@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.1
+
+- **new** Prompt for SSH password directly in the terminal when no password is saved.
+- **new** Detect system monospace fonts with live preview in the settings font selector.
+- **new** AI model config supports API protocol switching, connection test, and custom User-Agent.
+- **new** Customizable keyboard shortcuts for common actions.
+- **bugfix** Fixed Linux multi-screen maximize using wrong screen dimensions.
+- **bugfix** Fixed empty AI API message role causing request errors.
+- **bugfix** Fixed brief UI freeze during maximize/restore on Windows 11.
+- **bugfix** Fixed WSL local terminal console window flashing on startup.
+
 ## v1.1.0
 
 - **new** Added serial port terminal connection. Supports scanning available serial ports and connecting with configurable baud rate, data bits, stop bits, and parity.
