@@ -72,7 +72,7 @@
         </div>
       </div>
       <el-input v-model="processSearch" :placeholder="t('monitor.searchProcess')" clearable class="process-search" />
-      <el-table :data="filteredProcesses" height="calc(100% - 40px)" class="process-table" @row-click="onProcessRowClick">
+      <el-table :data="filteredProcesses" size="small" height="calc(100% - 40px)" class="process-table" @row-click="onProcessRowClick">
         <el-table-column prop="pid" label="PID" sortable width="80" />
         <el-table-column prop="name" :label="t('monitor.processName')" sortable />
         <el-table-column prop="user" :label="t('monitor.user')" sortable width="100" />
@@ -96,7 +96,7 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredPorts" v-loading="loadingPorts" height="calc(100% - 36px)" class="od-table">
+      <el-table :data="filteredPorts" size="small" v-loading="loadingPorts" height="calc(100% - 36px)" class="od-table">
         <el-table-column prop="protocol" :label="t('monitor.port.protocol')" sortable width="90" />
         <el-table-column prop="localAddr" :label="t('monitor.port.localAddr')" sortable width="160" />
         <el-table-column prop="process" :label="t('monitor.port.process')" sortable />
@@ -111,7 +111,7 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredDisks" v-loading="loadingDisks" height="calc(100% - 36px)" class="od-table">
+      <el-table :data="filteredDisks" size="small" v-loading="loadingDisks" height="calc(100% - 36px)" class="od-table">
         <el-table-column prop="name" :label="t('monitor.disk.name')" sortable>
           <template #default="{ row }">
             <span :style="{ paddingLeft: (row.name.match(/^ +/)?.[0].length || 0) * 6 + 'px' }">{{ row.name.trim() }}</span>
@@ -140,7 +140,7 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredNetCards" v-loading="loadingNetCards" height="calc(100% - 36px)" class="od-table">
+      <el-table :data="filteredNetCards" size="small" v-loading="loadingNetCards" height="calc(100% - 36px)" class="od-table">
         <el-table-column prop="name" :label="t('monitor.net.name')" sortable width="120" />
         <el-table-column prop="state" :label="t('monitor.net.state')" sortable width="90" />
         <el-table-column prop="mac" :label="t('monitor.net.mac')" sortable width="160" />

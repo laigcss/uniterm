@@ -34,7 +34,7 @@
         ref="tableRef"
         :key="locale"
         :data="filteredFiles"
-       
+        size="small"
         :row-class-name="getRowClassName"
         @row-click="onRowClick"
         @row-dblclick="onRowDblClick"
