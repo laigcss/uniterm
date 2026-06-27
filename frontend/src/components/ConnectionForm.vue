@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="640px">
+  <el-dialog v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="550px">
     <el-form id="conn-form" :model="form" label-width="100px" @submit.prevent="onSave">
       <el-form-item :label="t('conn.name')">
         <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
@@ -125,39 +125,49 @@
             :placeholder="t('conn.postLoginScriptPlaceholder')"
           />
           <div v-else class="expect-steps">
-            <div
-              v-for="(step, idx) in form.postLoginExpectSteps"
-              :key="idx"
-              class="expect-step"
-            >
-              <span class="step-index">{{ idx + 1 }}</span>
-              <el-input
-                v-model="step.expect"
-                :placeholder="t('conn.expectPlaceholder')"
-                class="expect-input"
-              />
-              <el-input
-                v-model="step.send"
-                :placeholder="t('conn.sendPlaceholder')"
-                class="send-input"
-              />
-              <el-input-number
-                v-model="step.timeoutSecond"
-                :min="1"
-                :max="120"
-                controls-position="right"
-                class="timeout-input"
-              />
-              <el-checkbox v-model="step.enter">{{ t('conn.expectEnter') }}</el-checkbox>
-              <el-button
-                link
-                type="danger"
-                class="remove-step-btn"
-                :title="t('conn.expectRemoveStep')"
-                @click="removeExpectStep(idx)"
+            <div class="expect-table">
+              <div class="expect-row expect-head">
+                <span></span>
+                <span>{{ t('conn.expectColExpect') }}</span>
+                <span>{{ t('conn.expectColSend') }}</span>
+                <span>{{ t('conn.expectColTimeout') }}</span>
+                <span>{{ t('conn.expectEnter') }}</span>
+                <span></span>
+              </div>
+              <div
+                v-for="(step, idx) in form.postLoginExpectSteps"
+                :key="idx"
+                class="expect-row"
               >
-                <Trash2 :size="14" />
-              </el-button>
+                <span class="step-index">{{ idx + 1 }}</span>
+                <el-input
+                  v-model="step.expect"
+                  :placeholder="t('conn.expectPlaceholder')"
+                  class="expect-input"
+                />
+                <el-input
+                  v-model="step.send"
+                  :placeholder="t('conn.sendPlaceholder')"
+                  class="send-input"
+                />
+                <el-input-number
+                  v-model="step.timeoutSecond"
+                  :min="1"
+                  :max="120"
+                  :controls="false"
+                  class="timeout-input"
+                />
+                <el-checkbox v-model="step.enter" class="enter-check" />
+                <el-button
+                  link
+                  type="danger"
+                  class="remove-step-btn"
+                  :title="t('conn.expectRemoveStep')"
+                  @click="removeExpectStep(idx)"
+                >
+                  <Trash2 :size="14" />
+                </el-button>
+              </div>
             </div>
             <el-button class="add-step-btn" @click="addExpectStep">
               <Plus :size="14" />
@@ -627,25 +637,69 @@ function onConnect() {
   gap: 8px;
 }
 
-.expect-step {
+.expect-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.expect-row {
   display: grid;
-  grid-template-columns: 22px minmax(110px, 1fr) minmax(130px, 1fr) 78px 62px 28px;
-  gap: 6px;
+  grid-template-columns: 26px minmax(80px, 1fr) minmax(90px, 1fr) 64px 40px 30px;
+  align-items: stretch;
+}
+
+.expect-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.expect-row > * {
+  display: flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.expect-row > *:not(:last-child) {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.expect-head {
+  background: var(--bg-elevated);
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text-secondary);
+}
+
+.expect-head > span {
+  padding: 3px 4px;
+}
+
+.expect-row :deep(.el-input__wrapper),
+.expect-row :deep(.el-input-number .el-input__wrapper) {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.expect-input,
+.send-input,
+.timeout-input {
+  width: 100%;
+}
+
+.timeout-input :deep(.el-input__inner) {
+  text-align: center;
 }
 
 .step-index {
-  color: var(--text-color-secondary, #909399);
+  color: var(--text-muted);
   font-size: 12px;
-  text-align: right;
-}
-
-.timeout-input {
-  width: 78px;
 }
 
 .remove-step-btn {
-  min-width: 28px;
+  min-width: 0;
 }
 
 .add-step-btn {
@@ -656,7 +710,7 @@ function onConnect() {
 }
 
 .expect-help {
-  color: var(--text-color-secondary, #909399);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
 }
