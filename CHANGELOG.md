@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.2.0
+
+- **new** Added Oracle database support. (@yuwei5380)
+- **new** Added SQL Server database support.
+- **new** Moved database CRUD SQL logic to backend for unified management.
+- **new** Database page now includes query/object tabs with view-aware actions.
+- **new** Added Expect/Send auto-login support for jumphost and similar scenarios. (@yuwei5380)
+- **new** Added file picker button for SSH key path input. (@yuwei5380)
+- **new** SSH connections now support terminal character encoding configuration.
+- **new** Added collapsible advanced section to connection form.
+- **new** Added app config section to sidebar personalization panel.
+- **new** Added 4px padding around terminal content.
+- **improve** Dark loading mask for monitor refresh to avoid white flash.
+- **bugfix** Fixed SSH key authentication failure. (@yuwei5380)
+- **bugfix** Fixed OOM when processing large files in sz/rz. (@yuwei5380)
+- **bugfix** Fixed macOS header double-click maximize not working. (@surenwuyuwuqiu)
+- **bugfix** Fixed command history not recording with zsh/oh-my-zsh Unicode prompt glyphs.
+- **bugfix** Fixed SFTP breadcrumb freezing on overflow boundary.
+- **bugfix** Fixed database grid not refreshing immediately after inline edit/delete.
+- **bugfix** Fixed missing key file picker logic in connection form.
+
+Thanks to @yuwei5380 and @surenwuyuwuqiu for their contributions to this release.
+
 ## v1.1.2
 
 - **new** Added 22 terminal themes with a sidebar personalization panel for one-click theme switching.
