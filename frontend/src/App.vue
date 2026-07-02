@@ -513,7 +513,7 @@ function navigatePanel(dir: number) {
 const actionHandlers: Record<ShortcutAction, () => void> = {
   nextTab: () => tabStore.nextTab(),
   prevTab: () => tabStore.prevTab(),
-  newConnection: () => { showConnectionForm.value = true },
+  newConnection: () => { tabStore.createStartTab() },
   toggleSidebar: () => {
     if (sidebarVisible.value) {
       sidebarVisible.value = false
@@ -806,8 +806,10 @@ async function createLocalTerminal(shellPath?: string) {
     panelStore.bindSession(panel.id, info.id)
     sessionStore.initSession(info.id)
     // Create tab AFTER session is bound so BaseTerminal mounts with valid sessionId
+    const prev = tabStore.activeTab
     const tab = tabStore.createTerminalTab(shellName, panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
+    if (prev?.type === 'start') closeTab(prev.id)
   } catch (e) {
     console.error('Failed to create local terminal:', e)
     panelStore.removePanel(panel.id)
@@ -1012,9 +1014,11 @@ async function onConnectSerial(sessionId: string, portName: string, baudRate: nu
   panel.title = `${portName} (${baudRate})`
   panelStore.bindSession(panel.id, sessionId)
   sessionStore.initSession(sessionId)
+  const prev = tabStore.activeTab
   const tab = tabStore.createTerminalTab(panel.title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
+  if (prev?.type === 'start') closeTab(prev.id)
 }
 
 // Show/hide native RDP window on tab switch.

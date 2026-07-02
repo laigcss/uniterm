@@ -628,7 +628,7 @@
   "shortcut.focusTerminal": "Focus Terminal",
   "shortcut.focusAI": "Toggle AI Sidebar",
   "shortcut.lockAI": "Lock/Unlock AI Window",
-  "shortcut.newConnection": "New Session",
+  "shortcut.newConnection": "New Tab",
   "shortcut.duplicateSession": "Duplicate Session",
   "shortcut.openSettings": "Open Settings",
   "shortcut.title": "Shortcuts",

@@ -628,7 +628,7 @@
   "shortcut.focusTerminal": "焦点回终端",
   "shortcut.focusAI": "开/关AI边栏并对话",
   "shortcut.lockAI": "锁定/解锁AI窗口",
-  "shortcut.newConnection": "新建会话",
+  "shortcut.newConnection": "新建标签页",
   "shortcut.duplicateSession": "复制会话",
   "shortcut.openSettings": "打开设置",
   "shortcut.title": "快捷键",

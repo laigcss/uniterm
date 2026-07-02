@@ -627,7 +627,7 @@
   "shortcut.focusTerminal": "ターミナルにフォーカス",
   "shortcut.focusAI": "AIサイドバーの切り替え",
   "shortcut.lockAI": "AIウィンドウのロック/解除",
-  "shortcut.newConnection": "新しいセッション",
+  "shortcut.newConnection": "新しいタブ",
   "shortcut.duplicateSession": "セッションを複製",
   "shortcut.openSettings": "設定を開く",
   "shortcut.title": "ショートカット",

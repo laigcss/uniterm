@@ -627,7 +627,7 @@
   "shortcut.focusTerminal": "焦點回終端",
   "shortcut.focusAI": "開/關AI邊欄並對話",
   "shortcut.lockAI": "鎖定/解鎖AI視窗",
-  "shortcut.newConnection": "新增會話",
+  "shortcut.newConnection": "新增標籤頁",
   "shortcut.duplicateSession": "複製會話",
   "shortcut.openSettings": "開啟設定",
   "shortcut.title": "快捷鍵",

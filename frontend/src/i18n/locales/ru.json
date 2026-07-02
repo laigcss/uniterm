@@ -627,7 +627,7 @@
   "shortcut.focusTerminal": "Фокус на терминал",
   "shortcut.focusAI": "Переключить ИИ-панель",
   "shortcut.lockAI": "Заблокировать/разблокировать ИИ-окно",
-  "shortcut.newConnection": "Новая сессия",
+  "shortcut.newConnection": "Новая вкладка",
   "shortcut.duplicateSession": "Дублировать сессию",
   "shortcut.openSettings": "Открыть настройки",
   "shortcut.title": "Горячие клавиши",

@@ -627,7 +627,7 @@
   "shortcut.focusTerminal": "Focus sur le terminal",
   "shortcut.focusAI": "Afficher/masquer la barre IA",
   "shortcut.lockAI": "Verrouiller/déverrouiller la fenêtre IA",
-  "shortcut.newConnection": "Nouvelle session",
+  "shortcut.newConnection": "Nouvel onglet",
   "shortcut.duplicateSession": "Dupliquer la session",
   "shortcut.openSettings": "Ouvrir les paramètres",
   "shortcut.title": "Raccourcis",
