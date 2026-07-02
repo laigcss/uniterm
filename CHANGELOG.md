@@ -10,6 +10,7 @@
 - **improve** AI detects command completion via prompt reappearance, reducing unnecessary wait time. (@surenwuyuwuqiu)
 - **improve** Terminal text highlighting now uses ANSI theme colors to adapt to different terminal themes.
 - **improve** Optimized uniTerm light terminal theme colors.
+- **improve** Simplified Chinese locale now detects version updates from Gitee Release.
 - **bugfix** Fixed serial port local echo causing double keystrokes.
 - **bugfix** Fixed background tab terminal output being truncated on buffer trim. (@surenwuyuwuqiu)
 - **bugfix** Fixed macOS local terminal not starting as a login shell. (@surenwuyuwuqiu)

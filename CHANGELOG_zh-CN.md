@@ -10,6 +10,7 @@
 - **improve** AI 通过 prompt 重新出现检测命令完成，减少不必要的等待时间。（@surenwuyuwuqiu）
 - **improve** 终端文本高亮改用 ANSI 主题颜色，适配不同终端主题。
 - **improve** 优化 uniTerm 浅色终端主题配色。
+- **improve** 简体中文环境下从 Gitee Release 检测版本更新。
 - **bugfix** 修复串口本地回显导致按键重复的问题。
 - **bugfix** 修复后台标签页终端输出被截断的问题。（@surenwuyuwuqiu）
 - **bugfix** 修复 macOS 本地终端未以登录 shell 方式启动的问题。（@surenwuyuwuqiu）
