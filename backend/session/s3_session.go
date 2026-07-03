@@ -92,6 +92,15 @@ func (s *S3Session) resolveRemote(p string) (string, error) {
 func (s *S3Session) s3Key(p string) string {
 	// S3 keys don't start with "/", they're relative to the bucket root.
 	p = strings.TrimPrefix(p, "/")
+	// Bucket root: path equals the bucket name → empty key
+	if s.bucket != "" && p == s.bucket {
+		return ""
+	}
+	// Strip bucket name prefix from subdirectory paths (e.g. "mybucket/dir" → "dir")
+	if s.bucket != "" {
+		bucketPrefix := s.bucket + "/"
+		p = strings.TrimPrefix(p, bucketPrefix)
+	}
 	return p
 }
 
@@ -189,27 +198,47 @@ func (s *S3Session) ChangeRemoteDir(dir string) (FileListResult, error) {
 		return FileListResult{}, err
 	}
 
-	// Handle bucket-level navigation
-	if s.bucket == "" && target == "/" {
-		// Already at bucket list root, just refresh
-		return s.ListRemote("/")
-	}
+	// ── Bucket list level ──
 	if s.bucket == "" {
-		// Navigating into a bucket from the bucket list
+		if target == "/" {
+			return s.ListRemote("/") // refresh bucket list
+		}
+		// Enter a bucket
 		bucketName := strings.TrimPrefix(target, "/")
 		s.mu.Lock()
 		s.bucket = bucketName
-		s.cwd = "/"
+		s.cwd = "/" + bucketName
 		s.mu.Unlock()
-		return s.ListRemote("/")
+		return s.ListRemote("/" + bucketName)
 	}
-	if target == "/" && s.cwd == "/" {
-		// Already at bucket root, navigating up goes back to bucket list
+
+	// ── Inside a bucket ──
+	bucketRoot := "/" + s.bucket
+
+	// "/" inside a bucket means the bucket list root
+	if target == "/" {
 		s.mu.Lock()
 		s.bucket = ""
 		s.cwd = "/"
 		s.mu.Unlock()
 		return s.ListRemote("/")
+	}
+
+	// Navigate to bucket root via breadcrumb or direct path
+	if target == bucketRoot {
+		s.mu.Lock()
+		s.cwd = bucketRoot
+		s.mu.Unlock()
+		return s.ListRemote(bucketRoot)
+	}
+
+	// ".." navigation within the bucket
+	if dir == ".." {
+		parent := path.Dir(s.cwd)
+		s.mu.Lock()
+		s.cwd = parent
+		s.mu.Unlock()
+		return s.ListRemote(parent)
 	}
 
 	// Validate directory exists by listing it
@@ -227,7 +256,6 @@ func (s *S3Session) ChangeRemoteDir(dir string) (FileListResult, error) {
 	if err != nil {
 		return FileListResult{}, fmt.Errorf("no such directory: %s", target)
 	}
-	// If no objects and no common prefixes and prefix is not empty, the directory might not exist
 	if len(resp.Objects) == 0 && len(resp.CommonPrefixes) == 0 && prefix != "" {
 		// Could be a "virtual" directory (no marker object). Allow it.
 	}
