@@ -18,9 +18,7 @@ The server monitor opens as an independent tab alongside terminal, file transfer
 
 ## Interface Overview
 
-The monitoring panel is organized into six tabs, switchable via the top tab bar:
-
-![Server Monitor](/imgs/monitor_light.png)
+The monitoring panel is organized into six tabs, switchable via the top tab bar.
 
 ## Performance
 
@@ -49,8 +47,6 @@ Displays four core metrics — CPU, Memory, Disk, and Network — in real time, 
 ## Processes
 
 Lists the top **30 processes** by CPU usage, refreshing every second.
-
-![Process List](/imgs/monitor_light.png)
 
 | Feature | Description |
 |------|------|
