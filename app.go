@@ -42,6 +42,7 @@ type App struct {
 	settingsStore        *store.SettingsStore
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
+	tunnelStore          *store.TunnelStore
 	terminalHistoryStore *store.TerminalHistoryStore
 	recentStore          *store.RecentStore
 	syncService          *sync.SyncService
@@ -116,11 +117,18 @@ func (a *App) startup(ctx context.Context) {
 	appDir := filepath.Join(configDir, "uniTerm")
 	a.terminalHistoryStore = store.NewTerminalHistoryStore(appDir)
 	a.quickCommandsStore = store.NewQuickCommandsStore(appDir)
+	a.tunnelStore = store.NewTunnelStore(appDir)
 	a.localStateStore = store.NewLocalStateStore(appDir)
 	a.recentStore = store.NewRecentStore(appDir)
 	if _, err := a.recentStore.Load(); err != nil {
 		log.Writef("recentStore.Load: %v", err)
 	}
+
+	// Push tunnel runtime state to the frontend, and bring up auto-start tunnels.
+	a.tunnelService.SetStateCallback(func(st session.TunnelState) {
+		runtime.EventsEmit(a.ctx, "tunnel:state", st)
+	})
+	go a.autoStartTunnels()
 
 	syncSvc, err := sync.NewSyncService()
 	if err != nil {
@@ -236,6 +244,110 @@ func (a *App) LoadConnections() (session.ConnectionStoreData, error) {
 		return session.ConnectionStoreData{}, fmt.Errorf("connection store not initialized")
 	}
 	return a.connectionStore.Load()
+}
+
+// TunnelStore methods
+
+func (a *App) SaveTunnels(data session.TunnelStoreData) error {
+	if a.tunnelStore == nil {
+		return fmt.Errorf("tunnel store not initialized")
+	}
+	err := a.tunnelStore.Save(data)
+	if err == nil {
+		runtime.EventsEmit(a.ctx, "store:tunnels:changed", data)
+	}
+	return err
+}
+
+func (a *App) LoadTunnels() (session.TunnelStoreData, error) {
+	if a.tunnelStore == nil {
+		return session.TunnelStoreData{}, fmt.Errorf("tunnel store not initialized")
+	}
+	return a.tunnelStore.Load()
+}
+
+// connResolver returns a resolver over the current saved connections so the
+// tunnel layer can look up the exit connection and recurse its jump hosts.
+func (a *App) connResolver() (session.ConnResolver, error) {
+	conns, err := a.connectionStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]session.ConnectionConfig, len(conns.Connections))
+	for _, c := range conns.Connections {
+		index[c.ID] = c
+	}
+	return func(id string) (session.ConnectionConfig, bool) {
+		c, ok := index[id]
+		return c, ok
+	}, nil
+}
+
+// StartTunnel brings the tunnel with the given ID up and returns its state.
+func (a *App) StartTunnel(id string) (session.TunnelState, error) {
+	if a.tunnelService == nil || a.tunnelStore == nil || a.connectionStore == nil {
+		return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
+	}
+	data, err := a.tunnelStore.Load()
+	if err != nil {
+		return session.TunnelState{}, err
+	}
+	var t *session.Tunnel
+	for i := range data.Tunnels {
+		if data.Tunnels[i].ID == id {
+			t = &data.Tunnels[i]
+			break
+		}
+	}
+	if t == nil {
+		return session.TunnelState{}, fmt.Errorf("tunnel %s not found", id)
+	}
+	resolve, err := a.connResolver()
+	if err != nil {
+		return session.TunnelState{}, err
+	}
+	st := a.tunnelService.StartTunnel(*t, resolve)
+	if st.Status == session.TunnelError {
+		return st, fmt.Errorf("%s", st.Error)
+	}
+	return st, nil
+}
+
+// StopTunnel tears down the tunnel with the given ID.
+func (a *App) StopTunnel(id string) error {
+	if a.tunnelService != nil {
+		a.tunnelService.StopTunnel(id)
+	}
+	return nil
+}
+
+// ListTunnelStates returns the runtime state of every known tunnel.
+func (a *App) ListTunnelStates() []session.TunnelState {
+	if a.tunnelService == nil {
+		return nil
+	}
+	return a.tunnelService.TunnelStates()
+}
+
+// autoStartTunnels starts every tunnel flagged AutoStart. Errors surface via the
+// per-tunnel state event, not as a startup failure.
+func (a *App) autoStartTunnels() {
+	if a.tunnelService == nil || a.tunnelStore == nil || a.connectionStore == nil {
+		return
+	}
+	data, err := a.tunnelStore.Load()
+	if err != nil {
+		return
+	}
+	resolve, err := a.connResolver()
+	if err != nil {
+		return
+	}
+	for _, t := range data.Tunnels {
+		if t.AutoStart {
+			a.tunnelService.StartTunnel(t, resolve)
+		}
+	}
 }
 
 // AI Config Store methods
