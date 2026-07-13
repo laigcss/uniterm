@@ -149,7 +149,7 @@ scoop bucket add uniterm https://github.com/ys-ll/scoop-uniterm && scoop install
 choco install uniterm
 
 # macOS
-brew install ys-ll/uniterm/uniterm
+brew install --cask ys-ll/uniterm/uniterm
 
 # Linux (deb)
 curl -sLo uniterm.deb https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.deb

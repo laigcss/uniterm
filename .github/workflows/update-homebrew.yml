@@ -35,14 +35,14 @@ jobs:
 
       - name: Update formula
         run: |
-          sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/uniterm.rb
-          sed -i "s/sha256 arm:.*/sha256 arm:   \"$SHA256\"/" Formula/uniterm.rb
-          sed -i "s/    intel:.*/     intel: \"$SHA256\"/" Formula/uniterm.rb
+          sed -i "s/version \".*\"/version \"$VERSION\"/" Casks/uniterm.rb
+          sed -i "s/sha256 arm:.*/sha256 arm:   \"$SHA256\"/" Casks/uniterm.rb
+          sed -i "s/    intel:.*/     intel: \"$SHA256\"/" Casks/uniterm.rb
 
       - name: Commit and push
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add Formula/uniterm.rb
+          git add Casks/uniterm.rb
           git commit -m "Update to $TAG" || true
           git push
