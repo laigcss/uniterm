@@ -43,7 +43,7 @@ echo ">> ${#TAGS[@]} release(s) to sync: ${TAGS[*]}"
 # --- helpers ------------------------------------------------------------------
 
 # json_get <field> : read a top-level JSON field from stdin
-json_get() { python -c 'import sys,json; d=json.load(sys.stdin); print(d.get("'"$1"'","") if isinstance(d,dict) else "")'; }
+json_get() { python -c 'import sys,json; d=json.loads(sys.stdin.buffer.read()); print(d.get("'"$1"'","") if isinstance(d,dict) else "")'; }
 
 # Return the Gitee release id for a tag, or empty string if it does not exist.
 gitee_release_id() {
@@ -89,7 +89,7 @@ gitee_attached_names() {
   curl -sS "$GITEE_API/repos/$GITEE_REPO/releases/$rid/attach_files?access_token=$GITEE_TOKEN" \
     | python -c 'import sys,json
 try:
-    d=json.load(sys.stdin)
+    d=json.loads(sys.stdin.buffer.read())
     for a in (d if isinstance(d,list) else []):
         print(a.get("name",""))
 except Exception:

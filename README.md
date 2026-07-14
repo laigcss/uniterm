@@ -136,17 +136,15 @@ Oracle Database support is implemented with a pure Go driver. uniTerm does not b
 
 Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-ll/uniterm/releases) or [Gitee Releases](https://gitee.com/ys-l/uniterm/releases):
 
-- **Windows**: installer `uniterm-windows-amd64-installer-*.exe`, or portable `uniterm-windows-amd64-portable-*.zip`
-- **macOS**: Download `uniterm-darwin-universal-*.dmg`
-- **Linux**: Download `uniterm-linux-amd64-*.tar.gz`, `.deb`, or `.rpm`
+- **Windows** (amd64 / arm64): installer `uniterm-windows-*-installer-*.exe`, or portable `uniterm-windows-*-portable-*.zip`
+- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-universal-*.dmg`
+- **Linux** (amd64 / arm64): Download `uniterm-linux-*-*.tar.gz`, `.deb`, or `.rpm`
 
 ### Package Managers
 
 ```bash
 # Windows
-winget install ys-ll.uniTerm
 scoop bucket add uniterm https://github.com/ys-ll/scoop-uniterm && scoop install uniterm
-choco install uniterm
 
 # macOS
 brew install --cask ys-ll/uniterm/uniterm
