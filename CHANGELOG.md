@@ -16,6 +16,7 @@
 
 **Improvements**
 - AI tool chain: added completion markers, `start_command` risk control, and `collect_output` idle detection.
+- AI `execute_command` / `collect_output` results now include the reappeared shell prompt line, so the AI can tell the command finished and see the current shell state (cwd, user, REPL, etc.).
 - WebDAV connections now use a single URL field instead of separate host / port / SSL toggle.
 - Broadcast input per-panel selection: Ctrl+click panel headers to include only the selected panels when broadcasting keyboard input.
 - Tab styling: minimum tab width, close / more / AI-lock buttons now appear only on hover, and duplicate local terminal names are deduplicated.
@@ -49,6 +50,7 @@ Thanks to @wangxufeng and @surenwuyuwuqiu for their contributions to this releas
 
 **改进**
 - AI 工具链优化:新增命令完成标记、`start_command` 风险控制、`collect_output` 空闲检测。
+- AI `execute_command` / `collect_output` 结果现在保留末尾重新出现的 shell 提示符行，AI 可据此判断命令已结束并感知当前 shell 状态（cwd、用户、REPL 等）。
 - WebDAV 连接改为单个 URL 字段，取代原来的主机 / 端口 / SSL 开关组合。
 - 广播输入支持逐面板选择:Ctrl+点击面板标题栏,广播输入时仅发送到已选中的面板。
 - 标签样式:限制最小宽度,关闭/更多/AI 锁定按钮仅在 hover 时显示,本地终端同名标签自动去重。
