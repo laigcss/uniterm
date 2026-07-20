@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.5.1
+
+### What's Changed
+
+**Improvements**
+- macOS Cmd+Q quits the app and Cmd+W closes the current tab, matching platform conventions. (@surenwuyuwuqiu)
+- Right-click the copyable log-path toast (shown after starting a session log) to copy the path or select all. (@surenwuyuwuqiu)
+- Batch-close confirmation for "close right / others / left" is now consolidated into a single dialog with a per-batch "don't show again" option, instead of one prompt per connected tab.
+- Hovered tab is decluttered — the AI-lock button moved into the context menu, no more layout shift when hovering. (@surenwuyuwuqiu)
+- The tab "+" button now stays visible next to the overflow (…) menu when tabs overflow, so it's still reachable with many tabs open. (@surenwuyuwuqiu)
+- The "Copy as Markdown" button no longer shows under assistant messages that contain only tool calls (previously it appeared but the clipboard ended up empty).
+
+**Bug Fixes**
+- Fixed `Ctrl+V` being swallowed by the paste shortcut, so it now passes through to shell prompts (bash `Ctrl+V Tab` for literal characters) and alternate-screen apps such as vim visual block, k9s and less. Paste is bound to the platform shortcut only. (@wangxufeng, @surenwuyuwuqiu)
+- Fixed the "close tab prompt" / "close app prompt" settings not being persisted — they were silently dropped by the backend, so the toggle reset to on after every restart.
+- Fixed tab duplicate for terminal / SFTP / database tabs, which regressed after v1.5.0 (multi-minute black screen or missing session bind). (@surenwuyuwuqiu)
+- Fixed the tab rename input being unable to take focus because the terminal focus guard immediately stole it back. (@surenwuyuwuqiu)
+
+Thanks to @surenwuyuwuqiu and @wangxufeng for their contributions to this release.
+
+### 更新内容
+
+**改进**
+- 支持 macOS 快捷键 Cmd+Q 退出应用、Cmd+W 关闭当前标签，与系统习惯保持一致。（@surenwuyuwuqiu）
+- 会话日志路径提示框支持右键复制 / 全选，方便复制日志路径。（@surenwuyuwuqiu）
+- "关闭右侧 / 其他 / 左侧"批量操作现在合并为一次确认弹窗，"不再提示"当批即生效，不再逐个标签弹框。
+- Hover 标签栏简化：AI 锁定按钮移入右键菜单，hover 不再发生布局抖动。（@surenwuyuwuqiu）
+- 标签数量溢出时，"+"新建按钮改为固定显示在溢出 (…) 菜单旁，方便快速新建。（@surenwuyuwuqiu）
+- 只包含工具调用的 AI 消息不再显示"复制为 Markdown"按钮（此前会显示，但点击后复制的是空白内容）。
+
+**Bug 修复**
+- 修复 `Ctrl+V` 被粘贴快捷键截获的问题，现在在 shell 提示符（bash `Ctrl+V Tab` 输入字面字符）和终端全屏应用（vim 可视块、k9s、less 等）中都能正确透传。粘贴仅绑定到各平台自身的快捷键。（@wangxufeng、@surenwuyuwuqiu）
+- 修复"关闭标签页提示"、"关闭应用提示"开关无法持久化的问题——之前后端未识别这两个字段，重启后总是回到默认开启状态。
+- 修复 v1.5.0 后终端 / SFTP / 数据库标签"复制标签"功能失效的问题（表现为终端出现长时间黑屏或会话未绑定）。（@surenwuyuwuqiu）
+- 修复标签重命名输入框无法获得焦点的问题——之前被终端焦点守卫立即抢回。（@surenwuyuwuqiu）
+
+感谢 @surenwuyuwuqiu 和 @wangxufeng 对本版本的贡献。
+
 ## v1.5.0
 
 ### What's Changed
