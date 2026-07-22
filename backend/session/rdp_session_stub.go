@@ -45,3 +45,7 @@ func (s *RDPSession) SetFocus(_ bool) {}
 func (s *RDPSession) Show() {}
 
 func (s *RDPSession) Hide() {}
+
+func (s *RDPSession) SetFullScreen(_ bool) {}
+
+func (s *RDPSession) SetOnFullScreenExit(_ func()) {}
