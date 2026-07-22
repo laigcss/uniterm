@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.5.2
+
+### What's Changed
+
+**New Features**
+- Customizable application background image. Set an image under App Settings with adjustable opacity and blur.
+- RDP full-screen support with a new "Fullscreen" resolution option and a fullscreen toggle button on the status bar.
+- RDP now forwards the Windows key and combos (Win+E, Win+D, Alt+Tab, etc.) to the remote machine. Ctrl+Alt+Del still can't be forwarded — press Ctrl+Alt+End instead.
+- Option to use the OS native title bar instead of the built-in one, toggleable under App Settings (requires restart).
+
+**Improvements**
+- Disconnect / reconnect notices now include the local timestamp so you can tell when a connection dropped.
+- AI request timeout raised from 2 to 10 minutes for both Anthropic and OpenAI paths, so slower models can finish complex tasks; on timeout a friendly localized hint is shown instead of the raw `context deadline exceeded`.
+- Anthropic base URL now accepts both suffix-free (`https://api.anthropic.com`) and `/v1`-suffixed (`https://api.anthropic.com/v1`) addresses.
+- App icons: the "U" glyph is now centered, and the macOS icon has proper transparent padding so the Dock/Launchpad tile size matches other apps.
+
+**Bug Fixes**
+- Fixed the terminal text highlighter not highlighting numbers adjacent to letters and stripping upstream SGR spans on partially-styled lines.
+- Fixed the PostgreSQL browser listing every database in the cluster and showing "no tables" for the ones the connection can't query; the browser is now scoped to the connected database, and the connection form requires a database name for PostgreSQL.
+- Fixed the RDP native window covering modal dialogs (tunnel add/edit, close-tab / close-app confirm).
+- Fixed the RDP dialog auto-dismiss loop repeatedly closing the system `mstsc.exe`'s own password/security prompts.
+
+### 更新内容
+
+**新功能**
+- 应用背景图片自定义。可在应用设置中设置背景图片，支持调整不透明度和模糊度。
+- RDP 全屏支持，新增“全屏”分辨率选项，新增全屏切换状态栏按钮。
+- RDP 现在会将 Windows 键及组合键（Win+E、Win+D、Alt+Tab 等）转发到远端。Ctrl+Alt+Del 属于安全注意序列，任何 RDP 客户端都无法转发，请改用 Ctrl+Alt+End。
+- 新增使用系统原生标题栏的选项，应用设置中可切换，重启后生效。
+
+**改进**
+- 断线 / 重连提示条附带本地时间戳，方便定位连接中断的具体时间。
+- AI 请求超时时间从 2 分钟提升到 10 分钟（Anthropic 与 OpenAI 通道均生效），避免慢速模型跑长任务被打断；超时时不再显示原始的 `context deadline exceeded`，改为友好的多语言提示。
+- Anthropic base URL 同时兼容不带 `/v1` 后缀（如 `https://api.anthropic.com`）和带 `/v1` 后缀（如 `https://api.anthropic.com/v1`）两种写法。
+- 应用图标 “U” 字重新居中，macOS 图标补充透明外边距，Dock 与 Launchpad 中显示尺寸与其他应用一致。
+
+**Bug 修复**
+- 修复终端文本高亮无法高亮紧邻字母的数字，以及在部分带样式的行中会覆盖上游 SGR 样式的问题。
+- 修复 PostgreSQL 数据库浏览器列出整个集群所有数据库、点开非当前连接的库时显示“无表”的问题；现在浏览器仅显示当前连接的数据库，新建 PostgreSQL 连接时数据库名为必填。
+- 修复 RDP 原生窗口盖住模态弹窗（隧道新建/编辑、关闭标签确认、关闭应用确认）的问题。
+- 修复 RDP 对话框自动关闭逻辑误关系统 `mstsc.exe` 自身密码/安全提示框，导致 mstsc 弹窗反复闪烁的问题。
+
 ## v1.5.1
 
 ### What's Changed
