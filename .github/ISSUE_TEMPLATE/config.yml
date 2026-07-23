@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FAQ
+    url: https://uniterm.net/guide/en/faq.html
+    about: >-
+      Check the FAQ first — your question may already be answered there.
+  - name: Roadmap
+    url: https://github.com/ys-ll/uniterm/blob/main/ROADMAP.md
+    about: >-
+      Before filing a feature request, please check the roadmap first —
+      if your idea is already listed, it's on the plan and no need to file a duplicate.
