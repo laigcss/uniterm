@@ -85,6 +85,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Internationalization | ✅ | v2026.06.10-alpha | Multi-language UI |
 | Custom Keybindings | ✅ | v1.1.1 | Rebindable keyboard shortcuts |
 | Background Image | ✅ | v1.5.2 | Customizable application background |
+| Connection Import / Export | 🚧 | — | Import and export connection configurations |
 
 ### Productivity
 
