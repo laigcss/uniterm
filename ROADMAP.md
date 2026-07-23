@@ -81,9 +81,9 @@ Legend: ✅ Shipped, 🚧 Planned
 |---------|--------|-------|-------|
 | UI Themes | ✅ | initial release | Dark / Deep Blue / Light |
 | Terminal Themes | ✅ | initial release | Built-in terminal color themes |
-| Custom Keybindings | ✅ | v1.1.1 | Rebindable keyboard shortcuts |
 | Cloud Sync | ✅ | v2026.05.24-alpha | Encrypted sync via your own private repo |
 | Internationalization | ✅ | v2026.06.10-alpha | Multi-language UI |
+| Custom Keybindings | ✅ | v1.1.1 | Rebindable keyboard shortcuts |
 | Background Image | ✅ | v1.5.2 | Customizable application background |
 
 ### Productivity
