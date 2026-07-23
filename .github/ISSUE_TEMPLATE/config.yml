@@ -1,5 +1,10 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Discussions
+    url: https://github.com/ys-ll/uniterm/discussions
+    about: >-
+      Have a question, an idea to bounce around, or want to share how you use uniTerm?
+      Start a discussion instead of filing an issue.
   - name: FAQ
     url: https://uniterm.net/guide/en/faq.html
     about: >-
