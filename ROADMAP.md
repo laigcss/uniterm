@@ -73,7 +73,11 @@ Legend: ✅ Shipped, 🚧 Planned
 | NL Database Query | ✅ | v1.4.1 | Natural-language database query generation |
 | Multi-Panel AI Lock | ✅ | v1.5.0 | Control multiple terminals simultaneously |
 | Skill Support | 🚧 | — | Packaged, reusable workflows the agent can invoke |
-| MCP Interface | 🚧 | — | Model Context Protocol integration |
+| Prompt Library | 🚧 | — | Manage and trigger reusable AI prompts |
+| Interaction Modes | 🚧 | — | Chat / read-only / agent modes to constrain AI actions |
+| MCP Server | 🚧 | — | Expose uniTerm as an MCP server for external AI agents |
+| MCP Client | 🚧 | — | Connect external MCP servers to extend uniTerm's AI |
+| File Attachments | 🚧 | — | Attach files to AI prompts for the agent to read |
 
 ### Personalization
 
@@ -81,17 +85,16 @@ Legend: ✅ Shipped, 🚧 Planned
 |---------|--------|-------|-------|
 | UI Themes | ✅ | initial release | Dark / Deep Blue / Light |
 | Terminal Themes | ✅ | initial release | Built-in terminal color themes |
-| Cloud Sync | ✅ | v2026.05.24-alpha | Encrypted sync via your own private repo |
 | Internationalization | ✅ | v2026.06.10-alpha | Multi-language UI |
 | Custom Keybindings | ✅ | v1.1.1 | Rebindable keyboard shortcuts |
 | Background Image | ✅ | v1.5.2 | Customizable application background |
-| Connection Import / Export | 🚧 | — | Import and export connection configurations |
 
 ### Productivity
 
 | Feature | Status | Since | Notes |
 |---------|--------|-------|-------|
 | Workspace | ✅ | v2026.05.13-alpha | Split panes and broadcast input |
+| Cloud Sync | ✅ | v2026.05.24-alpha | Encrypted sync via your own private repo |
 | Terminal Search | ✅ | v2026.05.27-alpha | In-terminal text search |
 | Command History | ✅ | v2026.05.29-alpha | Searchable terminal command history |
 | Smart Completion | ✅ | v2026.05.29-alpha | Real-time command suggestions |
@@ -101,6 +104,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Quick Commands | ✅ | v1.0.1 | Manage and run reusable commands |
 | SSH Tunnel Manager | ✅ | v1.4.1 | Local, remote, and dynamic port forwarding |
 | Session Recording | ✅ | v1.5.0 | Record terminal output to file |
+| Connection Import / Export | 🚧 | — | Import and export connection configurations |
 
 ## Contributing
 
