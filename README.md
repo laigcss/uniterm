@@ -29,6 +29,7 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 - [Tech Stack](#tech-stack)
 - [Build from Source](#build-from-source)
 - [Project Structure](#project-structure)
+- [Roadmap](#roadmap)
 - [Star this Project](#star-this-project)
 - [Feedback & Contributing](#feedback--contributing)
 - [License](#license)
@@ -227,6 +228,10 @@ uniTerm/
 │       └── types/                # TypeScript type definitions
 └── wails.json
 ```
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the current protocol / feature status and what's planned next. For per-release history, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Star this Project
 
