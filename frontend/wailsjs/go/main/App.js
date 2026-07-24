@@ -46,6 +46,10 @@ export function CreateSession(arg1, arg2) {
   return window['go']['main']['App']['CreateSession'](arg1, arg2);
 }
 
+export function CreateSkill(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateSkill'](arg1, arg2, arg3);
+}
+
 export function CreateTable(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateTable'](arg1, arg2, arg3);
 }
@@ -64,6 +68,10 @@ export function DBInsertRow(arg1, arg2, arg3, arg4) {
 
 export function DBUpdateRow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['DBUpdateRow'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function DeleteSkill(arg1) {
+  return window['go']['main']['App']['DeleteSkill'](arg1);
 }
 
 export function DeleteTerminalHistoryEntry(arg1) {
@@ -178,6 +186,14 @@ export function GetSessionOutputLogInfo(arg1) {
   return window['go']['main']['App']['GetSessionOutputLogInfo'](arg1);
 }
 
+export function GetSkillBody(arg1) {
+  return window['go']['main']['App']['GetSkillBody'](arg1);
+}
+
+export function GetSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['GetSkillFile'](arg1, arg2);
+}
+
 export function GetSystemFonts() {
   return window['go']['main']['App']['GetSystemFonts']();
 }
@@ -190,6 +206,14 @@ export function GetTables(arg1, arg2) {
   return window['go']['main']['App']['GetTables'](arg1, arg2);
 }
 
+export function ImportSkillFromDir(arg1) {
+  return window['go']['main']['App']['ImportSkillFromDir'](arg1);
+}
+
+export function ImportSkillFromZip(arg1) {
+  return window['go']['main']['App']['ImportSkillFromZip'](arg1);
+}
+
 export function KillProcess(arg1, arg2, arg3) {
   return window['go']['main']['App']['KillProcess'](arg1, arg2, arg3);
 }
@@ -200,6 +224,10 @@ export function ListSerialPorts() {
 
 export function ListSessions() {
   return window['go']['main']['App']['ListSessions']();
+}
+
+export function ListSkills() {
+  return window['go']['main']['App']['ListSkills']();
 }
 
 export function ListTunnelStates() {
@@ -498,6 +526,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SaveSkill(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveSkill'](arg1, arg2, arg3);
+}
+
 export function SaveTerminalHistory(arg1) {
   return window['go']['main']['App']['SaveTerminalHistory'](arg1);
 }
@@ -544,6 +576,18 @@ export function SetMonitorActiveTab(arg1, arg2) {
 
 export function SetMonitorPaused(arg1, arg2) {
   return window['go']['main']['App']['SetMonitorPaused'](arg1, arg2);
+}
+
+export function SetSkillEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetSkillEnabled'](arg1, arg2);
+}
+
+export function SetSkillLocked(arg1, arg2) {
+  return window['go']['main']['App']['SetSkillLocked'](arg1, arg2);
+}
+
+export function SetSkillSortOrder(arg1, arg2) {
+  return window['go']['main']['App']['SetSkillSortOrder'](arg1, arg2);
 }
 
 export function SftpCancelTransfer(arg1, arg2) {

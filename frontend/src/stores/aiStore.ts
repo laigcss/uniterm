@@ -264,6 +264,25 @@ export const useAIStore = defineStore('ai', () => {
     return r
   }
 
+  function addSkillCard(name: string, source: 'explicit' | 'auto') {
+    const r = reactive({
+      id: `skill-${Date.now()}`,
+      role: 'user' as const,
+      content: '',
+      skillName: name,
+      skillSource: source,
+    }) as AIMessage
+    messages.value.push(r)
+    if (currentSessionId.value) {
+      const s = sessions.value.find(s => s.id === currentSessionId.value)
+      if (s) {
+        s.messages.push(r)
+        s.updatedAt = Date.now()
+        doSave()
+      }
+    }
+  }
+
   function clearMessages() {
     messages.value = []
     if (currentSessionId.value) {
@@ -615,7 +634,7 @@ export const useAIStore = defineStore('ai', () => {
     visible,
     toggle,
     messages,
-    addMessage,
+    addMessage, addSkillCard,
     clearMessages,
     mode,
     config,

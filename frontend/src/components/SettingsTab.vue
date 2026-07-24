@@ -361,6 +361,13 @@
         </div>
       </div>
 
+      <!-- Skills & Commands -->
+      <div v-if="settingsStore.activeCategory === 'skills'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.skills') }}</h2>
+        <p class="section-desc">{{ t('settings.skillsDesc') }}</p>
+        <SkillsManager />
+      </div>
+
       <!-- Sync settings -->
       <div v-if="settingsStore.activeCategory === 'sync'" class="settings-section sync-settings">
         <h2 class="section-title">{{ t('settings.sync') }}</h2>
@@ -686,7 +693,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -699,6 +706,7 @@ import { Quit } from '../../wailsjs/runtime'
 import { ElMessageBox } from 'element-plus'
 import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
+import SkillsManager from './SkillsManager.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
 import { uninstallGlobalListener, installGlobalListener } from '../composables/useKeyboardShortcuts'
@@ -933,6 +941,7 @@ const categories = computed(() => {
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
+    { key: 'skills', label: t('settings.skills'), icon: Wrench },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]

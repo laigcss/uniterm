@@ -42,6 +42,7 @@ type App struct {
 	settingsStore        *store.SettingsStore
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
+	skillsStore          *store.SkillsStore
 	tunnelStore          *store.TunnelStore
 	terminalHistoryStore *store.TerminalHistoryStore
 	recentStore          *store.RecentStore
@@ -146,6 +147,7 @@ func (a *App) startup(ctx context.Context) {
 	appDir := filepath.Join(configDir, "uniTerm")
 	a.terminalHistoryStore = store.NewTerminalHistoryStore(appDir)
 	a.quickCommandsStore = store.NewQuickCommandsStore(appDir)
+	a.skillsStore = store.NewSkillsStore(appDir)
 	a.tunnelStore = store.NewTunnelStore(appDir)
 	a.localStateStore = store.NewLocalStateStore(appDir)
 	a.recentStore = store.NewRecentStore(appDir)
@@ -735,6 +737,85 @@ func (a *App) LoadQuickCommands() (store.QuickCommandData, error) {
 		return store.QuickCommandData{}, fmt.Errorf("quick commands store not initialized")
 	}
 	return a.quickCommandsStore.Load()
+}
+
+// SkillsStore methods
+
+func (a *App) ListSkills() ([]store.SkillMeta, error) {
+	if a.skillsStore == nil {
+		return nil, fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.List()
+}
+
+func (a *App) GetSkillBody(name string) (string, error) {
+	if a.skillsStore == nil {
+		return "", fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.GetBody(name)
+}
+
+func (a *App) GetSkillFile(name, relPath string) (string, error) {
+	if a.skillsStore == nil {
+		return "", fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.GetSkillFile(name, relPath)
+}
+
+func (a *App) SetSkillEnabled(name string, enabled bool) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.SetEnabled(name, enabled)
+}
+
+func (a *App) SetSkillLocked(name string, locked bool) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.SetLocked(name, locked)
+}
+
+func (a *App) SetSkillSortOrder(name string, order int) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.SetSortOrder(name, order)
+}
+
+func (a *App) DeleteSkill(name string) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.Delete(name)
+}
+
+func (a *App) ImportSkillFromDir(srcDir string) (string, error) {
+	if a.skillsStore == nil {
+		return "", fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.ImportFromDir(srcDir)
+}
+
+func (a *App) ImportSkillFromZip(zipPath string) (string, error) {
+	if a.skillsStore == nil {
+		return "", fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.ImportFromZip(zipPath)
+}
+
+func (a *App) CreateSkill(name, description, body string) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.CreateSkill(name, description, body)
+}
+
+func (a *App) SaveSkill(name, description, body string) error {
+	if a.skillsStore == nil {
+		return fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.SaveSkill(name, description, body)
 }
 
 func (a *App) OpenFileDialog() (string, error) {

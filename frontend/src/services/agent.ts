@@ -191,7 +191,7 @@ function buildSystemPrompt(): string {
   return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell)
 }
 
-export async function runAgent(userInput: string) {
+export async function runAgent(userInput: string, skillName?: string, skillBody?: string) {
   const store = useAIStore()
 
   if (!hasActiveSession()) {
@@ -247,10 +247,15 @@ export async function runAgent(userInput: string) {
 
   if (userInput) {
     const dynamicCtx = buildDynamicContext()
+    let content = userInput
+    if (skillName && skillBody) {
+      content = `[Skill: ${skillName}]\n${skillBody}\n\n---\n${userInput}`
+      store.addSkillCard(skillName, 'explicit')
+    }
     store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: userInput,
+      content,
       _contextHeader: dynamicCtx || undefined
     })
   }
