@@ -30,9 +30,9 @@
       />
       <span v-else-if="!isActive && hasNotification && !tab.locked" class="tab-notification-dot" />
     </span>
-    <span v-if="!editing" class="tab-name" :class="{ 'tab-disconnected': isDisconnected }" @dblclick.stop="startEdit">
+    <span v-if="!editing" class="tab-name" :class="{ 'tab-disconnected': isDisconnected }" :title="tab.name" @dblclick.stop="startEdit">
       <ArrowDownUp v-if="hasActiveTransfers" class="transfer-indicator" :size="14" title="Transferring..." />
-      {{ tab.name }}
+      <span class="tab-name-text">{{ tab.name }}</span>
     </span>
     <input
       v-else
@@ -538,7 +538,8 @@ onUnmounted(() => {
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  /* 约 25 个字符后省略，避免过长主机名撑大标题栏；完整名见 title 悬停 */
+  max-width: 200px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -546,6 +547,11 @@ onUnmounted(() => {
      widens the tab (no layout shift) and the button never covers the name. */
   margin-right: 20px;
   font-weight: 500;
+}
+.tab-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tab-disconnected {
   opacity: 0.5;
