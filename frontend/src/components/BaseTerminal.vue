@@ -653,6 +653,18 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
     return false
   }
 
+  // macOS Cmd+C: copy selection when there is one. With no selection, don't
+  // intercept — let it pass through (Ctrl+C interrupt uses ctrlKey, unaffected).
+  if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
+    const sel = terminal?.getSelection()
+    if (sel) {
+      e.preventDefault()
+      navigator.clipboard.writeText(sel).catch(() => {})
+      return false
+    }
+    return true
+  }
+
   // Ctrl+Shift+C: copy terminal selection to clipboard
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
     const sel = terminal?.getSelection()
