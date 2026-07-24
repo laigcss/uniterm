@@ -1,18 +1,15 @@
 <template>
-  <div class="settings-group">
+  <div class="skills-manager">
     <div class="skills-toolbar">
-      <el-select v-model="filterOrigin" size="small" style="width: 120px">
-        <el-option :label="t('settings.skillsFilterAll')" value="all" />
-        <el-option :label="t('settings.skillsFilterCreated')" value="created" />
-        <el-option :label="t('settings.skillsFilterImported')" value="imported" />
-      </el-select>
       <el-input
         v-model="searchQuery"
         size="small"
-        :placeholder="t('settings.search')"
-        style="width: 200px"
+        :placeholder="t('settings.skillsSearch')"
+        style="flex: 1"
         clearable
-      />
+      >
+        <template #prefix><el-icon :size="14"><Search /></el-icon></template>
+      </el-input>
       <el-button size="small" @click="showCreate = true">
         <Plus :size="14" /> {{ t('settings.skillsCreate') }}
       </el-button>
@@ -25,35 +22,37 @@
     <div
       v-for="skill in filteredSkills"
       :key="skill.name"
-      class="model-card"
+      class="skill-card"
+      @click="openEdit(skill)"
     >
-      <div class="model-main">
+      <BookOpen :size="18" class="skill-card-icon" />
+      <div class="skill-card-info">
+        <div class="skill-card-title">
+          <span class="skill-card-name">{{ skill.name }}</span>
+        </div>
+        <div class="skill-card-desc">{{ skill.description }}</div>
+      </div>
+      <div class="skill-card-actions" @click.stop>
         <el-switch
           :model-value="skill.enabled"
           size="small"
           @change="store.toggleEnabled(skill.name)"
         />
-        <span class="model-name">{{ skill.name }}</span>
-        <el-tag size="small" :type="skill.origin === 'created' ? '' : 'info'">
-          {{ skill.origin === 'created' ? t('settings.skillsOriginCreated') : t('settings.skillsOriginImported') }}
-        </el-tag>
-        <span class="skill-detail">/{{ skill.name }} · {{ skill.description }}</span>
-      </div>
-      <div class="model-actions">
         <el-button
           link
           :title="skill.locked ? t('settings.skillsLocked') : t('settings.skillsUnlocked')"
           @click="store.toggleLocked(skill.name)"
         >
-          <el-icon :size="14"><Lock v-if="skill.locked" /><LockOpen v-else /></el-icon>
+          <el-icon :size="15"><Lock v-if="skill.locked" /><LockOpen v-else /></el-icon>
         </el-button>
         <el-dropdown trigger="click" @command="(cmd: string) => handleCmd(cmd, skill)">
           <el-button link>
-            <el-icon :size="14"><Settings2 /></el-icon>
+            <el-icon :size="15"><Settings2 /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="delete">
+              <el-dropdown-item command="edit">{{ t('settings.skillsEdit') }}</el-dropdown-item>
+              <el-dropdown-item command="delete" divided>
                 <span style="color: var(--el-color-danger)">{{ t('settings.skillsDelete') }}</span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -67,12 +66,58 @@
       @close="showCreate = false"
       @created="onCreated"
     />
+
+    <!-- 编辑弹窗（锁定则只读 + 提示解锁） -->
+    <el-dialog
+      v-model="showEdit"
+      :title="editSkill?.name"
+      width="600px"
+    >
+      <div v-if="editSkill" class="skill-edit">
+        <el-alert
+          v-if="editSkill.locked"
+          :title="t('settings.skillsEditLocked')"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+        />
+        <el-form label-position="right" label-width="60px" size="small">
+          <el-form-item :label="t('settings.skillsDescription')">
+            <el-input
+              v-model="editForm.description"
+              type="textarea"
+              :rows="2"
+              :disabled="editSkill.locked"
+            />
+          </el-form-item>
+          <el-form-item :label="t('settings.skillsBody')">
+            <el-input
+              v-model="editForm.body"
+              type="textarea"
+              :rows="12"
+              :disabled="editSkill.locked"
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="showEdit = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :disabled="editSkill?.locked || !editForm.description.trim() || !editForm.body.trim()"
+          @click="onSaveEdit"
+        >
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Plus, Lock, LockOpen, Settings2 } from '@lucide/vue'
+import { Plus, Lock, LockOpen, Settings2, Search, BookOpen } from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useSkillStore } from '../stores/skillStore'
@@ -83,25 +128,42 @@ const { t } = useI18n()
 const store = useSkillStore()
 
 const showCreate = ref(false)
-const filterOrigin = ref('all')
 const searchQuery = ref('')
 
+const showEdit = ref(false)
+const editSkill = ref<SkillMeta | null>(null)
+const editForm = ref({ description: '', body: '' })
+
 const filteredSkills = computed(() => {
-  let list = store.skills
-  if (filterOrigin.value !== 'all') {
-    list = list.filter(s => s.origin === filterOrigin.value)
-  }
   const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
-    list = list.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
-  }
-  return list
+  if (!q) return store.skills
+  return store.skills.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
 })
 
-function handleCmd(cmd: string, skill: SkillMeta) {
-  if (cmd === 'delete') {
-    onDelete(skill)
+async function openEdit(skill: SkillMeta) {
+  editSkill.value = skill
+  editForm.value = { description: skill.description, body: '' }
+  showEdit.value = true
+  try {
+    editForm.value.body = await store.getBody(skill.name)
+  } catch (e) {
+    editForm.value.body = ''
   }
+}
+
+async function onSaveEdit() {
+  if (!editSkill.value) return
+  try {
+    await store.save(editSkill.value.name, editForm.value.description.trim(), editForm.value.body.trim())
+    showEdit.value = false
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Save failed')
+  }
+}
+
+function handleCmd(cmd: string, skill: SkillMeta) {
+  if (cmd === 'delete') onDelete(skill)
+  else if (cmd === 'edit') openEdit(skill)
 }
 
 async function onDelete(skill: SkillMeta) {
@@ -131,23 +193,67 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.skills-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .skills-toolbar {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
 }
 .skills-empty {
   color: var(--el-text-color-secondary);
-  padding: 24px 0;
+  padding: 32px 0;
   text-align: center;
 }
-.skill-detail {
-  color: var(--el-text-color-secondary);
+.skill-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.skill-card:hover {
+  border-color: var(--el-color-primary);
+}
+.skill-card-icon {
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+.skill-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.skill-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.skill-card-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+}
+.skill-card-desc {
   font-size: 12px;
-  margin-left: 8px;
+  color: var(--el-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-top: 2px;
+}
+.skill-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 </style>

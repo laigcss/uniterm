@@ -387,7 +387,7 @@
   "settings.syncStatusSuccess": "Success",
   "settings.syncStatusFailed": "Failed",
   "settings.syncReason": "Reason",
-  "settings.skills": "Skills & Commands",
+  "settings.skills": "Skills",
   "settings.skillsDesc": "Manage command-line skills callable by AI.",
   "settings.skillsCreate": "New / Import",
   "settings.skillsDelete": "Delete",
@@ -917,5 +917,13 @@
   "tunnels.errTarget": "Please enter the destination host and port",
   "tunnels.destination": "Remote target",
   "tunnels.toLocal": "Local target",
-  "tunnels.autoStartLabel": "Auto-start"
+  "tunnels.autoStartLabel": "Auto-start",
+  "settings.skillsSearch": "Search skills",
+  "settings.skillsParseOk": "File uploaded and parsed",
+  "settings.skillsZipHint": "For zip import, fill in manually below or use a SKILL.md file",
+  "settings.skillsView": "View",
+  "ai.skillExplicit": "Explicit",
+  "ai.skillAuto": "Auto",
+  "settings.skillsEdit": "Edit",
+  "settings.skillsEditLocked": "Skill is locked (view only). Unlock it in the list to edit."
 }

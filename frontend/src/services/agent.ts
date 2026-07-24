@@ -247,16 +247,18 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
 
   if (userInput) {
     const dynamicCtx = buildDynamicContext()
-    let content = userInput
+    // skill 正文进 _contextHeader（发给模型但 UI 隐藏），content 只留用户原始输入
+    let header = dynamicCtx || ''
     if (skillName && skillBody) {
-      content = `[Skill: ${skillName}]\n${skillBody}\n\n---\n${userInput}`
+      const skillCtx = `[Skill: ${skillName}]\n${skillBody}`
+      header = header ? `${skillCtx}\n\n${header}` : skillCtx
       store.addSkillCard(skillName, 'explicit')
     }
     store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
-      content,
-      _contextHeader: dynamicCtx || undefined
+      content: userInput,
+      _contextHeader: header || undefined
     })
   }
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill } from '../../wailsjs/go/main/App'
+import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill } from '../../wailsjs/go/main/App'
 import type { SkillMeta } from '../types/skill'
 
 export const useSkillStore = defineStore('skills', () => {
@@ -71,6 +71,16 @@ export const useSkillStore = defineStore('skills', () => {
     }
   }
 
+  async function save(name: string, description: string, body: string) {
+    try {
+      await SaveSkill(name, description, body)
+      await reload()
+    } catch (e) {
+      console.error('Failed to save skill:', e)
+      throw e
+    }
+  }
+
   async function getBody(name: string): Promise<string> {
     try {
       return await GetSkillBody(name)
@@ -83,6 +93,6 @@ export const useSkillStore = defineStore('skills', () => {
   return {
     skills, loaded, enabledSkills,
     load, reload,
-    toggleEnabled, toggleLocked, remove, create, getBody,
+    toggleEnabled, toggleLocked, remove, create, save, getBody,
   }
 })
