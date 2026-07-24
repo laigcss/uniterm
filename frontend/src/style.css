@@ -54,6 +54,11 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
 
+  /* Scrim - dim-out mask for loading/drop overlays. Dark themes use a
+     translucent black; light theme overrides to translucent white so the
+     dark text/spinner on top stays legible. */
+  --scrim: rgba(0, 0, 0, 0.35);
+
   /* Fonts */
   --font-ui: -apple-system, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif;
   --font-mono: 'SF Mono', 'Consolas', monospace;
@@ -89,7 +94,7 @@
   --el-border-color-light: rgba(255, 255, 255, 0.1);
   --el-border-color-lighter: rgba(255, 255, 255, 0.08);
   /* Loading mask: uniform dark overlay matching the project's .loading-overlay convention (no white flash on refresh) */
-  --el-mask-color: rgba(0, 0, 0, 0.35);
+  --el-mask-color: var(--scrim);
 
   /* Element Plus sizing */
   --el-input-height: 28px;
@@ -205,6 +210,9 @@
   /* Borders - cool light grays */
   --border-subtle: rgba(0, 0, 0, 0.06);
   --border-hover: rgba(0, 0, 0, 0.12);
+
+  /* Scrim - translucent white so dark loading text stays legible */
+  --scrim: rgba(255, 255, 255, 0.6);
 
   /* Shadows - cleaner, deeper */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);

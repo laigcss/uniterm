@@ -1723,5 +1723,17 @@ watch(
 .app-container.has-bg .main-content :deep(.el-select__wrapper) {
   backdrop-filter: blur(8px);
 }
+/* 拖拽/等待遮罩：全局透明规则会抹掉底色，这里给几处遮罩恢复颜色，
+   保证背景图下 SFTP 拖入、终端拖文件、分屏落位提示、loading 蒙层仍清晰可见 */
+.app-container.has-bg .main-content :deep(.drop-overlay),
+.app-container.has-bg .main-content :deep(.loading-overlay) {
+  background-color: var(--scrim) !important;
+}
+.app-container.has-bg .main-content :deep(.drop-zone-overlay .dz) {
+  background-color: var(--accent-subtle) !important;
+}
+.app-container.has-bg .main-content :deep(.drop-zone-overlay .dz.active) {
+  background-color: var(--accent-glow) !important;
+}
 
 </style>

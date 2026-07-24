@@ -624,7 +624,7 @@ function onEditRowCancel() {
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -635,10 +635,6 @@ function onEditRowCancel() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 24px 36px;
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
 }
 .spinner {
   width: 28px;
@@ -654,7 +650,7 @@ function onEditRowCancel() {
 .loading-text {
   font-family: var(--font-ui);
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 .editor-top {
   flex-shrink: 0;
