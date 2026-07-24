@@ -169,7 +169,7 @@ func tunnelKeepAlive(client *ssh.Client, quit chan struct{}, label string) {
 				} else {
 					failures = 0
 				}
-			case <-time.After(sshKeepAliveTimeout):
+			case <-time.After(sshKeepAliveInterval):
 				failures++
 			}
 

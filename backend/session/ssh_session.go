@@ -21,18 +21,10 @@ import (
 )
 
 const (
-	// Kept well under common corporate firewall/NAT/VPN idle-connection
-	// timeouts (commonly 5-15 minutes, sometimes as low as a few minutes),
-	// which otherwise silently drop the TCP session while the user is
-	// idle-reading in an editor (e.g. vim in normal mode) with no traffic
-	// flowing between keystrokes.
-	sshKeepAliveInterval = 20 * time.Second
-	// Timeout for a single keepalive request. Kept generous: a jump host or
-	// target that is merely slow to answer keepalive@openssh.com under load
-	// must not be mistaken for a dead connection (a too-aggressive 5s value
-	// falsely closed healthy tunnels, see issue #242).
-	sshKeepAliveTimeout = 15 * time.Second
-	sshKeepAliveMaxFail = 4
+	// OpenSSH-recommended defaults (ServerAliveInterval=60, CountMax=3):
+	// 180s judgement window rides out `systemctl restart network` / VPN blips.
+	sshKeepAliveInterval = 60 * time.Second
+	sshKeepAliveMaxFail  = 3
 )
 
 type SSHSession struct {
@@ -471,7 +463,7 @@ func (s *SSHSession) startKeepAlive() {
 					s.kaLastErr.Store("")
 					s.kaLastOKUnix.Store(time.Now().UnixNano())
 				}
-			case <-time.After(sshKeepAliveTimeout):
+			case <-time.After(sshKeepAliveInterval):
 				failures++
 				s.kaLastErr.Store("timeout")
 			}
