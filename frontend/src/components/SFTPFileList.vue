@@ -496,7 +496,7 @@ function onDragStart(event: DragEvent, row: FileItem) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--scrim);
 }
 .loading-content {
   display: flex;
@@ -517,7 +517,7 @@ function onDragStart(event: DragEvent, row: FileItem) {
 }
 .loading-text {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* Remove horizontal borders between data rows (keep header border) */
