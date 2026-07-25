@@ -7,6 +7,7 @@ import {
   K8sStopWatch,
   K8sStartLogStream,
   K8sStopLogStream,
+  K8sExecSession,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import type { K8sContextInfo, K8sWatchEvent } from '../types/k8s'
@@ -103,4 +104,8 @@ export async function startLogStream(
       K8sStopLogStream(streamId)
     },
   }
+}
+
+export async function execSession(connId: string, ns: string, pod: string, container: string) {
+  return await K8sExecSession(connId, ns, pod, container)
 }

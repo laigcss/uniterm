@@ -159,6 +159,7 @@ const tabIcon = computed(() => {
   if (t.type === 'workspace') return LayoutDashboard
   if (t.type === 'terminal') {
     const panel = panelStore.getPanel(t.panelId)
+    if (panel?.type === 'k8s-exec') return ShipWheel
     if (panel?.type === 'local') return Laptop
     if (panel?.type === 'serial') return Cable
     if (panel?.type === 'telnet') return Terminal

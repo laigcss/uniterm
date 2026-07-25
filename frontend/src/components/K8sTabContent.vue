@@ -43,7 +43,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import * as k8sClient from '../services/k8sClient'
+import { usePanelStore } from '../stores/panelStore'
+import { useTabStore } from '../stores/tabStore'
 import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
@@ -56,6 +59,9 @@ import type { ConnectionConfig } from '../types/session'
 const props = defineProps<{ tab: K8sTab; connection: ConnectionConfig }>()
 
 const { resolveTunnelCredentials } = useTunnelCredentials()
+
+const panelStore = usePanelStore()
+const tabStore = useTabStore()
 
 const connId = ref<string>('')
 const error = ref('')
@@ -131,8 +137,30 @@ function crSelfPathOverride(): ((obj: any) => string) | undefined {
     return crdListPath(crd, ns).split('?')[0] + '/' + encodeURIComponent(obj.metadata?.name)
   }
 }
-// openTerminal wired in Phase 3
-function openTerminal(_pod: any) { /* Phase 3 */ }
+async function openTerminal(pod: any) {
+  const containers = (pod.spec?.containers || []).map((c: any) => c.name)
+  let container = containers[0]
+  try {
+    if (containers.length > 1) {
+      const { value } = await ElMessageBox.prompt(
+        `Container (${containers.join(', ')})`, 'Select container',
+        { inputValue: containers[0], inputValidator: (v: string) => containers.includes(v) || 'unknown container' },
+      )
+      container = value
+    }
+    const ns = pod.metadata?.namespace
+    const info = await k8sClient.execSession(connId.value, ns, pod.metadata?.name, container)
+    const title = `${pod.metadata?.name}/${container}`
+    const cfg = { id: '', name: title, type: 'k8s-exec' as any, host: '', port: 0, user: '', authType: 'password' as any }
+    const panel = panelStore.createPanel(cfg as any, 'k8s-exec')
+    panelStore.updateTitle(panel.id, title)
+    panelStore.bindSession(panel.id, info.id)
+    const tab = tabStore.createTerminalTab(panel.title, panel.id)
+    panelStore.movePanelToTab(panel.id, tab.id)
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e))
+  }
+}
 
 // 左侧宽度 + resizer（抄 DBTabContent）
 const leftWidth = ref(220)
