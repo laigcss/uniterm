@@ -25,7 +25,7 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <el-dropdown trigger="click" placement="bottom-end" :teleported="false">
+            <el-dropdown trigger="click" placement="bottom-end" popper-class="type-filter-popper">
               <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop>
                 <el-icon><Filter :size="14" /></el-icon>
               </span>
@@ -2292,6 +2292,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .new-conn-popper {
   margin-top: -8px !important;
   margin-left: 4px !important;
+}
+
+/* Teleported (.type-filter-popper) to body so it floats above everything.
+   The global .el-dropdown-menu provides the surface, but we set a popper
+   background here too as a safety net against any future Teleport removal. */
+.type-filter-popper {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 .theme-select-popper .el-select-group__title {
