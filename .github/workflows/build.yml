@@ -194,6 +194,11 @@ jobs:
           depends:
             - libgtk-3-0
             - libwebkit2gtk-4.1-0
+          overrides:
+            rpm:
+              depends:
+                - gtk3
+                - webkit2gtk4.1
           contents:
             - src: build/bin/uniTerm
               dst: /usr/bin/uniterm
