@@ -160,13 +160,6 @@
           </div>
         </div>
 
-        <div v-if="activeSkillChip" class="skill-chip-area">
-          <span class="skill-chip">
-            ⚡ {{ activeSkillChip }}
-            <button class="skill-chip-close" @click="activeSkillChip = null">&times;</button>
-          </span>
-        </div>
-
         <div v-if="aiStore.queuedMessages.length" class="queued-area">
           <div v-for="q in aiStore.queuedMessages" :key="q.id" class="queued-chip">
             <span class="queued-text">{{ q.content }}</span>
@@ -257,7 +250,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus } from '@lucide/vue'
+import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, Zap } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSkillStore } from '../stores/skillStore'
@@ -287,6 +280,10 @@ function getEditableText(): string {
     if (node.nodeType === Node.TEXT_NODE) {
       text += node.textContent || ''
     } else if (node instanceof HTMLElement) {
+      if (node.classList.contains('skill-tag')) {
+        // skill tag 不贡献文本(skill 正文单独注入,不发给终端)
+        return
+      }
       if (node.classList.contains('hash-tag')) {
         text += node.getAttribute('data-ref') || node.textContent || ''
       } else {
@@ -296,6 +293,33 @@ function getEditableText(): string {
   }
   el.childNodes.forEach(walk)
   return text
+}
+
+// 从输入框里提取已插入的 skill 名(取第一个 skill-tag)
+function extractSkillFromInput(): string | null {
+  const el = editableRef.value
+  if (!el) return null
+  const tag = el.querySelector('.skill-tag')
+  return tag?.getAttribute('data-skill') || null
+}
+
+// Create a skill inline tag span (⚡ name), non-editable, carries data-skill
+function createSkillTagSpan(name: string): HTMLSpanElement {
+  const span = document.createElement('span')
+  span.className = 'skill-tag'
+  span.setAttribute('data-skill', name)
+  span.contentEditable = 'false'
+  span.textContent = '⚡ ' + name
+  const el = editableRef.value
+  if (el) {
+    for (const attr of el.attributes) {
+      if (attr.name.startsWith('data-v-')) {
+        span.setAttribute(attr.name, '')
+        break
+      }
+    }
+  }
+  return span
 }
 
 // Create a hash-tag span with scoped CSS attribute so styles apply
@@ -656,7 +680,27 @@ function onSelectSkill(name: string) {
       }
     }
   }
-  activeSkillChip.value = name
+  // 移除已有的 skill tag（只允许一个），再在光标处插入新的
+  if (el) {
+    el.querySelectorAll('.skill-tag').forEach(n => n.remove())
+    const tagSpan = createSkillTagSpan(name)
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0)
+      range.collapse(false)
+      range.insertNode(tagSpan)
+      const trailing = document.createTextNode(' ')
+      tagSpan.after(trailing)
+      range.setStart(trailing, 1)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    } else {
+      // 光标不在输入框（按钮触发）：插到开头
+      el.insertBefore(tagSpan, el.firstChild)
+      el.insertBefore(document.createTextNode(' '), tagSpan.nextSibling)
+    }
+  }
   skillDropdownVisible.value = false
   skillQuery.value = ''
   syncInputText()
@@ -1051,8 +1095,8 @@ async function onSend() {
   const text = getEditableText().trim()
   if (!text) return
 
-  // F5: 显式调用 skill —— 如果挂了 chip，注入 L2 正文到用户消息
-  const skillName = activeSkillChip.value
+  // F5: 显式调用 skill —— 输入框里挂了 skill tag 则注入其 L2 正文
+  const skillName = extractSkillFromInput()
   let skillBody = ''
   if (skillName) {
     try {
@@ -1060,11 +1104,10 @@ async function onSend() {
     } catch (e) {
       console.error('Failed to get skill body:', e)
     }
-    activeSkillChip.value = null
   }
 
   if (busy.value) {
-    aiStore.enqueueMessage(text)
+    aiStore.enqueueMessage(text, skillName || undefined, skillBody || undefined)
     clearInput()
     return
   }
@@ -1658,6 +1701,9 @@ defineExpose({ focusInput })
   color: var(--text-muted);
   border-color: var(--border-subtle);
 }
+.panel-tag-skill-icon {
+  flex-shrink: 0;
+}
 .panel-tag-close {
   background: none;
   border: none;
@@ -1795,34 +1841,6 @@ defineExpose({ focusInput })
   white-space: nowrap;
 }
 /* Skill chip */
-.skill-chip-area {
-  padding: 4px 8px 0;
-}
-.skill-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent-glow);
-  border-radius: 10px;
-  font-size: 11px;
-  color: var(--accent);
-  font-weight: 500;
-}
-.skill-chip-close {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0.7;
-}
-.skill-chip-close:hover {
-  opacity: 1;
-}
 .queued-area {
   display: flex;
   flex-direction: column;

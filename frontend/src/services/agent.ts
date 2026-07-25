@@ -317,10 +317,16 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     if (store.queuedMessages.length > 0) {
       const drained = store.queuedMessages.splice(0)
       drained.forEach((q, i) => {
+        let header = ''
+        if (q.skillName && q.skillBody) {
+          header = `[Skill: ${q.skillName}]\n${q.skillBody}`
+          store.addSkillCard(q.skillName, 'explicit')
+        }
         store.addMessage({
           id: `msg-${Date.now()}-${i}`,
           role: 'user',
           content: q.content,
+          _contextHeader: header || undefined,
         })
       })
       turnCount = 0

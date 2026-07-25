@@ -177,18 +177,20 @@ export const useAIStore = defineStore('ai', () => {
     multiSelect: boolean
   } | null>(null)
   const lastPanelContext = ref<{ panelId: string; shellPath: string } | null>(null)
-  const queuedMessages = ref<{ id: string; content: string }[]>([])
+  const queuedMessages = ref<{ id: string; content: string; skillName?: string; skillBody?: string }[]>([])
 
   function setLastPanelContext(panelId: string, shellPath: string) {
     lastPanelContext.value = { panelId, shellPath }
   }
 
-  function enqueueMessage(content: string) {
+  function enqueueMessage(content: string, skillName?: string, skillBody?: string) {
     const trimmed = content.trim()
     if (!trimmed) return
     queuedMessages.value.push({
       id: `q-${Date.now()}-${queuedMessages.value.length}`,
       content: trimmed,
+      skillName,
+      skillBody,
     })
   }
 
