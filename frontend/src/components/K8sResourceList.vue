@@ -44,6 +44,8 @@
         :label="col.header"
         :width="col.width"
         sortable
+        :filters="col.filterable ? enumFilters(col) : undefined"
+        :filter-method="col.filterable ? (val, row) => cellText(col.value(row)) === val : undefined"
       >
         <template #default="{ row }">{{ cellText(col.value(row)) }}</template>
       </el-table-column>
@@ -106,6 +108,12 @@ function cellText(v: string | number | ColoredCell): string {
   if (v == null) return ''
   if (typeof v === 'object' && 'text' in v) return v.text
   return String(v)
+}
+
+function enumFilters(col: any) {
+  const set = new Set<string>()
+  for (const row of items.value) set.add(cellText(col.value(row)))
+  return Array.from(set).filter(Boolean).sort().map(v => ({ text: v, value: v }))
 }
 
 function onRowClick(row: any) {
