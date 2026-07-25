@@ -3216,23 +3216,18 @@ func (a *App) MongoDropIndex(sessionID string, dbName string, collection string,
 }
 
 func (a *App) GetDatabases(sessionID string) ([]string, error) {
-	log.Writef("[GetDatabases] sessionID=%s", sessionID)
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {
 		return nil, err
 	}
-	log.Writef("[GetDatabases] dbType=%s, fetching databases...", ds.DBType())
 	dbs, err := p.GetDatabases(ds.DB())
 	if err != nil {
 		log.Writef("[GetDatabases] failed: %v", err)
-	} else {
-		log.Writef("[GetDatabases] got %d databases: %v", len(dbs), dbs)
 	}
 	return dbs, err
 }
 
 func (a *App) GetTables(sessionID string, dbName string) ([]database.TableInfo, error) {
-	log.Writef("[GetTables] sessionID=%s, dbName=%s", sessionID, dbName)
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {
 		return nil, err
@@ -3245,11 +3240,6 @@ func (a *App) GetTables(sessionID string, dbName string) ([]database.TableInfo, 
 	sort.Slice(tables, func(i, j int) bool {
 		return tables[i].Name < tables[j].Name
 	})
-	names := make([]string, len(tables))
-	for i, t := range tables {
-		names[i] = t.Name
-	}
-	log.Writef("[GetTables] got %d tables: %v", len(tables), names)
 	return tables, nil
 }
 
