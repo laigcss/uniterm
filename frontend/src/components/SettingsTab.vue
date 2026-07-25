@@ -932,7 +932,8 @@ const categories = computed(() => {
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
-    { key: 'skills', label: t('settings.skills'), icon: Wrench },
+    // Skills 功能本期暂不开放，隐藏入口
+    // { key: 'skills', label: t('settings.skills'), icon: Wrench },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
