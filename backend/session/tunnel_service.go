@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
-
-	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // tunnelEntry holds the SSH client and listener for a single tunnel.
@@ -140,44 +138,21 @@ func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, tar
 }
 
 // tunnelKeepAlive periodically pings the tunnel's SSH connection with a
-// global keepalive request (same cadence/threshold as SSHSession's) and
-// closes the connection if the remote stops responding, so a dead jump-host
-// hop doesn't linger silently while the forwarded session on top of it hangs.
+// send-only global keepalive request (same cadence as SSHSession's) purely to
+// keep traffic flowing so an idle jump-host hop isn't dropped by a
+// server/NAT/firewall idle timeout. It does not wait for a reply or tear the
+// connection down: a dead hop surfaces as EOF on the forwarded sessions riding
+// it, and the OS TCP keepalive covers a silently-dropped socket.
 func tunnelKeepAlive(client *ssh.Client, quit chan struct{}, label string) {
 	ticker := time.NewTicker(sshKeepAliveInterval)
 	defer ticker.Stop()
 
-	failures := 0
 	for {
 		select {
 		case <-ticker.C:
-			done := make(chan error, 1)
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						done <- fmt.Errorf("panic: %v", r)
-					}
-				}()
-				_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
-				done <- err
-			}()
-
-			select {
-			case err := <-done:
-				if err != nil {
-					failures++
-				} else {
-					failures = 0
-				}
-			case <-time.After(sshKeepAliveInterval):
-				failures++
-			}
-
-			if failures >= sshKeepAliveMaxFail {
-				log.Writef("tunnel keepalive: closing jump-host client after %d failures (%s) — sessions riding this tunnel will get EOF", failures, label)
-				client.Close()
-				return
-			}
+			// wantReply=false: crypto/ssh takes no lock and returns
+			// immediately, so a slow/silent jump host can never stall this loop.
+			_, _, _ = client.SendRequest("keepalive@openssh.com", false, nil)
 
 		case <-quit:
 			return
