@@ -27,3 +27,17 @@ export interface K8sWatchEvent {
   type: 'ADDED' | 'MODIFIED' | 'DELETED' | 'BOOKMARK'
   object: any
 }
+
+export interface ParsedCRD {
+  group: string
+  version: string
+  plural: string
+  kind: string
+  scope: 'Namespaced' | 'Cluster'
+  printerColumns: { name: string; jsonPath: string; type?: string }[]
+}
+
+export type NavFrame =
+  | { kind: 'list'; resourceKey: string; namespace: string }
+  | { kind: 'owned'; resourceKey: string; ownerKind: string; ownerName: string; ownerUid: string; namespace: string }
+  | { kind: 'custom'; crd: ParsedCRD; namespace: string }
