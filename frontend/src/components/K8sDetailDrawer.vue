@@ -1,6 +1,6 @@
 <template>
   <div class="detail-drawer-backdrop" :class="{ open: !!mode }" @click="$emit('close')"></div>
-  <div class="detail-drawer" :class="{ open: !!mode }">
+  <div class="detail-drawer" :class="{ open: !!mode, wide: mode === 'logs' }">
     <div class="detail-drawer-header">
       <span class="detail-drawer-title">{{ headerTitle }}</span>
       <el-button link @click="$emit('close')"><el-icon><Close :size="16" /></el-icon></el-button>
@@ -39,17 +39,34 @@
       </div>
     </template>
 
-    <div v-else-if="mode === 'logs'" class="logs-placeholder"><!-- filled in Phase 3 --></div>
+    <div v-else-if="mode === 'logs'" class="logs-pane">
+      <div class="logs-toolbar">
+        <el-select v-model="logContainer" size="small" style="width: 160px" @change="restartLogs">
+          <el-option v-for="c in containerNames" :key="c" :label="c" :value="c" />
+        </el-select>
+        <el-select v-model="logTail" size="small" style="width: 100px" @change="restartLogs">
+          <el-option :value="100" label="100" />
+          <el-option :value="500" label="500" />
+          <el-option :value="2000" label="2000" />
+        </el-select>
+        <el-checkbox v-model="logPrevious" @change="restartLogs">上一次</el-checkbox>
+        <el-checkbox v-model="logTimestamps" @change="restartLogs">时间戳</el-checkbox>
+        <el-button size="small" @click="logPaused = !logPaused">{{ logPaused ? '继续' : '暂停' }}</el-button>
+        <el-button size="small" @click="logLines = []">清空</el-button>
+        <el-checkbox v-model="logAutoscroll">自动滚动</el-checkbox>
+      </div>
+      <pre ref="logBody" class="k8s-yaml-drawer-body logs-body">{{ logLines.join('\n') }}</pre>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ElButton, ElIcon, ElMessage } from 'element-plus'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ElButton, ElIcon, ElMessage, ElSelect, ElOption, ElCheckbox } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { dump, load } from 'js-yaml'
 import { getResource, type DetailSection } from '../services/k8sResources'
-import { requestJSON } from '../services/k8sClient'
+import { requestJSON, startLogStream, type LogHandle } from '../services/k8sClient'
 
 const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
@@ -123,6 +140,48 @@ async function save() {
     saving.value = false
   }
 }
+
+const logContainer = ref('')
+const logTail = ref(500)
+const logPrevious = ref(false)
+const logTimestamps = ref(false)
+const logPaused = ref(false)
+const logAutoscroll = ref(true)
+const logLines = ref<string[]>([])
+const logBody = ref<HTMLElement | null>(null)
+let logHandle: LogHandle | null = null
+
+const containerNames = computed(() => (props.target?.spec?.containers || []).map((c: any) => c.name))
+
+function stopLogs() { logHandle?.stop(); logHandle = null }
+async function restartLogs() {
+  stopLogs()
+  logLines.value = []
+  if (props.mode !== 'logs' || !props.target) return
+  const ns = props.target.metadata?.namespace
+  const pod = props.target.metadata?.name
+  logHandle = await startLogStream(
+    props.connId, ns, pod, logContainer.value, logTail.value, logTimestamps.value, logPrevious.value,
+    (line) => {
+      if (logPaused.value) return
+      logLines.value.push(line)
+      if (logLines.value.length > 5000) logLines.value.splice(0, logLines.value.length - 5000)
+      if (logAutoscroll.value) nextTick(() => { if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight })
+    },
+    () => {},
+  )
+}
+
+watch(() => [props.mode, props.target], () => {
+  if (props.mode === 'logs' && props.target) {
+    logContainer.value = containerNames.value[0] || ''
+    restartLogs()
+  } else {
+    stopLogs()
+  }
+})
+
+onBeforeUnmount(stopLogs)
 </script>
 
 <style scoped>
@@ -258,4 +317,9 @@ async function save() {
 .yaml-actions { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
 .yaml-edit { width: 100%; box-sizing: border-box; resize: none; background: transparent; color: var(--text-primary); border: none; outline: none; }
 .yaml-error { color: var(--el-color-danger, #f56); padding: 8px 12px; font-size: 12px; }
+
+.detail-drawer.wide { width: 640px; }
+.logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
+.logs-body { flex: 1; overflow: auto; }
 </style>
