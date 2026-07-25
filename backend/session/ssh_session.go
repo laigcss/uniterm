@@ -480,7 +480,6 @@ func (s *SSHSession) Disconnect() error {
 func (s *SSHSession) Resize(cols, rows int) error {
 	// Always save the desired size so it can be applied after Connect finishes.
 	s.SetPendingSize(cols, rows)
-	log.Writef("ssh resize: cols=%d rows=%d", cols, rows)
 	if s.session == nil {
 		return fmt.Errorf("session not connected")
 	}

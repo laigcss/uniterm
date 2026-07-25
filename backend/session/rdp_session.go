@@ -180,8 +180,6 @@ func (s *RDPSession) autoDismissSecurityDialogs(stop <-chan struct{}) {
 					continue
 				}
 
-				log.Writef("[RDP] found security dialog: %s hwnd=0x%x", title, hwnd)
-
 				// Dismiss via standard dialog button IDs
 				procPostMessageW.Call(hwnd, WM_COMMAND, IDYES, 0)
 				procPostMessageW.Call(hwnd, WM_COMMAND, IDOK, 0)
@@ -491,7 +489,6 @@ type msg struct {
 func (s *RDPSession) runMessagePump() {
 	log.Writef("[RDP] message pump started")
 	var m msg
-	pumpTick := 0
 	noMsgCount := 0
 	disconnectLogged := false
 	for {
@@ -530,7 +527,6 @@ func (s *RDPSession) runMessagePump() {
 			}
 			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 			procDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
-			pumpTick++
 			noMsgCount = 0
 		} else {
 			// No message available; sleep briefly to avoid busy-wait.
@@ -568,7 +564,6 @@ func (s *RDPSession) runMessagePump() {
 			}
 
 			if noMsgCount%20 == 0 {
-				log.Writef("[RDP-pump] heartbeat idle=%d, pumpMsgs=%d, hwnd=0x%x", noMsgCount, pumpTick, s.hwnd)
 				// Check if RDP connection is still alive via ActiveX Connected property.
 				// When the remote side drops or the connection is lost, this transitions
 				// to 0 while the ActiveX window is still alive.
@@ -867,7 +862,6 @@ func (s *RDPSession) SetPosition(x, y, w, h int) {
 	s.shown = true
 	s.trackX = x
 	s.trackY = y
-	log.Writef("[RDP-SetPos] FROM FRONTEND x=%d y=%d w=%d h=%d", x, y, w, h)
 	s.mu.Unlock()
 
 	// Owned window: z-order is automatic. SWP_SHOWWINDOW handles tab-switch restore.
@@ -910,7 +904,6 @@ func (s *RDPSession) Show() {
 	tY := s.trackY
 	s.shown = true
 	s.mu.Unlock()
-	log.Writef("[RDP-Show] trackX=%d trackY=%d hwnd=0x%x", tX, tY, hwnd)
 	if hwnd != 0 {
 		procShowWindow.Call(hwnd, SW_SHOWNOACTIVATE)
 		procSetWindowPos.Call(hwnd, 0,
@@ -921,7 +914,6 @@ func (s *RDPSession) Show() {
 }
 
 func (s *RDPSession) Hide() {
-	log.Writef("[RDP-Hide] called")
 	s.mu.Lock()
 	if !s.shown {
 		s.mu.Unlock()
