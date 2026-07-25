@@ -307,5 +307,27 @@ export const AVAILABLE_TOOLS = [
       },
       required: ['question', 'options']
     }
+  },
+  {
+    name: 'save_skill',
+    description: 'Create or update a reusable skill (a command-line workflow / SOP) so it can be invoked later via /name. Use this when the user asks to save the current approach as a skill, or when you and the user just worked out a repeatable command-line procedure worth keeping. Write a thin skill: only include steps the model would NOT do by default, use imperative steps, state clearly in the description what it does AND when to use it. Locked skills cannot be overwritten.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Skill identifier in kebab-case (lowercase letters, digits, hyphens), e.g. "git-clean-branches". This becomes the /trigger.'
+        },
+        description: {
+          type: 'string',
+          description: 'One line: what the skill does AND when to use it (drives matching). E.g. "Clean up merged local git branches. Use when the user wants to delete/tidy git branches."'
+        },
+        body: {
+          type: 'string',
+          description: 'The skill instructions as markdown (imperative steps). Do NOT include YAML frontmatter — name/description are passed separately.'
+        }
+      },
+      required: ['name', 'description', 'body']
+    }
   }
 ]

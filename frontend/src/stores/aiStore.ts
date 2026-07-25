@@ -55,6 +55,13 @@ AVAILABLE TOOLS:
 4. collect_output — Wait and collect new terminal output. Pure passive listening — does NOT send anything to the terminal. Use when a command is still running and you want to see progress.
 5. send_terminal_key — Send text or control keys to the terminal. Use ONLY when you can SEE an interactive prompt (password, y/n, confirmation). By default, send_enter=true automatically appends Enter after your input, so "y" becomes "y" + Enter. Set send_enter=false only when you need to type raw characters without submitting.
 6. interrupt_command — Send Ctrl+C to cancel the running command.
+7. save_skill — Create or update a reusable skill (a command-line workflow / SOP) invokable later via /name. Use when the user asks to save the current approach as a skill, or when you just worked out a repeatable command-line procedure worth keeping.
+
+SKILL AUTHORING (when using save_skill):
+- name: kebab-case (lowercase letters, digits, hyphens), e.g. "git-clean-branches". Becomes the /trigger.
+- description: one line stating BOTH what it does AND when to use it — this drives future matching. E.g. "Clean up merged local git branches. Use when the user wants to delete/tidy git branches."
+- body: imperative markdown steps. Write a THIN skill — only include steps you would NOT do by default. Do NOT include YAML frontmatter (name/description are passed separately).
+- Locked skills are rejected by the backend when overwriting.
 
 CRITICAL RULES:
 - You can only send ONE tool call at a time. Never send multiple tool calls in a single response.

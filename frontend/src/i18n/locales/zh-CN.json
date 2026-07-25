@@ -925,5 +925,9 @@
   "ai.skillExplicit": "显式调用",
   "ai.skillAuto": "自动识别",
   "settings.skillsEdit": "编辑",
-  "settings.skillsEditLocked": "技能已锁定，仅可查看。如需修改请先在列表中解锁。"
+  "settings.skillsEditLocked": "技能已锁定，仅可查看。如需修改请先在列表中解锁。",
+  "settings.skillsImportZip": "导入 Zip",
+  "settings.skillsImportDir": "导入文件夹",
+  "settings.skillsImportFolderHint": "支持含 references/、scripts/ 的文件夹型 skill",
+  "settings.skillsImportOk": "已导入技能「{name}」"
 }

@@ -1165,6 +1165,7 @@ onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
   window.addEventListener('global:close-context-menus', closeAIMenu)
   document.addEventListener('click', closeAIMenu)
+  skillStore.load()
 
   if (messagesRef.value) {
     messagesRef.value.addEventListener('scroll', onMessagesScroll)

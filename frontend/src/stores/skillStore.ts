@@ -81,6 +81,18 @@ export const useSkillStore = defineStore('skills', () => {
     }
   }
 
+  // AI 侧保存：已存在则覆写（后端拒绝 locked），不存在则新建。
+  async function saveByAgent(name: string, description: string, body: string) {
+    await load()
+    const exists = skills.value.some(s => s.name === name)
+    if (exists) {
+      await SaveSkill(name, description, body)
+    } else {
+      await CreateSkill(name, description, body)
+    }
+    await reload()
+  }
+
   async function getBody(name: string): Promise<string> {
     try {
       return await GetSkillBody(name)
@@ -93,6 +105,6 @@ export const useSkillStore = defineStore('skills', () => {
   return {
     skills, loaded, enabledSkills,
     load, reload,
-    toggleEnabled, toggleLocked, remove, create, save, getBody,
+    toggleEnabled, toggleLocked, remove, create, save, saveByAgent, getBody,
   }
 })

@@ -925,5 +925,9 @@
   "ai.skillExplicit": "Explicit",
   "ai.skillAuto": "Auto",
   "settings.skillsEdit": "Edit",
-  "settings.skillsEditLocked": "Skill is locked (view only). Unlock it in the list to edit."
+  "settings.skillsEditLocked": "Skill is locked (view only). Unlock it in the list to edit.",
+  "settings.skillsImportZip": "Import Zip",
+  "settings.skillsImportDir": "Import Folder",
+  "settings.skillsImportFolderHint": "Supports folder skills with references/ and scripts/",
+  "settings.skillsImportOk": "Imported skill \"{name}\""
 }

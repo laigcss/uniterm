@@ -36,6 +36,12 @@
         </template>
       </div>
 
+      <div class="import-actions">
+        <el-button size="small" @click="importZip">{{ t('settings.skillsImportZip') }}</el-button>
+        <el-button size="small" @click="importDir">{{ t('settings.skillsImportDir') }}</el-button>
+        <span class="import-hint">{{ t('settings.skillsImportFolderHint') }}</span>
+      </div>
+
       <el-form label-position="right" label-width="72px" size="small">
         <el-form-item required :label="t('settings.skillsName')">
           <el-input
@@ -79,6 +85,7 @@ import { ElMessage } from 'element-plus'
 import { FileUp, CircleCheck } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { useSkillStore } from '../stores/skillStore'
+import { OpenFileDialogFiltered, OpenDirectoryDialog, ImportSkillFromZip, ImportSkillFromDir } from '../../wailsjs/go/main/App'
 
 const { t } = useI18n()
 const store = useSkillStore()
@@ -168,7 +175,7 @@ async function handleFile(file: File) {
       parseError.value = e?.message || t('settings.skillsParseFail')
     }
   } else if (lower.endsWith('.zip') || lower.endsWith('.skill')) {
-    // zip 导入需后端解压：提示用户改用 .md，或后续通过文件对话框路径导入
+    // 拖入的 zip 拿不到磁盘路径，引导用下方「导入 Zip」按钮走原生对话框
     parseState.value = 'fail'
     parseError.value = t('settings.skillsZipHint')
   } else {
@@ -190,6 +197,33 @@ async function onCreate() {
     ElMessage.error(e?.message || 'Creation failed')
   }
 }
+
+// 通过 Wails 原生对话框选 zip / 文件夹，走后端导入（支持文件夹型 skill）
+async function importZip() {
+  try {
+    const path = await OpenFileDialogFiltered(t('settings.skillsImportZip'), 'Skill', '*.zip;*.skill')
+    if (!path) return
+    const name = await ImportSkillFromZip(path)
+    await store.reload()
+    ElMessage.success(t('settings.skillsImportOk', { name }))
+    emit('created')
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Import failed')
+  }
+}
+
+async function importDir() {
+  try {
+    const path = await OpenDirectoryDialog()
+    if (!path) return
+    const name = await ImportSkillFromDir(path)
+    await store.reload()
+    ElMessage.success(t('settings.skillsImportOk', { name }))
+    emit('created')
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Import failed')
+  }
+}
 </script>
 
 <style scoped>
@@ -209,6 +243,15 @@ async function onCreate() {
   text-align: center;
   cursor: pointer;
   transition: border-color 0.15s;
+}
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.import-hint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
 }
 .upload-zone:hover {
   border-color: var(--el-color-primary);
