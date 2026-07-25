@@ -45,7 +45,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | MySQL | ✅ | v2026.05.27-alpha | Also covers MariaDB, TiDB, etc. |  |
 | PostgreSQL | ✅ | v2026.05.27-alpha | Also covers CockroachDB, etc. |  |
 | rqlite | ✅ | v2026.05.27-alpha | Distributed SQLite with Raft |  |
-| Oracle | ✅ | v1.2.0 | Oracle Database | @yuwei5380 |
+| Oracle | ✅ | v1.2.0 | Oracle Database | [@yuwei5380](https://github.com/yuwei5380) |
 | SQL Server | ✅ | v1.2.0 | Microsoft SQL Server |  |
 | Redis | ✅ | v1.2.1 | Key-value store with visual browser |  |
 | MongoDB | ✅ | v1.4.1 | Document database |  |
@@ -72,7 +72,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Message Queue | ✅ | v1.4.1 | Queue messages while the agent is running |  |
 | NL Database Query | ✅ | v1.4.1 | Natural-language database query generation |  |
 | Multi-Panel AI Lock | ✅ | v1.5.0 | Control multiple terminals simultaneously |  |
-| Skill Support | 🚧 | — | Packaged, reusable workflows the agent can invoke | @surenwuyuwuqiu |
+| Skill Support | 🚧 | — | Packaged, reusable workflows the agent can invoke | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
 | Prompt Library | 🚧 | — | Manage and trigger reusable AI prompts |  |
 | Interaction Modes | 🚧 | — | Chat / read-only / agent modes to constrain AI actions |  |
 | MCP Server | 🚧 | — | Expose uniTerm as an MCP server for external AI agents |  |
@@ -102,8 +102,8 @@ Legend: ✅ Shipped, 🚧 Planned
 | Text Highlighting | ✅ | v2026.06.02-alpha | Terminal text highlighting |  |
 | SSH Jump Host | ✅ | v2026.06.14-alpha | Route connections through an SSH jump host |  |
 | Quick Commands | ✅ | v1.0.1 | Manage and run reusable commands |  |
-| Session Logging | ✅ | v1.4.0 | Log terminal output to file | @wangxufeng |
-| SSH Tunnel Manager | ✅ | v1.4.1 | Local, remote, and dynamic port forwarding | @surenwuyuwuqiu |
+| Session Logging | ✅ | v1.4.0 | Log terminal output to file | [@wangxufeng](https://github.com/wangxufeng) |
+| SSH Tunnel Manager | ✅ | v1.4.1 | Local, remote, and dynamic port forwarding | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
 | Connection Import / Export | 🚧 | — | Import and export connection configurations |  |
 
 ## Contributing
