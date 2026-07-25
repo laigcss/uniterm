@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill } from '../../wailsjs/go/main/App'
+import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill, OpenPathInExplorer } from '../../wailsjs/go/main/App'
 import type { SkillMeta } from '../types/skill'
 
 export const useSkillStore = defineStore('skills', () => {
@@ -102,9 +102,18 @@ export const useSkillStore = defineStore('skills', () => {
     }
   }
 
+  async function openFolder(path: string): Promise<void> {
+    if (!path) return
+    try {
+      await OpenPathInExplorer(path)
+    } catch (e) {
+      console.error('Failed to open skill folder:', e)
+    }
+  }
+
   return {
     skills, loaded, enabledSkills,
     load, reload,
-    toggleEnabled, toggleLocked, remove, create, save, saveByAgent, getBody,
+    toggleEnabled, toggleLocked, remove, create, save, saveByAgent, getBody, openFolder,
   }
 })

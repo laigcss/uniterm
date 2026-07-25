@@ -925,6 +925,7 @@
   "ai.skillExplicit": "显式调用",
   "ai.skillAuto": "自动识别",
   "settings.skillsEdit": "编辑",
+  "settings.skillsOpenFolder": "在文件管理器中打开",
   "settings.skillsEditLocked": "技能已锁定，仅可查看。如需修改请先在列表中解锁。",
   "settings.skillsImportZip": "导入 Zip",
   "settings.skillsImportDir": "导入文件夹",

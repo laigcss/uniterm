@@ -1335,6 +1335,7 @@ export namespace store {
 	    enabled: boolean;
 	    sortOrder: number;
 	    dir: string;
+	    path: string;
 	    hasReferences: boolean;
 	    scriptCount: number;
 	    modelInvocable: boolean;
@@ -1356,6 +1357,7 @@ export namespace store {
 	        this.enabled = source["enabled"];
 	        this.sortOrder = source["sortOrder"];
 	        this.dir = source["dir"];
+	        this.path = source["path"];
 	        this.hasReferences = source["hasReferences"];
 	        this.scriptCount = source["scriptCount"];
 	        this.modelInvocable = source["modelInvocable"];

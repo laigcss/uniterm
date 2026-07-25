@@ -31,6 +31,10 @@
           <span class="skill-card-name">{{ skill.name }}</span>
         </div>
         <div class="skill-card-desc">{{ skill.description }}</div>
+        <div v-if="skill.path" class="skill-card-path" @click.stop="openFolder(skill)" :title="t('settings.skillsOpenFolder')">
+          <FolderOpen :size="12" class="skill-card-path-icon" />
+          <span class="skill-card-path-text">{{ skill.path }}</span>
+        </div>
       </div>
       <div class="skill-card-actions" @click.stop>
         <el-switch
@@ -117,7 +121,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Plus, Lock, LockOpen, Settings2, Search, BookOpen } from '@lucide/vue'
+import { Plus, Lock, LockOpen, Settings2, Search, BookOpen, FolderOpen } from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useSkillStore } from '../stores/skillStore'
@@ -164,6 +168,10 @@ async function onSaveEdit() {
 function handleCmd(cmd: string, skill: SkillMeta) {
   if (cmd === 'delete') onDelete(skill)
   else if (cmd === 'edit') openEdit(skill)
+}
+
+function openFolder(skill: SkillMeta) {
+  store.openFolder(skill.path)
 }
 
 async function onDelete(skill: SkillMeta) {
@@ -255,5 +263,29 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+.skill-card-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+}
+.skill-card-path:hover {
+  color: var(--el-color-primary);
+}
+.skill-card-path-icon {
+  flex-shrink: 0;
+}
+.skill-card-path-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 </style>
