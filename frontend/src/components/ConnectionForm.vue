@@ -517,6 +517,13 @@ const visible = computed({
 watch(visible, (val) => {
   if (val) {
     passwordInputKey.value++
+    // Apply group on open: the defaultGroupId watch won't fire when the value
+    // is unchanged, so restore it here to avoid losing the group on the second
+    // consecutive create within the same group.
+    if (!props.editConfig) {
+      selectedGroupId.value = props.defaultGroupId
+      form.groupId = props.defaultGroupId
+    }
   }
 })
 
