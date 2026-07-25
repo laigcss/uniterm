@@ -63,7 +63,7 @@ export interface AIModelConfig {
   apiKey: string
   baseURL: string
   model: string
-  protocol: 'anthropic' | 'openai'
+  protocol: 'anthropic' | 'openai' | 'responses'
   userAgent?: string
 }
 

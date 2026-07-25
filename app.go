@@ -1525,8 +1525,11 @@ func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, 
 		userAgent = "uniTerm"
 	}
 
-	if protocol == "openai" {
+	switch protocol {
+	case "openai":
 		return a.chatCompletionOpenAI(apiKey, baseURL, model, reqBody, userAgent)
+	case "responses":
+		return a.chatCompletionResponses(apiKey, baseURL, model, reqBody, userAgent)
 	}
 	return a.chatCompletionAnthropic(apiKey, baseURL, model, reqBody, userAgent)
 }
@@ -2120,6 +2123,337 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		}
 		resultJSON, _ := json.Marshal(fullMessage)
 		return string(resultJSON), nil
+	}
+
+	return "", fmt.Errorf("stream ended without completion")
+}
+
+// anthropicToolToResponses converts an Anthropic tool definition to the
+// Responses API function format (flat, unlike Chat Completions' nested form).
+func anthropicToolToResponses(t map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "function",
+		"name":        t["name"],
+		"description": t["description"],
+		"parameters":  t["input_schema"],
+	}
+}
+
+// convertAnthropicMessageToResponses converts one Anthropic-format message to
+// Responses API input items. Text turns become message items with
+// input_text/output_text; tool_use becomes function_call; tool_result becomes
+// function_call_output.
+func convertAnthropicMessageToResponses(msg map[string]interface{}) []map[string]interface{} {
+	role, _ := msg["role"].(string)
+	content := msg["content"]
+
+	var results []map[string]interface{}
+
+	textType := "input_text"
+	if role == "assistant" {
+		textType = "output_text"
+	}
+
+	if contentStr, ok := content.(string); ok {
+		if contentStr != "" {
+			results = append(results, map[string]interface{}{
+				"role": role,
+				"content": []map[string]interface{}{
+					{"type": textType, "text": contentStr},
+				},
+			})
+		}
+		return results
+	}
+
+	contentBlocks, ok := content.([]interface{})
+	if !ok {
+		return results
+	}
+
+	var textParts []map[string]interface{}
+	for _, block := range contentBlocks {
+		b, ok := block.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		switch b["type"] {
+		case "text":
+			if txt, _ := b["text"].(string); txt != "" {
+				textParts = append(textParts, map[string]interface{}{"type": textType, "text": txt})
+			}
+		case "tool_use":
+			argsStr := "{}"
+			if input, ok := b["input"]; ok {
+				argsBytes, _ := json.Marshal(input)
+				argsStr = string(argsBytes)
+			}
+			results = append(results, map[string]interface{}{
+				"type":      "function_call",
+				"call_id":   b["id"],
+				"name":      b["name"],
+				"arguments": argsStr,
+			})
+		case "tool_result":
+			results = append(results, map[string]interface{}{
+				"type":    "function_call_output",
+				"call_id": b["tool_use_id"],
+				"output":  toString(b["content"]),
+			})
+		}
+	}
+
+	if len(textParts) > 0 {
+		msgItem := map[string]interface{}{"role": role, "content": textParts}
+		if role == "assistant" {
+			results = append([]map[string]interface{}{msgItem}, results...)
+		} else {
+			results = append(results, msgItem)
+		}
+	}
+
+	return results
+}
+
+// chatCompletionResponses converts the Anthropic-format request to the OpenAI
+// Responses API, calls /responses with SSE streaming, and converts the response
+// events back to Anthropic-format events so the frontend sees no difference.
+// Stateless: full history is sent as `input` each turn; reasoning items are ignored.
+func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string) (string, error) {
+	url := strings.TrimRight(baseURL, "/") + "/responses"
+
+	// --- Build Responses-format request body ---
+	respBody := map[string]interface{}{
+		"model":  model,
+		"stream": true,
+	}
+	if mt, ok := reqBody["max_tokens"]; ok {
+		respBody["max_output_tokens"] = mt
+	}
+	if system, ok := reqBody["system"].(string); ok && system != "" {
+		respBody["instructions"] = system
+	}
+
+	if tools, ok := reqBody["tools"].([]interface{}); ok {
+		var respTools []map[string]interface{}
+		for _, t := range tools {
+			if tm, ok := t.(map[string]interface{}); ok {
+				respTools = append(respTools, anthropicToolToResponses(tm))
+			}
+		}
+		if len(respTools) > 0 {
+			respBody["tools"] = respTools
+		}
+	}
+
+	var input []map[string]interface{}
+	if msgs, ok := reqBody["messages"].([]interface{}); ok {
+		for _, m := range msgs {
+			if mm, ok := m.(map[string]interface{}); ok {
+				input = append(input, convertAnthropicMessageToResponses(mm)...)
+			}
+		}
+	}
+	respBody["input"] = input
+
+	requestJSON, err := json.Marshal(respBody)
+	if err != nil {
+		return "", fmt.Errorf("marshal responses request: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	a.chatCancelMu.Lock()
+	a.chatCancel = cancel
+	a.chatCancelMu.Unlock()
+	defer func() {
+		a.chatCancelMu.Lock()
+		a.chatCancel = nil
+		a.chatCancelMu.Unlock()
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	client := &http.Client{Timeout: 0}
+	res, err := client.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
+		}
+		return "", err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
+	}
+
+	// --- Parse Responses SSE stream, emit Anthropic-format events ---
+	var contentBlocks []map[string]interface{}
+	// Map Responses output_index -> our content block index / accumulating block.
+	blockByOutputIdx := make(map[int]map[string]interface{})
+	idxByOutputIdx := make(map[int]int)
+	nextBlockIndex := 0
+
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	runtime.EventsEmit(a.ctx, "ai:message_start", map[string]interface{}{
+		"message": map[string]interface{}{"role": "assistant"},
+	})
+
+	finish := func(stopReason string) (string, error) {
+		fullMessage := map[string]interface{}{
+			"role":    "assistant",
+			"content": contentBlocks,
+		}
+		runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
+			"message":     fullMessage,
+			"stop_reason": stopReason,
+		})
+		resultJSON, _ := json.Marshal(fullMessage)
+		return string(resultJSON), nil
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		dataStr := line[6:]
+		if strings.TrimSpace(dataStr) == "[DONE]" {
+			continue
+		}
+
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
+			continue
+		}
+
+		eventType, _ := event["type"].(string)
+		outputIdxF, _ := event["output_index"].(float64)
+		outputIdx := int(outputIdxF)
+
+		switch eventType {
+		case "response.output_item.added":
+			item, _ := event["item"].(map[string]interface{})
+			if item == nil {
+				continue
+			}
+			itemType, _ := item["type"].(string)
+			switch itemType {
+			case "message":
+				block := map[string]interface{}{"type": "text", "text": ""}
+				blockByOutputIdx[outputIdx] = block
+				idxByOutputIdx[outputIdx] = nextBlockIndex
+				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
+					"index":         nextBlockIndex,
+					"content_block": block,
+				})
+				nextBlockIndex++
+			case "function_call":
+				block := map[string]interface{}{
+					"type":  "tool_use",
+					"id":    item["call_id"],
+					"name":  item["name"],
+					"input": "",
+				}
+				blockByOutputIdx[outputIdx] = block
+				idxByOutputIdx[outputIdx] = nextBlockIndex
+				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
+					"index": nextBlockIndex,
+					"content_block": map[string]interface{}{
+						"type": "tool_use",
+						"id":   item["call_id"],
+						"name": item["name"],
+					},
+				})
+				nextBlockIndex++
+			}
+
+		case "response.output_text.delta":
+			block := blockByOutputIdx[outputIdx]
+			if block == nil {
+				continue
+			}
+			delta, _ := event["delta"].(string)
+			if delta == "" {
+				continue
+			}
+			block["text"] = block["text"].(string) + delta
+			runtime.EventsEmit(a.ctx, "ai:token", map[string]interface{}{
+				"text":  delta,
+				"index": idxByOutputIdx[outputIdx],
+			})
+
+		case "response.function_call_arguments.delta":
+			block := blockByOutputIdx[outputIdx]
+			if block == nil {
+				continue
+			}
+			delta, _ := event["delta"].(string)
+			if delta == "" {
+				continue
+			}
+			if block["input"] == nil {
+				block["input"] = ""
+			}
+			block["input"] = block["input"].(string) + delta
+			runtime.EventsEmit(a.ctx, "ai:input_json_delta", map[string]interface{}{
+				"partial_json": delta,
+			})
+
+		case "response.output_item.done":
+			block := blockByOutputIdx[outputIdx]
+			if block == nil {
+				continue
+			}
+			if block["type"] == "tool_use" {
+				if inputStr, ok := block["input"].(string); ok {
+					var inputObj map[string]interface{}
+					if inputStr != "" && json.Unmarshal([]byte(inputStr), &inputObj) == nil {
+						block["input"] = inputObj
+					} else {
+						block["input"] = map[string]interface{}{}
+					}
+				}
+			}
+			contentBlocks = append(contentBlocks, block)
+			runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
+				"index": idxByOutputIdx[outputIdx],
+			})
+			delete(blockByOutputIdx, outputIdx)
+
+		case "response.completed":
+			stopReason := "end_turn"
+			for _, b := range contentBlocks {
+				if b["type"] == "tool_use" {
+					stopReason = "tool_use"
+					break
+				}
+			}
+			return finish(stopReason)
+
+		case "response.failed", "error":
+			body, _ := json.Marshal(event)
+			return "", fmt.Errorf("responses stream error: %s", string(body))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	if len(contentBlocks) > 0 {
+		return finish("end_turn")
 	}
 
 	return "", fmt.Errorf("stream ended without completion")

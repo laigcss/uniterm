@@ -612,23 +612,14 @@
           <el-input v-model="modelForm.name" />
         </el-form-item>
         <el-form-item :label="t('settings.modelProtocol')">
-          <div class="default-toggle-group">
-            <button
-              type="button"
-              class="toggle-btn"
-              :class="{ active: modelForm.protocol === 'anthropic' }"
-              @click="modelForm.protocol = 'anthropic'"
-            >Anthropic</button>
-            <button
-              type="button"
-              class="toggle-btn"
-              :class="{ active: modelForm.protocol === 'openai' }"
-              @click="modelForm.protocol = 'openai'"
-            >OpenAI</button>
-          </div>
+          <el-select v-model="modelForm.protocol" style="width: 100%">
+            <el-option label="Anthropic Messages API" value="anthropic" />
+            <el-option label="OpenAI Chat Completions API" value="openai" />
+            <el-option label="OpenAI Responses API" value="responses" />
+          </el-select>
         </el-form-item>
         <el-form-item :label="t('settings.modelBaseURL')">
-          <el-input v-model="modelForm.baseURL" :placeholder="modelForm.protocol === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'" />
+          <el-input v-model="modelForm.baseURL" :placeholder="modelForm.protocol === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'" />
         </el-form-item>
         <el-form-item :label="t('settings.modelUserAgent')">
           <el-select v-model="modelForm.userAgent" style="width: 100%" filterable allow-create>
@@ -973,7 +964,7 @@ const modelForm = reactive({
   baseURL: '',
   model: '',
   apiKey: '',
-  protocol: 'anthropic' as 'anthropic' | 'openai',
+  protocol: 'anthropic' as 'anthropic' | 'openai' | 'responses',
   userAgent: 'uniTerm' as string,
 })
 
@@ -1567,39 +1558,6 @@ async function onToggleSystemTitleBar(v: boolean) {
   margin-top: 12px;
   font-size: 13px;
   font-family: var(--font-ui);
-}
-
-.default-toggle-group {
-  display: flex;
-  gap: 0;
-}
-.toggle-btn {
-  padding: 5px 14px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-base);
-  color: var(--text-secondary);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.toggle-btn:first-child {
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-}
-.toggle-btn:last-child {
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-.toggle-btn + .toggle-btn {
-  border-left: none;
-}
-.toggle-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.toggle-btn.active {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
 }
 
 .kb-key {
