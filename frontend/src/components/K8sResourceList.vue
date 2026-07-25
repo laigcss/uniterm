@@ -47,6 +47,21 @@
       >
         <template #default="{ row }">{{ cellText(col.value(row)) }}</template>
       </el-table-column>
+
+      <template v-if="desc?.metrics === 'pod'">
+        <el-table-column label="CPU" width="90">
+          <template #default="{ row }">{{ podCpu(row) }}</template>
+        </el-table-column>
+        <el-table-column label="MEM" width="90">
+          <template #default="{ row }">{{ podMem(row) }}</template>
+        </el-table-column>
+      </template>
+      <template v-else-if="desc?.metrics === 'node'">
+        <el-table-column label="CPU" width="80"><template #default="{ row }">{{ nodeCpu(row) }}</template></el-table-column>
+        <el-table-column label="CPU%" width="70"><template #default="{ row }">{{ nodeCpuPct(row) }}</template></el-table-column>
+        <el-table-column label="MEM" width="90"><template #default="{ row }">{{ nodeMem(row) }}</template></el-table-column>
+        <el-table-column label="MEM%" width="70"><template #default="{ row }">{{ nodeMemPct(row) }}</template></el-table-column>
+      </template>
     </el-table>
 
     <div v-if="!items.length && !listError" class="k8s-list-empty">
@@ -61,6 +76,8 @@ import { ElTable, ElTableColumn, ElInput, ElButton, ElSelect, ElOption } from 'e
 import { Refresh } from '@element-plus/icons-vue'
 import { useK8sStore } from '../stores/k8sStore'
 import { getResource, type ColoredCell } from '../services/k8sResources'
+import { fetchPodMetrics, fetchNodeMetrics, type Usage } from '../services/k8sMetrics'
+import { formatCpu, formatMemory, percent, parseCpu, parseMemory } from '../services/k8sQuantity'
 
 const props = defineProps<{
   connId: string
@@ -95,9 +112,48 @@ function onRowClick(row: any) {
   emit('row-click', row)
 }
 
+// ── metrics poller ─────────────────────────────────────────────
+const metricsMap = ref<Map<string, Usage> | null>(null)
+let metricsTimer: number | null = null
+
+async function pollMetrics() {
+  if (!props.connId || !desc.value?.metrics) return
+  try {
+    metricsMap.value = desc.value.metrics === 'pod'
+      ? await fetchPodMetrics(props.connId, localNs.value)
+      : await fetchNodeMetrics(props.connId)
+  } catch { metricsMap.value = null }
+}
+function startMetrics() {
+  stopMetrics()
+  if (!desc.value?.metrics) return
+  pollMetrics()
+  metricsTimer = window.setInterval(pollMetrics, 15000)
+}
+function stopMetrics() {
+  if (metricsTimer != null) { clearInterval(metricsTimer); metricsTimer = null }
+}
+
+function podKey(row: any) { return `${row.metadata?.namespace || ''}/${row.metadata?.name || ''}` }
+function podCpu(row: any) { const u = metricsMap.value?.get(podKey(row)); return u ? formatCpu(u.cpu) : '—' }
+function podMem(row: any) { const u = metricsMap.value?.get(podKey(row)); return u ? formatMemory(u.mem) : '—' }
+function nodeCpu(row: any) { const u = metricsMap.value?.get(row.metadata?.name); return u ? formatCpu(u.cpu) : '—' }
+function nodeMem(row: any) { const u = metricsMap.value?.get(row.metadata?.name); return u ? formatMemory(u.mem) : '—' }
+function parseCpuAlloc(row: any) { return parseCpu(row.status?.allocatable?.cpu) }
+function parseMemAlloc(row: any) { return parseMemory(row.status?.allocatable?.memory) }
+function nodeCpuPct(row: any) {
+  const u = metricsMap.value?.get(row.metadata?.name); if (!u) return '—'
+  const cap = parseCpuAlloc(row); return percent(u.cpu, cap)
+}
+function nodeMemPct(row: any) {
+  const u = metricsMap.value?.get(row.metadata?.name); if (!u) return '—'
+  const cap = parseMemAlloc(row); return percent(u.mem, cap)
+}
+
 async function subscribeCurrent() {
   if (!props.connId) return
   await store.subscribe(props.connId, props.resourceKey, localNs.value)
+  startMetrics()
 }
 
 function unsubscribeCurrent(oldRes: string, oldNs: string) {
@@ -109,12 +165,14 @@ function unsubscribeCurrent(oldRes: string, oldNs: string) {
 watch(() => props.resourceKey, async (newRes, oldRes) => {
   unsubscribeCurrent(oldRes, localNs.value)
   await store.subscribe(props.connId, newRes, localNs.value)
+  startMetrics()
 })
 
 // namespace 切换：卸旧订新（同一 resource）
 watch(localNs, async (newNs, oldNs) => {
   unsubscribeCurrent(props.resourceKey, oldNs)
   await store.subscribe(props.connId, props.resourceKey, newNs)
+  startMetrics()
 })
 
 // connId 就绪：首次订阅
@@ -126,9 +184,11 @@ async function onRefresh() {
   if (!props.connId) return
   store.unsubscribe(props.connId, props.resourceKey, localNs.value)
   await store.subscribe(props.connId, props.resourceKey, localNs.value)
+  startMetrics()
 }
 
 onBeforeUnmount(() => {
+  stopMetrics()
   unsubscribeCurrent(props.resourceKey, localNs.value)
 })
 </script>

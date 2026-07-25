@@ -114,6 +114,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     ],
     actions: ['detail', 'logs', 'terminal', 'delete'],
     canCreate: true,
+    metrics: 'pod',
   },
   {
     key: 'deployments', kind: 'Deployment', apiVersion: 'apps/v1',
@@ -328,6 +329,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     ],
     actions: ['detail', 'viewPods', 'cordon', 'drain'],
     canCreate: false,
+    metrics: 'node',
   },
   {
     key: 'namespaces', kind: 'Namespace', apiVersion: 'v1',
