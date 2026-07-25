@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	// OpenSSH-recommended defaults (ServerAliveInterval=60, CountMax=3):
-	// 180s judgement window rides out `systemctl restart network` / VPN blips.
+	// Keepalive cadence. This is pure keep-alive (no reply awaited): every
+	// interval we send one global request just to keep traffic flowing so a
+	// server/NAT/firewall idle timeout doesn't drop an otherwise-healthy
+	// connection. Dead-connection detection is NOT done here — see readLoop
+	// (EOF) and the OS-level TCP keepalive set in Connect.
 	sshKeepAliveInterval = 60 * time.Second
-	sshKeepAliveMaxFail  = 3
 )
 
 type SSHSession struct {
@@ -43,12 +45,9 @@ type SSHSession struct {
 	decoder        *encoding.Decoder // persistent streaming decoder for output(read)
 	decodeLeftover []byte            // trailing partial multibyte bytes between reads
 
-	// Keepalive diagnostics (see startKeepAlive / disconnect logs).
-	kaFailures   atomic.Int32 // consecutive keepalive failures at last tick
-	kaLastErr    atomic.Value // string: last keepalive error ("" if ok)
-	kaLastOKUnix atomic.Int64 // unix ns of last successful keepalive
-	lastRecv     atomic.Value // []byte: tail of most recent server output (diagnostics)
-	lastSent     atomic.Value // []byte: most recent input sent to server (diagnostics)
+	// Disconnect diagnostics (see readLoop / disconnect logs).
+	lastRecv atomic.Value // []byte: tail of most recent server output (diagnostics)
+	lastSent atomic.Value // []byte: most recent input sent to server (diagnostics)
 }
 
 func NewSSHSession(id string) *SSHSession {
@@ -340,21 +339,12 @@ func tailHex(b []byte, max int) string {
 	return fmt.Sprintf("% x", b)
 }
 
-// kaDiag formats keepalive/idle state for disconnect diagnostics: how long
-// since the last byte from the server, the last-keepalive outcome, and the
-// consecutive-failure count. A long idle with healthy keepalives points to a
-// server-side idle timeout that ignores global keepalive requests.
+// kaDiag formats idle state for disconnect diagnostics: how long since the
+// last byte from the server. Keepalive here is send-only (no reply awaited),
+// so there is no failure/last-OK state to report — a disconnect is detected
+// by readLoop (EOF) or the OS TCP keepalive, not by this loop.
 func (s *SSHSession) kaDiag() string {
-	lastErr, _ := s.kaLastErr.Load().(string)
-	if lastErr == "" {
-		lastErr = "ok"
-	}
-	okAgo := "never"
-	if ns := s.kaLastOKUnix.Load(); ns != 0 {
-		okAgo = time.Since(time.Unix(0, ns)).Truncate(time.Second).String()
-	}
-	return fmt.Sprintf("idle=%v lastKeepalive=%s lastOK=%s ago failures=%d",
-		s.idleSince().Truncate(time.Second), lastErr, okAgo, s.kaFailures.Load())
+	return fmt.Sprintf("idle=%v", s.idleSince().Truncate(time.Second))
 }
 
 func (s *SSHSession) offerExpectOutput(data []byte) {
@@ -430,51 +420,20 @@ func (s *SSHSession) startKeepAlive() {
 	ticker := time.NewTicker(sshKeepAliveInterval)
 	defer ticker.Stop()
 
-	failures := 0
 	for {
 		select {
 		case <-ticker.C:
 			if s.Status() != StatusConnected {
 				return
 			}
-
-			done := make(chan error, 1)
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						done <- fmt.Errorf("panic: %v", r)
-					}
-				}()
-				// Use global request for keepalive, matching standard OpenSSH
-				// ServerAliveInterval behavior. Session channel requests for
-				// keepalive@openssh.com are not recognized by most SSH servers,
-				// causing timeouts that eventually disconnect.
-				_, _, err := s.client.SendRequest("keepalive@openssh.com", true, nil)
-				done <- err
-			}()
-
-			select {
-			case err := <-done:
-				if err != nil {
-					failures++
-					s.kaLastErr.Store(err.Error())
-				} else {
-					failures = 0
-					s.kaLastErr.Store("")
-					s.kaLastOKUnix.Store(time.Now().UnixNano())
-				}
-			case <-time.After(sshKeepAliveInterval):
-				failures++
-				s.kaLastErr.Store("timeout")
-			}
-			s.kaFailures.Store(int32(failures))
-
-			if failures >= sshKeepAliveMaxFail {
-				log.Writef("ssh disconnect: keepalive timeout, %s", s.kaDiag())
-				s.emitData(disconnectNotice("Connection lost."))
-				s.Disconnect()
-				return
-			}
+			// Pure keep-alive: send one global request just to keep traffic
+			// flowing, and do NOT wait for a reply. wantReply=false means
+			// crypto/ssh takes no lock and returns immediately, so a slow or
+			// silent server can never stall this loop (an earlier wantReply=true
+			// version leaked a goroutine holding mux.globalSentMu, which wedged
+			// all later keepalives and let the connection idle out). Detecting a
+			// dead connection is readLoop's job (EOF) plus the OS TCP keepalive.
+			_, _, _ = s.client.SendRequest("keepalive@openssh.com", false, nil)
 
 		case <-s.quit:
 			return
