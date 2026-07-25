@@ -3,8 +3,8 @@
 package session
 
 import (
-	"runtime"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -19,7 +19,6 @@ var (
 	atlDll              = windows.NewLazySystemDLL("atl.dll")
 	procAtlAxWinInit    = atlDll.NewProc("AtlAxWinInit")
 	procAtlAxGetControl = atlDll.NewProc("AtlAxGetControl")
-
 
 	user32Dll              = windows.NewLazySystemDLL("user32.dll")
 	procSetWindowPos       = user32Dll.NewProc("SetWindowPos")
@@ -44,28 +43,27 @@ var (
 )
 
 const (
-	WM_CLOSE       = 0x0010
-	SWP_SHOWWINDOW = 0x0040
-	SWP_HIDEWINDOW = 0x0080
-	SWP_NOMOVE     = 0x0002
-	SWP_NOSIZE     = 0x0001
-	SWP_NOACTIVATE = 0x0010
-	SWP_NOZORDER   = 0x0004
+	WM_CLOSE           = 0x0010
+	SWP_SHOWWINDOW     = 0x0040
+	SWP_HIDEWINDOW     = 0x0080
+	SWP_NOMOVE         = 0x0002
+	SWP_NOSIZE         = 0x0001
+	SWP_NOACTIVATE     = 0x0010
+	SWP_NOZORDER       = 0x0004
 	SWP_ASYNCWINDOWPOS = 0x4000 // non-blocking: avoids freezing RDP COM thread
-	WS_EX_TOOLWINDOW  = 0x00000080
-	WS_EX_NOACTIVATE  = 0x08000000
-	WS_POPUP          = 0x80000000
-	WS_CLIPSIBLINGS   = 0x04000000
-	PM_REMOVE         = 0x0001
-	GWLP_HWNDPARENT   = ^uintptr(7) // -8 represented as uintptr for syscall compatibility
-	SW_HIDE           = 0
-	SW_SHOWNOACTIVATE = 4
-	WM_COMMAND        = 0x0111
-	BM_CLICK          = 0x00F5
-	IDYES             = 6
-	IDOK              = 1
-	SM_CXSCREEN       = 0
-	SM_CYSCREEN       = 1
+	WS_EX_TOOLWINDOW   = 0x00000080
+	WS_POPUP           = 0x80000000
+	WS_CLIPSIBLINGS    = 0x04000000
+	PM_REMOVE          = 0x0001
+	GWLP_HWNDPARENT    = ^uintptr(7) // -8 represented as uintptr for syscall compatibility
+	SW_HIDE            = 0
+	SW_SHOWNOACTIVATE  = 4
+	WM_COMMAND         = 0x0111
+	BM_CLICK           = 0x00F5
+	IDYES              = 6
+	IDOK               = 1
+	SM_CXSCREEN        = 0
+	SM_CYSCREEN        = 1
 )
 
 type RDPSession struct {
@@ -75,7 +73,7 @@ type RDPSession struct {
 	rdp        *ole.IDispatch
 	config     ConnectionConfig
 	mu         sync.Mutex
-	shown     bool
+	shown      bool
 
 	// Last known position, used by Show() after Hide()
 	trackX, trackY int
@@ -83,9 +81,9 @@ type RDPSession struct {
 	// Full-screen toggle request, applied on the COM STA thread by the message
 	// pump. COM (STA) calls must run on the thread that created the object;
 	// calling PutProperty from the Wails binding thread deadlocks.
-	fsRequested bool // a toggle has been requested
-	fsValue     bool // desired FullScreen value
-	fsActive    bool // last observed FullScreen state (for exit detection)
+	fsRequested bool   // a toggle has been requested
+	fsValue     bool   // desired FullScreen value
+	fsActive    bool   // last observed FullScreen state (for exit detection)
 	onFsExit    func() // called (on COM thread) when user leaves full screen via the connection bar
 }
 
@@ -129,8 +127,6 @@ func (s *RDPSession) ClientAreaScreenRect() (x, y, w, h int) {
 func (s *RDPSession) SetParentHwnd(hwnd uintptr) {
 	s.parentHwnd = hwnd
 }
-
-
 
 // autoDismissSecurityDialogs polls for RDP security warning dialogs (e.g.
 // cert prompts or "do you want to connect" dialogs) and dismisses them.
@@ -197,7 +193,6 @@ func (s *RDPSession) autoDismissSecurityDialogs(stop <-chan struct{}) {
 					btnHwnd, _, _ := procFindWindowExW.Call(hwnd, 0, 0, uintptr(unsafe.Pointer(btnPtr)))
 					if btnHwnd != 0 {
 						procSendMessageW.Call(btnHwnd, BM_CLICK, 0, 0)
-						log.Writef("[RDP] clicked button '%s' on dialog hwnd=0x%x", btnText, hwnd)
 						break
 					}
 				}
@@ -207,8 +202,6 @@ func (s *RDPSession) autoDismissSecurityDialogs(stop <-chan struct{}) {
 }
 
 func (s *RDPSession) Connect(config ConnectionConfig) error {
-	log.Writef("[RDP] starting connect to %s:%d as %s", config.Host, config.Port, config.User)
-
 	defer func() {
 		if r := recover(); r != nil {
 			log.Writef("[RDP] PANIC in Connect: %v", r)
@@ -287,7 +280,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		sh, _, _ := procGetSystemMetrics.Call(uintptr(SM_CYSCREEN))
 		width = int(sw)
 		height = int(sh)
-		log.Writef("[RDP] fullscreen resolution: using display size %dx%d", width, height)
 	}
 	if width <= 0 {
 		width = 800
@@ -302,7 +294,14 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 
 	createWindowEx := windows.NewLazySystemDLL("user32.dll").NewProc("CreateWindowExW")
 	hwnd, _, _ := createWindowEx.Call(
-		uintptr(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE),
+		// WS_EX_TOOLWINDOW keeps the RDP window off the taskbar. We must NOT add
+		// WS_EX_NOACTIVATE: that flag tells the OS "clicking this window (and its
+		// owner) does not bring them to the foreground", which on multi-monitor
+		// setups leaves the keyboard attached to whatever app was last active on
+		// another screen. Programmatic show/position already use SWP_NOACTIVATE /
+		// SW_SHOWNOACTIVATE, so activation happens only on a real user click —
+		// exactly the behavior we want for keyboard focus. (issue #385)
+		uintptr(WS_EX_TOOLWINDOW),
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(name)),
 		uintptr(WS_POPUP|WS_CLIPSIBLINGS),
@@ -322,7 +321,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	// Owned windows naturally stay above their owner but below other top-level windows,
 	// eliminating the need for manual HWND_TOPMOST/HWND_NOTOPMOST z-order management.
 	procSetWindowLongPtr.Call(hwnd, GWLP_HWNDPARENT, s.parentHwnd)
-	log.Writef("[RDP] hwnd=0x%x parentHwnd=0x%x (owned)", hwnd, s.parentHwnd)
 
 	var unk *ole.IUnknown
 	procAtlAxGetControl.Call(hwnd, uintptr(unsafe.Pointer(&unk)))
@@ -406,7 +404,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		if sec != nil {
 			sec.PutProperty("KeyboardHookMode", 1)
 			sec.Release()
-			log.Writef("[RDP] KeyboardHookMode=1 (forward Win/combo keys to remote)")
 		}
 	}
 
@@ -420,15 +417,12 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 				a.PutProperty("ContainerHandledFullScreen", false)
 				a.PutProperty("WarnOnDirectConnect", false)
 				a.Release()
-				log.Writef("[RDP] AdvancedSettings%d: security prompts suppressed", ver)
 			}
 		}
 	}
 
-
 	// Suppress server certificate warning at OS level
 	setAuthLevelOverride()
-
 
 	// Auto-dismiss any security dialogs that appear during Connect (e.g.
 	// "网站正在尝试启动远程连接"). The goroutine polls for dialog windows
@@ -446,7 +440,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		}()
 	}()
 
-	log.Writef("[RDP] calling Connect...")
 	_, err = dispatch.CallMethod("Connect")
 	if err != nil {
 		log.Writef("[RDP] Connect failed: %v", err)
@@ -460,7 +453,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("RDP Connect: %w", err)
 	}
 
-	log.Writef("[RDP] Connect succeeded")
 	// Immediate show-and-position to avoid white/black screen.
 	// Frontend will refine via RDPSetPosition shortly after.
 	s.positionFromMainWindow(width, height)
@@ -469,7 +461,6 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 
 	s.runMessagePump()
 
-	log.Writef("[RDP] COM thread exited")
 	return nil
 }
 
@@ -487,7 +478,6 @@ type msg struct {
 }
 
 func (s *RDPSession) runMessagePump() {
-	log.Writef("[RDP] message pump started")
 	var m msg
 	noMsgCount := 0
 	disconnectLogged := false
@@ -509,7 +499,6 @@ func (s *RDPSession) runMessagePump() {
 			s.mu.Unlock()
 			if rdp != nil {
 				rdp.PutProperty("FullScreen", full)
-				log.Writef("[RDP] FullScreen applied on COM thread full=%v", full)
 			}
 		} else {
 			s.mu.Unlock()
@@ -522,7 +511,6 @@ func (s *RDPSession) runMessagePump() {
 		)
 		if ret != 0 {
 			if m.Message == 0x0012 { // WM_QUIT
-				log.Writef("[RDP-pump] WM_QUIT received, exiting")
 				return
 			}
 			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
@@ -554,7 +542,6 @@ func (s *RDPSession) runMessagePump() {
 							s.fsActive = false
 							cb := s.onFsExit
 							s.mu.Unlock()
-							log.Writef("[RDP] full-screen exited via connection bar")
 							if cb != nil {
 								cb()
 							}
@@ -604,9 +591,7 @@ func (s *RDPSession) runMessagePump() {
 			}
 		}
 	}
-	log.Writef("[RDP] message pump exited")
 }
-
 
 func (s *RDPSession) findRdpProgID() string {
 	candidates := []string{
@@ -763,8 +748,6 @@ func elevateRegWrite() {
 	)
 	if ret <= 32 {
 		log.Writef("[RDP] ShellExecute runas failed: %d", ret)
-	} else {
-		log.Writef("[RDP] UAC elevation requested for RedirectionWarningDialogVersion")
 	}
 }
 
@@ -784,7 +767,7 @@ func (s *RDPSession) configureNonScriptable(password string) {
 		return
 	}
 	defer unk.Release()
-	for i, guid := range nsGUIDs {
+	for _, guid := range nsGUIDs {
 		nsGUID := ole.NewGUID(guid)
 		nsUnk, err := unk.QueryInterface(nsGUID)
 		if err != nil || nsUnk == nil {
@@ -794,11 +777,9 @@ func (s *RDPSession) configureNonScriptable(password string) {
 			nsUnk.PutProperty("ClearTextPassword", password)
 		}
 		nsUnk.Release()
-		log.Writef("[RDP] NonScriptable[%d] configured, password=%v", i, password != "")
 		break
 	}
 }
-
 
 type point struct{ X, Y int32 }
 
@@ -837,8 +818,6 @@ func (s *RDPSession) positionFromMainWindow(width, height int) {
 	y := clientTop + topReserve
 	w := clientWidth - sideMargin*2
 	h := clientHeight - topReserve - bottomReserve
-	log.Writef("[RDP] backend positioning: client=(%d,%d %dx%d) rdp=(x=%d y=%d w=%d h=%d)",
-		clientLeft, clientTop, clientWidth, clientHeight, x, y, w, h)
 
 	s.shown = true
 	procSetWindowPos.Call(s.hwnd, 0,
@@ -848,14 +827,12 @@ func (s *RDPSession) positionFromMainWindow(width, height int) {
 
 	s.trackX = x
 	s.trackY = y
-	log.Writef("[RDP] backend position done, shown=%v hwnd=0x%x", s.shown, s.hwnd)
 }
 
 func (s *RDPSession) SetPosition(x, y, w, h int) {
 	s.mu.Lock()
 	hwnd := s.hwnd
 	if hwnd == 0 {
-		log.Writef("[RDP-SetPos] SKIP hwnd=0")
 		s.mu.Unlock()
 		return
 	}
@@ -871,13 +848,6 @@ func (s *RDPSession) SetPosition(x, y, w, h int) {
 		SWP_SHOWWINDOW|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
 }
 
-// SetFocus adjusts the RDP window z-order when uniTerm gains or loses focus.
-// With the owned-window model, z-order is fully automatic — the OS handles it.
-// Kept as a no-op for API compatibility with the frontend.
-func (s *RDPSession) SetFocus(focused bool) {
-	log.Writef("[RDP-focus] SetFocus focused=%v (no-op, owned-window model)", focused)
-}
-
 // SetFullScreen toggles the ActiveX control's built-in full-screen mode.
 // With ContainerHandledFullScreen=false the control renders its own
 // connection bar (with a restore button) to exit full screen.
@@ -890,7 +860,6 @@ func (s *RDPSession) SetFullScreen(full bool) {
 	s.fsRequested = true
 	s.fsValue = full
 	s.mu.Unlock()
-	log.Writef("[RDP] SetFullScreen requested full=%v (deferred to COM thread)", full)
 }
 
 func (s *RDPSession) Show() {

@@ -1350,22 +1350,6 @@ func (a *App) RDPShow(sessionID string) error {
 	return nil
 }
 
-func (a *App) RDPSetFocus(sessionID string, focused bool) error {
-	if a.sessionManager == nil {
-		return fmt.Errorf("session manager not initialized")
-	}
-	s, ok := a.sessionManager.Get(sessionID)
-	if !ok {
-		return fmt.Errorf("session not found: %s", sessionID)
-	}
-	rdp, ok := s.(*session.RDPSession)
-	if !ok {
-		return fmt.Errorf("session is not RDP")
-	}
-	rdp.SetFocus(focused)
-	return nil
-}
-
 // RDPSetFullScreen toggles the ActiveX control's built-in full-screen mode.
 func (a *App) RDPSetFullScreen(sessionID string, full bool) error {
 	if a.sessionManager == nil {

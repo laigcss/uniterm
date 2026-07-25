@@ -354,10 +354,6 @@ export function RDPHide(arg1) {
   return window['go']['main']['App']['RDPHide'](arg1);
 }
 
-export function RDPSetFocus(arg1, arg2) {
-  return window['go']['main']['App']['RDPSetFocus'](arg1, arg2);
-}
-
 export function RDPSetFullScreen(arg1, arg2) {
   return window['go']['main']['App']['RDPSetFullScreen'](arg1, arg2);
 }
