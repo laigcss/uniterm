@@ -5,6 +5,8 @@ import {
   K8sRequest,
   K8sStartWatch,
   K8sStopWatch,
+  K8sStartLogStream,
+  K8sStopLogStream,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import type { K8sContextInfo, K8sWatchEvent } from '../types/k8s'
@@ -70,6 +72,35 @@ export async function startWatch(
       EventsOff(eventName)
       EventsOff(endName)
       K8sStopWatch(id)
+    },
+  }
+}
+
+export interface LogHandle {
+  stop(): void
+}
+
+export async function startLogStream(
+  connId: string,
+  ns: string,
+  pod: string,
+  container: string,
+  tailLines: number,
+  timestamps: boolean,
+  previous: boolean,
+  onLine: (line: string) => void,
+  onEnd: (err: string) => void
+): Promise<LogHandle> {
+  const streamId = await K8sStartLogStream(connId, ns, pod, container, tailLines, timestamps, previous)
+  const evName = `k8s:log:${streamId}`
+  const endName = `k8s:log-end:${streamId}`
+  EventsOn(evName, (line: string) => onLine(line))
+  EventsOn(endName, (p: any) => onEnd(p?.error || ''))
+  return {
+    stop() {
+      EventsOff(evName)
+      EventsOff(endName)
+      K8sStopLogStream(streamId)
     },
   }
 }

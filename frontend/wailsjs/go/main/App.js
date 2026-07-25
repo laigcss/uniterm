@@ -230,8 +230,16 @@ export function K8sRequest(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['K8sRequest'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function K8sStartLogStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['K8sStartLogStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
 export function K8sStartWatch(arg1, arg2) {
   return window['go']['main']['App']['K8sStartWatch'](arg1, arg2);
+}
+
+export function K8sStopLogStream(arg1) {
+  return window['go']['main']['App']['K8sStopLogStream'](arg1);
 }
 
 export function K8sStopWatch(arg1) {

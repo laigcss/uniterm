@@ -122,7 +122,11 @@ export function K8sListContexts(arg1:string,arg2:boolean):Promise<Array<k8s.Cont
 
 export function K8sRequest(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<main.K8sResponse>;
 
+export function K8sStartLogStream(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:boolean,arg7:boolean):Promise<string>;
+
 export function K8sStartWatch(arg1:string,arg2:string):Promise<string>;
+
+export function K8sStopLogStream(arg1:string):Promise<void>;
 
 export function K8sStopWatch(arg1:string):Promise<void>;
 

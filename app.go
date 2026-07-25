@@ -3941,6 +3941,14 @@ func (a *App) K8sStopWatch(watchID string) {
 	a.k8sManager.StopWatch(watchID)
 }
 
+func (a *App) K8sStartLogStream(connID, namespace, pod, container string, tailLines int, timestamps, previous bool) (string, error) {
+	return a.k8sManager.StartLogStream(connID, namespace, pod, container, tailLines, timestamps, previous)
+}
+
+func (a *App) K8sStopLogStream(streamID string) {
+	a.k8sManager.StopLogStream(streamID)
+}
+
 func readKubeconfigSource(source string, sourceIsPath bool) ([]byte, error) {
 	if !sourceIsPath {
 		return []byte(source), nil
