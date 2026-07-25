@@ -4,21 +4,39 @@
     <div v-else-if="!connId" class="k8s-connecting">Connecting…</div>
     <div v-else class="db-main">
       <div class="db-left" :style="{ width: leftWidth + 'px' }">
-        <K8sTree v-model="currentResourceKey" />
+        <K8sTree :model-value="rootResourceKey" @update:model-value="selectResource" />
       </div>
       <div class="db-resizer" @mousedown="onResizeStart" />
       <div class="db-right">
+        <K8sBreadcrumb
+          :stack="navStack"
+          :namespace="currentNamespace"
+          :namespace-options="namespaceOptions"
+          @pop="popTo"
+          @update:namespace="setNamespace"
+        />
         <K8sResourceList
           :conn-id="connId"
-          :resource-key="currentResourceKey"
-          :initial-namespace="initialNamespace"
+          :frame="topFrame"
           :namespace-options="namespaceOptions"
-          @row-click="onRowClick"
+          @open-detail="openDetail"
+          @open-logs="openLogs"
+          @view-pods="viewPods"
+          @open-crd="openCrd"
+          @open-terminal="openTerminal"
+          @changed="() => {}"
         />
       </div>
     </div>
 
-    <K8sYamlDrawer :obj="detail" @close="detail = null" />
+    <K8sDetailDrawer
+      :conn-id="connId"
+      :mode="drawerMode"
+      :target="drawerTarget"
+      :resource-key="drawerResourceKey"
+      @close="closeDrawer"
+      @saved="() => {}"
+    />
   </div>
 </template>
 
@@ -28,8 +46,10 @@ import * as k8sClient from '../services/k8sClient'
 import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
-import K8sYamlDrawer from './K8sYamlDrawer.vue'
-import type { K8sTab } from '../types/k8s'
+import K8sBreadcrumb from './K8sBreadcrumb.vue'
+import K8sDetailDrawer from './K8sDetailDrawer.vue'
+import { parseCRD } from '../services/k8sCrd'
+import type { K8sTab, NavFrame } from '../types/k8s'
 import type { ConnectionConfig } from '../types/session'
 
 const props = defineProps<{ tab: K8sTab; connection: ConnectionConfig }>()
@@ -38,8 +58,6 @@ const { resolveTunnelCredentials } = useTunnelCredentials()
 
 const connId = ref<string>('')
 const error = ref('')
-const currentResourceKey = ref<string>('pods')
-const detail = ref<any | null>(null)
 const initialNamespace = ref<string>(props.tab.namespace || '')
 
 // 静态候选 + 打开时选中的 ns，后续 PR 再动态拉 /api/v1/namespaces。
@@ -48,6 +66,56 @@ const namespaceOptions = computed(() => {
   if (initialNamespace.value) set.add(initialNamespace.value)
   return Array.from(set)
 })
+
+// ── nav stack ──────────────────────────────────────────────────
+const navStack = ref<NavFrame[]>([{ kind: 'list', resourceKey: 'pods', namespace: props.tab.namespace || '' }])
+const topFrame = computed(() => navStack.value[navStack.value.length - 1])
+const rootResourceKey = computed(() => {
+  const base = navStack.value[0]
+  return base.kind === 'list' ? base.resourceKey : ''
+})
+const currentNamespace = computed(() => {
+  const f = topFrame.value
+  return f.kind === 'custom' ? f.namespace : (f as any).namespace || ''
+})
+
+function selectResource(key: string) {
+  navStack.value = [{ kind: 'list', resourceKey: key, namespace: currentNamespace.value }]
+}
+function popTo(index: number) {
+  navStack.value = navStack.value.slice(0, index + 1)
+}
+function setNamespace(ns: string) {
+  const f = topFrame.value
+  if (f.kind === 'list') navStack.value = [{ kind: 'list', resourceKey: f.resourceKey, namespace: ns }]
+  else navStack.value = navStack.value.map((fr, i) => i === navStack.value.length - 1 ? { ...fr, namespace: ns } as NavFrame : fr)
+}
+function viewPods(owner: { kind: string; name: string; uid: string; namespace: string }) {
+  navStack.value = [...navStack.value, {
+    kind: 'owned', resourceKey: 'pods',
+    ownerKind: owner.kind, ownerName: owner.name, ownerUid: owner.uid, namespace: owner.namespace,
+  }]
+}
+function openCrd(crdObj: any) {
+  const crd = parseCRD(crdObj)
+  navStack.value = [...navStack.value, { kind: 'custom', crd, namespace: '' }]
+}
+
+// ── drawer ─────────────────────────────────────────────────────
+const drawerMode = ref<'detail' | 'logs' | null>(null)
+const drawerTarget = ref<any | null>(null)
+const drawerResourceKey = ref<string>('pods')
+function openDetail(obj: any) { drawerTarget.value = obj; drawerResourceKey.value = resourceKeyOf(); drawerMode.value = 'detail' }
+function openLogs(pod: any) { drawerTarget.value = pod; drawerResourceKey.value = 'pods'; drawerMode.value = 'logs' }
+function closeDrawer() { drawerMode.value = null; drawerTarget.value = null }
+function resourceKeyOf(): string {
+  const f = topFrame.value
+  if (f.kind === 'list') return f.resourceKey
+  if (f.kind === 'owned') return f.resourceKey
+  return 'customresourcedefinitions'
+}
+// openTerminal wired in Phase 3
+function openTerminal(_pod: any) { /* Phase 3 */ }
 
 // 左侧宽度 + resizer（抄 DBTabContent）
 const leftWidth = ref(220)
@@ -69,10 +137,6 @@ function onResizeEnd() {
   resizing = false
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
-}
-
-function onRowClick(obj: any) {
-  detail.value = obj
 }
 
 async function connect() {

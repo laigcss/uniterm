@@ -239,7 +239,7 @@ async function save() {
   border-bottom-color: var(--accent);
 }
 
-/* Copied verbatim from K8sYamlDrawer.vue */
+/* Preformatted YAML body */
 .k8s-yaml-drawer-body {
   margin: 0;
   padding: 12px;
