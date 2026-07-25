@@ -184,7 +184,7 @@ func (s *RDPSession) autoDismissSecurityDialogs(stop <-chan struct{}) {
 				// Also try clicking buttons directly (Windows 11 may use different labels)
 				for _, btnText := range []string{
 					"是(&Y)", "是", "Yes", "&Yes",
-					"连接(&C)", "连接", "Connect", "&Connect",
+					"连接(&C)", "连接(&N)", "连接", "Connect", "&Connect",
 					"确认", "确认(&Y)", "确认(&O)",
 					"确定", "确定(&O)", "OK", "&OK",
 					"继续", "继续(&C)", "Continue", "&Continue",
