@@ -197,6 +197,67 @@ export const useConnectionStore = defineStore('connection', () => {
     await save()
   }
 
+  // Move connections into targetGroupId and reorder within the connections
+  // array so they land right before beforeId (or at the group's end when
+  // beforeId is omitted). Preserves the relative order of the moved ids.
+  async function moveConnections(connectionIds: string[], targetGroupId: string | undefined, beforeId?: string) {
+    const moveSet = new Set(connectionIds)
+    // Grab moved items in their current array order, apply the new group
+    const moved = connections.value.filter(c => moveSet.has(c.id))
+    if (moved.length === 0) return
+    for (const c of moved) c.groupId = targetGroupId
+
+    const rest = connections.value.filter(c => !moveSet.has(c.id))
+
+    let insertAt: number
+    if (beforeId && !moveSet.has(beforeId)) {
+      const idx = rest.findIndex(c => c.id === beforeId)
+      insertAt = idx >= 0 ? idx : rest.length
+    } else {
+      // Append after the last connection already in the target group
+      let lastIdx = -1
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i].groupId === targetGroupId) lastIdx = i
+      }
+      insertAt = lastIdx >= 0 ? lastIdx + 1 : rest.length
+    }
+
+    rest.splice(insertAt, 0, ...moved)
+    connections.value = rest
+    await save()
+  }
+
+  // Reparent a group (reusing reparentGroup's cycle/name guards) and reorder
+  // it within the groups array so it lands right before beforeId sibling
+  // (or at the end of its new parent when beforeId is omitted).
+  async function moveGroup(groupId: string, newParentId: string | undefined, beforeId?: string) {
+    if (newParentId === groupId) return
+    if (newParentId && isDescendantOf(groupId, newParentId)) return
+
+    const g = groups.value.find(g => g.id === groupId)
+    if (!g) return
+
+    const newName = uniqueGroupName(g.name, newParentId, groupId)
+    g.parentId = newParentId
+    g.name = newName
+
+    const rest = groups.value.filter(x => x.id !== groupId)
+    let insertAt: number
+    if (beforeId && beforeId !== groupId) {
+      const idx = rest.findIndex(x => x.id === beforeId)
+      insertAt = idx >= 0 ? idx : rest.length
+    } else {
+      let lastIdx = -1
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i].parentId === newParentId) lastIdx = i
+      }
+      insertAt = lastIdx >= 0 ? lastIdx + 1 : rest.length
+    }
+    rest.splice(insertAt, 0, g)
+    groups.value = rest
+    await save()
+  }
+
   // ── Derived: tree structure ──
 
   const groupedConnections = computed<GroupedConnections>(() => {
@@ -226,16 +287,8 @@ export const useConnectionStore = defineStore('connection', () => {
       }
     }
 
-    // Recursive sort
-    function sortNode(node: GroupTreeNode) {
-      node.connections.sort((a, b) => a.name.localeCompare(b.name))
-      node.children.sort((a, b) => a.group.name.localeCompare(b.group.name))
-      node.children.forEach(sortNode)
-    }
-    roots.forEach(sortNode)
-    roots.sort((a, b) => a.group.name.localeCompare(b.group.name))
-    ungrouped.sort((a, b) => a.name.localeCompare(b.name))
-
+    // Display order follows the underlying array order (manual sort).
+    // No name-based sorting: drag & drop reorders the arrays directly.
     return { roots, ungrouped }
   })
 
@@ -278,6 +331,8 @@ export const useConnectionStore = defineStore('connection', () => {
     getChildGroups,
     setConnectionGroup,
     setConnectionsGroup,
+    moveConnections,
+    moveGroup,
     groupedConnections,
     allGroupIds,
   }

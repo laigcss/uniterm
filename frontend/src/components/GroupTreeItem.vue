@@ -2,7 +2,11 @@
   <!-- Group header -->
   <div
     class="group-header"
-    :class="{ 'drag-over': dragOverId === node.group.id }"
+    :class="{
+      'drag-over': dragOverId === node.group.id,
+      'drop-before': dropIndicator?.id === node.group.id && dropIndicator?.position === 'before',
+      'drop-after': dropIndicator?.id === node.group.id && dropIndicator?.position === 'after',
+    }"
     :style="{ paddingLeft: (6 + depth * 16) + 'px' }"
     draggable="true"
     @click="onToggle"
@@ -35,11 +39,17 @@
       v-for="conn in node.connections"
       :key="conn.id"
       class="connection-item indented"
-      :class="{ active: selected.has(conn.id) }"
+      :class="{
+        active: selected.has(conn.id),
+        'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
+        'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
+      }"
       :style="{ paddingLeft: (24 + depth * 16) + 'px' }"
       draggable="true"
       @dragstart="onConnDragStart($event, conn)"
       @dragend="onConnDragEnd"
+      @dragover.prevent="onConnDragOver($event, conn)"
+      @drop.prevent="onConnDrop($event, conn)"
       @click="onItemClick($event, conn)"
       @dblclick="onItemDblClick(conn)"
       @contextmenu.prevent="onConnCtxMenu($event, conn)"
@@ -82,6 +92,7 @@ const totalCount = computed(() => {
 const expanded = inject<Set<string>>('expandedGroups')!
 const selected = inject<Set<string>>('selectedIds')!
 const dragOverId = inject<any>('dragOverGroupId')!
+const dropIndicator = inject<any>('dropIndicator')!
 const handlers = inject<any>('groupHandlers')!
 const utils = inject<any>('utils')!
 
@@ -100,8 +111,8 @@ function onGrpDragStart(e: DragEvent) {
   e.dataTransfer!.effectAllowed = 'move'
 }
 
-function onGrpDragOver() {
-  handlers.onGroupDragOver(props.node.group.id)
+function onGrpDragOver(e: DragEvent) {
+  handlers.onGroupDragOver(props.node.group.id, e)
 }
 
 function onGrpDragLeave() {
@@ -118,6 +129,14 @@ function onConnDragStart(e: DragEvent, conn: ConnectionConfig) {
 
 function onConnDragEnd() {
   handlers.onDragEnd()
+}
+
+function onConnDragOver(e: DragEvent, conn: ConnectionConfig) {
+  handlers.onConnDragOver(e, conn)
+}
+
+function onConnDrop(e: DragEvent, conn: ConnectionConfig) {
+  handlers.onConnDrop(e, conn)
 }
 
 function onItemClick(e: MouseEvent, conn: ConnectionConfig) {
@@ -157,6 +176,33 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 .group-header.drag-over {
   background: var(--accent-subtle);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+/* Insertion line for reordering (siblings) */
+.group-header,
+.connection-item {
+  position: relative;
+}
+.group-header.drop-before::before,
+.connection-item.drop-before::before,
+.group-header.drop-after::after,
+.connection-item.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
+.group-header.drop-before::before,
+.connection-item.drop-before::before {
+  top: -1px;
+}
+.group-header.drop-after::after,
+.connection-item.drop-after::after {
+  bottom: -1px;
 }
 .group-arrow {
   display: inline-flex;
