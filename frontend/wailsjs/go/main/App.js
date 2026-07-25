@@ -222,6 +222,10 @@ export function K8sDisconnect(arg1) {
   return window['go']['main']['App']['K8sDisconnect'](arg1);
 }
 
+export function K8sExecSession(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['K8sExecSession'](arg1, arg2, arg3, arg4);
+}
+
 export function K8sListContexts(arg1, arg2) {
   return window['go']['main']['App']['K8sListContexts'](arg1, arg2);
 }

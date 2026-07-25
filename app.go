@@ -3949,6 +3949,21 @@ func (a *App) K8sStopLogStream(streamID string) {
 	a.k8sManager.StopLogStream(streamID)
 }
 
+func (a *App) K8sExecSession(connID, namespace, pod, container string) (*session.SessionInfo, error) {
+	if a.k8sManager == nil {
+		return nil, fmt.Errorf("k8s manager not initialized")
+	}
+	// initial size fallback; real size arrives via Resize after the frontend mounts xterm
+	wsConn, err := a.k8sManager.DialExec(connID, namespace, pod, container, 80, 24)
+	if err != nil {
+		return nil, err
+	}
+	id := uuid.New().String()
+	sess := session.NewK8sExecSession(id, wsConn)
+	a.sessionManager.Add(sess)
+	return &session.SessionInfo{ID: id, Type: "k8s-exec", Title: pod, Status: session.StatusConnected}, nil
+}
+
 func readKubeconfigSource(source string, sourceIsPath bool) ([]byte, error) {
 	if !sourceIsPath {
 		return []byte(source), nil

@@ -118,6 +118,8 @@ export function K8sConnect(arg1:string,arg2:boolean,arg3:string,arg4:string,arg5
 
 export function K8sDisconnect(arg1:string):Promise<void>;
 
+export function K8sExecSession(arg1:string,arg2:string,arg3:string,arg4:string):Promise<session.SessionInfo>;
+
 export function K8sListContexts(arg1:string,arg2:boolean):Promise<Array<k8s.ContextInfo>>;
 
 export function K8sRequest(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<main.K8sResponse>;
