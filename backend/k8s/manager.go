@@ -17,6 +17,7 @@ type Manager struct {
 	mu      sync.RWMutex
 	conns   map[string]*connection
 	watches map[string]*watchHandle
+	logs    map[string]*logHandle
 	emit    EventEmitter
 }
 
@@ -33,10 +34,16 @@ type watchHandle struct {
 	cancel context.CancelFunc
 }
 
+type logHandle struct {
+	connID string
+	cancel context.CancelFunc
+}
+
 func NewManager() *Manager {
 	return &Manager{
 		conns:   make(map[string]*connection),
 		watches: make(map[string]*watchHandle),
+		logs:    make(map[string]*logHandle),
 		emit:    func(string, any) {},
 	}
 }
@@ -116,12 +123,22 @@ func (m *Manager) Disconnect(connID string) {
 	for wid := range conn.watches {
 		toStop = append(toStop, wid)
 	}
+	// 停掉所有属于本 conn 的 log stream
+	var logsToStop []string
+	for sid, lh := range m.logs {
+		if lh.connID == connID {
+			logsToStop = append(logsToStop, sid)
+		}
+	}
 	onClose := conn.onClose
 	delete(m.conns, connID)
 	m.mu.Unlock()
 
 	for _, wid := range toStop {
 		m.StopWatch(wid)
+	}
+	for _, sid := range logsToStop {
+		m.StopLogStream(sid)
 	}
 	if onClose != nil {
 		onClose()
@@ -202,4 +219,57 @@ func (m *Manager) StopWatch(watchID string) {
 	}
 	m.mu.Unlock()
 	wh.cancel()
+}
+
+func (m *Manager) StartLogStream(connID, ns, pod, container string, tailLines int, timestamps, previous bool) (string, error) {
+	streamID := uuid.New().String()
+	eventName := "k8s:log:" + streamID
+	endName := "k8s:log-end:" + streamID
+	ctx, cancel := context.WithCancel(context.Background())
+
+	m.mu.Lock()
+	conn, ok := m.conns[connID]
+	if !ok {
+		m.mu.Unlock()
+		cancel()
+		return "", fmt.Errorf("connection %q not found", connID)
+	}
+	client, base, emit := conn.client, conn.base, m.emit
+	m.logs[streamID] = &logHandle{connID: connID, cancel: cancel}
+	m.mu.Unlock()
+
+	path := buildLogPath(ns, pod, container, tailLines, timestamps, previous)
+	err := startLogStream(ctx, client, base, path,
+		func(line string) { emit(eventName, line) },
+		func(err error) {
+			payload := map[string]any{"error": ""}
+			if err != nil {
+				payload["error"] = err.Error()
+			}
+			emit(endName, payload)
+			m.mu.Lock()
+			delete(m.logs, streamID)
+			m.mu.Unlock()
+		},
+	)
+	if err != nil {
+		m.mu.Lock()
+		delete(m.logs, streamID)
+		m.mu.Unlock()
+		cancel()
+		return "", err
+	}
+	return streamID, nil
+}
+
+func (m *Manager) StopLogStream(streamID string) {
+	m.mu.Lock()
+	lh, ok := m.logs[streamID]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	delete(m.logs, streamID)
+	m.mu.Unlock()
+	lh.cancel()
 }
