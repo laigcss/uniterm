@@ -124,6 +124,7 @@
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
                   <Database v-else :size="28" />
                 </el-icon>
+                <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
                 <el-icon v-else><Server :size="28" /></el-icon>
               </div>
               <div>
@@ -208,6 +209,7 @@
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
                   <Database v-else :size="28" />
                 </el-icon>
+                <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
                 <el-icon v-else><Server :size="28" /></el-icon>
               </div>
               <div>
@@ -278,6 +280,7 @@
                 <DatabaseZap v-if="config.dbType === 'redis'" :size="28" />
                 <Database v-else :size="28" />
               </el-icon>
+              <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
               <el-icon v-else><Server :size="28" /></el-icon>
             </div>
             <div>
@@ -437,7 +440,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { GetRecentConnections } from '../../wailsjs/go/main/App'
 import { formatConnSubtitle } from '../utils/quickConnect'
-import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown } from '@lucide/vue'
+import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel } from '@lucide/vue'
 
 const props = defineProps<{
   tab: StartTab
@@ -1533,6 +1536,7 @@ async function doDelete(config: ConnectionConfig | null) {
 .start-card-icon.rdp,
 .start-card-icon.vnc,
 .start-card-icon.spice { color: var(--accent); }
+.start-card-icon.k8s { color: var(--accent); }
 .start-card-icon.serial { color: var(--success-dim); }
 .start-card-icon.group { color: var(--text-secondary); }
 .start-card-icon.ungrouped { color: var(--text-muted); }

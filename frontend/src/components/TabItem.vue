@@ -106,7 +106,7 @@ import {
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -155,6 +155,7 @@ const tabIcon = computed(() => {
     return Database
   }
   if (t.type === 'monitor') return Activity
+  if (t.type === 'k8s') return ShipWheel
   if (t.type === 'workspace') return LayoutDashboard
   if (t.type === 'terminal') {
     const panel = panelStore.getPanel(t.panelId)
