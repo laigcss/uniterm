@@ -1,0 +1,299 @@
+<template>
+  <div class="commands-manager">
+    <div class="commands-toolbar">
+      <el-input
+        v-model="searchQuery"
+        size="small"
+        :placeholder="t('settings.commandsSearch')"
+        style="flex: 1"
+        clearable
+      >
+        <template #prefix><el-icon :size="14"><Search /></el-icon></template>
+      </el-input>
+      <el-button size="small" @click="showCreate = true">
+        <Plus :size="14" /> {{ t('settings.commandsCreate') }}
+      </el-button>
+    </div>
+
+    <div v-if="filteredCommands.length === 0" class="commands-empty">
+      {{ t('settings.commandsNoCommand') }}
+    </div>
+
+    <div
+      v-for="cmd in filteredCommands"
+      :key="cmd.name"
+      class="command-card"
+      @click="openEdit(cmd)"
+    >
+      <Terminal :size="18" class="command-card-icon" />
+      <div class="command-card-info">
+        <div class="command-card-title">
+          <span class="command-card-name">/{{ cmd.name }}</span>
+        </div>
+        <div class="command-card-desc">{{ cmd.description }}</div>
+        <div v-if="cmd.path" class="command-card-path" @click.stop="openFolder(cmd)" :title="t('settings.commandsOpenFolder')">
+          <FolderOpen :size="12" class="command-card-path-icon" />
+          <span class="command-card-path-text">{{ cmd.path }}</span>
+        </div>
+      </div>
+      <div class="command-card-actions" @click.stop>
+        <el-switch
+          :model-value="cmd.enabled"
+          size="small"
+          @change="store.toggleEnabled(cmd.name)"
+        />
+        <el-button
+          link
+          :title="cmd.locked ? t('settings.commandsLocked') : t('settings.commandsUnlocked')"
+          @click="store.toggleLocked(cmd.name)"
+        >
+          <el-icon :size="15"><Lock v-if="cmd.locked" /><LockOpen v-else /></el-icon>
+        </el-button>
+        <el-dropdown trigger="click" @command="(action: string) => handleCmd(action, cmd)">
+          <el-button link>
+            <el-icon :size="15"><Settings2 /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="edit">{{ t('settings.commandsEdit') }}</el-dropdown-item>
+              <el-dropdown-item command="delete" divided>
+                <span style="color: var(--el-color-danger)">{{ t('settings.commandsDelete') }}</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </div>
+
+    <CommandCreateDialog
+      v-if="showCreate"
+      @close="showCreate = false"
+      @created="onCreated"
+    />
+
+    <!-- 编辑弹窗（锁定则只读 + 提示解锁） -->
+    <el-dialog
+      v-model="showEdit"
+      :title="editCommand ? '/' + editCommand.name : ''"
+      width="600px"
+    >
+      <div v-if="editCommand" class="command-edit">
+        <el-alert
+          v-if="editCommand.locked"
+          :title="t('settings.commandsEditLocked')"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+        />
+        <el-form label-position="right" label-width="60px" size="small">
+          <el-form-item :label="t('settings.commandsDescription')">
+            <el-input
+              v-model="editForm.description"
+              type="textarea"
+              :rows="2"
+              :disabled="editCommand.locked"
+            />
+          </el-form-item>
+          <el-form-item :label="t('settings.commandsBody')">
+            <el-input
+              v-model="editForm.body"
+              type="textarea"
+              :rows="12"
+              :disabled="editCommand.locked"
+            />
+          </el-form-item>
+        </el-form>
+        <p class="command-args-hint">{{ t('settings.commandsArgumentsHint') }}</p>
+      </div>
+      <template #footer>
+        <el-button @click="showEdit = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :disabled="editCommand?.locked || !editForm.body.trim()"
+          @click="onSaveEdit"
+        >
+          {{ t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { Plus, Lock, LockOpen, Settings2, Search, Terminal, FolderOpen } from '@lucide/vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from '../i18n'
+import { useCommandStore } from '../stores/commandStore'
+import CommandCreateDialog from './CommandCreateDialog.vue'
+import type { CommandMeta } from '../types/command'
+
+const { t } = useI18n()
+const store = useCommandStore()
+
+const showCreate = ref(false)
+const searchQuery = ref('')
+
+const showEdit = ref(false)
+const editCommand = ref<CommandMeta | null>(null)
+const editForm = ref({ description: '', body: '' })
+
+const filteredCommands = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return store.commands
+  return store.commands.filter(c => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
+})
+
+async function openEdit(cmd: CommandMeta) {
+  editCommand.value = cmd
+  editForm.value = { description: cmd.description, body: '' }
+  showEdit.value = true
+  try {
+    editForm.value.body = await store.getBody(cmd.name)
+  } catch (e) {
+    editForm.value.body = ''
+  }
+}
+
+async function onSaveEdit() {
+  if (!editCommand.value) return
+  try {
+    await store.save(editCommand.value.name, editForm.value.description.trim(), editForm.value.body.trim())
+    showEdit.value = false
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Save failed')
+  }
+}
+
+function handleCmd(action: string, cmd: CommandMeta) {
+  if (action === 'delete') onDelete(cmd)
+  else if (action === 'edit') openEdit(cmd)
+}
+
+function openFolder(cmd: CommandMeta) {
+  store.openFolder(cmd.path)
+}
+
+async function onDelete(cmd: CommandMeta) {
+  if (cmd.locked) {
+    ElMessage.warning(t('settings.commandsDeleteLocked', { name: cmd.name }))
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('settings.commandsDeleteConfirm', { name: cmd.name }),
+      t('settings.commandsDelete')
+    )
+    await store.remove(cmd.name)
+  } catch {
+    // cancelled
+  }
+}
+
+function onCreated() {
+  showCreate.value = false
+  store.reload()
+}
+
+onMounted(() => {
+  store.load()
+})
+</script>
+
+<style scoped>
+.commands-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.commands-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.commands-empty {
+  color: var(--el-text-color-secondary);
+  padding: 32px 0;
+  text-align: center;
+}
+.command-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.command-card:hover {
+  border-color: var(--el-color-primary);
+}
+.command-card-icon {
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+.command-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.command-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.command-card-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  font-family: var(--el-font-family-mono, monospace);
+}
+.command-card-desc {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-top: 2px;
+}
+.command-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.command-card-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+}
+.command-card-path:hover {
+  color: var(--el-color-primary);
+}
+.command-card-path-icon {
+  flex-shrink: 0;
+}
+.command-card-path-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+.command-args-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+</style>

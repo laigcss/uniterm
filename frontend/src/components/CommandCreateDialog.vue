@@ -1,0 +1,79 @@
+<template>
+  <el-dialog
+    :model-value="true"
+    :title="t('settings.commandsCreateTitle')"
+    width="540px"
+    @close="$emit('close')"
+  >
+    <el-form label-position="right" label-width="72px" size="small">
+      <el-form-item :label="t('settings.commandsName')" required>
+        <el-input v-model="form.name" :placeholder="t('settings.commandsNamePlaceholder')" />
+      </el-form-item>
+      <el-form-item :label="t('settings.commandsDescription')">
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="2"
+          :placeholder="t('settings.commandsDescriptionPlaceholder')"
+        />
+      </el-form-item>
+      <el-form-item :label="t('settings.commandsBody')" required>
+        <el-input
+          v-model="form.body"
+          type="textarea"
+          :rows="8"
+          :placeholder="t('settings.commandsBodyPlaceholder')"
+        />
+      </el-form-item>
+    </el-form>
+    <p class="command-args-hint">{{ t('settings.commandsArgumentsHint') }}</p>
+    <template #footer>
+      <el-button @click="$emit('close')">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :disabled="!canCreate" @click="onCreate">
+        {{ t('common.confirm') }}
+      </el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useI18n } from '../i18n'
+import { useCommandStore } from '../stores/commandStore'
+
+const { t } = useI18n()
+const store = useCommandStore()
+
+const emit = defineEmits<{
+  close: []
+  created: []
+}>()
+
+const form = ref({ name: '', description: '', body: '' })
+
+const nameRe = /^[a-z0-9][a-z0-9-]*$/
+
+const canCreate = computed(() => {
+  return nameRe.test(form.value.name.trim()) && form.value.body.trim()
+})
+
+async function onCreate() {
+  if (!canCreate.value) return
+  try {
+    await store.create(form.value.name.trim(), form.value.description.trim(), form.value.body.trim())
+    emit('created')
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Create failed')
+  }
+}
+</script>
+
+<style scoped>
+.command-args-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+</style>

@@ -143,20 +143,21 @@
           </div>
         </div>
 
-        <!-- / skill dropdown -->
+        <!-- / skill & command dropdown -->
         <div
-          v-if="skillDropdownVisible && skillMatchingSkills.length > 0"
+          v-if="skillDropdownVisible && skillMatchingItems.length > 0"
           class="skill-dropdown"
         >
           <div
-            v-for="(s, i) in skillMatchingSkills"
-            :key="s.name"
+            v-for="(item, i) in skillMatchingItems"
+            :key="item.kind + '/' + item.name"
             class="skill-dropdown-item"
             :class="{ highlighted: i === skillHighlightIndex }"
-            @mousedown.prevent="onSelectSkill(s.name)"
+            @mousedown.prevent="onSelectItem(item)"
           >
-            <span class="skill-dropdown-name">/{{ s.name }}</span>
-            <span class="skill-dropdown-desc">{{ s.description }}</span>
+            <component :is="item.kind === 'command' ? Terminal : Zap" :size="13" class="skill-dropdown-kind-icon" />
+            <span class="skill-dropdown-name">/{{ item.name }}</span>
+            <span class="skill-dropdown-desc">{{ item.description }}</span>
           </div>
         </div>
 
@@ -250,10 +251,11 @@
 
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, Zap } from '@lucide/vue'
+import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, Zap, Terminal } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSkillStore } from '../stores/skillStore'
+import { useCommandStore } from '../stores/commandStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
@@ -268,6 +270,7 @@ const settingsStore = useSettingsStore()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const skillStore = useSkillStore()
+const commandStore = useCommandStore()
 const { t } = useI18n()
 const editableRef = ref<HTMLDivElement | null>(null)
 
@@ -601,10 +604,22 @@ const hashMatchingPanels = computed(() => {
   return list
 })
 
-const skillMatchingSkills = computed(() => {
-  const q = skillQuery.value.toLowerCase()
-  let list = skillStore.enabledSkills
-  if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+// `/` 补全的查询串可能带参数（如 `review 修复 bug`）：首段是名字用于匹配，其余是命令参数。
+const skillNameToken = computed(() => skillQuery.value.trimStart().split(/\s+/)[0] || '')
+const skillArgsText = computed(() => {
+  const raw = skillQuery.value.trimStart()
+  const sp = raw.search(/\s/)
+  return sp >= 0 ? raw.slice(sp).trim() : ''
+})
+
+type SlashItem = { kind: 'skill' | 'command'; name: string; description: string }
+
+const skillMatchingItems = computed<SlashItem[]>(() => {
+  const q = skillNameToken.value.toLowerCase()
+  const commands: SlashItem[] = commandStore.enabledCommands.map(c => ({ kind: 'command', name: c.name, description: c.description }))
+  const skills: SlashItem[] = skillStore.enabledSkills.map(s => ({ kind: 'skill', name: s.name, description: s.description }))
+  let list = [...commands, ...skills]
+  if (q) list = list.filter(i => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q))
   return list.slice(0, 8)
 })
 
@@ -704,6 +719,47 @@ function onSelectSkill(name: string) {
   skillDropdownVisible.value = false
   skillQuery.value = ''
   syncInputText()
+}
+
+// $ARGUMENTS 替换：含占位符则替换（args 可为空）；否则有参数就追加到末尾；无参数原样。
+function applyArguments(body: string, args: string): string {
+  if (body.includes('$ARGUMENTS')) {
+    return body.split('$ARGUMENTS').join(args)
+  }
+  if (args.trim() !== '') {
+    return body.trimEnd() + '\n\n' + args
+  }
+  return body
+}
+
+// `/` 下拉选中：skill 走插 tag；command 组装 prompt 填入输入框（可编辑，不自动发送）。
+async function onSelectItem(item: SlashItem) {
+  if (item.kind === 'skill') {
+    onSelectSkill(item.name)
+    return
+  }
+  const args = skillArgsText.value
+  skillDropdownVisible.value = false
+  skillQuery.value = ''
+  const body = await commandStore.getBody(item.name)
+  if (!body) return
+  const final = applyArguments(body, args)
+  const el = editableRef.value
+  if (el) {
+    el.innerHTML = ''
+    el.appendChild(document.createTextNode(final))
+    // 光标移到末尾
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      range.collapse(false)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+  syncInputText()
+  focusInput()
 }
 
 function findLastHashIndex(text: string): number {
@@ -1030,7 +1086,7 @@ function onKeydown(e: KeyboardEvent) {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      skillHighlightIndex.value = Math.min(skillHighlightIndex.value + 1, skillMatchingSkills.value.length - 1)
+      skillHighlightIndex.value = Math.min(skillHighlightIndex.value + 1, skillMatchingItems.value.length - 1)
       return
     }
     if (e.key === 'ArrowUp') {
@@ -1040,8 +1096,8 @@ function onKeydown(e: KeyboardEvent) {
     }
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (skillMatchingSkills.value.length > 0) {
-        onSelectSkill(skillMatchingSkills.value[skillHighlightIndex.value].name)
+      if (skillMatchingItems.value.length > 0) {
+        onSelectItem(skillMatchingItems.value[skillHighlightIndex.value])
       }
       return
     }
@@ -1209,6 +1265,7 @@ onMounted(() => {
   window.addEventListener('global:close-context-menus', closeAIMenu)
   document.addEventListener('click', closeAIMenu)
   skillStore.load()
+  commandStore.load()
 
   if (messagesRef.value) {
     messagesRef.value.addEventListener('scroll', onMessagesScroll)
@@ -1830,6 +1887,11 @@ defineExpose({ focusInput })
   font-weight: 500;
   font-family: var(--font-mono);
   flex-shrink: 0;
+}
+.skill-dropdown-kind-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  align-self: center;
 }
 .skill-dropdown-desc {
   flex: 1;

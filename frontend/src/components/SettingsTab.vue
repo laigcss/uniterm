@@ -366,6 +366,9 @@
         <h2 class="section-title">{{ t('settings.skills') }}</h2>
         <p class="section-desc">{{ t('settings.skillsDesc') }}</p>
         <SkillsManager />
+        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.commands') }}</h2>
+        <p class="section-desc">{{ t('settings.commandsDesc') }}</p>
+        <CommandsManager />
       </div>
 
       <!-- Sync settings -->
@@ -698,6 +701,7 @@ import { ElMessageBox } from 'element-plus'
 import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
+import CommandsManager from './CommandsManager.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
 import { uninstallGlobalListener, installGlobalListener } from '../composables/useKeyboardShortcuts'
@@ -932,7 +936,7 @@ const categories = computed(() => {
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
-    { key: 'skills', label: t('settings.skills'), icon: Wrench },
+    { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]

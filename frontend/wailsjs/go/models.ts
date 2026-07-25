@@ -1200,6 +1200,34 @@ export namespace store {
 		    return a;
 		}
 	}
+	export class CommandMeta {
+	    name: string;
+	    description: string;
+	    origin: string;
+	    locked: boolean;
+	    enabled: boolean;
+	    sortOrder: number;
+	    path: string;
+	    createdAt: string;
+	    version: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CommandMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.origin = source["origin"];
+	        this.locked = source["locked"];
+	        this.enabled = source["enabled"];
+	        this.sortOrder = source["sortOrder"];
+	        this.path = source["path"];
+	        this.createdAt = source["createdAt"];
+	        this.version = source["version"];
+	    }
+	}
 	
 	export class HistoryEntry {
 	    id: string;
