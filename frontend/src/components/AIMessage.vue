@@ -1,6 +1,13 @@
 <template>
   <div class="ai-message" :class="[message.role, { interrupted: isInterrupted || isTimeout }]">
-    <div class="content">
+    <!-- Skill card: 仅显示用了哪个 skill，正文已隐藏进 _contextHeader -->
+    <div v-if="message.skillName" class="skill-card">
+      <span class="skill-card-icon">⚡</span>
+      <span class="skill-card-name">{{ message.skillName }}</span>
+      <span class="skill-card-src">{{ message.skillSource === 'auto' ? t('ai.skillAuto') : t('ai.skillExplicit') }}</span>
+    </div>
+
+    <div class="content" v-if="!message.skillName">
       <div class="text" v-html="renderedContent" @click="onTextClick" />
 
       <div v-if="message.role === 'assistant' && message.content?.trim()" class="copy-action">
@@ -1155,5 +1162,28 @@ function escapeHtml(text: string): string {
 .question-actions {
   display: flex;
   gap: 8px;
+}
+.skill-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--accent-subtle, rgba(64,158,255,0.1));
+  border: 1px solid var(--accent-glow, rgba(64,158,255,0.3));
+  border-radius: 12px;
+  font-size: 12px;
+  margin: 2px 0;
+}
+.skill-card-icon {
+  font-size: 12px;
+}
+.skill-card-name {
+  color: var(--accent, #409eff);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.skill-card-src {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 </style>

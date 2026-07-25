@@ -40,6 +40,8 @@ export interface AIMessage {
   tool_call_id?: string
   pendingTools?: PendingTool[]
   needsContinue?: boolean  // UI-only: max turns reached, prompt user to continue
+  skillName?: string       // 显式调用的 skill 名（对话卡片渲染用）
+  skillSource?: string     // 'explicit' | 'auto'
 }
 
 export interface AISession {

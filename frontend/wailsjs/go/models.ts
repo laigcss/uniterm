@@ -1326,6 +1326,44 @@ export namespace store {
 	}
 	
 	
+	export class SkillMeta {
+	    name: string;
+	    description: string;
+	    isSystem: boolean;
+	    origin: string;
+	    locked: boolean;
+	    enabled: boolean;
+	    sortOrder: number;
+	    dir: string;
+	    hasReferences: boolean;
+	    scriptCount: number;
+	    modelInvocable: boolean;
+	    createdModel: string;
+	    createdAt: string;
+	    version: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.isSystem = source["isSystem"];
+	        this.origin = source["origin"];
+	        this.locked = source["locked"];
+	        this.enabled = source["enabled"];
+	        this.sortOrder = source["sortOrder"];
+	        this.dir = source["dir"];
+	        this.hasReferences = source["hasReferences"];
+	        this.scriptCount = source["scriptCount"];
+	        this.modelInvocable = source["modelInvocable"];
+	        this.createdModel = source["createdModel"];
+	        this.createdAt = source["createdAt"];
+	        this.version = source["version"];
+	    }
+	}
 	
 
 }

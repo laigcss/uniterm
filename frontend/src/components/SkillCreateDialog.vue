@@ -1,0 +1,254 @@
+<template>
+  <el-dialog
+    :model-value="true"
+    :title="t('settings.skillsCreateTitle')"
+    width="540px"
+    @close="$emit('close')"
+  >
+    <div class="skill-create-body">
+      <div
+        class="upload-zone"
+        :class="{ parsed: parseState === 'ok', failed: parseState === 'fail' }"
+        @dragover.prevent
+        @drop.prevent="onDrop"
+        @click="fileInput?.click()"
+      >
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".md,.zip,.skill"
+          style="display:none"
+          @change="onFileChange"
+        />
+        <template v-if="!uploadFile">
+          <FileUp :size="24" class="upload-icon" />
+          <p class="upload-hint">{{ t('settings.skillsUploadHint') }}</p>
+        </template>
+        <template v-else>
+          <FileUp :size="24" class="upload-icon" />
+          <p class="upload-file-name">{{ uploadFile }}</p>
+          <p v-if="parseState === 'ok'" class="parse-ok">
+            <CircleCheck :size="14" /> {{ t('settings.skillsParseOk') }}
+          </p>
+          <p v-else-if="parseState === 'fail'" class="parse-fail">
+            {{ parseError }}
+          </p>
+        </template>
+      </div>
+
+      <el-form label-position="right" label-width="72px" size="small">
+        <el-form-item required :label="t('settings.skillsName')">
+          <el-input
+            v-model="form.name"
+            :placeholder="t('settings.skillsNamePlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item required :label="t('settings.skillsDescription')">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            :placeholder="t('settings.skillsDescriptionPlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item required :label="t('settings.skillsBody')">
+          <el-input
+            v-model="form.body"
+            type="textarea"
+            :rows="8"
+            :placeholder="t('settings.skillsBodyPlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
+
+      <p class="security-tip">{{ t('settings.skillsSecurityTip') }}</p>
+    </div>
+
+    <template #footer>
+      <el-button @click="$emit('close')">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :disabled="!canCreate" @click="onCreate">
+        {{ t('common.confirm') }}
+      </el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { FileUp, CircleCheck } from '@lucide/vue'
+import { useI18n } from '../i18n'
+import { useSkillStore } from '../stores/skillStore'
+
+const { t } = useI18n()
+const store = useSkillStore()
+
+const emit = defineEmits<{
+  close: []
+  created: []
+}>()
+
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadFile = ref('')
+const parseState = ref<'idle' | 'ok' | 'fail'>('idle')
+const parseError = ref('')
+const form = ref({ name: '', description: '', body: '' })
+
+const canCreate = computed(() => {
+  return form.value.name.trim() && form.value.description.trim() && form.value.body.trim()
+})
+
+function onDrop(e: DragEvent) {
+  const files = e.dataTransfer?.files
+  if (files && files.length > 0) handleFile(files[0])
+}
+
+function onFileChange() {
+  const files = fileInput.value?.files
+  if (files && files.length > 0) handleFile(files[0])
+}
+
+// 解析 SKILL.md：frontmatter(name/description) + 正文，自动填充表单
+function parseSkillMd(content: string): { name: string; description: string; body: string } | null {
+  const trimmed = content.replace(/^﻿/, '').trimStart()
+  if (!trimmed.startsWith('---')) return null
+  const rest = trimmed.slice(3).replace(/^\r?\n/, '')
+  const endIdx = rest.search(/\n---/)
+  if (endIdx < 0) return null
+  const fmBlock = rest.slice(0, endIdx)
+  const body = rest.slice(endIdx + 4).replace(/^[-\s]*\r?\n/, '').trim()
+
+  let name = ''
+  let description = ''
+  let curKey = ''
+  for (const raw of fmBlock.split('\n')) {
+    const line = raw.replace(/\r$/, '')
+    if (!line.trim()) continue
+    // 折叠标量续行（description: > 的多行）
+    if (/^[\t ]/.test(line) && curKey === 'description') {
+      description += (description ? ' ' : '') + line.trim()
+      continue
+    }
+    const m = line.match(/^([\w-]+):\s*(.*)$/)
+    if (!m) continue
+    curKey = m[1]
+    const val = m[2].replace(/^["']|["']$/g, '')
+    if (curKey === 'name') name = val
+    else if (curKey === 'description' && !['>', '|', '>-', '|-'].includes(val)) description = val
+  }
+  if (!name && !description) return null
+  return { name, description, body }
+}
+
+async function handleFile(file: File) {
+  uploadFile.value = file.name
+  parseState.value = 'idle'
+  parseError.value = ''
+
+  const lower = file.name.toLowerCase()
+  if (lower.endsWith('.md')) {
+    try {
+      const content = await file.text()
+      const parsed = parseSkillMd(content)
+      if (parsed) {
+        form.value.name = parsed.name
+        form.value.description = parsed.description
+        form.value.body = parsed.body
+        parseState.value = 'ok'
+      } else {
+        // 无 frontmatter：整个内容作为正文，文件名作为 name 候选
+        form.value.body = content.trim()
+        if (!form.value.name) {
+          form.value.name = file.name.replace(/\.md$/i, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+        }
+        parseState.value = 'ok'
+      }
+    } catch (e: any) {
+      parseState.value = 'fail'
+      parseError.value = e?.message || t('settings.skillsParseFail')
+    }
+  } else if (lower.endsWith('.zip') || lower.endsWith('.skill')) {
+    // zip 导入需后端解压：提示用户改用 .md，或后续通过文件对话框路径导入
+    parseState.value = 'fail'
+    parseError.value = t('settings.skillsZipHint')
+  } else {
+    parseState.value = 'fail'
+    parseError.value = t('settings.skillsParseFail')
+  }
+}
+
+async function onCreate() {
+  if (!canCreate.value) return
+  try {
+    await store.create(
+      form.value.name.trim(),
+      form.value.description.trim(),
+      form.value.body.trim()
+    )
+    emit('created')
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Creation failed')
+  }
+}
+</script>
+
+<style scoped>
+.skill-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.upload-zone:hover {
+  border-color: var(--el-color-primary);
+}
+.upload-zone.parsed {
+  border-color: var(--el-color-success);
+}
+.upload-zone.failed {
+  border-color: var(--el-color-danger);
+}
+.upload-icon {
+  color: var(--el-text-color-secondary);
+}
+.upload-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+.upload-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  margin: 0;
+}
+.parse-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--el-color-success);
+  margin: 0;
+}
+.parse-fail {
+  font-size: 12px;
+  color: var(--el-color-danger);
+  margin: 0;
+}
+.security-tip {
+  font-size: 12px;
+  color: var(--el-color-warning);
+  margin: 0;
+}
+</style>

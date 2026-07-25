@@ -191,7 +191,7 @@ function buildSystemPrompt(): string {
   return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell)
 }
 
-export async function runAgent(userInput: string) {
+export async function runAgent(userInput: string, skillName?: string, skillBody?: string) {
   const store = useAIStore()
 
   if (!hasActiveSession()) {
@@ -247,11 +247,18 @@ export async function runAgent(userInput: string) {
 
   if (userInput) {
     const dynamicCtx = buildDynamicContext()
+    // skill 正文进 _contextHeader（发给模型但 UI 隐藏），content 只留用户原始输入
+    let header = dynamicCtx || ''
+    if (skillName && skillBody) {
+      const skillCtx = `[Skill: ${skillName}]\n${skillBody}`
+      header = header ? `${skillCtx}\n\n${header}` : skillCtx
+      store.addSkillCard(skillName, 'explicit')
+    }
     store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
       content: userInput,
-      _contextHeader: dynamicCtx || undefined
+      _contextHeader: header || undefined
     })
   }
 

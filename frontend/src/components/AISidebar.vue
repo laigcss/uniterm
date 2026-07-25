@@ -143,6 +143,30 @@
           </div>
         </div>
 
+        <!-- / skill dropdown -->
+        <div
+          v-if="skillDropdownVisible && skillMatchingSkills.length > 0"
+          class="skill-dropdown"
+        >
+          <div
+            v-for="(s, i) in skillMatchingSkills"
+            :key="s.name"
+            class="skill-dropdown-item"
+            :class="{ highlighted: i === skillHighlightIndex }"
+            @mousedown.prevent="onSelectSkill(s.name)"
+          >
+            <span class="skill-dropdown-name">/{{ s.name }}</span>
+            <span class="skill-dropdown-desc">{{ s.description }}</span>
+          </div>
+        </div>
+
+        <div v-if="activeSkillChip" class="skill-chip-area">
+          <span class="skill-chip">
+            ⚡ {{ activeSkillChip }}
+            <button class="skill-chip-close" @click="activeSkillChip = null">&times;</button>
+          </span>
+        </div>
+
         <div v-if="aiStore.queuedMessages.length" class="queued-area">
           <div v-for="q in aiStore.queuedMessages" :key="q.id" class="queued-chip">
             <span class="queued-text">{{ q.content }}</span>
@@ -236,6 +260,7 @@ import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
 import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useSkillStore } from '../stores/skillStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
@@ -249,6 +274,7 @@ const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
+const skillStore = useSkillStore()
 const { t } = useI18n()
 const editableRef = ref<HTMLDivElement | null>(null)
 
@@ -299,14 +325,13 @@ function syncInputText() {
 }
 
 function onEditableInput() {
-  syncInputText(); refreshHashDropdown()
-  refreshHashDropdown()
+  syncInputText(); refreshHashDropdown(); refreshSkillDropdown()
 }
 
 // MutationObserver as backup — catches changes that don't fire 'input' event
 onMounted(() => {
   if (editableRef.value) {
-    mutationObserver = new MutationObserver(() => { syncInputText(); refreshHashDropdown() })
+    mutationObserver = new MutationObserver(() => { syncInputText(); refreshHashDropdown(); refreshSkillDropdown() })
     mutationObserver.observe(editableRef.value, { childList: true, subtree: true, characterData: true })
   }
 })
@@ -531,6 +556,11 @@ const hashQuery = ref('')
 const hashDropdownVisible = ref(false)
 const hashHighlightIndex = ref(0)
 
+const skillQuery = ref('')
+const skillDropdownVisible = ref(false)
+const skillHighlightIndex = ref(0)
+const activeSkillChip = ref<string | null>(null)
+
 const hashMatchingPanels = computed(() => {
   const src = hashDropdownVisible.value && !hashQuery.value
     ? availableTerminalPanels.value
@@ -546,6 +576,91 @@ const hashMatchingPanels = computed(() => {
   })
   return list
 })
+
+const skillMatchingSkills = computed(() => {
+  const q = skillQuery.value.toLowerCase()
+  let list = skillStore.enabledSkills
+  if (q) list = list.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+  return list.slice(0, 8)
+})
+
+function findLastSkillSlash(text: string): number {
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === '/') {
+      if (i === 0 || /[\s,;:.(\{\[]/.test(text[i - 1])) {
+        return i
+      }
+    }
+  }
+  return -1
+}
+
+function detectSlashQuery(): string | null {
+  const sel = window.getSelection()
+  const el = editableRef.value
+  if (!sel || !sel.rangeCount || !el) return null
+  const node = sel.anchorNode
+  if (!node || !el.contains(node)) return null
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent?.slice(0, sel.anchorOffset) || ''
+    const idx = findLastSkillSlash(text)
+    if (idx >= 0) {
+      return text.slice(idx + 1)
+    }
+  }
+  return null
+}
+
+function refreshSkillDropdown() {
+  const query = detectSlashQuery()
+  if (query !== null) {
+    skillDropdownVisible.value = true
+    skillQuery.value = query
+    skillHighlightIndex.value = 0
+  } else {
+    skillDropdownVisible.value = false
+    skillQuery.value = ''
+  }
+}
+
+function onSelectSkill(name: string) {
+  const el = editableRef.value
+  // 删除输入框里正在输入的 /query 片段（无论从补全还是按钮触发），只留 chip
+  if (el) {
+    const sel = window.getSelection()
+    let removed = false
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const node = sel.anchorNode
+      if (node && node.nodeType === Node.TEXT_NODE) {
+        const tn = node as Text
+        const caretPos = sel.anchorOffset
+        const c = tn.textContent || ''
+        const hi = c.slice(0, caretPos).lastIndexOf('/')
+        if (hi >= 0) {
+          const delRange = document.createRange()
+          delRange.setStart(tn, hi)
+          delRange.setEnd(tn, caretPos)
+          delRange.deleteContents()
+          sel.removeAllRanges()
+          sel.addRange(delRange)
+          removed = true
+        }
+      }
+    }
+    // 兜底：若光标不在输入框（如按钮触发），按文本删掉末尾的 /query
+    if (!removed) {
+      const text = getEditableText()
+      const idx = findLastSkillSlash(text)
+      if (idx >= 0) {
+        el.textContent = text.slice(0, idx) + text.slice(idx).replace(/^\/\S*/, '')
+      }
+    }
+  }
+  activeSkillChip.value = name
+  skillDropdownVisible.value = false
+  skillQuery.value = ''
+  syncInputText()
+}
 
 function findLastHashIndex(text: string): number {
   for (let i = text.length - 1; i >= 0; i--) {
@@ -862,6 +977,32 @@ function onKeydown(e: KeyboardEvent) {
     }
   }
 
+  // Skill dropdown navigation
+  if (skillDropdownVisible.value) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      skillDropdownVisible.value = false
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      skillHighlightIndex.value = Math.min(skillHighlightIndex.value + 1, skillMatchingSkills.value.length - 1)
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      skillHighlightIndex.value = Math.max(skillHighlightIndex.value - 1, 0)
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (skillMatchingSkills.value.length > 0) {
+        onSelectSkill(skillMatchingSkills.value[skillHighlightIndex.value].name)
+      }
+      return
+    }
+  }
+
   // Cmd/Ctrl+V: paste via Wails clipboard (DOM paste unreliable in WKWebView)
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
     e.preventDefault()
@@ -909,6 +1050,19 @@ function clearInput() {
 async function onSend() {
   const text = getEditableText().trim()
   if (!text) return
+
+  // F5: 显式调用 skill —— 如果挂了 chip，注入 L2 正文到用户消息
+  const skillName = activeSkillChip.value
+  let skillBody = ''
+  if (skillName) {
+    try {
+      skillBody = await skillStore.getBody(skillName)
+    } catch (e) {
+      console.error('Failed to get skill body:', e)
+    }
+    activeSkillChip.value = null
+  }
+
   if (busy.value) {
     aiStore.enqueueMessage(text)
     clearInput()
@@ -916,7 +1070,7 @@ async function onSend() {
   }
   clearInput()
   scrollToBottom()
-  await runAgent(text)
+  await runAgent(text, skillName, skillBody)
   scrollToBottom()
 }
 
@@ -1594,6 +1748,79 @@ defineExpose({ focusInput })
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
+}
+
+/* Skill dropdown (紧凑单行，仿 TRAE) */
+.skill-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  right: -1px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  margin-bottom: 4px;
+}
+.skill-dropdown-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.skill-dropdown-item:hover,
+.skill-dropdown-item.highlighted {
+  background: var(--accent-subtle);
+}
+.skill-dropdown-name {
+  color: var(--accent);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.skill-dropdown-desc {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Skill chip */
+.skill-chip-area {
+  padding: 4px 8px 0;
+}
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-glow);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.skill-chip-close {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.7;
+}
+.skill-chip-close:hover {
+  opacity: 1;
 }
 .queued-area {
   display: flex;

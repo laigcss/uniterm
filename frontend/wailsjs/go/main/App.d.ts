@@ -29,6 +29,8 @@ export function CreateDatabase(arg1:string,arg2:string):Promise<void>;
 
 export function CreateSession(arg1:string,arg2:session.ConnectionConfig):Promise<session.SessionInfo>;
 
+export function CreateSkill(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function CreateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string):Promise<string>;
@@ -38,6 +40,8 @@ export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<stri
 export function DBInsertRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 
 export function DBUpdateRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>,arg5:Record<string, any>):Promise<void>;
+
+export function DeleteSkill(arg1:string):Promise<void>;
 
 export function DeleteTerminalHistoryEntry(arg1:Array<string>):Promise<void>;
 
@@ -95,17 +99,27 @@ export function GetRecentConnections():Promise<Array<string>>;
 
 export function GetSessionOutputLogInfo(arg1:string):Promise<main.SessionLogInfo>;
 
+export function GetSkillBody(arg1:string):Promise<string>;
+
+export function GetSkillFile(arg1:string,arg2:string):Promise<string>;
+
 export function GetSystemFonts():Promise<Array<string>>;
 
 export function GetTableSchema(arg1:string,arg2:string,arg3:string):Promise<database.SchemaResult>;
 
 export function GetTables(arg1:string,arg2:string):Promise<Array<database.TableInfo>>;
 
+export function ImportSkillFromDir(arg1:string):Promise<string>;
+
+export function ImportSkillFromZip(arg1:string):Promise<string>;
+
 export function KillProcess(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function ListSerialPorts():Promise<Array<string>>;
 
 export function ListSessions():Promise<Array<session.SessionInfo>>;
+
+export function ListSkills():Promise<Array<store.SkillMeta>>;
 
 export function ListTunnelStates():Promise<Array<session.TunnelState>>;
 
@@ -255,6 +269,8 @@ export function SaveQuickCommands(arg1:store.QuickCommandData):Promise<void>;
 
 export function SaveSettings(arg1:store.AppSettings):Promise<void>;
 
+export function SaveSkill(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SaveTerminalHistory(arg1:Array<store.HistoryEntry>):Promise<void>;
 
 export function SaveTunnels(arg1:session.TunnelStoreData):Promise<void>;
@@ -278,6 +294,12 @@ export function SetDefaultSessionLogDir(arg1:string):Promise<void>;
 export function SetMonitorActiveTab(arg1:string,arg2:string):Promise<void>;
 
 export function SetMonitorPaused(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetSkillEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetSkillLocked(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetSkillSortOrder(arg1:string,arg2:number):Promise<void>;
 
 export function SftpCancelTransfer(arg1:string,arg2:string):Promise<void>;
 
