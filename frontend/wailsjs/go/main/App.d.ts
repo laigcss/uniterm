@@ -183,8 +183,6 @@ export function OpenPathInExplorer(arg1:string):Promise<void>;
 
 export function RDPHide(arg1:string):Promise<void>;
 
-export function RDPSetFocus(arg1:string,arg2:boolean):Promise<void>;
-
 export function RDPSetFullScreen(arg1:string,arg2:boolean):Promise<void>;
 
 export function RDPSetPosition(arg1:string,arg2:number,arg3:number,arg4:number,arg5:number):Promise<void>;

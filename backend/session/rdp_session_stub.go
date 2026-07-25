@@ -40,8 +40,6 @@ func (s *RDPSession) SetParentHwnd(_ uintptr) {}
 
 func (s *RDPSession) SetPosition(_, _, _, _ int) {}
 
-func (s *RDPSession) SetFocus(_ bool) {}
-
 func (s *RDPSession) Show() {}
 
 func (s *RDPSession) Hide() {}

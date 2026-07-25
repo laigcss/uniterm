@@ -173,7 +173,7 @@ import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from 
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RDPSetFocus, RecordRecentConnection, GetPlatform, GetBackgroundImage } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage } from '../wailsjs/go/main/App'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
@@ -659,15 +659,6 @@ onMounted(async () => {
   // (issue #285) — see composables/useFocusTerminal.ts for the policy.
   uninstallFocusRestore = installTerminalFocusRestore()
 
-  // RDP blur/focus: notify Go side so it can manage focus on the native RDP window
-  window.addEventListener('blur', () => {
-    const sid = getActiveRdpSessionId()
-    if (sid) RDPSetFocus(sid, false)
-  })
-  window.addEventListener('focus', () => {
-    const sid = getActiveRdpSessionId()
-    if (sid) RDPSetFocus(sid, true)
-  })
   // RDP overlay tracking
   window.addEventListener('rdp:overlay-push', RDPHideForOverlay)
   window.addEventListener('rdp:overlay-pop', RDPShowForOverlay)
