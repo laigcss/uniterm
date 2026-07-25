@@ -92,3 +92,23 @@ describe('k8sResources completeness', () => {
     }
   })
 })
+
+describe('descriptor actions + canCreate', () => {
+  it('pods support detail/logs/terminal/delete and canCreate', () => {
+    const p = getResource('pods')!
+    expect(p.actions).toEqual(['detail', 'logs', 'terminal', 'delete'])
+    expect(p.canCreate).toBe(true)
+  })
+  it('deployments support viewPods/restart/scale', () => {
+    const d = getResource('deployments')!
+    expect(d.actions).toEqual(expect.arrayContaining(['viewPods', 'restart', 'scale', 'delete']))
+  })
+  it('nodes support cordon/drain, not creatable', () => {
+    const n = getResource('nodes')!
+    expect(n.actions).toEqual(expect.arrayContaining(['cordon', 'drain', 'viewPods']))
+    expect(n.canCreate).toBe(false)
+  })
+  it('events are detail-only', () => {
+    expect(getResource('events')!.actions).toEqual(['detail'])
+  })
+})

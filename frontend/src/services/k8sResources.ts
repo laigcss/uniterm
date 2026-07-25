@@ -112,6 +112,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
       { header: 'Node', value: p => p.spec?.nodeName || '' },
     ],
+    actions: ['detail', 'logs', 'terminal', 'delete'],
+    canCreate: true,
   },
   {
     key: 'deployments', kind: 'Deployment', apiVersion: 'apps/v1',
@@ -126,6 +128,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Available', value: d => d.status?.availableReplicas || 0 },
       { header: 'Age', value: d => age(d.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'restart', 'scale', 'delete'],
+    canCreate: true,
   },
   {
     key: 'statefulsets', kind: 'StatefulSet', apiVersion: 'apps/v1',
@@ -138,6 +142,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Ready', value: s => `${s.status?.readyReplicas || 0}/${s.spec?.replicas ?? 0}` },
       { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'restart', 'scale', 'delete'],
+    canCreate: true,
   },
   {
     key: 'daemonsets', kind: 'DaemonSet', apiVersion: 'apps/v1',
@@ -152,6 +158,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Ready', value: d => d.status?.numberReady || 0 },
       { header: 'Age', value: d => age(d.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'restart', 'delete'],
+    canCreate: true,
   },
   {
     key: 'jobs', kind: 'Job', apiVersion: 'batch/v1',
@@ -164,6 +172,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Completions', value: j => `${j.status?.succeeded || 0}/${j.spec?.completions ?? 1}` },
       { header: 'Age', value: j => age(j.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'delete'],
+    canCreate: true,
   },
   {
     key: 'cronjobs', kind: 'CronJob', apiVersion: 'batch/v1',
@@ -179,6 +189,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Last Schedule', value: c => age(c.status?.lastScheduleTime) },
       { header: 'Age', value: c => age(c.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   {
     key: 'replicasets', kind: 'ReplicaSet', apiVersion: 'apps/v1',
@@ -192,6 +204,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Ready', value: r => r.status?.readyReplicas || 0 },
       { header: 'Age', value: r => age(r.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'scale', 'delete'],
+    canCreate: true,
   },
   // ── Network ─────────────────────────────────────────────────
   {
@@ -207,6 +221,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Ports', value: s => (s.spec?.ports || []).map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(',') },
       { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   {
     key: 'ingresses', kind: 'Ingress', apiVersion: 'networking.k8s.io/v1',
@@ -220,6 +236,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Hosts', value: i => (i.spec?.rules || []).map((r: any) => r.host).filter(Boolean).join(',') || '*' },
       { header: 'Age', value: i => age(i.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   // ── Config ──────────────────────────────────────────────────
   {
@@ -233,6 +251,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Data', value: c => Object.keys(c.data || {}).length },
       { header: 'Age', value: c => age(c.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   {
     key: 'secrets', kind: 'Secret', apiVersion: 'v1',
@@ -246,6 +266,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Data', value: s => Object.keys(s.data || {}).length },
       { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   // ── Storage ─────────────────────────────────────────────────
   {
@@ -262,6 +284,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Storage Class', value: p => p.spec?.storageClassName || '' },
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   {
     key: 'persistentvolumes', kind: 'PersistentVolume', apiVersion: 'v1',
@@ -278,6 +302,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Storage Class', value: p => p.spec?.storageClassName || '' },
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: true,
   },
   // ── Cluster ─────────────────────────────────────────────────
   {
@@ -300,6 +326,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'OS', value: n => n.status?.nodeInfo?.osImage || '' },
       { header: 'Age', value: n => age(n.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'viewPods', 'cordon', 'drain'],
+    canCreate: false,
   },
   {
     key: 'namespaces', kind: 'Namespace', apiVersion: 'v1',
@@ -311,6 +339,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Status', value: n => n.status?.phase || '' },
       { header: 'Age', value: n => age(n.metadata?.creationTimestamp) },
     ],
+    actions: ['detail', 'delete'],
+    canCreate: false,
   },
   {
     key: 'events', kind: 'Event', apiVersion: 'v1',
@@ -325,6 +355,8 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Namespace', value: e => e.metadata?.namespace || '' },
       { header: 'Age', value: e => age(e.metadata?.creationTimestamp || e.lastTimestamp) },
     ],
+    actions: ['detail'],
+    canCreate: false,
   },
 ]
 
