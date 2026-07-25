@@ -32,6 +32,7 @@ var (
 	procGetClientRect      = user32Dll.NewProc("GetClientRect")
 	procClientToScreen     = user32Dll.NewProc("ClientToScreen")
 	procSetWindowLongPtr   = user32Dll.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtr   = user32Dll.NewProc("GetWindowLongPtrW")
 	procPostMessageW       = user32Dll.NewProc("PostMessageW")
 	procFindWindowExW      = user32Dll.NewProc("FindWindowExW")
 	procSendMessageW       = user32Dll.NewProc("SendMessageW")
@@ -52,10 +53,12 @@ const (
 	SWP_NOZORDER       = 0x0004
 	SWP_ASYNCWINDOWPOS = 0x4000 // non-blocking: avoids freezing RDP COM thread
 	WS_EX_TOOLWINDOW   = 0x00000080
+	WS_EX_NOACTIVATE   = 0x08000000
 	WS_POPUP           = 0x80000000
 	WS_CLIPSIBLINGS    = 0x04000000
 	PM_REMOVE          = 0x0001
 	GWLP_HWNDPARENT    = ^uintptr(7) // -8 represented as uintptr for syscall compatibility
+	GWL_EXSTYLE        = ^uintptr(19) // -20: extended window style
 	SW_HIDE            = 0
 	SW_SHOWNOACTIVATE  = 4
 	WM_COMMAND         = 0x0111
@@ -294,14 +297,12 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 
 	createWindowEx := windows.NewLazySystemDLL("user32.dll").NewProc("CreateWindowExW")
 	hwnd, _, _ := createWindowEx.Call(
-		// WS_EX_TOOLWINDOW keeps the RDP window off the taskbar. We must NOT add
-		// WS_EX_NOACTIVATE: that flag tells the OS "clicking this window (and its
-		// owner) does not bring them to the foreground", which on multi-monitor
-		// setups leaves the keyboard attached to whatever app was last active on
-		// another screen. Programmatic show/position already use SWP_NOACTIVATE /
-		// SW_SHOWNOACTIVATE, so activation happens only on a real user click —
-		// exactly the behavior we want for keyboard focus. (issue #385)
-		uintptr(WS_EX_TOOLWINDOW),
+		// Create with WS_EX_NOACTIVATE so the RDP ActiveX control cannot steal the
+		// foreground during connection (which would push uniTerm behind other
+		// windows). The flag is cleared after connect (see below) so that clicking
+		// the RDP window then activates uniTerm and keyboard focus follows on
+		// multi-monitor setups. (issues #385, foreground-during-connect)
+		uintptr(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE),
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(name)),
 		uintptr(WS_POPUP|WS_CLIPSIBLINGS),
@@ -416,6 +417,10 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 			if a != nil {
 				a.PutProperty("ContainerHandledFullScreen", false)
 				a.PutProperty("WarnOnDirectConnect", false)
+				// Hide the minimize button on the full-screen connection bar.
+				// When minimized, the RDP window (WS_EX_TOOLWINDOW, no taskbar entry)
+				// becomes unrecoverable. Supported in AdvancedSettings6+.
+				a.PutProperty("ConnectionBarShowMinimizeButton", false)
 				a.Release()
 			}
 		}
@@ -456,6 +461,12 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	// Immediate show-and-position to avoid white/black screen.
 	// Frontend will refine via RDPSetPosition shortly after.
 	s.positionFromMainWindow(width, height)
+
+	// Connection is up and the ActiveX control is no longer trying to grab the
+	// foreground, so clear WS_EX_NOACTIVATE. From now on a click on the RDP
+	// window activates uniTerm, letting keyboard focus follow. (issue #385)
+	exStyle, _, _ := procGetWindowLongPtr.Call(hwnd, GWL_EXSTYLE)
+	procSetWindowLongPtr.Call(hwnd, GWL_EXSTYLE, exStyle&^WS_EX_NOACTIVATE)
 
 	s.setStatus(StatusConnected)
 
