@@ -272,6 +272,7 @@ onBeforeUnmount(stopLogs)
   color: var(--text-primary);
   font-family: var(--font-mono);
   word-break: break-all;
+  white-space: pre-wrap;
   flex: 1;
   user-select: text;
 }

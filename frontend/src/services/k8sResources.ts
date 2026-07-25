@@ -127,6 +127,14 @@ export const RESOURCES: ResourceDescriptor[] = [
         { label: 'Pod IP', value: p => p.status?.podIP || '' },
         { label: 'QoS', value: p => p.status?.qosClass || '' },
       ]},
+      { label: 'Containers', fields: [
+        { label: 'Containers', value: p => {
+          const statuses = new Map((p.status?.containerStatuses || []).map((s: any) => [s.name, s.ready]))
+          return (p.spec?.containers || [])
+            .map((c: any) => `${c.name} (${c.image}) [${statuses.get(c.name) ? 'ready' : 'not ready'}]`)
+            .join('\n')
+        } },
+      ]},
     ],
   },
   {

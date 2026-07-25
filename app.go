@@ -3960,6 +3960,18 @@ func (a *App) K8sExecSession(connID, namespace, pod, container string) (*session
 	}
 	id := uuid.New().String()
 	sess := session.NewK8sExecSession(id, wsConn)
+	sess.SetOnDataCallback(func(data []byte) {
+		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+			"id":   sess.ID(),
+			"data": string(data),
+		})
+	})
+	sess.SetOnStatusChangeCallback(func(status session.SessionStatus) {
+		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+			"id":     sess.ID(),
+			"status": status,
+		})
+	})
 	a.sessionManager.Add(sess)
 	return &session.SessionInfo{ID: id, Type: "k8s-exec", Title: pod, Status: session.StatusConnected}, nil
 }

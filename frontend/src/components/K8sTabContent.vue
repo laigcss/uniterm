@@ -47,6 +47,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import * as k8sClient from '../services/k8sClient'
 import { usePanelStore } from '../stores/panelStore'
 import { useTabStore } from '../stores/tabStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
@@ -62,6 +63,7 @@ const { resolveTunnelCredentials } = useTunnelCredentials()
 
 const panelStore = usePanelStore()
 const tabStore = useTabStore()
+const sessionStore = useSessionStore()
 
 const connId = ref<string>('')
 const error = ref('')
@@ -155,6 +157,7 @@ async function openTerminal(pod: any) {
     const panel = panelStore.createPanel(cfg as any, 'k8s-exec')
     panelStore.updateTitle(panel.id, title)
     panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
     const tab = tabStore.createTerminalTab(panel.title, panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
   } catch (e: any) {
