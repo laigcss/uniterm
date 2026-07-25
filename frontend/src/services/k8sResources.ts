@@ -358,6 +358,167 @@ export const RESOURCES: ResourceDescriptor[] = [
     actions: ['detail'],
     canCreate: false,
   },
+  // ── Workloads (autoscaling) ─────────────────────────────────
+  {
+    key: 'horizontalpodautoscalers', kind: 'HorizontalPodAutoscaler', apiVersion: 'autoscaling/v2',
+    namespaced: true, group: 'workloads', icon: 'GitFork', label: 'HPAs',
+    listPath: ns => apisListPath('autoscaling', 'v2', 'horizontalpodautoscalers', ns),
+    watchPath: (ns, rv) => apisWatchPath('autoscaling', 'v2', 'horizontalpodautoscalers', ns, rv),
+    columns: [
+      { header: 'Name', value: h => h.metadata?.name || '' },
+      { header: 'Namespace', value: h => h.metadata?.namespace || '' },
+      { header: 'Reference', value: h => `${h.spec?.scaleTargetRef?.kind || ''}/${h.spec?.scaleTargetRef?.name || ''}` },
+      { header: 'Min', value: h => h.spec?.minReplicas ?? 0 },
+      { header: 'Max', value: h => h.spec?.maxReplicas ?? 0 },
+      { header: 'Replicas', value: h => h.status?.currentReplicas ?? 0 },
+      { header: 'Age', value: h => age(h.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  // ── Network ─────────────────────────────────────────────────
+  {
+    key: 'networkpolicies', kind: 'NetworkPolicy', apiVersion: 'networking.k8s.io/v1',
+    namespaced: true, group: 'network', icon: 'Network', label: 'NetworkPolicies',
+    listPath: ns => apisListPath('networking.k8s.io', 'v1', 'networkpolicies', ns),
+    watchPath: (ns, rv) => apisWatchPath('networking.k8s.io', 'v1', 'networkpolicies', ns, rv),
+    columns: [
+      { header: 'Name', value: n => n.metadata?.name || '' },
+      { header: 'Namespace', value: n => n.metadata?.namespace || '' },
+      { header: 'Pod-Selector', value: n => Object.entries(n.spec?.podSelector?.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(',') || '<all>' },
+      { header: 'Age', value: n => age(n.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'endpoints', kind: 'Endpoints', apiVersion: 'v1',
+    namespaced: true, group: 'network', icon: 'Network', label: 'Endpoints',
+    listPath: ns => coreListPath('endpoints', ns),
+    watchPath: (ns, rv) => coreWatchPath('endpoints', ns, rv),
+    columns: [
+      { header: 'Name', value: e => e.metadata?.name || '' },
+      { header: 'Namespace', value: e => e.metadata?.namespace || '' },
+      { header: 'Endpoints', value: e => (e.subsets || []).flatMap((s: any) => (s.addresses || []).map((a: any) => a.ip)).slice(0, 5).join(',') },
+      { header: 'Age', value: e => age(e.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: false,
+  },
+  // ── Config (quota) ──────────────────────────────────────────
+  {
+    key: 'resourcequotas', kind: 'ResourceQuota', apiVersion: 'v1',
+    namespaced: true, group: 'config', icon: 'FileText', label: 'ResourceQuotas',
+    listPath: ns => coreListPath('resourcequotas', ns),
+    watchPath: (ns, rv) => coreWatchPath('resourcequotas', ns, rv),
+    columns: [
+      { header: 'Name', value: q => q.metadata?.name || '' },
+      { header: 'Namespace', value: q => q.metadata?.namespace || '' },
+      { header: 'Age', value: q => age(q.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'limitranges', kind: 'LimitRange', apiVersion: 'v1',
+    namespaced: true, group: 'config', icon: 'FileText', label: 'LimitRanges',
+    listPath: ns => coreListPath('limitranges', ns),
+    watchPath: (ns, rv) => coreWatchPath('limitranges', ns, rv),
+    columns: [
+      { header: 'Name', value: l => l.metadata?.name || '' },
+      { header: 'Namespace', value: l => l.metadata?.namespace || '' },
+      { header: 'Age', value: l => age(l.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  // ── Storage ─────────────────────────────────────────────────
+  {
+    key: 'storageclasses', kind: 'StorageClass', apiVersion: 'storage.k8s.io/v1',
+    namespaced: false, group: 'storage', icon: 'Database', label: 'StorageClasses',
+    listPath: () => apisListPath('storage.k8s.io', 'v1', 'storageclasses', ''),
+    watchPath: (_ns, rv) => apisWatchPath('storage.k8s.io', 'v1', 'storageclasses', '', rv),
+    columns: [
+      { header: 'Name', value: s => s.metadata?.name || '' },
+      { header: 'Provisioner', value: s => s.provisioner || '' },
+      { header: 'Reclaim', value: s => s.reclaimPolicy || '' },
+      { header: 'Binding', value: s => s.volumeBindingMode || '' },
+      { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  // ── RBAC ────────────────────────────────────────────────────
+  {
+    key: 'serviceaccounts', kind: 'ServiceAccount', apiVersion: 'v1',
+    namespaced: true, group: 'rbac', icon: 'Lock', label: 'ServiceAccounts',
+    listPath: ns => coreListPath('serviceaccounts', ns),
+    watchPath: (ns, rv) => coreWatchPath('serviceaccounts', ns, rv),
+    columns: [
+      { header: 'Name', value: s => s.metadata?.name || '' },
+      { header: 'Namespace', value: s => s.metadata?.namespace || '' },
+      { header: 'Secrets', value: s => (s.secrets || []).length },
+      { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'roles', kind: 'Role', apiVersion: 'rbac.authorization.k8s.io/v1',
+    namespaced: true, group: 'rbac', icon: 'Lock', label: 'Roles',
+    listPath: ns => apisListPath('rbac.authorization.k8s.io', 'v1', 'roles', ns),
+    watchPath: (ns, rv) => apisWatchPath('rbac.authorization.k8s.io', 'v1', 'roles', ns, rv),
+    columns: [
+      { header: 'Name', value: r => r.metadata?.name || '' },
+      { header: 'Namespace', value: r => r.metadata?.namespace || '' },
+      { header: 'Age', value: r => age(r.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'rolebindings', kind: 'RoleBinding', apiVersion: 'rbac.authorization.k8s.io/v1',
+    namespaced: true, group: 'rbac', icon: 'Lock', label: 'RoleBindings',
+    listPath: ns => apisListPath('rbac.authorization.k8s.io', 'v1', 'rolebindings', ns),
+    watchPath: (ns, rv) => apisWatchPath('rbac.authorization.k8s.io', 'v1', 'rolebindings', ns, rv),
+    columns: [
+      { header: 'Name', value: r => r.metadata?.name || '' },
+      { header: 'Namespace', value: r => r.metadata?.namespace || '' },
+      { header: 'Role', value: r => `${r.roleRef?.kind || ''}/${r.roleRef?.name || ''}` },
+      { header: 'Age', value: r => age(r.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'clusterroles', kind: 'ClusterRole', apiVersion: 'rbac.authorization.k8s.io/v1',
+    namespaced: false, group: 'rbac', icon: 'Lock', label: 'ClusterRoles',
+    listPath: () => apisListPath('rbac.authorization.k8s.io', 'v1', 'clusterroles', ''),
+    watchPath: (_ns, rv) => apisWatchPath('rbac.authorization.k8s.io', 'v1', 'clusterroles', '', rv),
+    columns: [
+      { header: 'Name', value: r => r.metadata?.name || '' },
+      { header: 'Age', value: r => age(r.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  {
+    key: 'clusterrolebindings', kind: 'ClusterRoleBinding', apiVersion: 'rbac.authorization.k8s.io/v1',
+    namespaced: false, group: 'rbac', icon: 'Lock', label: 'ClusterRoleBindings',
+    listPath: () => apisListPath('rbac.authorization.k8s.io', 'v1', 'clusterrolebindings', ''),
+    watchPath: (_ns, rv) => apisWatchPath('rbac.authorization.k8s.io', 'v1', 'clusterrolebindings', '', rv),
+    columns: [
+      { header: 'Name', value: r => r.metadata?.name || '' },
+      { header: 'Role', value: r => `${r.roleRef?.kind || ''}/${r.roleRef?.name || ''}` },
+      { header: 'Age', value: r => age(r.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
+  // ── Cluster (CRD) ───────────────────────────────────────────
+  {
+    key: 'customresourcedefinitions', kind: 'CustomResourceDefinition', apiVersion: 'apiextensions.k8s.io/v1',
+    namespaced: false, group: 'cluster', icon: 'Boxes', label: 'CRDs',
+    listPath: () => apisListPath('apiextensions.k8s.io', 'v1', 'customresourcedefinitions', ''),
+    watchPath: (_ns, rv) => apisWatchPath('apiextensions.k8s.io', 'v1', 'customresourcedefinitions', '', rv),
+    columns: [
+      { header: 'Name', value: c => c.metadata?.name || '' },
+      { header: 'Group', value: c => c.spec?.group || '' },
+      { header: 'Kind', value: c => c.spec?.names?.kind || '' },
+      { header: 'Scope', value: c => c.spec?.scope || '' },
+      { header: 'Age', value: c => age(c.metadata?.creationTimestamp) },
+    ],
+    actions: ['detail', 'delete'], canCreate: true,
+  },
 ]
 
 export function getResource(key: string): ResourceDescriptor | undefined {

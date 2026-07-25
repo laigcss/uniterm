@@ -61,7 +61,7 @@ describe('k8sResources completeness', () => {
 
   it('contains all 16 built-in resources', () => {
     const keys = RESOURCES.map(r => r.key).sort()
-    expect(keys).toEqual([...EXPECTED_KEYS].sort())
+    expect(keys).toEqual(expect.arrayContaining([...EXPECTED_KEYS].sort()))
   })
 
   it('cluster-scoped resources are marked namespaced: false', () => {
@@ -121,5 +121,33 @@ describe('column filterable', () => {
   it('service Type column is enum-filterable', () => {
     const t = getResource('services')!.columns.find(c => c.header === 'Type')!
     expect(t.filterable).toEqual({ type: 'enum' })
+  })
+})
+
+describe('expanded resources', () => {
+  const NEW_KEYS = [
+    'horizontalpodautoscalers', 'networkpolicies', 'endpoints',
+    'resourcequotas', 'limitranges', 'storageclasses',
+    'serviceaccounts', 'roles', 'rolebindings', 'clusterroles', 'clusterrolebindings',
+    'customresourcedefinitions',
+  ]
+  it('all new resources present with valid paths', () => {
+    for (const k of NEW_KEYS) {
+      const r = getResource(k)
+      expect(r, k).toBeTruthy()
+      expect(r!.listPath(r!.namespaced ? 'default' : '').startsWith('/api')).toBe(true)
+    }
+  })
+  it('rbac resources are in the rbac group', () => {
+    expect(getResource('clusterroles')!.group).toBe('rbac')
+    expect(getResource('serviceaccounts')!.group).toBe('rbac')
+  })
+  it('cluster-scoped new resources marked namespaced:false', () => {
+    for (const k of ['storageclasses', 'clusterroles', 'clusterrolebindings', 'customresourcedefinitions']) {
+      expect(getResource(k)!.namespaced, k).toBe(false)
+    }
+  })
+  it('endpoints not creatable', () => {
+    expect(getResource('endpoints')!.canCreate).toBe(false)
   })
 })

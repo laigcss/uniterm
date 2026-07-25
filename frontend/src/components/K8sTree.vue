@@ -56,12 +56,13 @@ interface Group {
   resources: ResourceDescriptor[]
 }
 
-const GROUP_ORDER: ResourceGroup[] = ['workloads', 'network', 'config', 'storage', 'cluster']
+const GROUP_ORDER: ResourceGroup[] = ['workloads', 'network', 'config', 'storage', 'rbac', 'cluster']
 const GROUP_LABELS: Record<ResourceGroup, string> = {
   workloads: 'Workloads',
   network: 'Network',
   config: 'Config',
   storage: 'Storage',
+  rbac: 'RBAC',
   cluster: 'Cluster',
 }
 
