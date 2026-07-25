@@ -150,17 +150,19 @@ const logAutoscroll = ref(true)
 const logLines = ref<string[]>([])
 const logBody = ref<HTMLElement | null>(null)
 let logHandle: LogHandle | null = null
+let logGen = 0
 
 const containerNames = computed(() => (props.target?.spec?.containers || []).map((c: any) => c.name))
 
-function stopLogs() { logHandle?.stop(); logHandle = null }
+function stopLogs() { logGen++; logHandle?.stop(); logHandle = null }
 async function restartLogs() {
   stopLogs()
+  const myGen = ++logGen
   logLines.value = []
   if (props.mode !== 'logs' || !props.target) return
   const ns = props.target.metadata?.namespace
   const pod = props.target.metadata?.name
-  logHandle = await startLogStream(
+  const handle = await startLogStream(
     props.connId, ns, pod, logContainer.value, logTail.value, logTimestamps.value, logPrevious.value,
     (line) => {
       if (logPaused.value) return
@@ -170,6 +172,8 @@ async function restartLogs() {
     },
     () => {},
   )
+  if (myGen !== logGen || props.mode !== 'logs' || !props.target) { handle.stop(); return }
+  logHandle = handle
 }
 
 watch(() => [props.mode, props.target], () => {
