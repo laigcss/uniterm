@@ -613,9 +613,9 @@
         </el-form-item>
         <el-form-item :label="t('settings.modelProtocol')">
           <el-select v-model="modelForm.protocol" style="width: 100%">
-            <el-option label="Anthropic Messages" value="anthropic" />
-            <el-option label="OpenAI Chat Completions" value="openai" />
-            <el-option label="OpenAI Responses" value="responses" />
+            <el-option label="Anthropic Messages API" value="anthropic" />
+            <el-option label="OpenAI Chat Completions API" value="openai" />
+            <el-option label="OpenAI Responses API" value="responses" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('settings.modelBaseURL')">
