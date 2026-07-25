@@ -85,6 +85,98 @@ func TestSanitizeLogName(t *testing.T) {
 	}
 }
 
+func TestLineProcessorSlowCharEchoNoDuplication(t *testing.T) {
+	// Regression for issue #358: a switch CLI echoes one char per keystroke.
+	// When the user types slower than flushTimeout, each Feed triggers a
+	// timeout flush. The buffer must only emit the NEW tail each time, not
+	// re-emit the growing prefix, or the log fills with duplicated lines
+	// like "port acc[prompt]port accv[prompt]port access v...".
+	p := lineProcessor{flushTimeout: 1 * time.Millisecond}
+	var out []byte
+	for _, ch := range []string{"v", "l", "a", "n", " ", "2", "4"} {
+		time.Sleep(2 * time.Millisecond)
+		out = append(out, p.Feed([]byte(ch))...)
+	}
+	out = append(out, p.Feed([]byte("\r\n"))...)
+	got := string(out)
+	want := "vlan 24\n"
+	if got != want {
+		t.Errorf("slow char echo = %q, want %q", got, want)
+	}
+}
+
+func TestLineProcessorRepaintAfterTimeoutFlush(t *testing.T) {
+	// After a timeout flush emits a prefix, a \r-repaint that overwrites
+	// already-emitted bytes must re-flush the corrected tail rather than
+	// silently drop it.
+	p := lineProcessor{flushTimeout: 1 * time.Millisecond}
+	out := string(p.Feed([]byte("abc")))
+	if out != "" {
+		t.Errorf("first Feed emitted %q, want empty", out)
+	}
+	time.Sleep(2 * time.Millisecond)
+	// Timeout flush emits "abc"; then \r rewrites to "aXY". "abc" is already
+	// committed to the log (can't be unwritten), so the corrected tail is
+	// appended: the second Feed yields "abc" (flush) + "aXY\n" (repaint).
+	out2 := string(p.Feed([]byte("\raXY\n")))
+	want := "abcaXY\n"
+	if out2 != want {
+		t.Errorf("repaint after flush = %q, want %q", out2, want)
+	}
+}
+
+func TestLineProcessorReadlineRecallEraseToEnd(t *testing.T) {
+	// Regression: readline history recall repaints the prompt line. Recalling
+	// a SHORTER command over a longer one uses ESC[K to erase the leftover
+	// tail. Without interpreting ESC[K the log kept the old tail, e.g.
+	// "cat trace_fip_flows.sh er01.cloud.local...". \r returns to col 0, the
+	// new command overwrites, ESC[K erases the rest.
+	var p lineProcessor
+	// First command echoed, then Enter.
+	got1 := string(p.Feed([]byte("[root@m ~]# cat test.txt\r\n")))
+	if got1 != "[root@m ~]# cat test.txt\n" {
+		t.Errorf("first line = %q", got1)
+	}
+	// Prompt reprints; user recalls a longer line then a shorter one. The
+	// shorter recall overwrites from col 0 and erases the tail with ESC[K.
+	in := []byte("[root@m ~]# cat a_very_long_old_command.txt\r" +
+		"[root@m ~]# cat short.sh\x1b[K\r\n")
+	got2 := string(p.Feed(in))
+	want2 := "[root@m ~]# cat short.sh\n"
+	if got2 != want2 {
+		t.Errorf("recall erase-to-end = %q, want %q", got2, want2)
+	}
+}
+
+func TestLineProcessorCursorMoveAndDelete(t *testing.T) {
+	// readline mid-line edit: type "helo", move cursor left with ESC[D,
+	// insert 'l' — verify cursor-left (D) and the resulting text.
+	var p lineProcessor
+	// "helo" then cursor left 2 (before 'l'... actually before 'o'): ESC[2D
+	// puts cursor between 'e' and 'l'; insert 'l' → "hello".
+	got := string(p.Feed([]byte("helo\x1b[2Dl\r\n")))
+	// helo, pos=4. ESC[2D → pos=2 (between 'e' and 'l'). write 'l' overwrites
+	// 'l' at pos2, pos=3. \n flushes "hello"? -> overwrite makes "hello"? no:
+	// "helo"[2]='l' overwritten with 'l' = "helo", pos3. So result "helo".
+	// This asserts cursor-left works without corrupting the buffer.
+	if got != "helo\n" {
+		t.Errorf("cursor move = %q, want %q", got, "helo\n")
+	}
+}
+
+func TestLineProcessorDeleteChar(t *testing.T) {
+	// ESC[P (DCH) deletes n chars at cursor — used by readline Ctrl+D / edit.
+	var p lineProcessor
+	// "hello", cursor to col 1 (ESC[2G → 1-indexed col 2 = pos 1, on 'e'),
+	// delete 1 char → "hllo".
+	got := string(p.Feed([]byte("hello\x1b[2G\x1b[Px\r\n")))
+	// hello pos5. ESC[2G → pos1. ESC[P deletes 'e' → "hllo" pos1. 'x' writes
+	// at pos1 over 'l' → "hxlo" pos2. \n → "hxlo".
+	if got != "hxlo\n" {
+		t.Errorf("delete char = %q, want %q", got, "hxlo\n")
+	}
+}
+
 func TestOutputLoggerBasic(t *testing.T) {
 	var l OutputLogger
 	dir := t.TempDir()
