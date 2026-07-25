@@ -48,15 +48,20 @@ const crumbs = computed<Crumb[]>(() => {
   const out: Crumb[] = []
   props.stack.forEach((f, idx) => {
     const isLast = idx === props.stack.length - 1
+    const prevIsList = idx > 0 && props.stack[idx - 1].kind === 'list'
     if (f.kind === 'list') {
       out.push({ text: getResource(f.resourceKey)?.label || f.resourceKey, clickable: !isLast, current: isLast, frameIndex: idx })
     } else if (f.kind === 'owned') {
-      // parent resource-type crumb (clickable → pop to its list) + owner name (plain) + sub-resource (current)
-      out.push({ text: getResource(f.ownerKind.toLowerCase() + 's')?.label || f.ownerKind, clickable: true, current: false, frameIndex: idx - 1 >= 0 ? idx - 1 : idx })
+      // parent resource-type crumb only when there's no preceding list frame to supply it (edge case: plain, not clickable)
+      if (!prevIsList) {
+        out.push({ text: getResource(f.ownerKind.toLowerCase() + 's')?.label || f.ownerKind, clickable: false, current: false, frameIndex: idx })
+      }
       out.push({ text: f.ownerName, clickable: false, current: false, frameIndex: idx })
       out.push({ text: getResource(f.resourceKey)?.label || f.resourceKey, clickable: false, current: isLast, frameIndex: idx })
     } else if (f.kind === 'custom') {
-      out.push({ text: 'CRDs', clickable: true, current: false, frameIndex: idx - 1 >= 0 ? idx - 1 : idx })
+      if (!prevIsList) {
+        out.push({ text: 'CRDs', clickable: false, current: false, frameIndex: idx })
+      }
       out.push({ text: f.crd.kind, clickable: false, current: false, frameIndex: idx })
       out.push({ text: 'Items', clickable: false, current: isLast, frameIndex: idx })
     }
