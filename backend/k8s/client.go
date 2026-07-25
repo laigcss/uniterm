@@ -18,32 +18,34 @@ type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 // BuildClient 根据 kubeconfig + context 名构造 *http.Client 和 base URL。
 // 认证信息（token / client cert）通过 transport 层的自定义 RoundTripper 注入。
 func BuildClient(kc *Kubeconfig, ctxName string) (*http.Client, string, error) {
-	return BuildClientWithDial(kc, ctxName, nil)
+	client, base, _, _, err := BuildClientWithDial(kc, ctxName, nil)
+	return client, base, err
 }
 
 // BuildClientWithDial 同 BuildClient，但可选注入 dialOverride：非 nil 时
 // 覆盖 http.Transport.DialContext。TLS 配置保持不变，SNI/证书校验继续按
 // kubeconfig 里的 hostname 走，只是底层 TCP 拨到别处。
-func BuildClientWithDial(kc *Kubeconfig, ctxName string, dialOverride DialFunc) (*http.Client, string, error) {
+// 额外返回 token 与 *tls.Config，供 exec 等 WebSocket 场景复用同一套认证/TLS。
+func BuildClientWithDial(kc *Kubeconfig, ctxName string, dialOverride DialFunc) (*http.Client, string, string, *tls.Config, error) {
 	if kc == nil {
-		return nil, "", fmt.Errorf("kubeconfig nil")
+		return nil, "", "", nil, fmt.Errorf("kubeconfig nil")
 	}
 	ctx, ok := kc.Contexts[ctxName]
 	if !ok {
-		return nil, "", fmt.Errorf("context %q not found", ctxName)
+		return nil, "", "", nil, fmt.Errorf("context %q not found", ctxName)
 	}
 	cluster, ok := kc.Clusters[ctx.Cluster]
 	if !ok {
-		return nil, "", fmt.Errorf("cluster %q not found", ctx.Cluster)
+		return nil, "", "", nil, fmt.Errorf("cluster %q not found", ctx.Cluster)
 	}
 	user, ok := kc.Users[ctx.User]
 	if !ok {
-		return nil, "", fmt.Errorf("user %q not found", ctx.User)
+		return nil, "", "", nil, fmt.Errorf("user %q not found", ctx.User)
 	}
 
 	tlsCfg, err := buildTLSConfig(cluster, user)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", nil, err
 	}
 	base := &http.Transport{
 		TLSClientConfig: tlsCfg,
@@ -56,7 +58,7 @@ func BuildClientWithDial(kc *Kubeconfig, ctxName string, dialOverride DialFunc) 
 		Transport: &authRoundTripper{base: base, token: user.Token},
 		Timeout:   0, // watch 需要长连接
 	}
-	return client, cluster.Server, nil
+	return client, cluster.Server, user.Token, tlsCfg, nil
 }
 
 func buildTLSConfig(cluster clusterEntry, user userEntry) (*tls.Config, error) {

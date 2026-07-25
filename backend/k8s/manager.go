@@ -2,11 +2,14 @@ package k8s
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // EventEmitter 是 Manager 用来推送 watch 事件的抽象；
@@ -22,11 +25,14 @@ type Manager struct {
 }
 
 type connection struct {
-	id      string
-	client  *http.Client
-	base    string
-	watches map[string]struct{} // 属于本 conn 的 watchID 集合，Disconnect 时统一停
-	onClose func()              // Disconnect 时触发（例如拆 SSH 隧道）；只调一次
+	id           string
+	client       *http.Client
+	base         string
+	token        string      // exec 等 WebSocket 场景复用的 bearer token
+	tlsConfig    *tls.Config // 复用 REST client 的 TLS 配置
+	dialOverride DialFunc    // 可选的 dial 劫持（SSH 隧道）
+	watches      map[string]struct{} // 属于本 conn 的 watchID 集合，Disconnect 时统一停
+	onClose      func()              // Disconnect 时触发（例如拆 SSH 隧道）；只调一次
 }
 
 type watchHandle struct {
@@ -87,7 +93,7 @@ func (m *Manager) ConnectWith(kubeconfigYAML []byte, contextName string, opts Co
 	if contextName == "" {
 		contextName = kc.CurrentContext
 	}
-	client, base, err := BuildClientWithDial(kc, contextName, opts.DialOverride)
+	client, base, token, tlsCfg, err := BuildClientWithDial(kc, contextName, opts.DialOverride)
 	if err != nil {
 		return "", fmt.Errorf("build client: %w", err)
 	}
@@ -101,11 +107,14 @@ func (m *Manager) ConnectWith(kubeconfigYAML []byte, contextName string, opts Co
 		return "", fmt.Errorf("k8s connection %q already exists", id)
 	}
 	m.conns[id] = &connection{
-		id:      id,
-		client:  client,
-		base:    base,
-		watches: make(map[string]struct{}),
-		onClose: opts.OnClose,
+		id:           id,
+		client:       client,
+		base:         base,
+		token:        token,
+		tlsConfig:    tlsCfg,
+		dialOverride: opts.DialOverride,
+		watches:      make(map[string]struct{}),
+		onClose:      opts.OnClose,
 	}
 	m.mu.Unlock()
 	return id, nil
@@ -272,4 +281,55 @@ func (m *Manager) StopLogStream(streamID string) {
 	delete(m.logs, streamID)
 	m.mu.Unlock()
 	lh.cancel()
+}
+
+// DialExec 打开一个到 Pod exec 端点的 WebSocket，复用连接的 TLS/auth/dial 配置。
+// cols/rows 供上层建立终端后通过 resize 通道下发，这里仅负责建连。
+func (m *Manager) DialExec(connID, ns, pod, container string, cols, rows int) (*websocket.Conn, error) {
+	m.mu.RLock()
+	conn, ok := m.conns[connID]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("connection %q not found", connID)
+	}
+
+	u, err := url.Parse(conn.base)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	} else {
+		u.Scheme = "ws"
+	}
+	u.Path = fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/exec", ns, pod)
+	// k9s 风格的 shell 自动探测：优先 bash，其次 ash，最后退回 /bin/sh。
+	shellCmd := "exec $(command -v bash || command -v ash || echo /bin/sh)"
+	q := url.Values{}
+	q.Set("container", container)
+	q.Set("stdin", "true")
+	q.Set("stdout", "true")
+	q.Set("stderr", "true")
+	q.Set("tty", "true")
+	q.Add("command", "/bin/sh")
+	q.Add("command", "-c")
+	q.Add("command", shellCmd)
+	u.RawQuery = q.Encode()
+
+	dialer := websocket.Dialer{
+		TLSClientConfig: conn.tlsConfig,
+		Subprotocols:    []string{"v4.channel.k8s.io"},
+	}
+	if conn.dialOverride != nil {
+		dialer.NetDialContext = conn.dialOverride
+	}
+	header := http.Header{}
+	if conn.token != "" {
+		header.Set("Authorization", "Bearer "+conn.token)
+	}
+	c, _, err := dialer.Dial(u.String(), header)
+	if err != nil {
+		return nil, fmt.Errorf("exec dial: %w", err)
+	}
+	return c, nil
 }
