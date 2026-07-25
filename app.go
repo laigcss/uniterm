@@ -1759,8 +1759,12 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 				}
 			}
 		}
+		// Emit tool messages first, then any text user message. An OpenAI-format
+		// assistant message with tool_calls must be immediately followed by the
+		// matching tool messages; a user text block placed before them triggers a
+		// 400 "insufficient tool messages following tool_calls" error.
 		if _, hasContent := out["content"]; hasContent {
-			results = append([]map[string]interface{}{out}, results...)
+			results = append(results, out)
 		}
 
 	case "assistant":
