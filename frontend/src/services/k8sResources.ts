@@ -115,6 +115,19 @@ export const RESOURCES: ResourceDescriptor[] = [
     actions: ['detail', 'logs', 'terminal', 'delete'],
     canCreate: true,
     metrics: 'pod',
+    detailSections: [
+      { label: 'Metadata', fields: [
+        { label: 'Name', value: p => p.metadata?.name || '' },
+        { label: 'Namespace', value: p => p.metadata?.namespace || '' },
+        { label: 'Node', value: p => p.spec?.nodeName || '' },
+        { label: 'Labels', value: p => Object.entries(p.metadata?.labels || {}).map(([k, v]) => `${k}=${v}`).join(', ') },
+      ]},
+      { label: 'Status', fields: [
+        { label: 'Phase', value: p => p.status?.phase || '' },
+        { label: 'Pod IP', value: p => p.status?.podIP || '' },
+        { label: 'QoS', value: p => p.status?.qosClass || '' },
+      ]},
+    ],
   },
   {
     key: 'deployments', kind: 'Deployment', apiVersion: 'apps/v1',
