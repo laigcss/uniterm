@@ -107,7 +107,7 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Name', value: p => p.metadata?.name || '' },
       { header: 'Namespace', value: p => p.metadata?.namespace || '' },
       { header: 'Ready', value: podReady },
-      { header: 'Status', value: p => p.status?.phase || '' },
+      { header: 'Status', value: p => p.status?.phase || '', filterable: { type: 'enum' } },
       { header: 'Restarts', value: podRestarts },
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
       { header: 'Node', value: p => p.spec?.nodeName || '' },
@@ -216,7 +216,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     columns: [
       { header: 'Name', value: s => s.metadata?.name || '' },
       { header: 'Namespace', value: s => s.metadata?.namespace || '' },
-      { header: 'Type', value: s => s.spec?.type || '' },
+      { header: 'Type', value: s => s.spec?.type || '', filterable: { type: 'enum' } },
       { header: 'Cluster-IP', value: s => s.spec?.clusterIP || '' },
       { header: 'Ports', value: s => (s.spec?.ports || []).map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(',') },
       { header: 'Age', value: s => age(s.metadata?.creationTimestamp) },
@@ -278,7 +278,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     columns: [
       { header: 'Name', value: p => p.metadata?.name || '' },
       { header: 'Namespace', value: p => p.metadata?.namespace || '' },
-      { header: 'Status', value: p => p.status?.phase || '' },
+      { header: 'Status', value: p => p.status?.phase || '', filterable: { type: 'enum' } },
       { header: 'Volume', value: p => p.spec?.volumeName || '' },
       { header: 'Capacity', value: p => p.status?.capacity?.storage || '' },
       { header: 'Storage Class', value: p => p.spec?.storageClassName || '' },
@@ -297,7 +297,7 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Capacity', value: p => p.spec?.capacity?.storage || '' },
       { header: 'Access', value: p => (p.spec?.accessModes || []).join(',') },
       { header: 'Reclaim', value: p => p.spec?.persistentVolumeReclaimPolicy || '' },
-      { header: 'Status', value: p => p.status?.phase || '' },
+      { header: 'Status', value: p => p.status?.phase || '', filterable: { type: 'enum' } },
       { header: 'Claim', value: p => p.spec?.claimRef ? `${p.spec.claimRef.namespace}/${p.spec.claimRef.name}` : '' },
       { header: 'Storage Class', value: p => p.spec?.storageClassName || '' },
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
@@ -316,7 +316,7 @@ export const RESOURCES: ResourceDescriptor[] = [
       { header: 'Status', value: n => {
         const c = (n.status?.conditions || []).find((c: any) => c.type === 'Ready')
         return c?.status === 'True' ? 'Ready' : 'NotReady'
-      }},
+      }, filterable: { type: 'enum' } },
       { header: 'Roles', value: n => Object.keys(n.metadata?.labels || {})
           .filter(l => l.startsWith('node-role.kubernetes.io/'))
           .map(l => l.substring('node-role.kubernetes.io/'.length))
@@ -336,7 +336,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     watchPath: (_ns, rv) => coreWatchPath('namespaces', '', rv),
     columns: [
       { header: 'Name', value: n => n.metadata?.name || '' },
-      { header: 'Status', value: n => n.status?.phase || '' },
+      { header: 'Status', value: n => n.status?.phase || '', filterable: { type: 'enum' } },
       { header: 'Age', value: n => age(n.metadata?.creationTimestamp) },
     ],
     actions: ['detail', 'delete'],
@@ -348,7 +348,7 @@ export const RESOURCES: ResourceDescriptor[] = [
     listPath: ns => coreListPath('events', ns),
     watchPath: (ns, rv) => coreWatchPath('events', ns, rv),
     columns: [
-      { header: 'Type', value: e => e.type || '' },
+      { header: 'Type', value: e => e.type || '', filterable: { type: 'enum' } },
       { header: 'Reason', value: e => e.reason || '' },
       { header: 'Object', value: e => `${e.involvedObject?.kind}/${e.involvedObject?.name || ''}` },
       { header: 'Message', value: e => e.message || '' },

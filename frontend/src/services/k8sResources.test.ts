@@ -112,3 +112,14 @@ describe('descriptor actions + canCreate', () => {
     expect(getResource('events')!.actions).toEqual(['detail'])
   })
 })
+
+describe('column filterable', () => {
+  it('pod Status column is enum-filterable', () => {
+    const status = getResource('pods')!.columns.find(c => c.header === 'Status')!
+    expect(status.filterable).toEqual({ type: 'enum' })
+  })
+  it('service Type column is enum-filterable', () => {
+    const t = getResource('services')!.columns.find(c => c.header === 'Type')!
+    expect(t.filterable).toEqual({ type: 'enum' })
+  })
+})
