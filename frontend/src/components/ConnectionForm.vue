@@ -172,8 +172,8 @@
             <template v-if="form.type === 'k8s'">
               <el-form-item :label="t('conn.k8sConfigSource')">
                 <el-radio-group v-model="k8sSourceMode">
-                  <el-radio-button label="file">{{ t('conn.k8sConfigSourceFile') }}</el-radio-button>
                   <el-radio-button label="inline">{{ t('conn.k8sConfigSourceInline') }}</el-radio-button>
+                  <el-radio-button label="file">{{ t('conn.k8sConfigSourceFile') }}</el-radio-button>
                 </el-radio-group>
               </el-form-item>
 
@@ -192,26 +192,14 @@
               </el-form-item>
 
               <el-form-item :label="t('conn.k8sContext')">
-                <el-select v-model="form.k8sContext" filterable :placeholder="k8sContextsError || ''" :loading="k8sContextsLoading" style="width: 100%">
-                  <el-option v-for="c in k8sContexts" :key="c.name" :value="c.name" :label="c.current ? c.name + ' (current)' : c.name" />
-                </el-select>
-                <el-button link @click="reloadK8sContexts" style="margin-left: 8px">{{ t('conn.k8sReloadContexts') }}</el-button>
-              </el-form-item>
-
-              <el-form-item :label="t('conn.k8sNamespace')">
-                <el-input v-model="form.k8sNamespace" placeholder="default" :disabled="k8sShowAll" />
-                <el-checkbox v-model="k8sShowAll" style="margin-left: 8px">{{ t('conn.k8sShowAllNamespaces') }}</el-checkbox>
-              </el-form-item>
-
-              <el-form-item>
-                <el-checkbox v-model="form.k8sInsecureTls">{{ t('conn.k8sInsecureTls') }}</el-checkbox>
-              </el-form-item>
-
-              <el-form-item>
-                <el-button @click="testK8sConnection" :loading="k8sTesting">{{ t('conn.k8sTestConnection') }}</el-button>
-                <span v-if="k8sTestResult" :style="{ color: k8sTestResult.ok ? 'var(--el-color-success)' : 'var(--el-color-danger)', marginLeft: '12px' }">
-                  {{ k8sTestResult.msg }}
-                </span>
+                <div style="display: flex; align-items: center; gap: 8px; width: 100%">
+                  <el-select v-model="form.k8sContext" filterable :placeholder="k8sContextsError || ''" :loading="k8sContextsLoading" style="flex: 1">
+                    <el-option v-for="c in k8sContexts" :key="c.name" :value="c.name" :label="c.current ? c.name + ' (current)' : c.name" />
+                  </el-select>
+                  <el-button @click="reloadK8sContexts" :loading="k8sContextsLoading" :title="t('conn.k8sReloadContexts')">
+                    <el-icon><RefreshCw :size="16" /></el-icon>
+                  </el-button>
+                </div>
               </el-form-item>
             </template>
             <template v-if="form.type === 'rdp' && isWindows">
@@ -408,9 +396,9 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog } from '../../wailsjs/go/main/App'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, Ship } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel } from '@lucide/vue'
 import { ListSerialPorts } from '../../wailsjs/go/main/App'
-import { listContexts, connect as k8sConnect, disconnect as k8sDisconnect, requestJSON as k8sRequestJSON } from '../services/k8sClient'
+import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 
 const { t } = useI18n()
@@ -462,7 +450,7 @@ const allSubTypes = computed(() => ({
     { type: 'database', dbType: 'mongodb', label: 'MongoDB', icon: Layers },
   ],
   container: [
-    { type: 'k8s', label: 'Kubernetes', icon: Ship },
+    { type: 'k8s', label: 'Kubernetes', icon: ShipWheel },
   ],
 }))
 
@@ -652,7 +640,6 @@ const form = reactive<ConnectionConfig>({
   k8sConfigInline: '',
   k8sContext: '',
   k8sNamespace: 'default',
-  k8sInsecureTls: false,
 })
 
 const rdpResolutions = [
@@ -703,13 +690,10 @@ const newGroupName = ref('')
 const newGroupParentId = ref<string | undefined>(undefined)
 
 // ── K8s state ──
-const k8sSourceMode = ref<'file' | 'inline'>('file')
-const k8sShowAll = ref(false)
+const k8sSourceMode = ref<'file' | 'inline'>('inline')
 const k8sContexts = ref<K8sContextInfo[]>([])
 const k8sContextsLoading = ref(false)
 const k8sContextsError = ref('')
-const k8sTesting = ref(false)
-const k8sTestResult = ref<{ ok: boolean; msg: string } | null>(null)
 // Guard against watchers wiping restored state during edit-hydration.
 const hydrating = ref(false)
 
@@ -849,14 +833,10 @@ function resetForm() {
   form.k8sConfigInline = ''
   form.k8sContext = ''
   form.k8sNamespace = 'default'
-  form.k8sInsecureTls = false
-  k8sSourceMode.value = 'file'
-  k8sShowAll.value = false
+  k8sSourceMode.value = 'inline'
   k8sContexts.value = []
   k8sContextsLoading.value = false
   k8sContextsError.value = ''
-  k8sTesting.value = false
-  k8sTestResult.value = null
   rdpResolution.value = '1280 × 720 (HD)'
   selectedGroupId.value = undefined
 }
@@ -929,24 +909,6 @@ async function pickKubeconfigFile() {
   }
 }
 
-async function testK8sConnection() {
-  k8sTesting.value = true
-  k8sTestResult.value = null
-  let cid = ''
-  try {
-    const src = k8sSourceMode.value === 'file' ? form.k8sConfigPath : form.k8sConfigInline
-    cid = await k8sConnect(src || '', k8sSourceMode.value === 'file', form.k8sContext || '')
-    const { status, data } = await k8sRequestJSON<{ gitVersion?: string }>(cid, 'GET', '/version')
-    if (status !== 200) throw new Error(`HTTP ${status}`)
-    k8sTestResult.value = { ok: true, msg: `OK (${data?.gitVersion || 'connected'})` }
-  } catch (e: any) {
-    k8sTestResult.value = { ok: false, msg: String(e?.message || e) }
-  } finally {
-    if (cid) k8sDisconnect(cid)
-    k8sTesting.value = false
-  }
-}
-
 watch(() => [k8sSourceMode.value, form.k8sConfigPath, form.k8sConfigInline], () => {
   if (hydrating.value) return
   form.k8sContext = ''
@@ -958,8 +920,6 @@ watch(() => form.type, (t) => {
     reloadK8sContexts()
   }
 })
-
-watch(k8sShowAll, (v) => { if (v) form.k8sNamespace = '' })
 
 function generateUniqueName(name: string): string {
   if (!connectionStore.connections.some(c => c.name === name)) {
