@@ -7,9 +7,20 @@ export interface ColumnDef {
   header: string
   value: (obj: any) => string | number | ColoredCell
   width?: number
+  filterable?: { type: 'enum' }
 }
 
-export type ResourceGroup = 'workloads' | 'network' | 'config' | 'storage' | 'cluster'
+export type ResourceGroup = 'workloads' | 'network' | 'config' | 'storage' | 'rbac' | 'cluster'
+
+export type ResourceAction =
+  | 'detail' | 'delete' | 'restart' | 'scale' | 'viewPods' | 'logs' | 'terminal' | 'cordon' | 'drain'
+
+export interface DetailField {
+  label: string
+  value: (obj: any) => string | { text: string; color?: string }
+  link?: (obj: any) => void
+}
+export interface DetailSection { label: string; fields: DetailField[] }
 
 export interface ResourceDescriptor {
   key: string
@@ -22,6 +33,12 @@ export interface ResourceDescriptor {
   listPath: (ns: string) => string
   watchPath: (ns: string, rv: string) => string
   columns: ColumnDef[]
+  actions?: ResourceAction[]
+  detailSections?: DetailSection[]
+  canCreate?: boolean
+  createTemplate?: string
+  createPath?: (ns: string) => string
+  metrics?: 'pod' | 'node'
 }
 
 // ── 通用列生成器 ────────────────────────────────────────────────
