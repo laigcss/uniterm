@@ -34,6 +34,7 @@
       :mode="drawerMode"
       :target="drawerTarget"
       :resource-key="drawerResourceKey"
+      :self-path-override="drawerSelfPathOverride"
       @close="closeDrawer"
       @saved="() => {}"
     />
@@ -48,7 +49,7 @@ import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
 import K8sBreadcrumb from './K8sBreadcrumb.vue'
 import K8sDetailDrawer from './K8sDetailDrawer.vue'
-import { parseCRD } from '../services/k8sCrd'
+import { parseCRD, crdListPath } from '../services/k8sCrd'
 import type { K8sTab, NavFrame } from '../types/k8s'
 import type { ConnectionConfig } from '../types/session'
 
@@ -105,14 +106,30 @@ function openCrd(crdObj: any) {
 const drawerMode = ref<'detail' | 'logs' | null>(null)
 const drawerTarget = ref<any | null>(null)
 const drawerResourceKey = ref<string>('pods')
-function openDetail(obj: any) { drawerTarget.value = obj; drawerResourceKey.value = resourceKeyOf(); drawerMode.value = 'detail' }
-function openLogs(pod: any) { drawerTarget.value = pod; drawerResourceKey.value = 'pods'; drawerMode.value = 'logs' }
+const drawerSelfPathOverride = ref<((obj: any) => string) | undefined>(undefined)
+function openDetail(obj: any) {
+  drawerTarget.value = obj
+  drawerResourceKey.value = resourceKeyOf()
+  drawerSelfPathOverride.value = crSelfPathOverride()
+  drawerMode.value = 'detail'
+}
+function openLogs(pod: any) { drawerTarget.value = pod; drawerResourceKey.value = 'pods'; drawerSelfPathOverride.value = undefined; drawerMode.value = 'logs' }
 function closeDrawer() { drawerMode.value = null; drawerTarget.value = null }
 function resourceKeyOf(): string {
   const f = topFrame.value
   if (f.kind === 'list') return f.resourceKey
   if (f.kind === 'owned') return f.resourceKey
   return 'customresourcedefinitions'
+}
+// CR 实例（custom frame）的 self-path 由 ParsedCRD 派生，避免落到 CRD 集合路径
+function crSelfPathOverride(): ((obj: any) => string) | undefined {
+  const f = topFrame.value
+  if (f.kind !== 'custom') return undefined
+  const crd = f.crd
+  return (obj: any) => {
+    const ns = obj.metadata?.namespace || f.namespace
+    return crdListPath(crd, ns).split('?')[0] + '/' + encodeURIComponent(obj.metadata?.name)
+  }
 }
 // openTerminal wired in Phase 3
 function openTerminal(_pod: any) { /* Phase 3 */ }

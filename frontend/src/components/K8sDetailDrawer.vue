@@ -51,7 +51,7 @@ import { dump, load } from 'js-yaml'
 import { getResource, type DetailSection } from '../services/k8sResources'
 import { requestJSON } from '../services/k8sClient'
 
-const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string }>()
+const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 
 const tab = ref<'struct' | 'yaml'>('struct')
@@ -99,6 +99,7 @@ async function copyYaml() {
 }
 
 function selfPath(o: any): string {
+  if (props.selfPathOverride) return props.selfPathOverride(o)
   const desc = getResource(props.resourceKey)!
   const ns = o.metadata?.namespace
   const base = desc.listPath(ns || '').split('?')[0]
