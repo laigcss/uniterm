@@ -651,15 +651,9 @@ function detectSlashQuery(): string | null {
 }
 
 function refreshSkillDropdown() {
-  const query = detectSlashQuery()
-  if (query !== null) {
-    skillDropdownVisible.value = true
-    skillQuery.value = query
-    skillHighlightIndex.value = 0
-  } else {
-    skillDropdownVisible.value = false
-    skillQuery.value = ''
-  }
+  // Skills 功能本期暂不开放，禁用 / 斜杠命令下拉
+  skillDropdownVisible.value = false
+  skillQuery.value = ''
 }
 
 function onSelectSkill(name: string) {

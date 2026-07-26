@@ -61,6 +61,7 @@
         @click.stop
       >
         <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
+        <div v-if="tab.type === 'k8s'" class="menu-divider" />
         <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
@@ -95,9 +96,11 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useK8sStore } from '../stores/k8sStore'
 import { useI18n } from '../i18n'
 import {
   CreateSession,
+  K8sExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
@@ -106,7 +109,7 @@ import {
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -125,6 +128,7 @@ const emit = defineEmits<{
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+const k8sStore = useK8sStore()
 const { t } = useI18n()
 
 const hovered = ref(false)
@@ -155,9 +159,11 @@ const tabIcon = computed(() => {
     return Database
   }
   if (t.type === 'monitor') return Activity
+  if (t.type === 'k8s') return ShipWheel
   if (t.type === 'workspace') return LayoutDashboard
   if (t.type === 'terminal') {
     const panel = panelStore.getPanel(t.panelId)
+    if (panel?.type === 'k8s-exec') return Box
     if (panel?.type === 'local') return Laptop
     if (panel?.type === 'serial') return Cable
     if (panel?.type === 'telnet') return Terminal
@@ -186,6 +192,12 @@ const hasActiveTransfers = computed(() => {
 
 const isDisconnected = computed(() => {
   if (props.tab.type === 'start' || props.tab.type === 'settings') return false
+  // k8s main tab has no session; its connect status comes from the k8s store
+  // (grey while connecting / on error).
+  if (props.tab.type === 'k8s') {
+    const s = k8sStore.getConnStatus((props.tab as any).connectionId)
+    return s === 'connecting' || s === 'error'
+  }
   const panelIds: string[] = props.tab.type === 'workspace' ? props.tab.panelIds : 'panelId' in props.tab ? [props.tab.panelId] : []
   if (panelIds.length === 0) return false
   return panelIds.every(pid => {
@@ -208,10 +220,10 @@ const supportsOutputLog = computed(() => {
 })
 
 // Duplicate is supported for tabs backed by a reproducible connection:
-// terminals, file transfer, and database (incl. mongodb/redis variants).
+// terminals, file transfer, database (incl. mongodb/redis variants), and k8s.
 const canDuplicate = computed(() => {
   const type = props.tab.type
-  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis'
+  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
 })
 
 function onDragStart(e: DragEvent) {
@@ -354,6 +366,18 @@ async function duplicateTab() {
   const panel = panelStore.getPanel(tab.panelId)
   if (!panel) return
 
+  // k8s tab has no backend session; it connects itself on mount from
+  // connectionId + namespace. Duplicate = a fresh panel + K8s tab reusing the
+  // same connection (a new independent session), matching other tab types.
+  if (tab.type === 'k8s') {
+    const newPanel = panelStore.createPanel(panel.config, 'k8s')
+    panelStore.updateTitle(newPanel.id, panel.title)
+    const k8sTab = tab as any
+    const newTab = tabStore.createK8sTab(newPanel.title, newPanel.id, k8sTab.connectionId, k8sTab.namespace || '')
+    panelStore.movePanelToTab(newPanel.id, newTab.id)
+    return
+  }
+
   const newPanel = panelStore.createPanel(panel.config, panel.type)
   panelStore.updateTitle(newPanel.id, panel.title)
 
@@ -365,10 +389,19 @@ async function duplicateTab() {
   let info
   if (panel.config) {
     try {
-      const sessionType = resolveSessionType(tab.type, panel.config)
-      info = await CreateSession(sessionType, panel.config)
-      panelStore.bindSession(newPanel.id, info.id)
-      if (tab.type !== 'terminal') sessionStore.initSession(info.id)
+      if (panel.type === 'k8s-exec') {
+        // k8s-exec can't be rebuilt via CreateSession (no such type); re-dial the exec stream.
+        const c = panel.config
+        info = await K8sExecSession(c.k8sExecConnId, c.k8sNamespace || '', c.k8sExecPod, c.k8sExecContainer)
+        panelStore.bindSession(newPanel.id, info.id)
+        sessionStore.initSession(info.id)
+        sessionStore.updateStatus(info.id, 'connected')
+      } else {
+        const sessionType = resolveSessionType(tab.type, panel.config)
+        info = await CreateSession(sessionType, panel.config)
+        panelStore.bindSession(newPanel.id, info.id)
+        if (tab.type !== 'terminal') sessionStore.initSession(info.id)
+      }
     } catch (e) {
       console.error('Failed to duplicate session:', e)
       return

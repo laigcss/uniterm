@@ -25,7 +25,7 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <el-dropdown trigger="click" placement="bottom-end" :teleported="false">
+            <el-dropdown trigger="click" placement="bottom-end" popper-class="type-filter-popper">
               <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop>
                 <el-icon><Filter :size="14" /></el-icon>
               </span>
@@ -105,7 +105,7 @@
           :class="{ 'drag-over': dragOverGroupId === '__ungrouped__' }"
           @click="toggleGroup('__ungrouped__')"
           @contextmenu.prevent="onVirtualGroupContextMenu($event)"
-          @dragover.prevent="onGroupDragOver('__ungrouped__')"
+          @dragover.prevent="onGroupDragOver('__ungrouped__', $event)"
           @dragleave="onGroupDragLeave('__ungrouped__')"
           @drop.prevent="onGroupDrop('__ungrouped__', $event)"
         >
@@ -121,11 +121,15 @@
             :key="conn.id"
             class="connection-item indented"
             :class="{
-              active: selectedIds.has(conn.id)
+              active: selectedIds.has(conn.id),
+              'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
+              'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
             }"
             draggable="true"
             @dragstart="onDragStart($event, conn)"
             @dragend="onDragEnd"
+            @dragover.prevent="onConnDragOver($event, conn)"
+            @drop.prevent="onConnDrop($event, conn)"
             @click="onItemClick($event, conn)"
             @dblclick="onItemDblClick(conn)"
             @contextmenu.prevent="onContextMenu($event, conn)"
@@ -149,11 +153,15 @@
           :key="conn.id"
           class="connection-item"
           :class="{
-            active: selectedIds.has(conn.id)
+            active: selectedIds.has(conn.id),
+            'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
+            'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
           }"
           draggable="true"
           @dragstart="onDragStart($event, conn)"
           @dragend="onDragEnd"
+          @dragover.prevent="onConnDragOver($event, conn)"
+          @drop.prevent="onConnDrop($event, conn)"
           @click="onItemClick($event, conn)"
           @dblclick="onItemDblClick(conn)"
           @contextmenu.prevent="onContextMenu($event, conn)"
@@ -297,6 +305,7 @@
       <div v-if="selectedConn && selectedConn.type === 'spice'" class="menu-item" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</div>
       <!-- Database & Monitor -->
       <div v-if="selectedConn && selectedConn.type === 'database'" class="menu-item" @click="doConnectDB">{{ t('db.connectDB') }}</div>
+      <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</div>
@@ -442,7 +451,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -466,7 +475,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'toggle', 'new-local-terminal-with-shell'])
+const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
@@ -532,6 +541,7 @@ const TYPE_LABELS: Record<string, string> = {
   s3: 'S3',
   webdav: 'WebDAV',
   monitor: 'Monitor',
+  k8s: 'Kubernetes',
   'database:mysql': 'MySQL',
   'database:postgres': 'PostgreSQL',
   'database:rqlite': 'rqlite',
@@ -880,6 +890,12 @@ function findConnById(id: string | null): ConnectionConfig | undefined {
 
 // ── Drag & drop ──
 const dragOverGroupId = ref<string | null>(null)
+// Insertion indicator for manual reordering. `id` is a connection id or a
+// group id (or '__ungrouped__'); position drives before/after/inside visuals.
+const dropIndicator = ref<{ id: string; position: 'before' | 'after' | 'inside' } | null>(null)
+
+// Reordering is only meaningful against the full, unfiltered list.
+const reorderEnabled = computed(() => !searchQuery.value.trim() && selectedTypeFilter.value === 'all')
 
 function onDragStart(e: DragEvent, conn: ConnectionConfig) {
   const ids = getSelectedConnectionIds()
@@ -895,9 +911,70 @@ function onDragStart(e: DragEvent, conn: ConnectionConfig) {
 
 function onDragEnd() {
   dragOverGroupId.value = null
+  dropIndicator.value = null
 }
 
-function onGroupDragOver(groupId: string) {
+// Ordered connection ids within a group, matching connections array order.
+function connSiblingIds(groupId: string | undefined): string[] {
+  return connectionStore.connections
+    .filter(c => (c.groupId || undefined) === (groupId || undefined))
+    .map(c => c.id)
+}
+
+// ── Connection item drag (reorder within / across groups) ──
+function onConnDragOver(e: DragEvent, conn: ConnectionConfig) {
+  if (!reorderEnabled.value) return
+  const el = e.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  const position = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after'
+  dropIndicator.value = { id: conn.id, position }
+  dragOverGroupId.value = null
+}
+
+async function onConnDrop(e: DragEvent, conn: ConnectionConfig) {
+  const indicator = dropIndicator.value
+  dropIndicator.value = null
+  const raw = e.dataTransfer?.getData('text/plain')
+  if (!raw || !indicator) return
+  try {
+    const data = JSON.parse(raw)
+    if (!Array.isArray(data) || data.length === 0) return
+    const targetGroupId = conn.groupId || undefined
+    let beforeId: string | undefined
+    if (indicator.position === 'before') {
+      beforeId = conn.id
+    } else {
+      const siblings = connSiblingIds(targetGroupId)
+      const idx = siblings.indexOf(conn.id)
+      beforeId = idx >= 0 ? siblings[idx + 1] : undefined
+    }
+    await connectionStore.moveConnections(data, targetGroupId, beforeId)
+    selectedIds.value = new Set()
+  } catch {
+    // ignore parse errors
+  }
+}
+
+// ── Group header drag (reorder siblings vs reparent/move-in) ──
+function onGroupDragOver(groupId: string, e?: DragEvent) {
+  if (reorderEnabled.value && e && groupId !== '__ungrouped__') {
+    const el = e.currentTarget as HTMLElement
+    const rect = el.getBoundingClientRect()
+    const offset = e.clientY - rect.top
+    const edge = rect.height * 0.28
+    if (offset < edge) {
+      dropIndicator.value = { id: groupId, position: 'before' }
+      dragOverGroupId.value = null
+      return
+    }
+    if (offset > rect.height - edge) {
+      dropIndicator.value = { id: groupId, position: 'after' }
+      dragOverGroupId.value = null
+      return
+    }
+  }
+  // Middle region (or reorder disabled / ungrouped): move-in / reparent
+  dropIndicator.value = null
   dragOverGroupId.value = groupId
 }
 
@@ -905,31 +982,63 @@ function onGroupDragLeave(groupId: string) {
   if (dragOverGroupId.value === groupId) {
     dragOverGroupId.value = null
   }
+  if (dropIndicator.value?.id === groupId) {
+    dropIndicator.value = null
+  }
 }
 
 async function onGroupDrop(groupId: string, e: DragEvent) {
+  const indicator = dropIndicator.value
+  dragOverGroupId.value = null
+  dropIndicator.value = null
   const raw = e.dataTransfer?.getData('text/plain')
-  if (raw) {
-    try {
-      const data = JSON.parse(raw)
-      // Check if dropping a group (to reparent)
-      if (data && data.type === 'group') {
-        const targetParentId = groupId === '__ungrouped__' ? undefined : groupId
-        await connectionStore.reparentGroup(data.id, targetParentId)
-        dragOverGroupId.value = null
+  if (!raw) return
+  try {
+    const data = JSON.parse(raw)
+    // Dropping a group
+    if (data && data.type === 'group') {
+      if (indicator && indicator.id === groupId && indicator.position !== 'inside') {
+        // Reorder as sibling of the target group
+        const target = connectionStore.groups.find(g => g.id === groupId)
+        const newParentId = target?.parentId
+        let beforeId: string | undefined
+        if (indicator.position === 'before') {
+          beforeId = groupId
+        } else {
+          const siblings = connectionStore.groups
+            .filter(g => (g.parentId || undefined) === (newParentId || undefined))
+            .map(g => g.id)
+          const idx = siblings.indexOf(groupId)
+          beforeId = idx >= 0 ? siblings[idx + 1] : undefined
+        }
+        await connectionStore.moveGroup(data.id, newParentId, beforeId)
         return
       }
-      // Otherwise, dropping connections (plain array of IDs)
-      if (Array.isArray(data) && data.length > 0) {
-        const targetGroupId = groupId === '__ungrouped__' ? undefined : groupId
-        await connectionStore.setConnectionsGroup(data, targetGroupId)
-        selectedIds.value = new Set()
-      }
-    } catch {
-      // ignore parse errors
+      // Middle: move into this group as a child
+      const targetParentId = groupId === '__ungrouped__' ? undefined : groupId
+      await connectionStore.reparentGroup(data.id, targetParentId)
+      return
     }
+    // Dropping connections
+    if (Array.isArray(data) && data.length > 0) {
+      const targetGroupId = groupId === '__ungrouped__' ? undefined : groupId
+      if (indicator && indicator.id === groupId && indicator.position !== 'inside') {
+        // Reorder relative to the group header: before = group's first slot
+        let beforeId: string | undefined
+        if (indicator.position === 'before') {
+          beforeId = connSiblingIds(targetGroupId)[0]
+        } else {
+          beforeId = undefined // after header: append to group end
+        }
+        await connectionStore.moveConnections(data, targetGroupId, beforeId)
+      } else {
+        await connectionStore.moveConnections(data, targetGroupId)
+      }
+      selectedIds.value = new Set()
+    }
+  } catch {
+    // ignore parse errors
   }
-  dragOverGroupId.value = null
 }
 
 // ── Connection click / multi-select ──
@@ -1156,6 +1265,16 @@ function doConnectDB() {
   closeMenu()
   for (const c of conns) {
     emit('connectDB', c)
+  }
+}
+
+function doConnectK8s() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  selectedIds.value = new Set()
+  closeMenu()
+  for (const c of conns) {
+    emit('connectK8s', c)
   }
 }
 
@@ -1543,6 +1662,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'spice': return MonitorCloud
     case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : Database
     case 'monitor': return Activity
+    case 'k8s': return ShipWheel
     default: return SquareTerminal
   }
 }
@@ -1648,6 +1768,7 @@ onUnmounted(() => {
 provide('expandedGroups', expandedGroups)
 provide('selectedIds', selectedIds)
 provide('dragOverGroupId', dragOverGroupId)
+provide('dropIndicator', dropIndicator)
 provide('groupHandlers', {
   onToggleGroup: toggleGroup,
   onGroupContextMenu,
@@ -1658,6 +1779,8 @@ provide('groupHandlers', {
   onItemDblClick,
   onDragStart,
   onDragEnd,
+  onConnDragOver,
+  onConnDrop,
   onContextMenu,
   onConnMoreClick,
 })
@@ -1878,7 +2001,23 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   transition: all 0.12s ease;
   margin-bottom: 2px;
   user-select: none;
+  position: relative;
 }
+
+.connection-item.drop-before::before,
+.connection-item.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
+.connection-item.drop-before::before { top: -1px; }
+.connection-item.drop-after::after { bottom: -1px; }
 
 .connection-item.indented {
   padding-left: 24px;
@@ -2166,6 +2305,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 .new-conn-popper {
   margin-top: -8px !important;
   margin-left: 4px !important;
+}
+
+/* Teleported (.type-filter-popper) to body so it floats above everything.
+   The global .el-dropdown-menu provides the surface, but we set a popper
+   background here too as a safety net against any future Teleport removal. */
+.type-filter-popper {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 .theme-select-popper .el-select-group__title {

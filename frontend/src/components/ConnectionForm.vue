@@ -53,7 +53,7 @@
                 </el-button>
               </div>
             </el-form-item>
-            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial'">
+            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s'">
               <div class="host-port-row">
                 <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
@@ -62,7 +62,7 @@
                 </template>
               </div>
             </el-form-item>
-            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh'" :label="t('conn.authType')">
@@ -79,7 +79,7 @@
                 </div>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
+            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : ''" />
             </el-form-item>
             <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPath')">
@@ -166,6 +166,40 @@
               </el-form-item>
               <el-form-item label="Bucket">
                 <el-input v-model="form.s3Bucket" placeholder="my-bucket (leave empty to list all buckets)" />
+              </el-form-item>
+            </template>
+            <!-- ── K8s 字段 ── -->
+            <template v-if="form.type === 'k8s'">
+              <el-form-item :label="t('conn.k8sConfigSource')">
+                <el-radio-group v-model="k8sSourceMode">
+                  <el-radio-button label="inline">{{ t('conn.k8sConfigSourceInline') }}</el-radio-button>
+                  <el-radio-button label="file">{{ t('conn.k8sConfigSourceFile') }}</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+
+              <el-form-item v-if="k8sSourceMode === 'file'" :label="t('conn.k8sConfigPath')">
+                <el-input v-model="form.k8sConfigPath" placeholder="~/.kube/config">
+                  <template #append>
+                    <el-button @click="pickKubeconfigFile">
+                      <el-icon><FolderOpen :size="16" /></el-icon>
+                    </el-button>
+                  </template>
+                </el-input>
+              </el-form-item>
+
+              <el-form-item v-else :label="t('conn.k8sConfigInline')">
+                <el-input v-model="form.k8sConfigInline" type="textarea" :rows="6" placeholder="apiVersion: v1..." />
+              </el-form-item>
+
+              <el-form-item :label="t('conn.k8sContext')">
+                <div style="display: flex; align-items: center; gap: 8px; width: 100%">
+                  <el-select v-model="form.k8sContext" filterable :placeholder="k8sContextsError || ''" :loading="k8sContextsLoading" style="flex: 1">
+                    <el-option v-for="c in k8sContexts" :key="c.name" :value="c.name" :label="c.current ? c.name + ' (current)' : c.name" />
+                  </el-select>
+                  <el-button @click="reloadK8sContexts" :loading="k8sContextsLoading" :title="t('conn.k8sReloadContexts')">
+                    <el-icon><RefreshCw :size="16" /></el-icon>
+                  </el-button>
+                </div>
               </el-form-item>
             </template>
             <template v-if="form.type === 'rdp' && isWindows">
@@ -356,14 +390,16 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref } from 'vue'
+import { reactive, computed, watch, ref, nextTick } from 'vue'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog } from '../../wailsjs/go/main/App'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel } from '@lucide/vue'
 import { ListSerialPorts } from '../../wailsjs/go/main/App'
+import { listContexts } from '../services/k8sClient'
+import type { K8sContextInfo } from '../types/k8s'
 
 const { t } = useI18n()
 const connectionStore = useConnectionStore()
@@ -382,6 +418,7 @@ const categories = computed(() => [
   { key: 'filetransfer', label: t('conn.categoryFileTransfer'), icon: FolderUp },
   { key: 'remote', label: t('conn.categoryRemote'), icon: Monitor },
   { key: 'database', label: t('db.database'), icon: Database },
+  { key: 'container', label: t('conn.categoryContainer'), icon: Boxes },
 ])
 
 const allSubTypes = computed(() => ({
@@ -411,6 +448,9 @@ const allSubTypes = computed(() => ({
     { type: 'database', dbType: 'rqlite', label: 'rqlite', icon: Database },
     { type: 'database', dbType: 'redis', label: 'Redis', icon: DatabaseZap },
     { type: 'database', dbType: 'mongodb', label: 'MongoDB', icon: Layers },
+  ],
+  container: [
+    { type: 'k8s', label: 'Kubernetes', icon: ShipWheel },
   ],
 }))
 
@@ -538,6 +578,7 @@ const category = computed(() => {
   if (FILETRANSFER_TYPES.includes(form.type)) return 'filetransfer'
   if (REMOTE_TYPES.includes(form.type)) return 'remote'
   if (form.type === 'database') return 'database'
+  if (form.type === 'k8s') return 'container'
   return 'terminal'
 })
 
@@ -595,6 +636,10 @@ const form = reactive<ConnectionConfig>({
   s3Region: 'us-east-1',
   s3Bucket: '',
   logOnConnect: false,
+  k8sConfigPath: '~/.kube/config',
+  k8sConfigInline: '',
+  k8sContext: '',
+  k8sNamespace: 'default',
 })
 
 const rdpResolutions = [
@@ -644,6 +689,14 @@ const showNewGroupDialog = ref(false)
 const newGroupName = ref('')
 const newGroupParentId = ref<string | undefined>(undefined)
 
+// ── K8s state ──
+const k8sSourceMode = ref<'file' | 'inline'>('inline')
+const k8sContexts = ref<K8sContextInfo[]>([])
+const k8sContextsLoading = ref(false)
+const k8sContextsError = ref('')
+// Guard against watchers wiping restored state during edit-hydration.
+const hydrating = ref(false)
+
 watch(() => props.editConfig, (config) => {
   if (config) {
     // If editing an existing connection (has id), merge its full config.
@@ -652,6 +705,7 @@ watch(() => props.editConfig, (config) => {
     if (!config.id) {
       resetForm()
     }
+    hydrating.value = true
     Object.assign(form, { ...config, postLoginExpectSteps: cloneExpectSteps(config.postLoginExpectSteps || []) })
     // Existing connections without the field default to NLA off (old behavior).
     form.rdpEnableNLA = config.rdpEnableNLA ?? false
@@ -663,9 +717,14 @@ watch(() => props.editConfig, (config) => {
     if (config.serialStopBits) serialStopBitsValue.value = config.serialStopBits
     if (config.serialParity) serialParityValue.value = config.serialParity
     if (config.type === 'serial') scanSerialPorts()
+    // Sync k8s source-mode radio from restored config
+    if (config.type === 'k8s') {
+      k8sSourceMode.value = config.k8sConfigInline ? 'inline' : 'file'
+    }
     // Sync resolution dropdown to the config's fixed size
     const match = rdpResolutions.find(r => r.w === config.rdpFixedWidth && r.h === config.rdpFixedHeight)
     if (match) rdpResolution.value = match.label
+    nextTick(() => { hydrating.value = false })
   } else {
     resetForm()
     if (props.defaultGroupId) {
@@ -770,6 +829,14 @@ function resetForm() {
   serialBaudRateInput.value = ''
   form.tunnelSSHConnId = undefined
   form.logOnConnect = false
+  form.k8sConfigPath = '~/.kube/config'
+  form.k8sConfigInline = ''
+  form.k8sContext = ''
+  form.k8sNamespace = 'default'
+  k8sSourceMode.value = 'inline'
+  k8sContexts.value = []
+  k8sContextsLoading.value = false
+  k8sContextsError.value = ''
   rdpResolution.value = '1280 × 720 (HD)'
   selectedGroupId.value = undefined
 }
@@ -814,6 +881,46 @@ async function selectKeyFile() {
   }
 }
 
+async function reloadK8sContexts() {
+  k8sContextsLoading.value = true
+  k8sContextsError.value = ''
+  try {
+    const src = k8sSourceMode.value === 'file' ? form.k8sConfigPath : form.k8sConfigInline
+    if (!src) return
+    const list = await listContexts(src, k8sSourceMode.value === 'file')
+    k8sContexts.value = list
+    if (!form.k8sContext) {
+      const current = list.find(c => c.current)
+      if (current) form.k8sContext = current.name
+    }
+  } catch (e: any) {
+    k8sContextsError.value = String(e?.message || e)
+  } finally {
+    k8sContextsLoading.value = false
+  }
+}
+
+async function pickKubeconfigFile() {
+  try {
+    const selected = await OpenFileDialog()
+    if (selected) form.k8sConfigPath = selected
+  } catch (e) {
+    console.error('pick kubeconfig:', e)
+  }
+}
+
+watch(() => [k8sSourceMode.value, form.k8sConfigPath, form.k8sConfigInline], () => {
+  if (hydrating.value) return
+  form.k8sContext = ''
+  k8sContexts.value = []
+})
+
+watch(() => form.type, (t) => {
+  if (t === 'k8s' && (form.k8sConfigPath || form.k8sConfigInline)) {
+    reloadK8sContexts()
+  }
+})
+
 function generateUniqueName(name: string): string {
   if (!connectionStore.connections.some(c => c.name === name)) {
     return name
@@ -841,7 +948,7 @@ function normalizeForm(): ConnectionConfig {
   } else {
     normalized.postLoginScript = ''
   }
-  if (normalized.type !== 'local' && normalized.type !== 'serial' && !normalized.host.trim()) {
+  if (normalized.type !== 'local' && normalized.type !== 'serial' && normalized.type !== 'k8s' && !normalized.host.trim()) {
     throw new Error(t('conn.hostRequired'))
   }
   if (normalized.type === 's3') {
@@ -853,7 +960,9 @@ function normalizeForm(): ConnectionConfig {
   }
   if (!normalized.name.trim()) {
     normalized.name = generateUniqueName(
-      normalized.type === 'serial' ? (normalized.serialPort || 'Serial') : normalized.host.trim()
+      normalized.type === 'serial' ? (normalized.serialPort || 'Serial')
+        : normalized.type === 'k8s' ? (normalized.k8sContext || 'Kubernetes')
+        : normalized.host.trim()
     )
   }
   return normalized

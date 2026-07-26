@@ -12,7 +12,7 @@
       @tab-dragstart="onTabDragStart"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @new-local-terminal-with-shell="createLocalTerminalWithShell" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" @new-local-terminal-with-shell="createLocalTerminalWithShell" />
       <div class="tab-area">
         <template v-if="activeTab">
           <KeepAlive>
@@ -77,6 +77,12 @@
               v-else-if="activeTab.type === 'monitor'"
               :key="activeTab.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
+            <K8sTabContent
+              v-else-if="activeTab.type === 'k8s'"
+              :key="activeTab.id"
+              :tab="activeTab"
+              :connection="k8sConnectionForTab(activeTab)"
             />
             <StartTabContent
               v-else-if="activeTab.type === 'start'"
@@ -151,6 +157,7 @@ import DBTabContent from './components/DBTabContent.vue'
 import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
 import MonitorTabContent from './components/MonitorTabContent.vue'
+import K8sTabContent from './components/K8sTabContent.vue'
 import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
@@ -692,6 +699,9 @@ onMounted(async () => {
   window.addEventListener('app:connect-db', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectDB(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
+  window.addEventListener('app:connect-k8s', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectK8s(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
   window.addEventListener('app:connect-ftp', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectFtp(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
@@ -1003,6 +1013,23 @@ function getPanelSessionId(panelId: string): string | null {
   return panelStore.getPanel(panelId)?.sessionId || null
 }
 
+function k8sConnectionForTab(tab: any): ConnectionConfig {
+  const conn = connectionStore.connections.find((c: ConnectionConfig) => c.id === tab.connectionId)
+  return conn || ({
+    id: tab.connectionId,
+    name: tab.name,
+    type: 'k8s',
+    host: '',
+    port: 0,
+    user: '',
+    authType: 'password',
+    k8sConfigPath: '',
+    k8sConfigInline: '',
+    k8sContext: '',
+    k8sNamespace: '',
+  } as ConnectionConfig)
+}
+
 function onSaveOnly(config: ConnectionConfig) {
   if (editConfig.value) {
     connectionStore.update(config.id, config)
@@ -1046,6 +1073,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   if (config.type === 'vnc') { await onConnectVNC(config, prevStart); return }
   if (config.type === 'spice') { await onConnectSPICE(config, prevStart); return }
   if (config.type === 'database') { await onConnectDB(config, prevStart); return }
+  if (config.type === 'k8s') { await onConnectK8s(config, prevStart); return }
 
   // Credential check
   const resolved = await ensureCredentials(config)
@@ -1461,6 +1489,20 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
+async function onConnectK8s(config: ConnectionConfig, prevStart?: any) {
+  connectionStore.add(config)
+
+  const displayTitle = config.name || 'K8s'
+  const panel = panelStore.createPanel(config, 'k8s')
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const nsDefault = config.k8sNamespace || 'default'
+  const tab = tabStore.createK8sTab(displayTitle, panel.id, config.id, nsDefault)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  RecordRecentConnection(config.id)
+}
+
 async function onConnectSerial(sessionId: string, portName: string, baudRate: number, keepOpen?: boolean) {
   const config: ConnectionConfig = {
     id: '',
@@ -1696,6 +1738,16 @@ watch(
 .app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
   background: var(--scrollbar-thumb) !important;
 }
+/* el-table（el-scrollbar）横/纵滚动条：滑块是 div，被全局 * 透明规则抹掉了，
+   这里恢复半透明滑块，背景图下仍可见。 */
+.app-container.has-bg .main-content :deep(.el-scrollbar__thumb) {
+  background-color: var(--scrollbar-thumb) !important;
+}
+/* 表格 body 若走原生滚动条也一并恢复 */
+.app-container.has-bg .main-content :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb),
+.app-container.has-bg .main-content :deep(.el-scrollbar__wrap::-webkit-scrollbar-thumb) {
+  background: var(--scrollbar-thumb) !important;
+}
 /* 边栏毛玻璃 */
 .app-container.has-bg .main-content :deep(.sidebar),
 .app-container.has-bg .main-content :deep(.ai-sidebar) {
@@ -1712,6 +1764,21 @@ watch(
 .app-container.has-bg .main-content :deep(.el-textarea__inner),
 .app-container.has-bg .main-content :deep(.el-input-number),
 .app-container.has-bg .main-content :deep(.el-select__wrapper) {
+  backdrop-filter: blur(8px);
+}
+/* 表格固定列（el-table fixed right/left）：背景图模式下被透明规则抹掉背景，
+   固定列会和下方内容重叠 → 加毛玻璃遮住滚动内容。
+   旧版用 .el-table__fixed 容器，新版(2.5+)用 sticky 单元格 .el-table-fixed-column--*，两种都覆盖。 */
+.app-container.has-bg .main-content :deep(.el-table__fixed-right),
+.app-container.has-bg .main-content :deep(.el-table__fixed),
+.app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
+.app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
+.app-container.has-bg .main-content :deep(.k8s-action-cell) {
+  backdrop-filter: blur(8px);
+}
+/* 划出面板（K8sDetailDrawer / MonitorTabContent 等）：背景图模式下同样被透明规则抹掉背景，
+   加毛玻璃保证内容在背景图上清晰。 */
+.app-container.has-bg .main-content :deep(.detail-drawer) {
   backdrop-filter: blur(8px);
 }
 /* 拖拽/等待遮罩：全局透明规则会抹掉底色，这里给几处遮罩恢复颜色，
