@@ -1252,6 +1252,7 @@ export namespace store {
 	export class CommandMeta {
 	    name: string;
 	    description: string;
+	    argumentHint: string;
 	    origin: string;
 	    locked: boolean;
 	    enabled: boolean;
@@ -1268,6 +1269,7 @@ export namespace store {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.argumentHint = source["argumentHint"];
 	        this.origin = source["origin"];
 	        this.locked = source["locked"];
 	        this.enabled = source["enabled"];
@@ -1403,6 +1405,20 @@ export namespace store {
 	}
 	
 	
+	export class SkillFileList {
+	    references: string[];
+	    scripts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillFileList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.references = source["references"];
+	        this.scripts = source["scripts"];
+	    }
+	}
 	export class SkillMeta {
 	    name: string;
 	    description: string;
