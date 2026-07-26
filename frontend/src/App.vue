@@ -1738,6 +1738,16 @@ watch(
 .app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
   background: var(--scrollbar-thumb) !important;
 }
+/* el-table（el-scrollbar）横/纵滚动条：滑块是 div，被全局 * 透明规则抹掉了，
+   这里恢复半透明滑块，背景图下仍可见。 */
+.app-container.has-bg .main-content :deep(.el-scrollbar__thumb) {
+  background-color: var(--scrollbar-thumb) !important;
+}
+/* 表格 body 若走原生滚动条也一并恢复 */
+.app-container.has-bg .main-content :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb),
+.app-container.has-bg .main-content :deep(.el-scrollbar__wrap::-webkit-scrollbar-thumb) {
+  background: var(--scrollbar-thumb) !important;
+}
 /* 边栏毛玻璃 */
 .app-container.has-bg .main-content :deep(.sidebar),
 .app-container.has-bg .main-content :deep(.ai-sidebar) {
@@ -1754,6 +1764,21 @@ watch(
 .app-container.has-bg .main-content :deep(.el-textarea__inner),
 .app-container.has-bg .main-content :deep(.el-input-number),
 .app-container.has-bg .main-content :deep(.el-select__wrapper) {
+  backdrop-filter: blur(8px);
+}
+/* 表格固定列（el-table fixed right/left）：背景图模式下被透明规则抹掉背景，
+   固定列会和下方内容重叠 → 加毛玻璃遮住滚动内容。
+   旧版用 .el-table__fixed 容器，新版(2.5+)用 sticky 单元格 .el-table-fixed-column--*，两种都覆盖。 */
+.app-container.has-bg .main-content :deep(.el-table__fixed-right),
+.app-container.has-bg .main-content :deep(.el-table__fixed),
+.app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
+.app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
+.app-container.has-bg .main-content :deep(.k8s-action-cell) {
+  backdrop-filter: blur(8px);
+}
+/* 划出面板（K8sDetailDrawer / MonitorTabContent 等）：背景图模式下同样被透明规则抹掉背景，
+   加毛玻璃保证内容在背景图上清晰。 */
+.app-container.has-bg .main-content :deep(.detail-drawer) {
   backdrop-filter: blur(8px);
 }
 /* 拖拽/等待遮罩：全局透明规则会抹掉底色，这里给几处遮罩恢复颜色，

@@ -331,6 +331,34 @@ body::before {
   padding: 6px 12px;
 }
 
+/* Message box (ElMessageBox.confirm/prompt) — mirror .el-dialog so k8s
+   delete/scale/restart/drain confirms match the app's rounded dialogs. */
+.el-message-box {
+  background: var(--bg-surface) !important;
+  border: none !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.el-message-box__header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+}
+.el-message-box__title {
+  color: var(--text-primary) !important;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+.el-message-box__headerbtn .el-message-box__close {
+  color: var(--text-primary) !important;
+}
+.el-message-box__content {
+  color: var(--text-primary);
+  padding: 14px;
+}
+.el-message-box__btns {
+  padding: 6px 14px 12px;
+}
+
 .el-form-item {
   display: flex !important;
   align-items: center !important;

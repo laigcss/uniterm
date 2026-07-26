@@ -11,8 +11,12 @@ function ensureOk(status: number, raw: string) {
   if (status < 200 || status >= 300) throw new Error(`HTTP ${status}: ${raw?.slice(0, 300) || ''}`)
 }
 
-export async function deleteResource(connId: string, selfPath: string): Promise<void> {
-  const { status, raw } = await requestJSON(connId, 'DELETE', selfPath)
+export async function deleteResource(connId: string, selfPath: string, force = false): Promise<void> {
+  // force：立即删除（gracePeriodSeconds=0）并后台级联删除从属对象。
+  const path = force
+    ? `${selfPath}${selfPath.includes('?') ? '&' : '?'}gracePeriodSeconds=0&propagationPolicy=Background`
+    : selfPath
+  const { status, raw } = await requestJSON(connId, 'DELETE', path)
   ensureOk(status, raw)
 }
 

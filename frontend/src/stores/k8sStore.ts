@@ -16,6 +16,19 @@ export const useK8sStore = defineStore('k8s', () => {
   // key = `${connID}::${resourceKey}::${ns}` （ns='' 表示 all / 集群级）
   const states = ref<Map<string, ResourceListState>>(new Map())
 
+  // 初始 list 进行中的 key 集合；驱动列表遮罩。watch 事件不算 loading。
+  const loadingKeys = ref<Set<string>>(new Set())
+  function setLoading(key: string, v: boolean) {
+    if (v) loadingKeys.value.add(key)
+    else loadingKeys.value.delete(key)
+    loadingKeys.value = new Set(loadingKeys.value)
+  }
+  function isLoading(connID: string, resourceKey: string, ns: string): boolean {
+    const desc = getResource(resourceKey)
+    const effectiveNs = desc && !desc.namespaced ? '' : ns
+    return loadingKeys.value.has(k(connID, resourceKey, effectiveNs))
+  }
+
   function k(connID: string, resourceKey: string, ns: string) {
     return `${connID}::${resourceKey}::${ns}`
   }
@@ -49,12 +62,14 @@ export const useK8sStore = defineStore('k8s', () => {
     st = states.value.get(key)!
 
     // 初始 list
+    setLoading(key, true)
     const listPath = desc.listPath(effectiveNs)
     const { status, data, raw } = await client.requestJSON<any>(connID, 'GET', listPath)
     // 竞态守卫：期间被 unsubscribe（或换订阅）就丢弃结果
-    if (states.value.get(key) !== st) return
+    if (states.value.get(key) !== st) { setLoading(key, false); return }
     if (status !== 200 || !data) {
       st.error = `list ${desc.kind} HTTP ${status}: ${raw?.slice(0, 400) || ''}`
+      setLoading(key, false)
       bump(key, st)
       return
     }
@@ -71,10 +86,11 @@ export const useK8sStore = defineStore('k8s', () => {
     const handle = await client.startWatch(connID, watchPath, (ev) => handleEvent(key, ev))
     // 竞态守卫：startWatch 期间 state 已消失/被替换，停掉孤儿 watch
     if (states.value.get(key) !== st) {
-      handle.stop()
+      handle.stop(); setLoading(key, false)
       return
     }
     st.watch = handle
+    setLoading(key, false)
   }
 
   function handleEvent(key: string, ev: K8sWatchEvent) {
@@ -138,5 +154,5 @@ export const useK8sStore = defineStore('k8s', () => {
     return connStatus.value.get(connectionId) || ''
   }
 
-  return { subscribe, unsubscribe, getItems, getError, connStatus, setConnStatus, getConnStatus }
+  return { subscribe, unsubscribe, getItems, getError, isLoading, connStatus, setConnStatus, getConnStatus }
 })

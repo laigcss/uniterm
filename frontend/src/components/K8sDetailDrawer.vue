@@ -9,7 +9,7 @@
 
     <template v-if="mode === 'detail'">
       <div class="db-tabs">
-        <button class="db-tab" :class="{ active: tab === 'struct' }" @click="tab = 'struct'">详情</button>
+        <button class="db-tab" :class="{ active: tab === 'struct' }" @click="tab = 'struct'">{{ t('k8s.detail') }}</button>
         <button class="db-tab" :class="{ active: tab === 'yaml' }" @click="tab = 'yaml'">YAML</button>
       </div>
 
@@ -36,12 +36,12 @@
       <div v-show="tab === 'yaml'" class="yaml-pane">
         <div class="yaml-actions">
           <template v-if="!editing">
-            <el-button size="small" @click="startEdit">编辑</el-button>
-            <el-button size="small" @click="copyYaml">复制</el-button>
+            <el-button size="small" @click="startEdit">{{ t('k8s.edit') }}</el-button>
+            <el-button size="small" @click="copyYaml">{{ t('k8s.copy') }}</el-button>
           </template>
           <template v-else>
-            <el-button size="small" type="primary" :loading="saving" @click="save">保存</el-button>
-            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button size="small" type="primary" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
+            <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
           </template>
         </div>
         <pre v-if="!editing" class="k8s-yaml-drawer-body" @contextmenu="copyMenu.onContextMenu">{{ yamlText }}</pre>
@@ -55,25 +55,32 @@
         <el-select v-model="logContainer" size="small" style="width: 160px" @change="restartLogs">
           <el-option v-for="c in containerNames" :key="c" :label="c" :value="c" />
         </el-select>
-        <el-select v-model="logTail" size="small" style="width: 100px" @change="restartLogs">
+        <el-select v-model="logTail" size="small" style="width: 90px" @change="restartLogs">
           <el-option :value="100" label="100" />
           <el-option :value="500" label="500" />
           <el-option :value="2000" label="2000" />
         </el-select>
-        <el-checkbox v-model="logPrevious" @change="restartLogs">上一次</el-checkbox>
-        <el-checkbox v-model="logTimestamps" @change="restartLogs">时间戳</el-checkbox>
-        <el-button size="small" @click="logPaused = !logPaused">{{ logPaused ? '继续' : '暂停' }}</el-button>
-        <el-button size="small" @click="logLines = []">清空</el-button>
-        <el-checkbox v-model="logAutoscroll">自动滚动</el-checkbox>
+        <el-checkbox v-model="logPrevious" border size="small" @change="restartLogs">{{ t('k8s.logPrevious') }}</el-checkbox>
+        <el-checkbox v-model="logTimestamps" border size="small">{{ t('k8s.logTimestamps') }}</el-checkbox>
+        <el-checkbox v-model="logWrap" border size="small">{{ t('k8s.logWrap') }}</el-checkbox>
+        <el-button size="small" @click="logLines = []">{{ t('k8s.logClear') }}</el-button>
+        <el-button size="small" @click="logPaused = !logPaused">{{ logPaused ? t('k8s.logResume') : t('k8s.logPause') }}</el-button>
       </div>
-      <pre ref="logBody" class="k8s-yaml-drawer-body logs-body" @contextmenu="copyMenu.onContextMenu">{{ logLines.join('\n') }}</pre>
-
-      <Teleport to="body">
-        <div v-show="copyMenu.visible.value" class="text-copy-menu" :style="copyMenu.style.value" @click.stop>
-          <div class="menu-item" @click="copyMenu.copy">复制</div>
-        </div>
-      </Teleport>
+      <div
+        ref="logBody"
+        class="k8s-yaml-drawer-body logs-body"
+        :class="{ 'logs-hide-ts': !logTimestamps, 'logs-nowrap': !logWrap }"
+        @contextmenu="copyMenu.onContextMenu"
+      >
+        <div v-for="(l, i) in logLines" :key="i" class="log-line"><span class="log-ts">{{ l.ts }}</span>{{ l.msg }}</div>
+      </div>
     </div>
+
+    <Teleport to="body">
+      <div v-show="copyMenu.visible.value" class="text-copy-menu" :style="copyMenu.style.value" @click.stop>
+        <div class="menu-item" @click="copyMenu.copy">{{ t('k8s.copy') }}</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -82,13 +89,15 @@ import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ElButton, ElIcon, ElMessage, ElSelect, ElOption, ElCheckbox } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { dump, load } from 'js-yaml'
-import { getResource, type DetailSection } from '../services/k8sResources'
+import { getResource, genericDetailSections, type DetailSection } from '../services/k8sResources'
 import { requestJSON, startLogStream, type LogHandle } from '../services/k8sClient'
 import { useTextCopyMenu } from '../composables/useTextCopyMenu'
+import { useI18n } from '../i18n'
 
 const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string; initialTab?: 'detail' | 'yaml' }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 
+const { t } = useI18n()
 const copyMenu = useTextCopyMenu()
 
 // Drawer width (draggable). Defaults widen for logs mode; not persisted.
@@ -136,12 +145,7 @@ const headerTitle = computed(() => {
 const sections = computed<DetailSection[]>(() => {
   const desc = getResource(props.resourceKey)
   if (desc?.detailSections?.length) return desc.detailSections
-  // generic fallback
-  return [{ label: 'Metadata', fields: [
-    { label: 'Name', value: (o: any) => o.metadata?.name || '' },
-    { label: 'Namespace', value: (o: any) => o.metadata?.namespace || 'cluster' },
-    { label: 'Created', value: (o: any) => o.metadata?.creationTimestamp || '' },
-  ] }]
+  return genericDetailSections()
 })
 
 function fieldText(f: any): string {
@@ -189,8 +193,8 @@ const yamlText = computed(() => {
 function startEdit() { draft.value = yamlText.value; editing.value = true; saveError.value = '' }
 function cancelEdit() { editing.value = false; saveError.value = '' }
 async function copyYaml() {
-  try { await navigator.clipboard.writeText(yamlText.value); ElMessage.success('Copied') }
-  catch (e: any) { ElMessage.error(`Copy failed: ${e?.message || e}`) }
+  try { await navigator.clipboard.writeText(yamlText.value); ElMessage.success(t('k8s.copied')) }
+  catch (e: any) { ElMessage.error(`${t('k8s.copyFailed')}: ${e?.message || e}`) }
 }
 
 function selfPath(o: any): string {
@@ -211,7 +215,7 @@ async function save() {
     editing.value = false
     emit('saved')
     emit('close')
-    ElMessage.success('Saved')
+    ElMessage.success(t('k8s.saved'))
   } catch (e: any) {
     saveError.value = String(e?.message || e)
   } finally {
@@ -223,14 +227,26 @@ const logContainer = ref('')
 const logTail = ref(500)
 const logPrevious = ref(false)
 const logTimestamps = ref(false)
+const logWrap = ref(false)
 const logPaused = ref(false)
-const logAutoscroll = ref(true)
-const logLines = ref<string[]>([])
+// 日志始终自动滚动到底部（不再提供开关）。
+// Timestamps are always streamed from the API; visibility is a CSS-only toggle
+// (see .logs-hide-ts), so switching the checkbox never re-fetches the log.
+const logLines = ref<{ ts: string; msg: string }[]>([])
 const logBody = ref<HTMLElement | null>(null)
 let logHandle: LogHandle | null = null
 let logGen = 0
 
 const containerNames = computed(() => (props.target?.spec?.containers || []).map((c: any) => c.name))
+
+// Split the API's "<RFC3339 timestamp> <message>" line into its two parts.
+function splitLogLine(line: string): { ts: string; msg: string } {
+  const sp = line.indexOf(' ')
+  if (sp > 0 && /^\d{4}-\d\d-\d\dT/.test(line)) {
+    return { ts: line.slice(0, sp), msg: line.slice(sp + 1) }
+  }
+  return { ts: '', msg: line }
+}
 
 function stopLogs() { logGen++; logHandle?.stop(); logHandle = null }
 async function restartLogs() {
@@ -241,12 +257,12 @@ async function restartLogs() {
   const ns = props.target.metadata?.namespace
   const pod = props.target.metadata?.name
   const handle = await startLogStream(
-    props.connId, ns, pod, logContainer.value, logTail.value, logTimestamps.value, logPrevious.value,
+    props.connId, ns, pod, logContainer.value, logTail.value, true, logPrevious.value,
     (line) => {
       if (logPaused.value) return
-      logLines.value.push(line)
+      logLines.value.push(splitLogLine(line))
       if (logLines.value.length > 5000) logLines.value.splice(0, logLines.value.length - 5000)
-      if (logAutoscroll.value) nextTick(() => { if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight })
+      nextTick(() => { if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight })
     },
     () => {},
   )
@@ -447,6 +463,15 @@ onBeforeUnmount(stopLogs)
 
 .detail-drawer.wide { width: 640px; }
 .logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+/* 统一控件间距，避免 el-checkbox 自带 margin 造成时间戳等控件左右间隔过大 */
 .logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
+.logs-toolbar :deep(.el-checkbox) { margin-right: 0; }
 .logs-body { flex: 1; overflow: auto; }
+.log-line { white-space: pre-wrap; word-break: break-all; }
+/* 不换行模式：整行不折行，横向滚动 */
+.logs-nowrap .log-line { white-space: pre; word-break: normal; }
+/* 时间戳与正文之间留一个空格 */
+.log-ts { color: var(--text-muted); margin-right: 8px; }
+.log-ts:empty { margin-right: 0; }
+.logs-hide-ts .log-ts { display: none; }
 </style>

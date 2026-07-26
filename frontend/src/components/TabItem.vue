@@ -61,7 +61,7 @@
         @click.stop
       >
         <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
-        <div v-if="tab.type === 'k8s'" class="menu-item" @click="duplicateConnection">{{ t('sidebar.duplicate') }}</div>
+        <div v-if="tab.type === 'k8s'" class="menu-divider" />
         <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
@@ -97,7 +97,6 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useK8sStore } from '../stores/k8sStore'
-import { useConnectionStore } from '../stores/connectionStore'
 import { useI18n } from '../i18n'
 import {
   CreateSession,
@@ -130,7 +129,6 @@ const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const k8sStore = useK8sStore()
-const connectionStore = useConnectionStore()
 const { t } = useI18n()
 
 const hovered = ref(false)
@@ -222,10 +220,10 @@ const supportsOutputLog = computed(() => {
 })
 
 // Duplicate is supported for tabs backed by a reproducible connection:
-// terminals, file transfer, and database (incl. mongodb/redis variants).
+// terminals, file transfer, database (incl. mongodb/redis variants), and k8s.
 const canDuplicate = computed(() => {
   const type = props.tab.type
-  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis'
+  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
 })
 
 function onDragStart(e: DragEvent) {
@@ -368,6 +366,18 @@ async function duplicateTab() {
   const panel = panelStore.getPanel(tab.panelId)
   if (!panel) return
 
+  // k8s tab has no backend session; it connects itself on mount from
+  // connectionId + namespace. Duplicate = a fresh panel + K8s tab reusing the
+  // same connection (a new independent session), matching other tab types.
+  if (tab.type === 'k8s') {
+    const newPanel = panelStore.createPanel(panel.config, 'k8s')
+    panelStore.updateTitle(newPanel.id, panel.title)
+    const k8sTab = tab as any
+    const newTab = tabStore.createK8sTab(newPanel.title, newPanel.id, k8sTab.connectionId, k8sTab.namespace || '')
+    panelStore.movePanelToTab(newPanel.id, newTab.id)
+    return
+  }
+
   const newPanel = panelStore.createPanel(panel.config, panel.type)
   panelStore.updateTitle(newPanel.id, panel.title)
 
@@ -410,21 +420,6 @@ async function duplicateTab() {
     return
   }
   panelStore.movePanelToTab(newPanel.id, newTab.id)
-}
-
-// k8s tab: duplicate the underlying ConnectionConfig entry (not the session).
-function duplicateConnection() {
-  closeContextMenu()
-  const tab = props.tab as any
-  const src = connectionStore.connections.find(c => c.id === tab.connectionId)
-  if (!src) return
-  const match = src.name.match(/^(.*)\s*\((\d+)\)$/)
-  const base = match ? match[1].trim() : src.name
-  let n = 2
-  const exists = (name: string) => connectionStore.connections.some(c => c.name === name)
-  let dupName = `${base} (${n})`
-  while (exists(dupName)) { n++; dupName = `${base} (${n})` }
-  connectionStore.add({ ...src, id: `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: dupName })
 }
 
 // The session-type argument to CreateSession isn't always panel.config.type:

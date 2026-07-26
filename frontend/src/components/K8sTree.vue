@@ -43,7 +43,7 @@ import {
   File, FileText, Lock,
   HardDrive, Database,
   Server, Folder, Bell,
-  BrickWallShield, Cable, Component,
+  BrickWallShield, Cable, Component, Package2, CircleGauge,
   Package,   // 兜底
 } from '@lucide/vue'
 import { RESOURCES, type ResourceGroup, type ResourceDescriptor } from '../services/k8sResources'
@@ -91,7 +91,7 @@ const ICON_MAP: Record<string, any> = {
   File, FileText, Lock,
   HardDrive, Database,
   Server, Folder, Bell,
-  BrickWallShield, Cable, Component,
+  BrickWallShield, Cable, Component, Package2, CircleGauge,
 }
 function iconOf(name: string) {
   return ICON_MAP[name] || Package
@@ -108,47 +108,46 @@ function groupIcon(_g: ResourceGroup) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-elevated, transparent);
 }
 .tree-content {
   flex: 1;
   overflow: auto;
-  padding: 4px 0;
 }
 .db-header {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 6px 8px;
   cursor: pointer;
-  font-family: var(--font-ui, sans-serif);
-  font-size: 13px;
-  color: var(--text-primary, inherit);
   user-select: none;
+  transition: background 0.12s ease;
 }
 .db-header:hover {
-  background: var(--bg-hover, rgba(255,255,255,0.04));
+  background: var(--bg-hover);
 }
 .db-header.selected {
-  background: var(--bg-selected, rgba(255,255,255,0.06));
+  background: var(--bg-hover);
 }
 .db-arrow {
-  display: inline-flex;
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
   cursor: pointer;
-  color: var(--text-secondary, #888);
 }
 .db-arrow:hover {
-  color: var(--text-primary, inherit);
+  color: var(--text-primary);
 }
 .db-icon {
-  margin-right: 6px;
-  color: var(--text-secondary, #888);
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
 .db-name {
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -156,35 +155,38 @@ function groupIcon(_g: ResourceGroup) {
 .table-item {
   display: flex;
   align-items: center;
-  padding: 3px 8px 3px 24px;
+  gap: 4px;
+  padding: 6px 8px;
   cursor: pointer;
-  font-family: var(--font-ui, sans-serif);
-  font-size: 12px;
-  color: var(--text-primary, inherit);
   user-select: none;
+  transition: background 0.12s ease;
 }
 .table-item:hover {
-  background: var(--bg-hover, rgba(255,255,255,0.04));
+  background: var(--bg-hover);
 }
 .table-item.selected {
-  background: var(--accent-bg, rgba(64,150,255,0.15));
-  color: var(--accent, #4096ff);
+  background: var(--bg-hover);
 }
 .table-icon-spacer {
-  width: 16px;
+  width: 30px;
+  flex-shrink: 0;
 }
 .table-icon {
-  margin-right: 6px;
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
 .table-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .empty-hint {
-  padding: 3px 8px 3px 40px;
-  color: var(--text-secondary, #888);
-  font-size: 11px;
-  font-style: italic;
+  padding: 4px 8px 4px 28px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>
