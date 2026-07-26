@@ -77,9 +77,10 @@ func (s *SkillsStore) prefsPath() string  { return filepath.Join(s.skillsRoot(),
 // ---- frontmatter 解析（极简，只取平铺的 name/description/disable-model-invocation/created-model）----
 
 type skillFrontmatter struct {
-	name        string
-	description string
-	disableInv  bool
+	name         string
+	description  string
+	argumentHint string
+	disableInv   bool
 	createdModel string
 }
 
@@ -133,6 +134,8 @@ func parseFrontmatter(content string) (fm skillFrontmatter, body string) {
 			if val != ">" && val != "|" && val != ">-" && val != "|-" {
 				fm.description = val
 			}
+		case "argument-hint":
+			fm.argumentHint = val
 		case "disable-model-invocation":
 			fm.disableInv = val == "true"
 		case "created-model", "createdModel":
@@ -374,12 +377,59 @@ func (s *SkillsStore) GetSkillFile(name, relPath string) (string, error) {
 	if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
 		return "", fmt.Errorf("path not allowed: %s", relPath)
 	}
-	if !strings.HasSuffix(strings.ToLower(clean), ".md") {
-		return "", fmt.Errorf("only .md files can be read")
+	allowed := []string{".md", ".sh", ".bash", ".py", ".txt", ".json", ".yaml", ".yml"}
+	ok := false
+	for _, ext := range allowed {
+		if strings.HasSuffix(strings.ToLower(clean), ext) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return "", fmt.Errorf("file type not allowed: %s", relPath)
 	}
 	root := s.skillsRoot()
 	absPath := filepath.Join(root, dir, clean)
 	return readCapped(absPath)
+}
+
+// SkillFileList 列出一个 skill 的 references/ 与 scripts/ 下的相对路径（供 use_skill 组装资源清单）。
+type SkillFileList struct {
+	References []string `json:"references"`
+	Scripts    []string `json:"scripts"`
+}
+
+// ListSkillFiles 返回指定 skill 的 references/ 与 scripts/ 相对路径列表（仅目录内，防穿越）。
+func (s *SkillsStore) ListSkillFiles(name string) (SkillFileList, error) {
+	metas, err := s.List()
+	if err != nil {
+		return SkillFileList{}, err
+	}
+	var dir string
+	for _, m := range metas {
+		if m.Name == name {
+			dir = m.Dir
+			break
+		}
+	}
+	if dir == "" {
+		return SkillFileList{}, fmt.Errorf("skill %q not found", name)
+	}
+	list := func(sub string) []string {
+		out := []string{}
+		base := filepath.Join(s.skillsRoot(), dir, sub)
+		entries, err := os.ReadDir(base)
+		if err != nil {
+			return out
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				out = append(out, sub+"/"+e.Name())
+			}
+		}
+		return out
+	}
+	return SkillFileList{References: list(referencesDir), Scripts: list(scriptsDir)}, nil
 }
 
 // Delete 删除指定 skill 的目录与偏好记录。
