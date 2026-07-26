@@ -73,7 +73,7 @@
     <template #footer>
       <el-button @click="$emit('close')">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :disabled="!canCreate" @click="onCreate">
-        {{ t('common.confirm') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </el-dialog>
@@ -90,6 +90,26 @@ import { OpenFileDialogFiltered, OpenDirectoryDialog, ImportSkillFromZip, Import
 const { t } = useI18n()
 const store = useSkillStore()
 
+const SKILL_TEMPLATE = `## Purpose
+Investigate high disk usage on a Linux host and identify the largest space consumers.
+
+## Steps
+1. Show overall disk usage per mount point:
+   \`df -hT\`
+2. Find the top-level directories consuming the most space (start from the full mount):
+   \`du -xh --max-depth=1 / 2>/dev/null | sort -rh | head -n 20\`
+3. Drill down into the largest directory reported above, repeating step 2 until the culprit is found.
+4. List the largest individual files:
+   \`find <suspect_dir> -xdev -type f -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -n 20\`
+5. Check for deleted-but-open files still holding space:
+   \`lsof +L1 2>/dev/null | awk '$5=="REG"' | sort -k7 -rn | head\`
+
+## Notes
+- Always use \`-x\`/\`-xdev\` to stay on one filesystem and avoid crossing into /proc, /sys, or network mounts.
+- Do NOT delete anything automatically. Report findings first and let the user confirm.
+- If a mount is at 100%, note it explicitly and prioritize freeing it.
+`
+
 const emit = defineEmits<{
   close: []
   created: []
@@ -99,7 +119,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadFile = ref('')
 const parseState = ref<'idle' | 'ok' | 'fail'>('idle')
 const parseError = ref('')
-const form = ref({ name: '', description: '', body: '' })
+const form = ref({ name: '', description: '', body: SKILL_TEMPLATE })
 
 const canCreate = computed(() => {
   return form.value.name.trim() && form.value.description.trim() && form.value.body.trim()
