@@ -38,13 +38,14 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 
 ### Full-Featured Terminal
 
-Remote terminal (SSH / Telnet / Mosh), local & serial terminal (PowerShell / CMD / Git Bash / WSL), file transfer, remote desktop, database, and server monitor — covering all remote access needs.
+Remote terminal (SSH / Telnet / Mosh), local & serial terminal (PowerShell / CMD / Git Bash / WSL), file transfer, remote desktop, database, Kubernetes, and server monitor — covering all remote access needs.
 
 - **Remote Terminal** — SSH / Telnet / Mosh with password or key authentication; includes SSH tunnel port forwarding so any connection can route through an SSH jump host.
 - **Local & Serial Terminal** — PowerShell / CMD / Git Bash / WSL plus serial connections with configurable baud rate, data bits, stop bits, parity, and local echo.
 - **File Transfer** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem with dual-pane browsing and `rz`/`sz` support in SSH terminals.
 - **Remote Desktop** — RDP (Windows Remote Desktop), VNC (Linux remote control), SPICE (KVM/QEMU VMs)
 - **Database Client** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB.
+- **Kubernetes** (v1.6.0-alpha) — Cluster resource browsing and YAML editing, Pod logs and exec terminals, CPU/memory metrics.
 - **Server Monitor** — Real-time CPU, memory, disk, network, processes, ports, and network interfaces.
 
 ### AI Assistant
@@ -57,6 +58,7 @@ Autonomous AI Agent that independently plans and executes multi-turn shell comma
 - **Persistent Conversations** — Chat history is saved per session, so conversations survive app restarts.
 - **Terminal Integration** — AI commands execute directly in the active terminal tab, with optional pinning to a specific tab or following your active one. Collaborate side-by-side in split panes, each with its own terminal context.
 - **Smart Completion** — While typing in SSH terminals, get real-time suggestions from your command history and AI-powered command rewrites.
+- **Skills & Commands** (v1.6.0-alpha) — Reusable skill workflows and prompt-template commands, attached with `/` in the AI input; the AI can also save new skills itself.
 
 ### Personalization
 
@@ -95,6 +97,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Database | rqlite | Lightweight distributed DB built on SQLite with Raft consensus |
 | Database | Redis | In-memory key-value store with visual key browsing and editing |
 | Database | MongoDB | Document database with tree browsing, query editor, and inline editing |
+| Kubernetes | Kubernetes | Cluster resource browsing and management, Pod logs and exec, performance metrics |
 
 Oracle Database support is implemented with a pure Go driver. uniTerm does not bundle Oracle Database, Oracle Instant Client, OJDBC, wallet files, or Oracle brand assets; users are responsible for their own Oracle licenses, credentials, and database access.
 

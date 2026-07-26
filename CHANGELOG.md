@@ -1,5 +1,61 @@
 # Changelog
 
+## v1.6.0-alpha
+
+### What's Changed
+
+**New Features**
+- Kubernetes management. Connect to clusters via kubeconfig with optional SSH tunnel; browse and manage resources, edit YAML, follow Pod logs, exec into containers in a terminal tab, and view Pod/Node CPU and memory metrics.
+- AI skills. Create, import, and manage skills under Settings → Skills & Commands, then type `/` in the AI input to attach one to your request; the AI can also save new skills itself. (@surenwuyuwuqiu)
+- AI commands: reusable prompt templates. Pick one from the `/` dropdown to attach it as a `/name` tag, optionally type arguments, and send; managed under Settings → Skills & Commands. (@surenwuyuwuqiu)
+- OpenAI Responses API protocol support — a third AI protocol option for providers whose channel is natively the Responses API (e.g. codex-style channels).
+
+**Improvements**
+- Drag-and-drop reordering for connection groups and connections in the sidebar, with the custom order persisted. Reordering is paused while search or type filters are active.
+- Tab titles are now capped at a max width with ellipsis; hovering shows the full name in a tooltip. (@surenwuyuwuqiu)
+- macOS Cmd+C now copies the terminal selection when one exists (passes through otherwise; Ctrl+C interrupt unaffected). (@surenwuyuwuqiu)
+
+**Bug Fixes**
+- Fixed SSH keepalive silently stopping, which let the server drop the connection for idleness: the wait-for-reply loop could wedge on an internal lock and halt heartbeats entirely. Keepalive is now send-only with the interval aligned to OpenSSH defaults (60s); tunnel keepalive got the same fix.
+- Fixed the group not being preserved when creating a second connection inside the same group.
+- Fixed wrong OpenAI protocol message order when one turn carries both a tool_result and text.
+- Fixed session logs capturing interactive-edit garbage: readline cursor/erase CSI sequences are now preserved so edited command lines reconstruct cleanly.
+- Fixed the RDP fullscreen connection bar showing a minimize button (the window has no taskbar entry, so minimizing made it unrecoverable).
+- Fixed RDP security dialog auto-dismiss failing on Chinese Windows due to a missing '连接(&N)' button caption.
+- Fixed RDP keyboard focus not following mouse clicks in multi-monitor setups.
+- Fixed file-drop and loading masks becoming invisible when a custom background image is set.
+- Fixed the selected AI skill being lost when a message was queued while the agent was running. (@surenwuyuwuqiu)
+- Fixed RPM packages failing to install on Fedora due to wrong dependency names.
+
+Thanks to @surenwuyuwuqiu for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- Kubernetes 管理。通过 kubeconfig 接入集群（支持 SSH 隧道），浏览与管理集群资源、编辑 YAML、跟随查看 Pod 日志、exec 进入容器终端，并展示 Pod/Node CPU、内存指标。
+- AI 技能（Skills）。在设置 → 技能与命令中创建、导入和管理技能，AI 输入框输入 `/` 即可为本次请求挂载；AI 也可自行保存新技能。（@surenwuyuwuqiu）
+- AI 命令（Commands）：可复用的 Prompt 模板。`/` 下拉选择后以 `/名称` 标签挂载，可附加参数后发送；在设置 → 技能与命令中管理。（@surenwuyuwuqiu）
+- 支持 OpenAI Responses API 协议——第三种 AI 协议选项，适用于原生 Responses API 通道的服务商（如 codex 类通道）。
+
+**改进**
+- 侧边栏连接分组与连接支持拖拽排序，顺序持久化保存；搜索或类型过滤生效时暂停排序。
+- 标签标题限制最大宽度，超出部分显示省略号，悬停 tooltip 显示完整名称。（@surenwuyuwuqiu）
+- macOS 下终端有选区时 Cmd+C 复制选中内容（无选区时透传，不影响 Ctrl+C 中断）。（@surenwuyuwuqiu）
+
+**Bug 修复**
+- 修复 SSH 保活静默失效、连接因空闲被服务端断开的问题：等待回复的保活分支可能卡死在内部锁上，导致心跳完全停发。保活改为只发不等回复，间隔对齐 OpenSSH 默认值（60 秒）；隧道保活同步修复。
+- 修复在同一分组内新建第二个连接时分组未被保留的问题。
+- 修复 OpenAI 协议同一轮同时携带 tool_result 和 text 时消息顺序错误的问题。
+- 修复会话日志记录交互式编辑内容时出现乱码交错的问题：现在保留 readline 光标/擦除 CSI 序列，命令行可正确还原。
+- 修复 RDP 全屏连接条显示最小化按钮的问题（窗口无任务栏入口，最小化后无法恢复）。
+- 修复中文 Windows 下 RDP 安全对话框自动关闭失败的问题（缺少「连接(&N)」按钮文本）。
+- 修复多显示器环境下 RDP 点击后键盘焦点不跟随的问题。
+- 修复设置自定义背景图后文件拖拽遮罩与加载遮罩不可见的问题。
+- 修复 AI 运行中排队的消息丢失已选技能的问题。（@surenwuyuwuqiu）
+- 修复 RPM 安装包在 Fedora 上因依赖名错误无法安装的问题。
+
+感谢 @surenwuyuwuqiu 对本版本的贡献。
+
 ## v1.5.2
 
 ### What's Changed
