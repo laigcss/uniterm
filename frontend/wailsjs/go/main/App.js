@@ -38,6 +38,10 @@ export function ConnectSerial(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['ConnectSerial'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function CreateCommand(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateCommand'](arg1, arg2, arg3);
+}
+
 export function CreateDatabase(arg1, arg2) {
   return window['go']['main']['App']['CreateDatabase'](arg1, arg2);
 }
@@ -68,6 +72,10 @@ export function DBInsertRow(arg1, arg2, arg3, arg4) {
 
 export function DBUpdateRow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['DBUpdateRow'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function DeleteCommand(arg1) {
+  return window['go']['main']['App']['DeleteCommand'](arg1);
 }
 
 export function DeleteSkill(arg1) {
@@ -136,6 +144,10 @@ export function GetAvailableShells() {
 
 export function GetBackgroundImage(arg1) {
   return window['go']['main']['App']['GetBackgroundImage'](arg1);
+}
+
+export function GetCommandBody(arg1) {
+  return window['go']['main']['App']['GetCommandBody'](arg1);
 }
 
 export function GetDBCapabilities(arg1) {
@@ -252,6 +264,10 @@ export function K8sStopWatch(arg1) {
 
 export function KillProcess(arg1, arg2, arg3) {
   return window['go']['main']['App']['KillProcess'](arg1, arg2, arg3);
+}
+
+export function ListCommands() {
+  return window['go']['main']['App']['ListCommands']();
 }
 
 export function ListSerialPorts() {
@@ -534,6 +550,10 @@ export function SaveAISessions(arg1) {
   return window['go']['main']['App']['SaveAISessions'](arg1);
 }
 
+export function SaveCommand(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveCommand'](arg1, arg2, arg3);
+}
+
 export function SaveConnections(arg1) {
   return window['go']['main']['App']['SaveConnections'](arg1);
 }
@@ -596,6 +616,18 @@ export function SessionWriteBinary(arg1, arg2) {
 
 export function SetBackgroundImage(arg1) {
   return window['go']['main']['App']['SetBackgroundImage'](arg1);
+}
+
+export function SetCommandEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetCommandEnabled'](arg1, arg2);
+}
+
+export function SetCommandLocked(arg1, arg2) {
+  return window['go']['main']['App']['SetCommandLocked'](arg1, arg2);
+}
+
+export function SetCommandSortOrder(arg1, arg2) {
+  return window['go']['main']['App']['SetCommandSortOrder'](arg1, arg2);
 }
 
 export function SetDefaultSessionLogDir(arg1) {

@@ -46,6 +46,7 @@ type App struct {
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
 	skillsStore          *store.SkillsStore
+	commandsStore        *store.CommandsStore
 	tunnelStore          *store.TunnelStore
 	terminalHistoryStore *store.TerminalHistoryStore
 	recentStore          *store.RecentStore
@@ -156,6 +157,7 @@ func (a *App) startup(ctx context.Context) {
 	a.terminalHistoryStore = store.NewTerminalHistoryStore(appDir)
 	a.quickCommandsStore = store.NewQuickCommandsStore(appDir)
 	a.skillsStore = store.NewSkillsStore(appDir)
+	a.commandsStore = store.NewCommandsStore(appDir)
 	a.tunnelStore = store.NewTunnelStore(appDir)
 	a.localStateStore = store.NewLocalStateStore(appDir)
 	a.recentStore = store.NewRecentStore(appDir)
@@ -824,6 +826,64 @@ func (a *App) SaveSkill(name, description, body string) error {
 		return fmt.Errorf("skills store not initialized")
 	}
 	return a.skillsStore.SaveSkill(name, description, body)
+}
+
+// CommandsStore methods
+
+func (a *App) ListCommands() ([]store.CommandMeta, error) {
+	if a.commandsStore == nil {
+		return nil, fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.List()
+}
+
+func (a *App) GetCommandBody(name string) (string, error) {
+	if a.commandsStore == nil {
+		return "", fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.GetBody(name)
+}
+
+func (a *App) SetCommandEnabled(name string, enabled bool) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.SetEnabled(name, enabled)
+}
+
+func (a *App) SetCommandLocked(name string, locked bool) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.SetLocked(name, locked)
+}
+
+func (a *App) SetCommandSortOrder(name string, order int) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.SetSortOrder(name, order)
+}
+
+func (a *App) DeleteCommand(name string) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.Delete(name)
+}
+
+func (a *App) CreateCommand(name, description, body string) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.CreateCommand(name, description, body)
+}
+
+func (a *App) SaveCommand(name, description, body string) error {
+	if a.commandsStore == nil {
+		return fmt.Errorf("commands store not initialized")
+	}
+	return a.commandsStore.SaveCommand(name, description, body)
 }
 
 func (a *App) OpenFileDialog() (string, error) {

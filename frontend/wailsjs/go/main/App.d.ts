@@ -26,6 +26,8 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function ConnectSerial(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<session.SessionInfo>;
 
+export function CreateCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function CreateDatabase(arg1:string,arg2:string):Promise<void>;
 
 export function CreateSession(arg1:string,arg2:session.ConnectionConfig):Promise<session.SessionInfo>;
@@ -41,6 +43,8 @@ export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<stri
 export function DBInsertRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 
 export function DBUpdateRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>,arg5:Record<string, any>):Promise<void>;
+
+export function DeleteCommand(arg1:string):Promise<void>;
 
 export function DeleteSkill(arg1:string):Promise<void>;
 
@@ -75,6 +79,8 @@ export function GetAppInfo():Promise<main.AppInfo>;
 export function GetAvailableShells():Promise<Array<string>>;
 
 export function GetBackgroundImage(arg1:string):Promise<string>;
+
+export function GetCommandBody(arg1:string):Promise<string>;
 
 export function GetDBCapabilities(arg1:string):Promise<database.DBCapabilities>;
 
@@ -133,6 +139,8 @@ export function K8sStopLogStream(arg1:string):Promise<void>;
 export function K8sStopWatch(arg1:string):Promise<void>;
 
 export function KillProcess(arg1:string,arg2:number,arg3:string):Promise<void>;
+
+export function ListCommands():Promise<Array<store.CommandMeta>>;
 
 export function ListSerialPorts():Promise<Array<string>>;
 
@@ -274,6 +282,8 @@ export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
 export function SaveAISessions(arg1:store.AISessionData):Promise<void>;
 
+export function SaveCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SaveConnections(arg1:session.ConnectionStoreData):Promise<void>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
@@ -305,6 +315,12 @@ export function SessionWrite(arg1:string,arg2:string):Promise<void>;
 export function SessionWriteBinary(arg1:string,arg2:string):Promise<void>;
 
 export function SetBackgroundImage(arg1:string):Promise<string>;
+
+export function SetCommandEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetCommandLocked(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetCommandSortOrder(arg1:string,arg2:number):Promise<void>;
 
 export function SetDefaultSessionLogDir(arg1:string):Promise<void>;
 
