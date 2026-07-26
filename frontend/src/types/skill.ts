@@ -7,6 +7,7 @@ export interface SkillMeta {
   enabled: boolean
   sortOrder: number
   dir: string
+  path: string
   hasReferences: boolean
   scriptCount: number
   modelInvocable: boolean

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill } from '../../wailsjs/go/main/App'
+import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill, OpenPathInExplorer } from '../../wailsjs/go/main/App'
 import type { SkillMeta } from '../types/skill'
 
 export const useSkillStore = defineStore('skills', () => {
@@ -81,6 +81,18 @@ export const useSkillStore = defineStore('skills', () => {
     }
   }
 
+  // AI 侧保存：已存在则覆写（后端拒绝 locked），不存在则新建。
+  async function saveByAgent(name: string, description: string, body: string) {
+    await load()
+    const exists = skills.value.some(s => s.name === name)
+    if (exists) {
+      await SaveSkill(name, description, body)
+    } else {
+      await CreateSkill(name, description, body)
+    }
+    await reload()
+  }
+
   async function getBody(name: string): Promise<string> {
     try {
       return await GetSkillBody(name)
@@ -90,9 +102,18 @@ export const useSkillStore = defineStore('skills', () => {
     }
   }
 
+  async function openFolder(path: string): Promise<void> {
+    if (!path) return
+    try {
+      await OpenPathInExplorer(path)
+    } catch (e) {
+      console.error('Failed to open skill folder:', e)
+    }
+  }
+
   return {
     skills, loaded, enabledSkills,
     load, reload,
-    toggleEnabled, toggleLocked, remove, create, save, getBody,
+    toggleEnabled, toggleLocked, remove, create, save, saveByAgent, getBody, openFolder,
   }
 })

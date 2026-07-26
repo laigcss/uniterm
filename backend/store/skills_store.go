@@ -37,6 +37,7 @@ type SkillMeta struct {
 	Enabled        bool   `json:"enabled"`        // 是否进 L1/补全/识别（源:prefs）
 	SortOrder      int    `json:"sortOrder"`      // 列表排序（源:prefs）
 	Dir            string `json:"dir"`            // 存储目录名，可 ≠ name（源:目录）
+	Path           string `json:"path"`           // skill 目录的绝对路径（源:目录）
 	HasReferences  bool   `json:"hasReferences"`  // 是否文件夹型（有 references/）（源:目录）
 	ScriptCount    int    `json:"scriptCount"`    // scripts/ 文件数（源:目录）
 	ModelInvocable bool   `json:"modelInvocable"` // = !disable-model-invocation（源:目录）
@@ -207,6 +208,7 @@ func scanDir(root string, isSystem bool) []SkillMeta {
 			Description:    fm.description,
 			IsSystem:       isSystem,
 			Dir:            dir,
+			Path:           skillDir,
 			ModelInvocable: !fm.disableInv,
 			CreatedModel:   fm.createdModel,
 			HasReferences:  dirHasFiles(filepath.Join(skillDir, referencesDir)),

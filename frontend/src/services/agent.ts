@@ -4,6 +4,7 @@ import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useSkillStore } from '../stores/skillStore'
 import { EventsOn } from '../../wailsjs/runtime'
 import type { AIMessage } from '../types/ai'
 
@@ -188,7 +189,19 @@ function buildSystemPrompt(): string {
     shellPath.toLowerCase().includes('pwsh') ||
     shellPath.toLowerCase().includes('cmd')
   )
-  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell)
+  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell) + buildSkillIndex()
+}
+
+/**
+ * L1 skill index: name + description of enabled skills, appended to the system
+ * prompt so the model knows which skills exist (to invoke or avoid duplicating).
+ */
+function buildSkillIndex(): string {
+  const skillStore = useSkillStore()
+  const list = skillStore.enabledSkills
+  if (list.length === 0) return ''
+  const lines = list.map(s => `- /${s.name}: ${s.description}`).join('\n')
+  return `\n\nAVAILABLE SKILLS (invoke a matching one instead of reinventing it; do NOT duplicate an existing one with save_skill):\n${lines}`
 }
 
 export async function runAgent(userInput: string, skillName?: string, skillBody?: string) {
@@ -304,10 +317,16 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     if (store.queuedMessages.length > 0) {
       const drained = store.queuedMessages.splice(0)
       drained.forEach((q, i) => {
+        let header = ''
+        if (q.skillName && q.skillBody) {
+          header = `[Skill: ${q.skillName}]\n${q.skillBody}`
+          store.addSkillCard(q.skillName, 'explicit')
+        }
         store.addMessage({
           id: `msg-${Date.now()}-${i}`,
           role: 'user',
           content: q.content,
+          _contextHeader: header || undefined,
         })
       })
       turnCount = 0
@@ -663,6 +682,28 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
       store.isRunning = false
       cleanupStreamListeners()
       return
+    } else if (tu.name === 'save_skill') {
+      const name = tu.input.name as string
+      const description = tu.input.description as string
+      const body = tu.input.body as string
+      try {
+        store.status = 'executing'
+        const skillStore = useSkillStore()
+        await skillStore.saveByAgent(name, description, body)
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Skill saved: ${name}] The user can now invoke it with /${name}.`,
+          tool_call_id: tu.id
+        })
+      } catch (e: any) {
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Error saving skill: ${e.message ?? e}]`,
+          tool_call_id: tu.id
+        })
+      }
     }
   }
 
