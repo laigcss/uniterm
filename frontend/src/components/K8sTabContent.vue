@@ -20,6 +20,7 @@
           :frame="topFrame"
           :namespace-options="namespaceOptions"
           @open-detail="openDetail"
+          @open-yaml="openYaml"
           @open-logs="openLogs"
           @view-pods="viewPods"
           @open-crd="openCrd"
@@ -35,6 +36,7 @@
       :target="drawerTarget"
       :resource-key="drawerResourceKey"
       :self-path-override="drawerSelfPathOverride"
+      :initial-tab="drawerInitialTab"
       @close="closeDrawer"
       @saved="() => {}"
     />
@@ -48,6 +50,7 @@ import * as k8sClient from '../services/k8sClient'
 import { usePanelStore } from '../stores/panelStore'
 import { useTabStore } from '../stores/tabStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useK8sStore } from '../stores/k8sStore'
 import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
@@ -64,17 +67,32 @@ const { resolveTunnelCredentials } = useTunnelCredentials()
 const panelStore = usePanelStore()
 const tabStore = useTabStore()
 const sessionStore = useSessionStore()
+const k8sStore = useK8sStore()
 
 const connId = ref<string>('')
 const error = ref('')
 const initialNamespace = ref<string>(props.tab.namespace || '')
 
-// 静态候选 + 打开时选中的 ns，后续 PR 再动态拉 /api/v1/namespaces。
+// Namespaces fetched live from the cluster once connected; falls back to a
+// small static set if the list call fails (RBAC-restricted, etc.).
+const fetchedNamespaces = ref<string[]>([])
 const namespaceOptions = computed(() => {
-  const set = new Set<string>(['default', 'kube-system', 'kube-public'])
+  const set = new Set<string>()
+  for (const n of fetchedNamespaces.value) set.add(n)
+  if (!set.size) { set.add('default'); set.add('kube-system'); set.add('kube-public') }
   if (initialNamespace.value) set.add(initialNamespace.value)
   return Array.from(set)
 })
+
+async function loadNamespaces() {
+  if (!connId.value) return
+  try {
+    const { status, data } = await k8sClient.requestJSON<any>(connId.value, 'GET', '/api/v1/namespaces?limit=500')
+    if (status === 200 && data?.items) {
+      fetchedNamespaces.value = data.items.map((n: any) => n.metadata?.name).filter(Boolean).sort()
+    }
+  } catch { /* keep fallback */ }
+}
 
 // ── nav stack ──────────────────────────────────────────────────
 const navStack = ref<NavFrame[]>([{ kind: 'list', resourceKey: 'pods', namespace: props.tab.namespace || '' }])
@@ -115,10 +133,19 @@ const drawerMode = ref<'detail' | 'logs' | null>(null)
 const drawerTarget = ref<any | null>(null)
 const drawerResourceKey = ref<string>('pods')
 const drawerSelfPathOverride = ref<((obj: any) => string) | undefined>(undefined)
+const drawerInitialTab = ref<'detail' | 'yaml'>('detail')
 function openDetail(obj: any) {
   drawerTarget.value = obj
   drawerResourceKey.value = resourceKeyOf()
   drawerSelfPathOverride.value = crSelfPathOverride()
+  drawerInitialTab.value = 'detail'
+  drawerMode.value = 'detail'
+}
+function openYaml(obj: any) {
+  drawerTarget.value = obj
+  drawerResourceKey.value = resourceKeyOf()
+  drawerSelfPathOverride.value = crSelfPathOverride()
+  drawerInitialTab.value = 'yaml'
   drawerMode.value = 'detail'
 }
 function openLogs(pod: any) { drawerTarget.value = pod; drawerResourceKey.value = 'pods'; drawerSelfPathOverride.value = undefined; drawerMode.value = 'logs' }
@@ -153,11 +180,18 @@ async function openTerminal(pod: any) {
     const ns = pod.metadata?.namespace
     const info = await k8sClient.execSession(connId.value, ns, pod.metadata?.name, container)
     const title = `${pod.metadata?.name}/${container}`
-    const cfg = { id: '', name: title, type: 'k8s-exec' as any, host: '', port: 0, user: '', authType: 'password' as any }
+    // Store exec params on the config so Panel.vue can rebuild the stream on reconnect.
+    const cfg = {
+      id: '', name: title, type: 'k8s-exec' as any, host: '', port: 0, user: '', authType: 'password' as any,
+      k8sExecConnId: connId.value, k8sNamespace: ns, k8sExecPod: pod.metadata?.name, k8sExecContainer: container,
+    }
     const panel = panelStore.createPanel(cfg as any, 'k8s-exec')
     panelStore.updateTitle(panel.id, title)
     panelStore.bindSession(panel.id, info.id)
     sessionStore.initSession(info.id)
+    // Exec socket is already connected when the binding returns; the backend only
+    // emits session:status on later transitions (disconnect), so mark it now.
+    sessionStore.updateStatus(info.id, 'connected')
     const tab = tabStore.createTerminalTab(panel.title, panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
   } catch (e: any) {
@@ -188,6 +222,7 @@ function onResizeEnd() {
 }
 
 async function connect() {
+  k8sStore.setConnStatus(props.connection.id, 'connecting')
   try {
     const cfg = props.connection
     const source = cfg.k8sConfigInline ? cfg.k8sConfigInline : (cfg.k8sConfigPath || '~/.kube/config')
@@ -211,7 +246,10 @@ async function connect() {
       tunnelUser,
       tunnelPassword
     )
+    k8sStore.setConnStatus(props.connection.id, 'connected')
+    loadNamespaces()
   } catch (e: any) {
+    k8sStore.setConnStatus(props.connection.id, 'error')
     error.value = String(e?.message || e)
   }
 }

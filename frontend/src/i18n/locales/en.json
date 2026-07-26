@@ -505,6 +505,7 @@
   "spice.retry": "Retry",
   "spice.scale": "Scale",
   "sidebar.connectMonitor": "Server Monitor",
+  "sidebar.connectK8s": "Connect Kubernetes",
   "sidebar.connectTelnet": "Connect Telnet",
   "sidebar.connectMosh": "Connect Mosh",
   "sidebar.connectLocal": "Connect Local",

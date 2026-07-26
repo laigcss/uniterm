@@ -475,6 +475,7 @@
   "spice.retry": "再試行",
   "spice.scale": "スケーリング",
   "sidebar.connectMonitor": "サーバーモニター",
+  "sidebar.connectK8s": "Kubernetes に接続",
   "sidebar.connectTelnet": "Telnet で接続",
   "sidebar.connectMosh": "Mosh で接続",
   "sidebar.connectLocal": "ローカル接続",

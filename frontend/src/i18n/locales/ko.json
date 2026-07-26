@@ -475,6 +475,7 @@
   "spice.retry": "다시 시도",
   "spice.scale": "확대/축소",
   "sidebar.connectMonitor": "서버 모니터",
+  "sidebar.connectK8s": "Kubernetes 연결",
   "sidebar.connectTelnet": "Telnet 연결",
   "sidebar.connectMosh": "Mosh 연결",
   "sidebar.connectLocal": "로컬 연결",

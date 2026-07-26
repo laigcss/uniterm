@@ -127,5 +127,16 @@ export const useK8sStore = defineStore('k8s', () => {
     return states.value.get(k(connID, resourceKey, effectiveNs))?.error || ''
   }
 
-  return { subscribe, unsubscribe, getItems, getError }
+  // Per-connection connect status, surfaced on the k8s tab so a failed/absent
+  // connection isn't silent. Keyed by the ConnectionConfig.id the tab was opened for.
+  const connStatus = ref<Map<string, 'connecting' | 'connected' | 'error'>>(new Map())
+  function setConnStatus(connectionId: string, status: 'connecting' | 'connected' | 'error') {
+    connStatus.value.set(connectionId, status)
+    connStatus.value = new Map(connStatus.value)
+  }
+  function getConnStatus(connectionId: string): '' | 'connecting' | 'connected' | 'error' {
+    return connStatus.value.get(connectionId) || ''
+  }
+
+  return { subscribe, unsubscribe, getItems, getError, connStatus, setConnStatus, getConnStatus }
 })

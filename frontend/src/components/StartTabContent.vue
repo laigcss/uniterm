@@ -344,6 +344,7 @@
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'spice'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSpice(contextMenuConfig)">{{ t('sidebar.connectSPICE') }}</div>
       <!-- Database & Monitor -->
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'database'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectDb(contextMenuConfig)">{{ t('db.connectDB') }}</div>
+      <div v-if="contextMenuConfig && contextMenuConfig.type === 'k8s'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectK8s(contextMenuConfig)">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectMonitor(contextMenuConfig)">{{ t('sidebar.connectMonitor') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEditConnection(contextMenuConfig)">{{ t('sidebar.edit') }}</div>
@@ -530,6 +531,7 @@ const searchInputRef = ref<HTMLInputElement>()
 const TYPE_LABELS: Record<string, string> = {
   ssh: 'SSH', telnet: 'Telnet', mosh: 'Mosh', rdp: 'RDP', vnc: 'VNC', spice: 'SPICE',
   local: 'Local', sftp: 'SFTP', ftp: 'FTP', smb: 'SMB', s3: 'S3', webdav: 'WebDAV', monitor: 'Monitor',
+  k8s: 'Kubernetes',
   'database:mysql': 'MySQL', 'database:postgres': 'PostgreSQL', 'database:rqlite': 'rqlite',
   'database:oracle': 'Oracle', 'database:sqlserver': 'SQL Server', 'database:redis': 'Redis',
   'database:mongodb': 'MongoDB',
@@ -1200,6 +1202,7 @@ function doConnectRdp(config: ConnectionConfig) { closeContextMenu(); window.dis
 function doConnectVnc(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-vnc', { detail: config })) }
 function doConnectSpice(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-spice', { detail: config })) }
 function doConnectDb(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-db', { detail: config })) }
+function doConnectK8s(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-k8s', { detail: config })) }
 function doConnectFtp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-ftp', { detail: config })) }
 function doConnectSmb(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-smb', { detail: config })) }
 function doConnectS3(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-s3', { detail: config })) }

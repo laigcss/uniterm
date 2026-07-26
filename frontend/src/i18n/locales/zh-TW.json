@@ -475,6 +475,7 @@
   "spice.retry": "重試",
   "spice.scale": "自動縮放",
   "sidebar.connectMonitor": "伺服器監控",
+  "sidebar.connectK8s": "連接 Kubernetes",
   "sidebar.connectTelnet": "連線 Telnet",
   "sidebar.connectMosh": "連線 Mosh",
   "sidebar.connectLocal": "連線本機",

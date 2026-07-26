@@ -475,6 +475,7 @@
   "spice.retry": "Повторить",
   "spice.scale": "Масштабирование",
   "sidebar.connectMonitor": "Мониторинг сервера",
+  "sidebar.connectK8s": "Подключить Kubernetes",
   "sidebar.connectTelnet": "Подключиться по Telnet",
   "sidebar.connectMosh": "Подключиться по Mosh",
   "sidebar.connectLocal": "Подключить локально",

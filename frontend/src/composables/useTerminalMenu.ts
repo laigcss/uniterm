@@ -1,7 +1,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import { useSettingsStore } from '../stores/settingsStore'
-import { ClipboardGetText } from '../../wailsjs/runtime/runtime'
+import { ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime'
 
 export interface UseTerminalMenuOptions {
   getSelection: () => string
@@ -56,10 +56,20 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     return { left: left + 'px', top: top + 'px' }
   }
 
+  // Write to the OS clipboard via Wails first (reliable in WebView2), falling
+  // back to the browser clipboard API when the runtime call fails.
+  async function writeClipboard(text: string) {
+    try {
+      await ClipboardSetText(text)
+    } catch {
+      try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
+    }
+  }
+
   function copySelection() {
     const text = options.getSelection()
     if (text) {
-      navigator.clipboard.writeText(text)
+      writeClipboard(text)
     }
     closeMenu()
   }
@@ -67,7 +77,7 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
   async function copyAndPaste() {
     const text = options.getSelection()
     if (text) {
-      await navigator.clipboard.writeText(text)
+      await writeClipboard(text)
       await options.onPaste(text)
     }
     closeMenu()

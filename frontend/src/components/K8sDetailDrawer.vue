@@ -1,6 +1,7 @@
 <template>
   <div class="detail-drawer-backdrop" :class="{ open: !!mode }" @click="$emit('close')"></div>
-  <div class="detail-drawer" :class="{ open: !!mode, wide: mode === 'logs' }">
+  <div class="detail-drawer" :class="{ open: !!mode }" :style="mode ? { width: drawerWidth + 'px' } : undefined">
+    <div class="drawer-resizer" @mousedown="onResizeStart"></div>
     <div class="detail-drawer-header">
       <span class="detail-drawer-title">{{ headerTitle }}</span>
       <el-button link @click="$emit('close')"><el-icon><Close :size="16" /></el-icon></el-button>
@@ -8,16 +9,26 @@
 
     <template v-if="mode === 'detail'">
       <div class="db-tabs">
-        <button class="db-tab" :class="{ active: tab === 'struct' }" @click="tab = 'struct'">结构</button>
+        <button class="db-tab" :class="{ active: tab === 'struct' }" @click="tab = 'struct'">详情</button>
         <button class="db-tab" :class="{ active: tab === 'yaml' }" @click="tab = 'yaml'">YAML</button>
       </div>
 
-      <div v-show="tab === 'struct'" class="detail-body">
+      <div v-show="tab === 'struct'" class="detail-body" @contextmenu="copyMenu.onContextMenu">
         <div v-for="sec in sections" :key="sec.label" class="detail-section">
           <div class="detail-section-title">{{ sec.label }}</div>
           <div v-for="f in sec.fields" :key="f.label" class="detail-row">
             <span class="detail-label">{{ f.label }}</span>
             <span class="detail-value">{{ fieldText(f) }}</span>
+          </div>
+        </div>
+        <!-- Pod events (async) -->
+        <div v-if="isPod" class="detail-section">
+          <div class="detail-section-title">Events</div>
+          <div v-if="eventsError" class="detail-row"><span class="detail-value">{{ eventsError }}</span></div>
+          <div v-else-if="!events.length" class="detail-row"><span class="detail-value">—</span></div>
+          <div v-else v-for="(ev, i) in events" :key="i" class="detail-row">
+            <span class="detail-label">{{ ev.lastTimestamp || ev.eventTime || '' }}</span>
+            <span class="detail-value">{{ ev.type }} {{ ev.reason }}: {{ ev.message }}</span>
           </div>
         </div>
       </div>
@@ -33,7 +44,7 @@
             <el-button size="small" @click="cancelEdit">取消</el-button>
           </template>
         </div>
-        <pre v-if="!editing" class="k8s-yaml-drawer-body">{{ yamlText }}</pre>
+        <pre v-if="!editing" class="k8s-yaml-drawer-body" @contextmenu="copyMenu.onContextMenu">{{ yamlText }}</pre>
         <textarea v-else v-model="draft" class="k8s-yaml-drawer-body yaml-edit" spellcheck="false"></textarea>
         <div v-if="saveError" class="yaml-error">{{ saveError }}</div>
       </div>
@@ -55,7 +66,13 @@
         <el-button size="small" @click="logLines = []">清空</el-button>
         <el-checkbox v-model="logAutoscroll">自动滚动</el-checkbox>
       </div>
-      <pre ref="logBody" class="k8s-yaml-drawer-body logs-body">{{ logLines.join('\n') }}</pre>
+      <pre ref="logBody" class="k8s-yaml-drawer-body logs-body" @contextmenu="copyMenu.onContextMenu">{{ logLines.join('\n') }}</pre>
+
+      <Teleport to="body">
+        <div v-show="copyMenu.visible.value" class="text-copy-menu" :style="copyMenu.style.value" @click.stop>
+          <div class="menu-item" @click="copyMenu.copy">复制</div>
+        </div>
+      </Teleport>
     </div>
   </div>
 </template>
@@ -67,9 +84,35 @@ import { Close } from '@element-plus/icons-vue'
 import { dump, load } from 'js-yaml'
 import { getResource, type DetailSection } from '../services/k8sResources'
 import { requestJSON, startLogStream, type LogHandle } from '../services/k8sClient'
+import { useTextCopyMenu } from '../composables/useTextCopyMenu'
 
-const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string }>()
+const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string; initialTab?: 'detail' | 'yaml' }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
+
+const copyMenu = useTextCopyMenu()
+
+// Drawer width (draggable). Defaults widen for logs mode; not persisted.
+const drawerWidth = ref(420)
+watch(() => props.mode, (m) => {
+  if (m === 'logs' && drawerWidth.value < 640) drawerWidth.value = 640
+})
+let resizeStartX = 0
+let resizeStartW = 0
+function onResizeMove(e: MouseEvent) {
+  const dx = resizeStartX - e.clientX
+  drawerWidth.value = Math.max(320, Math.min(window.innerWidth - 120, resizeStartW + dx))
+}
+function onResizeEnd() {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', onResizeEnd)
+}
+function onResizeStart(e: MouseEvent) {
+  resizeStartX = e.clientX
+  resizeStartW = drawerWidth.value
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', onResizeEnd)
+  e.preventDefault()
+}
 
 const tab = ref<'struct' | 'yaml'>('struct')
 const editing = ref(false)
@@ -77,7 +120,12 @@ const draft = ref('')
 const saving = ref(false)
 const saveError = ref('')
 
-watch(() => props.target, () => { tab.value = 'struct'; editing.value = false; saveError.value = '' })
+watch(() => props.target, () => {
+  tab.value = props.initialTab === 'yaml' ? 'yaml' : 'struct'
+  editing.value = false; saveError.value = ''
+  events.value = []; eventsError.value = ''
+  if (isPod.value) loadEvents()
+})
 
 const headerTitle = computed(() => {
   const o = props.target
@@ -100,6 +148,36 @@ function fieldText(f: any): string {
   if (!props.target) return ''
   const v = f.value(props.target)
   return typeof v === 'object' && v ? v.text : String(v ?? '')
+}
+
+// ── Pod events (async fetch; can't ride the synchronous detailSections model) ──
+const events = ref<any[]>([])
+const eventsError = ref('')
+const isPod = computed(() => {
+  if (props.mode !== 'detail' || !props.target) return false
+  const kind = props.target.kind || getResource(props.resourceKey)?.kind
+  return props.resourceKey === 'pods' || kind === 'Pod'
+})
+let eventsGen = 0
+async function loadEvents() {
+  const myGen = ++eventsGen
+  const o = props.target
+  if (!o?.metadata) return
+  const ns = o.metadata.namespace || ''
+  const name = o.metadata.name || ''
+  const path = `/api/v1/namespaces/${encodeURIComponent(ns)}/events?fieldSelector=involvedObject.name%3D${encodeURIComponent(name)}&limit=200`
+  try {
+    const { status, data, raw } = await requestJSON<any>(props.connId, 'GET', path)
+    if (myGen !== eventsGen) return
+    if (status === 200 && data) {
+      events.value = (data.items || []).slice().sort((a: any, b: any) =>
+        String(a.lastTimestamp || a.eventTime || '').localeCompare(String(b.lastTimestamp || b.eventTime || '')))
+    } else {
+      eventsError.value = `HTTP ${status}: ${raw?.slice(0, 200) || ''}`
+    }
+  } catch (e: any) {
+    if (myGen === eventsGen) eventsError.value = String(e?.message || e)
+  }
 }
 
 const yamlText = computed(() => {
@@ -224,6 +302,21 @@ onBeforeUnmount(stopLogs)
   transform: translateX(0);
 }
 
+.drawer-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 101;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.drawer-resizer:hover {
+  background: var(--accent, #4096ff);
+}
+
 .detail-drawer-header {
   display: flex;
   align-items: center;
@@ -240,11 +333,11 @@ onBeforeUnmount(stopLogs)
   font-family: var(--font-ui);
 }
 
-/* Detail rows copied verbatim from MonitorTabContent.vue (.process-detail rows) */
+/* Detail rows copied from MonitorTabContent.vue (.process-detail rows); the
+   per-section scroll is dropped so the whole detail-body scrolls once. */
 .detail-section {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 16px;
+  padding: 0 4px;
+  margin-bottom: 12px;
 }
 
 .detail-row {
@@ -314,6 +407,8 @@ onBeforeUnmount(stopLogs)
   white-space: pre-wrap;
   height: 100%;
   box-sizing: border-box;
+  user-select: text;
+  cursor: text;
 }
 
 .detail-body { flex: 1; overflow: auto; padding: 12px 16px; }
@@ -322,6 +417,33 @@ onBeforeUnmount(stopLogs)
 .yaml-actions { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
 .yaml-edit { width: 100%; box-sizing: border-box; resize: none; background: transparent; color: var(--text-primary); border: none; outline: none; }
 .yaml-error { color: var(--el-color-danger, #f56); padding: 8px 12px; font-size: 12px; }
+
+/* Right-click copy menu — styles copied from TabItem.vue (.tab-context-menu/.menu-item) */
+.text-copy-menu {
+  position: fixed;
+  z-index: 99999;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 90px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+.text-copy-menu .menu-item {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  transition: all 0.1s ease;
+}
+.text-copy-menu .menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 
 .detail-drawer.wide { width: 640px; }
 .logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

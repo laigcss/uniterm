@@ -71,6 +71,10 @@ export interface ConnectionConfig {
   k8sContext?: string
   k8sNamespace?: string
   k8sInsecureTls?: boolean
+  // K8s exec terminal (k8s-exec panel) — params needed to reconnect the exec stream.
+  k8sExecConnId?: string
+  k8sExecPod?: string
+  k8sExecContainer?: string
 }
 
 export interface SessionInfo {

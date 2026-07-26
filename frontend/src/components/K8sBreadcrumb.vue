@@ -62,8 +62,7 @@ const crumbs = computed<Crumb[]>(() => {
       if (!prevIsList) {
         out.push({ text: 'CRDs', clickable: false, current: false, frameIndex: idx })
       }
-      out.push({ text: f.crd.kind, clickable: false, current: false, frameIndex: idx })
-      out.push({ text: 'Items', clickable: false, current: isLast, frameIndex: idx })
+      out.push({ text: f.crd.kind, clickable: false, current: isLast, frameIndex: idx })
     }
   })
   return out

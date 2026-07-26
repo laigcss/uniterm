@@ -40,9 +40,10 @@ import {
   ChevronDown, ChevronRight,
   Box, Boxes, Layers, GitFork, CirclePlay, Clock, Copy,
   Network, Globe,
-  FileText, Lock,
+  File, FileText, Lock,
   HardDrive, Database,
   Server, Folder, Bell,
+  BrickWallShield, Cable, Component,
   Package,   // 兜底
 } from '@lucide/vue'
 import { RESOURCES, type ResourceGroup, type ResourceDescriptor } from '../services/k8sResources'
@@ -87,9 +88,10 @@ function toggle(k: string) {
 const ICON_MAP: Record<string, any> = {
   Box, Boxes, Layers, GitFork, PlayCircle: CirclePlay, Clock, Copy,
   Network, Globe,
-  FileText, Lock,
+  File, FileText, Lock,
   HardDrive, Database,
   Server, Folder, Bell,
+  BrickWallShield, Cable, Component,
 }
 function iconOf(name: string) {
   return ICON_MAP[name] || Package

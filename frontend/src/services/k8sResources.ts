@@ -105,12 +105,12 @@ export const RESOURCES: ResourceDescriptor[] = [
     watchPath: (ns, rv) => coreWatchPath('pods', ns, rv),
     columns: [
       { header: 'Name', value: p => p.metadata?.name || '' },
-      { header: 'Namespace', value: p => p.metadata?.namespace || '' },
-      { header: 'Ready', value: podReady },
+      { header: 'Namespace', value: p => p.metadata?.namespace || '', filterable: { type: 'enum' } },
+      { header: 'Ready', value: podReady, filterable: { type: 'enum' } },
       { header: 'Status', value: p => p.status?.phase || '', filterable: { type: 'enum' } },
       { header: 'Restarts', value: podRestarts },
       { header: 'Age', value: p => age(p.metadata?.creationTimestamp) },
-      { header: 'Node', value: p => p.spec?.nodeName || '' },
+      { header: 'Node', value: p => p.spec?.nodeName || '', filterable: { type: 'enum' } },
     ],
     actions: ['detail', 'logs', 'terminal', 'delete'],
     canCreate: true,
@@ -119,21 +119,54 @@ export const RESOURCES: ResourceDescriptor[] = [
       { label: 'Metadata', fields: [
         { label: 'Name', value: p => p.metadata?.name || '' },
         { label: 'Namespace', value: p => p.metadata?.namespace || '' },
-        { label: 'Node', value: p => p.spec?.nodeName || '' },
-        { label: 'Labels', value: p => Object.entries(p.metadata?.labels || {}).map(([k, v]) => `${k}=${v}`).join(', ') },
+        { label: 'UID', value: p => p.metadata?.uid || '' },
+        { label: 'Created', value: p => p.metadata?.creationTimestamp || '' },
+        { label: 'Labels', value: p => Object.entries(p.metadata?.labels || {}).map(([k, v]) => `${k}=${v}`).join('\n') || '—' },
+        { label: 'Annotations', value: p => Object.entries(p.metadata?.annotations || {}).map(([k, v]) => `${k}=${v}`).join('\n') || '—' },
+        { label: 'Owner', value: p => (p.metadata?.ownerReferences || []).map((o: any) => `${o.kind}/${o.name}`).join(', ') || '—' },
       ]},
       { label: 'Status', fields: [
         { label: 'Phase', value: p => p.status?.phase || '' },
         { label: 'Pod IP', value: p => p.status?.podIP || '' },
+        { label: 'Host IP', value: p => p.status?.hostIP || '' },
         { label: 'QoS', value: p => p.status?.qosClass || '' },
+        { label: 'Start Time', value: p => p.status?.startTime || '' },
+        { label: 'Restarts', value: p => String(podRestarts(p)) },
+        { label: 'Conditions', value: p => (p.status?.conditions || []).map((c: any) => `${c.type}=${c.status}`).join('\n') || '—' },
+        { label: 'Message', value: p => p.status?.message || '—' },
+      ]},
+      { label: 'Scheduling', fields: [
+        { label: 'Node', value: p => p.spec?.nodeName || '' },
+        { label: 'Service Account', value: p => p.spec?.serviceAccountName || p.spec?.serviceAccount || 'default' },
+        { label: 'Restart Policy', value: p => p.spec?.restartPolicy || '' },
+        { label: 'Node Selector', value: p => Object.entries(p.spec?.nodeSelector || {}).map(([k, v]) => `${k}=${v}`).join('\n') || '—' },
+        { label: 'Tolerations', value: p => (p.spec?.tolerations || []).map((t: any) => t.key ? `${t.key}${t.operator === 'Exists' ? '' : '=' + (t.value || '')}${t.effect ? ':' + t.effect : ''}` : (t.operator || '')).join('\n') || '—' },
+        { label: 'Priority Class', value: p => p.spec?.priorityClassName || '—' },
       ]},
       { label: 'Containers', fields: [
         { label: 'Containers', value: p => {
-          const statuses = new Map((p.status?.containerStatuses || []).map((s: any) => [s.name, s.ready]))
-          return (p.spec?.containers || [])
-            .map((c: any) => `${c.name} (${c.image}) [${statuses.get(c.name) ? 'ready' : 'not ready'}]`)
-            .join('\n')
+          const st = new Map((p.status?.containerStatuses || []).map((s: any) => [s.name, s]))
+          return (p.spec?.containers || []).map((c: any) => {
+            const s: any = st.get(c.name)
+            const state = s?.state ? Object.keys(s.state)[0] : '?'
+            const ports = (c.ports || []).map((pt: any) => `${pt.containerPort}/${pt.protocol || 'TCP'}`).join(',')
+            const req = c.resources?.requests ? `req ${c.resources.requests.cpu || '-'}/${c.resources.requests.memory || '-'}` : ''
+            const lim = c.resources?.limits ? `lim ${c.resources.limits.cpu || '-'}/${c.resources.limits.memory || '-'}` : ''
+            return [
+              `▸ ${c.name}`,
+              `   image: ${c.image}`,
+              `   state: ${state}  ready: ${s?.ready ? 'yes' : 'no'}  restarts: ${s?.restartCount ?? 0}`,
+              ports ? `   ports: ${ports}` : '',
+              (req || lim) ? `   resources: ${[req, lim].filter(Boolean).join('  ')}` : '',
+            ].filter(Boolean).join('\n')
+          }).join('\n\n')
         } },
+      ]},
+      { label: 'Volumes', fields: [
+        { label: 'Volumes', value: p => (p.spec?.volumes || []).map((v: any) => {
+          const type = Object.keys(v).find(k => k !== 'name') || '?'
+          return `${v.name} (${type})`
+        }).join('\n') || '—' },
       ]},
     ],
   },
@@ -401,7 +434,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   // ── Network ─────────────────────────────────────────────────
   {
     key: 'networkpolicies', kind: 'NetworkPolicy', apiVersion: 'networking.k8s.io/v1',
-    namespaced: true, group: 'network', icon: 'Network', label: 'NetworkPolicies',
+    namespaced: true, group: 'network', icon: 'BrickWallShield', label: 'NetworkPolicies',
     listPath: ns => apisListPath('networking.k8s.io', 'v1', 'networkpolicies', ns),
     watchPath: (ns, rv) => apisWatchPath('networking.k8s.io', 'v1', 'networkpolicies', ns, rv),
     columns: [
@@ -414,7 +447,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   },
   {
     key: 'endpoints', kind: 'Endpoints', apiVersion: 'v1',
-    namespaced: true, group: 'network', icon: 'Network', label: 'Endpoints',
+    namespaced: true, group: 'network', icon: 'Cable', label: 'Endpoints',
     listPath: ns => coreListPath('endpoints', ns),
     watchPath: (ns, rv) => coreWatchPath('endpoints', ns, rv),
     columns: [
@@ -428,7 +461,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   // ── Config (quota) ──────────────────────────────────────────
   {
     key: 'resourcequotas', kind: 'ResourceQuota', apiVersion: 'v1',
-    namespaced: true, group: 'config', icon: 'FileText', label: 'ResourceQuotas',
+    namespaced: true, group: 'config', icon: 'File', label: 'ResourceQuotas',
     listPath: ns => coreListPath('resourcequotas', ns),
     watchPath: (ns, rv) => coreWatchPath('resourcequotas', ns, rv),
     columns: [
@@ -440,7 +473,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   },
   {
     key: 'limitranges', kind: 'LimitRange', apiVersion: 'v1',
-    namespaced: true, group: 'config', icon: 'FileText', label: 'LimitRanges',
+    namespaced: true, group: 'config', icon: 'File', label: 'LimitRanges',
     listPath: ns => coreListPath('limitranges', ns),
     watchPath: (ns, rv) => coreWatchPath('limitranges', ns, rv),
     columns: [
@@ -453,7 +486,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   // ── Storage ─────────────────────────────────────────────────
   {
     key: 'storageclasses', kind: 'StorageClass', apiVersion: 'storage.k8s.io/v1',
-    namespaced: false, group: 'storage', icon: 'Database', label: 'StorageClasses',
+    namespaced: false, group: 'storage', icon: 'Layers', label: 'StorageClasses',
     listPath: () => apisListPath('storage.k8s.io', 'v1', 'storageclasses', ''),
     watchPath: (_ns, rv) => apisWatchPath('storage.k8s.io', 'v1', 'storageclasses', '', rv),
     columns: [
@@ -530,7 +563,7 @@ export const RESOURCES: ResourceDescriptor[] = [
   // ── Cluster (CRD) ───────────────────────────────────────────
   {
     key: 'customresourcedefinitions', kind: 'CustomResourceDefinition', apiVersion: 'apiextensions.k8s.io/v1',
-    namespaced: false, group: 'cluster', icon: 'Boxes', label: 'CRDs',
+    namespaced: false, group: 'cluster', icon: 'Component', label: 'CRDs',
     listPath: () => apisListPath('apiextensions.k8s.io', 'v1', 'customresourcedefinitions', ''),
     watchPath: (_ns, rv) => apisWatchPath('apiextensions.k8s.io', 'v1', 'customresourcedefinitions', '', rv),
     columns: [

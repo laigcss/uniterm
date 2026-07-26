@@ -505,6 +505,7 @@
   "spice.retry": "重试",
   "spice.scale": "自动缩放",
   "sidebar.connectMonitor": "服务器监控",
+  "sidebar.connectK8s": "连接 Kubernetes",
   "sidebar.connectTelnet": "连接 Telnet",
   "sidebar.connectMosh": "连接 Mosh",
   "sidebar.connectLocal": "连接本地",

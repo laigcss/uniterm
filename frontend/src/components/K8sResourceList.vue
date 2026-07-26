@@ -12,7 +12,7 @@
       <el-button size="small" :icon="Refresh" @click="onRefresh" />
 
       <el-button v-if="isNamespaceList" size="small" type="primary" @click="onNewNamespace">新建 Namespace</el-button>
-      <el-button v-else-if="desc?.canCreate" size="small" type="primary" :icon="Plus" @click="onCreate" />
+      <el-button v-else-if="frame.kind === 'custom' || desc?.canCreate" size="small" type="primary" :icon="Plus" @click="onCreate" />
 
       <span class="k8s-list-title">
         {{ titleLabel }} ({{ displayCount }})
@@ -35,10 +35,14 @@
         <template #default="{ row }">{{ evalJsonPath(row, pc.jsonPath) }}</template>
       </el-table-column>
       <el-table-column label="Age"><template #default="{ row }">{{ age(row.metadata?.creationTimestamp) }}</template></el-table-column>
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="66" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
-          <el-button size="small" link @click.stop="emit('open-detail', row)">详情</el-button>
-          <el-button size="small" link @click.stop="onDeleteCr(row)">删除</el-button>
+          <button class="btn btn-ghost btn-icon btn-sm" title="修改" @click.stop="emit('open-yaml', row)">
+            <FilePen :size="14" />
+          </button>
+          <button class="btn btn-ghost btn-icon btn-sm danger" title="删除" @click.stop="onDeleteCr(row)">
+            <Trash2 :size="14" />
+          </button>
         </template>
       </el-table-column>
     </el-table>
@@ -58,6 +62,7 @@
         :label="col.header"
         :width="col.width"
         sortable
+        :sort-method="(a, b) => compareCells(col, a, b)"
         :filters="col.filterable ? enumFilters(col) : undefined"
         :filter-method="col.filterable ? (val, row) => cellText(col.value(row)) === val : undefined"
       >
@@ -79,24 +84,35 @@
         <el-table-column label="MEM%" width="70"><template #default="{ row }">{{ nodeMemPct(row) }}</template></el-table-column>
       </template>
 
-      <el-table-column v-if="actionColWidth" label="操作" :width="actionColWidth" fixed="right">
+      <el-table-column v-if="actionColWidth" label="操作" :width="actionColWidth" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
-          <el-button v-if="has('detail')" size="small" link @click.stop="emit('open-detail', row)">详情</el-button>
-          <el-button v-if="has('logs')" size="small" link @click.stop="emit('open-logs', row)">日志</el-button>
-          <el-button v-if="has('terminal')" size="small" link @click.stop="emit('open-terminal', row)">终端</el-button>
-          <el-button v-if="has('viewPods')" size="small" link @click.stop="onViewPods(row)">查看Pods</el-button>
-          <el-dropdown v-if="dropdownActions.length" trigger="click" @command="cmd => onCommand(cmd, row)">
-            <el-button size="small" link>⋯</el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="has('restart')" command="restart">重启</el-dropdown-item>
-                <el-dropdown-item v-if="has('scale')" command="scale">伸缩</el-dropdown-item>
-                <el-dropdown-item v-if="has('cordon')" command="cordon">{{ row.spec?.unschedulable ? 'Uncordon' : 'Cordon' }}</el-dropdown-item>
-                <el-dropdown-item v-if="has('drain')" command="drain">Drain</el-dropdown-item>
-                <el-dropdown-item v-if="has('delete')" command="delete" divided>删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <button v-if="has('detail')" class="btn btn-ghost btn-icon btn-sm" title="修改" @click.stop="emit('open-yaml', row)">
+            <FilePen :size="14" />
+          </button>
+          <button v-if="has('logs')" class="btn btn-ghost btn-icon btn-sm" title="日志" @click.stop="emit('open-logs', row)">
+            <ScrollText :size="14" />
+          </button>
+          <button v-if="has('terminal')" class="btn btn-ghost btn-icon btn-sm" title="终端" @click.stop="emit('open-terminal', row)">
+            <SquareTerminal :size="14" />
+          </button>
+          <button v-if="has('viewPods')" class="btn btn-ghost btn-icon btn-sm" title="查看 Pods" @click.stop="onViewPods(row)">
+            <Box :size="14" />
+          </button>
+          <button v-if="has('restart')" class="btn btn-ghost btn-icon btn-sm" title="重启" @click.stop="onCommand('restart', row)">
+            <Repeat :size="14" />
+          </button>
+          <button v-if="has('scale')" class="btn btn-ghost btn-icon btn-sm" title="伸缩" @click.stop="onCommand('scale', row)">
+            <Scaling :size="14" />
+          </button>
+          <button v-if="has('cordon')" class="btn btn-ghost btn-icon btn-sm" :title="row.spec?.unschedulable ? 'Uncordon' : 'Cordon'" @click.stop="onCommand('cordon', row)">
+            <component :is="row.spec?.unschedulable ? CircleCheck : Ban" :size="14" />
+          </button>
+          <button v-if="has('drain')" class="btn btn-ghost btn-icon btn-sm" title="Drain" @click.stop="onCommand('drain', row)">
+            <Download :size="14" />
+          </button>
+          <button v-if="has('delete')" class="btn btn-ghost btn-icon btn-sm danger" title="删除" @click.stop="onCommand('delete', row)">
+            <Trash2 :size="14" />
+          </button>
         </template>
       </el-table-column>
     </el-table>
@@ -104,6 +120,15 @@
     <div v-if="frame.kind !== 'custom' && !items.length && !listError" class="k8s-list-empty">
       No {{ titleLabel }}<template v-if="desc?.namespaced"> in namespace <code>{{ localNs || '(all)' }}</code></template>.
     </div>
+
+    <K8sCreateDialog
+      v-model="createVisible"
+      :title="createTitle"
+      :template="createTemplate"
+      :saving="createSaving"
+      :error="createError"
+      @confirm="onCreateConfirm"
+    />
   </div>
 </template>
 
@@ -111,10 +136,14 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import {
   ElTable, ElTableColumn, ElInput, ElButton,
-  ElDropdown, ElDropdownMenu, ElDropdownItem, ElMessageBox, ElMessage,
+  ElMessageBox, ElMessage,
 } from 'element-plus'
 import { Refresh, Plus } from '@element-plus/icons-vue'
+import {
+  FilePen, ScrollText, SquareTerminal, Box, Repeat, Scaling, Ban, CircleCheck, Download, Trash2,
+} from '@lucide/vue'
 import { useK8sStore } from '../stores/k8sStore'
+import K8sCreateDialog from './K8sCreateDialog.vue'
 import { getResource, age, type ColoredCell } from '../services/k8sResources'
 import { fetchPodMetrics, fetchNodeMetrics, type Usage } from '../services/k8sMetrics'
 import { formatCpu, formatMemory, percent, parseCpu, parseMemory } from '../services/k8sQuantity'
@@ -129,6 +158,7 @@ import type { NavFrame } from '../types/k8s'
 const props = defineProps<{ connId: string; frame: NavFrame; namespaceOptions: string[] }>()
 const emit = defineEmits<{
   (e: 'open-detail', obj: any): void
+  (e: 'open-yaml', obj: any): void
   (e: 'open-logs', pod: any): void
   (e: 'view-pods', owner: { kind: string; name: string; uid: string; namespace: string }): void
   (e: 'open-crd', crdObj: any): void
@@ -191,6 +221,19 @@ function cellText(v: string | number | ColoredCell): string {
   return String(v)
 }
 
+// el-table `sortable` needs a comparator when columns render via slot (no prop).
+// Numeric-looking cells sort numerically; everything else localeCompare.
+function compareCells(col: any, a: any, b: any): number {
+  const ta = cellText(col.value(a))
+  const tb = cellText(col.value(b))
+  const na = parseFloat(ta)
+  const nb = parseFloat(tb)
+  const aNum = ta.trim() !== '' && !isNaN(na) && String(na) === ta.trim()
+  const bNum = tb.trim() !== '' && !isNaN(nb) && String(nb) === tb.trim()
+  if (aNum && bNum) return na - nb
+  return ta.localeCompare(tb)
+}
+
 function enumFilters(col: any) {
   const set = new Set<string>()
   for (const row of items.value) set.add(cellText(col.value(row)))
@@ -198,17 +241,20 @@ function enumFilters(col: any) {
 }
 
 function onRowClick(row: any) {
+  // CRD list rows drill into the CRD; everything else opens its detail.
   if (isCrdList.value) emit('open-crd', row)
   else emit('open-detail', row)
 }
 
 // ── action column ──────────────────────────────────────────────
 function has(a: string) { return (desc.value?.actions || []).includes(a as any) }
-const dropdownActions = computed(() =>
-  (desc.value?.actions || []).filter(a => ['restart', 'scale', 'cordon', 'drain', 'delete'].includes(a)))
 const actionColWidth = computed(() => {
-  if (!desc.value?.actions?.length) return 0
-  return 90 + (has('detail') ? 44 : 0) + (has('logs') ? 44 : 0) + (has('terminal') ? 44 : 0) + (has('viewPods') ? 72 : 0)
+  const iconCount =
+    (has('detail') ? 1 : 0) + (has('logs') ? 1 : 0) + (has('terminal') ? 1 : 0) +
+    (has('viewPods') ? 1 : 0) + (has('restart') ? 1 : 0) + (has('scale') ? 1 : 0) +
+    (has('cordon') ? 1 : 0) + (has('drain') ? 1 : 0) + (has('delete') ? 1 : 0)
+  if (!iconCount) return 0
+  return 16 + iconCount * 28
 })
 
 function onViewPods(row: any) {
@@ -257,14 +303,52 @@ async function onNewNamespace() {
     await createNamespace(props.connId, value); ElMessage.success('Created'); emit('changed')
   } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e)) }
 }
-async function onCreate() {
-  const d = desc.value!
-  const tmpl = d.createTemplate || `apiVersion: ${d.apiVersion}\nkind: ${d.kind}\nmetadata:\n  name: \n  namespace: ${localNs.value || 'default'}\n`
+// ── create (SFTP-style line-numbered YAML dialog) ───────────────
+const createVisible = ref(false)
+const createTitle = ref('')
+const createTemplate = ref('')
+const createSaving = ref(false)
+const createError = ref('')
+
+function onCreate() {
+  const f = props.frame
+  createError.value = ''
+  if (f.kind === 'custom') {
+    const crd = f.crd
+    const apiVersion = `${crd.group}/${crd.version}`
+    const nsLine = crd.scope === 'Namespaced' ? `\n  namespace: ${f.namespace || 'default'}` : ''
+    createTemplate.value = `apiVersion: ${apiVersion}\nkind: ${crd.kind}\nmetadata:\n  name: ${nsLine}\n`
+    createTitle.value = `新建 ${crd.kind}`
+  } else {
+    const d = desc.value!
+    createTemplate.value = d.createTemplate || `apiVersion: ${d.apiVersion}\nkind: ${d.kind}\nmetadata:\n  name: \n  namespace: ${localNs.value || 'default'}\n`
+    createTitle.value = `新建 ${d.kind}`
+  }
+  createVisible.value = true
+}
+
+async function onCreateConfirm(yaml: string) {
+  const f = props.frame
+  createSaving.value = true
+  createError.value = ''
   try {
-    const { value } = await ElMessageBox.prompt('YAML', `新建 ${d.kind}`, { inputType: 'textarea', inputValue: tmpl } as any)
-    const path = (d.createPath ? d.createPath(localNs.value) : d.listPath(localNs.value).split('?')[0])
-    await createResource(props.connId, path, value); ElMessage.success('Created'); emit('changed')
-  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e)) }
+    let path: string
+    if (f.kind === 'custom') {
+      path = crdListPath(f.crd, f.namespace).split('?')[0]
+    } else {
+      const d = desc.value!
+      path = d.createPath ? d.createPath(localNs.value) : d.listPath(localNs.value).split('?')[0]
+    }
+    await createResource(props.connId, path, yaml)
+    createVisible.value = false
+    ElMessage.success('Created')
+    if (f.kind === 'custom') await loadCrd()
+    else emit('changed')
+  } catch (e: any) {
+    createError.value = String(e?.message || e)
+  } finally {
+    createSaving.value = false
+  }
 }
 
 async function onDeleteCr(row: any) {
@@ -394,6 +478,15 @@ onBeforeUnmount(() => {
 }
 .k8s-list-table {
   flex: 1;
+}
+/* Action-column cell: tighter cell padding + fixed 4px gap between the
+   project-standard .btn-icon buttons (24px square, from style.css .btn). */
+.k8s-list-table :deep(.k8s-action-cell .cell) {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
+  margin-left: 4px;
 }
 .k8s-list-err {
   color: var(--el-color-danger, #f56);
