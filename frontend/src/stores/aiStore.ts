@@ -177,20 +177,21 @@ export const useAIStore = defineStore('ai', () => {
     multiSelect: boolean
   } | null>(null)
   const lastPanelContext = ref<{ panelId: string; shellPath: string } | null>(null)
-  const queuedMessages = ref<{ id: string; content: string; skillName?: string; skillBody?: string }[]>([])
+  const queuedMessages = ref<{ id: string; content: string; skillName?: string; skillBody?: string; commandBody?: string }[]>([])
 
   function setLastPanelContext(panelId: string, shellPath: string) {
     lastPanelContext.value = { panelId, shellPath }
   }
 
-  function enqueueMessage(content: string, skillName?: string, skillBody?: string) {
+  function enqueueMessage(content: string, skillName?: string, skillBody?: string, commandBody?: string) {
     const trimmed = content.trim()
-    if (!trimmed) return
+    if (!trimmed && !commandBody && !skillName) return
     queuedMessages.value.push({
       id: `q-${Date.now()}-${queuedMessages.value.length}`,
       content: trimmed,
       skillName,
       skillBody,
+      commandBody,
     })
   }
 
@@ -280,6 +281,25 @@ export const useAIStore = defineStore('ai', () => {
       content: '',
       skillName: name,
       skillSource: source,
+    }) as AIMessage
+    messages.value.push(r)
+    if (currentSessionId.value) {
+      const s = sessions.value.find(s => s.id === currentSessionId.value)
+      if (s) {
+        s.messages.push(r)
+        s.updatedAt = Date.now()
+        doSave()
+      }
+    }
+  }
+
+  function addCommandCard(name: string, args: string) {
+    const r = reactive({
+      id: `cmd-${Date.now()}`,
+      role: 'user' as const,
+      content: '',
+      commandName: name,
+      commandArgs: args,
     }) as AIMessage
     messages.value.push(r)
     if (currentSessionId.value) {
@@ -502,6 +522,10 @@ export const useAIStore = defineStore('ai', () => {
     for (const m of recentMsgs) {
       if (m.id.startsWith('dbg-')) continue
       if (m.needsContinue) continue  // UI-only prompts, not part of LLM conversation
+      // skill/command cards are UI-only markers; never send them to the API
+      if ((m.skillName || m.commandName) && !m.content) continue
+      // restored/legacy empty user messages produce invalid empty text blocks
+      if (m.role === 'user' && !m.content && !m._contextHeader) continue
 
       // Tool messages: ones with tool_call_id are real tool_results for the API;
       // ones without are display-only system errors and must not be sent.
@@ -643,7 +667,7 @@ export const useAIStore = defineStore('ai', () => {
     visible,
     toggle,
     messages,
-    addMessage, addSkillCard,
+    addMessage, addSkillCard, addCommandCard,
     clearMessages,
     mode,
     config,

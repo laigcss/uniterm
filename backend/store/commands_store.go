@@ -24,6 +24,7 @@ const (
 type CommandMeta struct {
 	Name        string `json:"name"`        // = 文件名（去 .md），唯一键（源:文件）
 	Description string `json:"description"` // frontmatter.description，可空（源:文件）
+	ArgumentHint string `json:"argumentHint"` // frontmatter.argument-hint，可空（源:文件）
 	Origin      string `json:"origin"`      // created | imported（源:prefs）
 	Locked      bool   `json:"locked"`      // 锁定态（源:prefs）
 	Enabled     bool   `json:"enabled"`     // 是否进 / 补全（源:prefs）
@@ -124,9 +125,10 @@ func (s *CommandsStore) List() ([]CommandMeta, error) {
 		}
 		fm, _ := parseFrontmatter(content)
 		metas = append(metas, CommandMeta{
-			Name:        name,
-			Description: fm.description,
-			Path:        mdPath,
+			Name:         name,
+			Description:  fm.description,
+			ArgumentHint: fm.argumentHint,
+			Path:         mdPath,
 		})
 	}
 
@@ -241,8 +243,8 @@ func (s *CommandsStore) GetBody(name string) (string, error) {
 	return body, nil
 }
 
-// CreateCommand 从 name/description/body 创建 command（origin=created, locked=false）。
-func (s *CommandsStore) CreateCommand(name, description, body string) error {
+// CreateCommand 从 name/description/argumentHint/body 创建 command（origin=created, locked=false）。
+func (s *CommandsStore) CreateCommand(name, description, argumentHint, body string) error {
 	if !skillNameRe.MatchString(name) {
 		return fmt.Errorf("invalid command name: %s", name)
 	}
@@ -250,7 +252,7 @@ func (s *CommandsStore) CreateCommand(name, description, body string) error {
 		return err
 	}
 	mdPath := filepath.Join(s.commandsRoot(), name+commandFileExt)
-	content := assembleCommandMD(name, description, body)
+	content := assembleCommandMD(name, description, argumentHint, body)
 	if err := os.WriteFile(mdPath, []byte(content), 0644); err != nil {
 		return err
 	}
@@ -285,7 +287,7 @@ func (s *CommandsStore) CreateCommand(name, description, body string) error {
 }
 
 // SaveCommand 覆盖已有 command 的正文（仅限未锁定项）。
-func (s *CommandsStore) SaveCommand(name, description, body string) error {
+func (s *CommandsStore) SaveCommand(name, description, argumentHint, body string) error {
 	metas, err := s.List()
 	if err != nil {
 		return err
@@ -306,7 +308,7 @@ func (s *CommandsStore) SaveCommand(name, description, body string) error {
 		return fmt.Errorf("command %q is locked", name)
 	}
 	mdPath := filepath.Join(s.commandsRoot(), name+commandFileExt)
-	content := assembleCommandMD(name, description, body)
+	content := assembleCommandMD(name, description, argumentHint, body)
 	if err := os.WriteFile(mdPath, []byte(content), 0644); err != nil {
 		return err
 	}
@@ -329,6 +331,10 @@ func (s *CommandsStore) Delete(name string) error {
 	return s.setPref(name, func(p *commandPref) {})
 }
 
-func assembleCommandMD(name, description, body string) string {
-	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s", name, description, body)
+func assembleCommandMD(name, description, argumentHint, body string) string {
+	fm := fmt.Sprintf("---\nname: %s\ndescription: %s\n", name, description)
+	if argumentHint != "" {
+		fm += fmt.Sprintf("argument-hint: %s\n", argumentHint)
+	}
+	return fm + "---\n\n" + body
 }

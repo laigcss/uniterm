@@ -58,9 +58,9 @@ export const useCommandStore = defineStore('commands', () => {
     }
   }
 
-  async function create(name: string, description: string, body: string) {
+  async function create(name: string, description: string, body: string, argumentHint = '') {
     try {
-      await CreateCommand(name, description, body)
+      await CreateCommand(name, description, argumentHint, body)
       await reload()
     } catch (e) {
       console.error('Failed to create command:', e)
@@ -68,9 +68,9 @@ export const useCommandStore = defineStore('commands', () => {
     }
   }
 
-  async function save(name: string, description: string, body: string) {
+  async function save(name: string, description: string, body: string, argumentHint = '') {
     try {
-      await SaveCommand(name, description, body)
+      await SaveCommand(name, description, argumentHint, body)
       await reload()
     } catch (e) {
       console.error('Failed to save command:', e)

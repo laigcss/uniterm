@@ -155,8 +155,9 @@
             :class="{ highlighted: i === skillHighlightIndex }"
             @mousedown.prevent="onSelectItem(item)"
           >
-            <component :is="item.kind === 'command' ? Terminal : Zap" :size="13" class="skill-dropdown-kind-icon" />
+            <component :is="item.kind === 'command' ? Terminal : BookOpen" :size="13" class="skill-dropdown-kind-icon" />
             <span class="skill-dropdown-name">/{{ item.name }}</span>
+            <span v-if="item.kind === 'command' && item.argumentHint" class="skill-dropdown-args">{{ item.argumentHint }}</span>
             <span class="skill-dropdown-desc">{{ item.description }}</span>
           </div>
         </div>
@@ -184,6 +185,9 @@
           <div class="input-actions-left">
             <button class="ghost-btn hash-btn" title="引用终端" @click="onHashButtonClick">
               <span class="hash-btn-icon">#</span>
+            </button>
+            <button class="ghost-btn hash-btn" title="Skill / 命令" @click="onSlashButtonClick">
+              <span class="hash-btn-icon">/</span>
             </button>
             <el-dropdown trigger="click" @command="onModelChange" v-if="settingsStore.settings.ai.models.length > 0">
               <button class="ghost-btn model-btn" :title="currentModelName">{{ currentModelName }}</button>
@@ -232,7 +236,7 @@
             <button
               v-if="!(busy && !inputText.trim())"
               class="send-btn"
-              :disabled="!inputText.trim()"
+              :disabled="!inputText.trim() && !hasSkillTag && !hasCommandTag"
               :title="busy ? t('ai.queue') : t('ai.send')"
               @click="onSend"
             >
@@ -251,7 +255,8 @@
 
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, Zap, Terminal } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, BookOpen, Terminal } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSkillStore } from '../stores/skillStore'
@@ -287,6 +292,9 @@ function getEditableText(): string {
         // skill tag 不贡献文本(skill 正文单独注入,不发给终端)
         return
       }
+      if (node.classList.contains('command-tag')) {
+        return // command tag 不贡献文本（正文后台组装）
+      }
       if (node.classList.contains('hash-tag')) {
         text += node.getAttribute('data-ref') || node.textContent || ''
       } else {
@@ -306,13 +314,13 @@ function extractSkillFromInput(): string | null {
   return tag?.getAttribute('data-skill') || null
 }
 
-// Create a skill inline tag span (⚡ name), non-editable, carries data-skill
+// Create a skill inline tag span (/name), styled like a hash-tag, carries data-skill
 function createSkillTagSpan(name: string): HTMLSpanElement {
   const span = document.createElement('span')
-  span.className = 'skill-tag'
+  span.className = 'hash-tag skill-tag'
   span.setAttribute('data-skill', name)
   span.contentEditable = 'false'
-  span.textContent = '⚡ ' + name
+  span.textContent = '/' + name
   const el = editableRef.value
   if (el) {
     for (const attr of el.attributes) {
@@ -323,6 +331,42 @@ function createSkillTagSpan(name: string): HTMLSpanElement {
     }
   }
   return span
+}
+
+function createCommandTagSpan(name: string): HTMLSpanElement {
+  const span = document.createElement('span')
+  span.className = 'hash-tag command-tag'
+  span.setAttribute('data-command', name)
+  span.contentEditable = 'false'
+  span.textContent = '/' + name
+  const el = editableRef.value
+  if (el) {
+    for (const attr of el.attributes) {
+      if (attr.name.startsWith('data-v-')) { span.setAttribute(attr.name, ''); break }
+    }
+  }
+  return span
+}
+
+function extractCommandFromInput(): { name: string; args: string } | null {
+  const el = editableRef.value
+  if (!el) return null
+  const tag = el.querySelector('.command-tag')
+  const name = tag?.getAttribute('data-command')
+  if (!name) return null
+  // 参数 = tag 之后的纯文本
+  let args = ''
+  let after = false
+  const walk = (node: Node) => {
+    if (node === tag) { after = true; return }
+    if (!after) return
+    if (node.nodeType === Node.TEXT_NODE) { args += node.textContent || ''; return }
+    // skill/command/hash tag 的文本（/name、#panel）不是参数，跳过
+    if (node instanceof HTMLElement && (node.classList.contains('skill-tag') || node.classList.contains('command-tag') || node.classList.contains('hash-tag'))) return
+    node.childNodes.forEach(walk)
+  }
+  el.childNodes.forEach(walk)
+  return { name, args: args.trim() }
 }
 
 // Create a hash-tag span with scoped CSS attribute so styles apply
@@ -347,8 +391,12 @@ function createHashTagSpan(panelTitle: string): HTMLSpanElement {
 
 // Computed: input text (for watch)
 const inputText = ref('')
+const hasSkillTag = ref(false)
+const hasCommandTag = ref(false)
 function syncInputText() {
   inputText.value = getEditableText()
+  hasSkillTag.value = extractSkillFromInput() !== null
+  hasCommandTag.value = extractCommandFromInput() !== null
 }
 
 function onEditableInput() {
@@ -604,19 +652,14 @@ const hashMatchingPanels = computed(() => {
   return list
 })
 
-// `/` 补全的查询串可能带参数（如 `review 修复 bug`）：首段是名字用于匹配，其余是命令参数。
+// `/` 补全的查询串可能带参数（如 `review 修复 bug`）：首段是名字用于匹配。
 const skillNameToken = computed(() => skillQuery.value.trimStart().split(/\s+/)[0] || '')
-const skillArgsText = computed(() => {
-  const raw = skillQuery.value.trimStart()
-  const sp = raw.search(/\s/)
-  return sp >= 0 ? raw.slice(sp).trim() : ''
-})
 
-type SlashItem = { kind: 'skill' | 'command'; name: string; description: string }
+type SlashItem = { kind: 'skill' | 'command'; name: string; description: string; argumentHint?: string }
 
 const skillMatchingItems = computed<SlashItem[]>(() => {
   const q = skillNameToken.value.toLowerCase()
-  const commands: SlashItem[] = commandStore.enabledCommands.map(c => ({ kind: 'command', name: c.name, description: c.description }))
+  const commands: SlashItem[] = commandStore.enabledCommands.map(c => ({ kind: 'command', name: c.name, description: c.description, argumentHint: c.argumentHint }))
   const skills: SlashItem[] = skillStore.enabledSkills.map(s => ({ kind: 'skill', name: s.name, description: s.description }))
   let list = [...commands, ...skills]
   if (q) list = list.filter(i => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q))
@@ -651,9 +694,15 @@ function detectSlashQuery(): string | null {
 }
 
 function refreshSkillDropdown() {
-  // Skills 功能本期暂不开放，禁用 / 斜杠命令下拉
-  skillDropdownVisible.value = false
-  skillQuery.value = ''
+  const query = detectSlashQuery()
+  if (query !== null) {
+    skillDropdownVisible.value = true
+    skillQuery.value = query
+    skillHighlightIndex.value = 0
+  } else {
+    skillDropdownVisible.value = false
+    skillQuery.value = ''
+  }
 }
 
 function onSelectSkill(name: string) {
@@ -715,45 +764,87 @@ function onSelectSkill(name: string) {
   syncInputText()
 }
 
-// $ARGUMENTS 替换：含占位符则替换（args 可为空）；否则有参数就追加到末尾；无参数原样。
+// 占位符替换：先 $1..$9 按空格分词逐个替换，再处理 $ARGUMENTS；无占位符时把参数追加到末尾。
 function applyArguments(body: string, args: string): string {
-  if (body.includes('$ARGUMENTS')) {
-    return body.split('$ARGUMENTS').join(args)
+  let out = body
+  const words = args.trim() === '' ? [] : args.trim().split(/\s+/)
+  for (let i = 1; i <= 9; i++) {
+    out = out.split(`$${i}`).join(words[i - 1] ?? '')
   }
-  if (args.trim() !== '') {
-    return body.trimEnd() + '\n\n' + args
+  if (out.includes('$ARGUMENTS')) {
+    out = out.split('$ARGUMENTS').join(args)
+  } else if (args.trim() !== '') {
+    out = out.trimEnd() + '\n\n' + args
   }
-  return body
+  return out
 }
 
-// `/` 下拉选中：skill 走插 tag；command 组装 prompt 填入输入框（可编辑，不自动发送）。
-async function onSelectItem(item: SlashItem) {
+function onSelectCommand(name: string) {
+  const el = editableRef.value
+  // 删除输入框里正在输入的 /query 片段（无论从补全还是按钮触发），只留 chip
+  if (el) {
+    const sel = window.getSelection()
+    let removed = false
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const node = sel.anchorNode
+      if (node && node.nodeType === Node.TEXT_NODE) {
+        const tn = node as Text
+        const caretPos = sel.anchorOffset
+        const c = tn.textContent || ''
+        const hi = c.slice(0, caretPos).lastIndexOf('/')
+        if (hi >= 0) {
+          const delRange = document.createRange()
+          delRange.setStart(tn, hi)
+          delRange.setEnd(tn, caretPos)
+          delRange.deleteContents()
+          sel.removeAllRanges()
+          sel.addRange(delRange)
+          removed = true
+        }
+      }
+    }
+    // 兜底：若光标不在输入框（如按钮触发），按文本删掉末尾的 /query
+    if (!removed) {
+      const text = getEditableText()
+      const idx = findLastSkillSlash(text)
+      if (idx >= 0) {
+        el.textContent = text.slice(0, idx) + text.slice(idx).replace(/^\/\S*/, '')
+      }
+    }
+  }
+  // 移除已有的 command tag（只允许一个），再在光标处插入新的
+  if (el) {
+    el.querySelectorAll('.command-tag').forEach(n => n.remove())
+    const tagSpan = createCommandTagSpan(name)
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0)
+      range.collapse(false)
+      range.insertNode(tagSpan)
+      const trailing = document.createTextNode(' ')
+      tagSpan.after(trailing)
+      range.setStart(trailing, 1)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    } else {
+      // 光标不在输入框（按钮触发）：插到开头
+      el.insertBefore(tagSpan, el.firstChild)
+      el.insertBefore(document.createTextNode(' '), tagSpan.nextSibling)
+    }
+  }
+  skillDropdownVisible.value = false
+  skillQuery.value = ''
+  syncInputText()
+}
+
+// `/` 下拉选中：skill/command 都走插 tag（正文后台组装，不在输入框展开）。
+function onSelectItem(item: SlashItem) {
   if (item.kind === 'skill') {
     onSelectSkill(item.name)
     return
   }
-  const args = skillArgsText.value
-  skillDropdownVisible.value = false
-  skillQuery.value = ''
-  const body = await commandStore.getBody(item.name)
-  if (!body) return
-  const final = applyArguments(body, args)
-  const el = editableRef.value
-  if (el) {
-    el.innerHTML = ''
-    el.appendChild(document.createTextNode(final))
-    // 光标移到末尾
-    const sel = window.getSelection()
-    if (sel) {
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      range.collapse(false)
-      sel.removeAllRanges()
-      sel.addRange(range)
-    }
-  }
-  syncInputText()
-  focusInput()
+  onSelectCommand(item.name)
 }
 
 function findLastHashIndex(text: string): number {
@@ -908,6 +999,33 @@ function onHashButtonClick() {
     sel.addRange(range)
   }
   syncInputText(); refreshHashDropdown()
+}
+
+function onSlashButtonClick() {
+  const el = editableRef.value
+  if (!el) return
+  el.focus()
+
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0)
+    range.deleteContents()
+    const textNode = document.createTextNode('/')
+    range.insertNode(textNode)
+    range.setStart(textNode, 1)
+    range.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  } else {
+    const textNode = document.createTextNode('/')
+    el.appendChild(textNode)
+    const range = document.createRange()
+    range.setStart(textNode, 1)
+    range.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+  syncInputText(); refreshSkillDropdown()
 }
 
 function onEscHashDropdown() {
@@ -1143,10 +1261,12 @@ function clearInput() {
 
 async function onSend() {
   const text = getEditableText().trim()
-  if (!text) return
 
+  // F6: command tag —— 取 tag 后参数,后台组装正文作为 user 消息
+  const cmd = extractCommandFromInput()
   // F5: 显式调用 skill —— 输入框里挂了 skill tag 则注入其 L2 正文
   const skillName = extractSkillFromInput()
+  if (!text && !skillName && !cmd) return
   let skillBody = ''
   if (skillName) {
     try {
@@ -1156,14 +1276,37 @@ async function onSend() {
     }
   }
 
+  let final = text
+  if (cmd) {
+    let body = ''
+    try {
+      body = await commandStore.getBody(cmd.name)
+    } catch (e) {
+      console.error('Failed to get command body:', e)
+    }
+    final = body ? applyArguments(body, cmd.args) : cmd.args
+  }
+
+  // 正文拉取失败时不要静默跑空 user turn，直接提示并终止
+  if (cmd && !final.trim()) {
+    ElMessage.error(t('ai.commandLoadFailed', { name: cmd.name }))
+    return
+  }
+  if (!cmd && skillName && !text && !skillBody) {
+    ElMessage.error(t('ai.skillLoadFailed', { name: skillName }))
+    return
+  }
+
   if (busy.value) {
-    aiStore.enqueueMessage(text, skillName || undefined, skillBody || undefined)
+    if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
+    aiStore.enqueueMessage(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined)
     clearInput()
     return
   }
   clearInput()
   scrollToBottom()
-  await runAgent(text, skillName, skillBody)
+  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
+  await runAgent(cmd ? '' : final, skillName, skillBody, cmd ? final : undefined)
   scrollToBottom()
 }
 
@@ -1886,6 +2029,12 @@ defineExpose({ focusInput })
   color: var(--text-muted);
   flex-shrink: 0;
   align-self: center;
+}
+.skill-dropdown-args {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
 }
 .skill-dropdown-desc {
   flex: 1;

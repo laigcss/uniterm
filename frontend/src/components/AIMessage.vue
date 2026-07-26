@@ -2,12 +2,19 @@
   <div class="ai-message" :class="[message.role, { interrupted: isInterrupted || isTimeout }]">
     <!-- Skill card: 仅显示用了哪个 skill，正文已隐藏进 _contextHeader -->
     <div v-if="message.skillName" class="skill-card">
-      <span class="skill-card-icon">⚡</span>
+      <BookOpen :size="13" class="skill-card-icon" />
       <span class="skill-card-name">{{ message.skillName }}</span>
       <span class="skill-card-src">{{ message.skillSource === 'auto' ? t('ai.skillAuto') : t('ai.skillExplicit') }}</span>
     </div>
 
-    <div class="content" v-if="!message.skillName">
+    <!-- Command card: 显示命令名 + 参数，正文已展开进 user 消息 -->
+    <div v-if="message.commandName" class="skill-card">
+      <Terminal :size="13" class="skill-card-icon" />
+      <span class="skill-card-name">{{ message.commandName }}</span>
+      <span v-if="message.commandArgs" class="skill-card-src">{{ message.commandArgs }}</span>
+    </div>
+
+    <div class="content" v-if="!message.skillName && !message.commandName">
       <div class="text" v-html="renderedContent" @click="onTextClick" />
 
       <div v-if="message.role === 'assistant' && message.content?.trim()" class="copy-action">
@@ -124,7 +131,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Copy, Check } from '@lucide/vue'
+import { Copy, Check, BookOpen, Terminal } from '@lucide/vue'
 import { useAIStore } from '../stores/aiStore'
 import { useI18n } from '../i18n'
 import type { AIMessage } from '../types/ai'
@@ -311,6 +318,10 @@ function formatToolBody(tc: { function: { name: string; arguments: string } }): 
         return 'Ctrl+C'
       case 'ask_user':
         return args.question || ''
+      case 'use_skill':
+      case 'save_skill':
+      case 'read_skill_file':
+        return args.name || ''
       default:
         return JSON.stringify(args, null, 2)
     }
