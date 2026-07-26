@@ -17,6 +17,12 @@
           :placeholder="t('settings.commandsDescriptionPlaceholder')"
         />
       </el-form-item>
+      <el-form-item :label="t('settings.commandsArgumentHint')">
+        <el-input
+          v-model="form.argumentHint"
+          :placeholder="t('settings.commandsArgumentHintPlaceholder')"
+        />
+      </el-form-item>
       <el-form-item :label="t('settings.commandsBody')" required>
         <el-input
           v-model="form.body"
@@ -30,7 +36,7 @@
     <template #footer>
       <el-button @click="$emit('close')">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :disabled="!canCreate" @click="onCreate">
-        {{ t('common.confirm') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </el-dialog>
@@ -45,23 +51,32 @@ import { useCommandStore } from '../stores/commandStore'
 const { t } = useI18n()
 const store = useCommandStore()
 
+const COMMAND_TEMPLATE = `Analyze the following log output and produce a concise incident report.
+
+$ARGUMENTS
+
+Please:
+- Summarize what happened, in order of importance.
+- List every ERROR / WARN / FATAL line with its likely root cause.
+- Point out repeated patterns, spikes, or timestamps that stand out.
+- Suggest concrete next commands to run for confirmation (do not execute anything destructive).
+`
+
 const emit = defineEmits<{
   close: []
   created: []
 }>()
 
-const form = ref({ name: '', description: '', body: '' })
-
-const nameRe = /^[a-z0-9][a-z0-9-]*$/
+const form = ref({ name: '', description: '', argumentHint: '', body: COMMAND_TEMPLATE })
 
 const canCreate = computed(() => {
-  return nameRe.test(form.value.name.trim()) && form.value.body.trim()
+  return form.value.name.trim() && form.value.body.trim()
 })
 
 async function onCreate() {
   if (!canCreate.value) return
   try {
-    await store.create(form.value.name.trim(), form.value.description.trim(), form.value.body.trim())
+    await store.create(form.value.name.trim(), form.value.description.trim(), form.value.body.trim(), form.value.argumentHint.trim())
     emit('created')
   } catch (e: any) {
     ElMessage.error(e?.message || 'Create failed')

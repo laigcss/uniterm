@@ -329,5 +329,28 @@ export const AVAILABLE_TOOLS = [
       },
       required: ['name', 'description', 'body']
     }
+  },
+  {
+    name: 'use_skill',
+    description: 'Load the full instructions (body) of an available skill, plus a manifest of its bundled reference docs and scripts. Call this when a skill from AVAILABLE SKILLS matches the current task, BEFORE acting on it. Scripts are returned as text; to run one, read it with read_skill_file then execute it via execute_command in the target terminal.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The skill name from AVAILABLE SKILLS (without the leading /).' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'read_skill_file',
+    description: 'Read a single bundled file of a skill (a reference doc or a script) as text. Use after use_skill to fetch a specific file listed in its manifest.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The skill name.' },
+        path: { type: 'string', description: 'Relative path inside the skill dir, as listed by use_skill (e.g. "references/guide.md" or "scripts/check.sh").' }
+      },
+      required: ['name', 'path']
+    }
   }
 ]

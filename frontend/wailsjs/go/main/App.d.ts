@@ -26,7 +26,7 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function ConnectSerial(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<session.SessionInfo>;
 
-export function CreateCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function CreateCommand(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function CreateDatabase(arg1:string,arg2:string):Promise<void>;
 
@@ -145,6 +145,8 @@ export function ListCommands():Promise<Array<store.CommandMeta>>;
 export function ListSerialPorts():Promise<Array<string>>;
 
 export function ListSessions():Promise<Array<session.SessionInfo>>;
+
+export function ListSkillFiles(arg1:string):Promise<store.SkillFileList>;
 
 export function ListSkills():Promise<Array<store.SkillMeta>>;
 
@@ -282,7 +284,7 @@ export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
 export function SaveAISessions(arg1:store.AISessionData):Promise<void>;
 
-export function SaveCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function SaveCommand(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function SaveConnections(arg1:session.ConnectionStoreData):Promise<void>;
 

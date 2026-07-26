@@ -5,6 +5,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSkillStore } from '../stores/skillStore'
+import { GetSkillFile, ListSkillFiles } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime'
 import type { AIMessage } from '../types/ai'
 
@@ -198,13 +199,13 @@ function buildSystemPrompt(): string {
  */
 function buildSkillIndex(): string {
   const skillStore = useSkillStore()
-  const list = skillStore.enabledSkills
+  const list = skillStore.enabledSkills.filter(s => s.modelInvocable)
   if (list.length === 0) return ''
   const lines = list.map(s => `- /${s.name}: ${s.description}`).join('\n')
-  return `\n\nAVAILABLE SKILLS (invoke a matching one instead of reinventing it; do NOT duplicate an existing one with save_skill):\n${lines}`
+  return `\n\nAVAILABLE SKILLS (when one matches the task, call the use_skill tool with its name to load its full instructions before acting; do NOT duplicate an existing one with save_skill):\n${lines}`
 }
 
-export async function runAgent(userInput: string, skillName?: string, skillBody?: string) {
+export async function runAgent(userInput: string, skillName?: string, skillBody?: string, commandBody?: string) {
   const store = useAIStore()
 
   if (!hasActiveSession()) {
@@ -258,19 +259,25 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     store.setLastPanelContext(trackPanelId, tp?.config?.shellPath || '')
   }
 
-  if (userInput) {
+  if (userInput || (skillName && skillBody) || commandBody) {
     const dynamicCtx = buildDynamicContext()
-    // skill 正文进 _contextHeader（发给模型但 UI 隐藏），content 只留用户原始输入
+    // skill/command 正文进 _contextHeader（发给模型但 UI 隐藏），content 只留用户原始输入
     let header = dynamicCtx || ''
     if (skillName && skillBody) {
       const skillCtx = `[Skill: ${skillName}]\n${skillBody}`
       header = header ? `${skillCtx}\n\n${header}` : skillCtx
       store.addSkillCard(skillName, 'explicit')
     }
+    if (commandBody) {
+      const cmdCtx = `[Command]\n${commandBody}`
+      header = header ? `${cmdCtx}\n\n${header}` : cmdCtx
+    }
+    // 仅选 skill/命令未输入文字时，给一句明确指令作为 content，避免发送空的 user 消息
+    const content = userInput || (skillName ? `请执行 skill「${skillName}」。` : `请执行命令。`)
     store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: userInput,
+      content,
       _contextHeader: header || undefined
     })
   }
@@ -322,10 +329,14 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
           header = `[Skill: ${q.skillName}]\n${q.skillBody}`
           store.addSkillCard(q.skillName, 'explicit')
         }
+        if (q.commandBody) {
+          const cmdCtx = `[Command]\n${q.commandBody}`
+          header = header ? `${cmdCtx}\n\n${header}` : cmdCtx
+        }
         store.addMessage({
           id: `msg-${Date.now()}-${i}`,
           role: 'user',
-          content: q.content,
+          content: q.content || (q.skillName ? `请执行 skill「${q.skillName}」。` : `请执行命令。`),
           _contextHeader: header || undefined,
         })
       })
@@ -701,6 +712,55 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
           id: `msg-${Date.now()}`,
           role: 'tool',
           content: `[Error saving skill: ${e.message ?? e}]`,
+          tool_call_id: tu.id
+        })
+      }
+    } else if (tu.name === 'use_skill') {
+      const name = tu.input.name as string
+      try {
+        const skillStore = useSkillStore()
+        const meta = skillStore.skills.find(s => s.name === name)
+        if (!meta) throw new Error(`skill "${name}" not found`)
+        if (!meta.enabled) throw new Error(`skill "${name}" is disabled`)
+        if (!meta.modelInvocable) throw new Error(`skill "${name}" is not model-invocable; the user must run it manually via /${name}`)
+        const body = await skillStore.getBody(name)
+        const files = await ListSkillFiles(name)
+        store.addSkillCard(name, 'auto')
+        const manifest = [
+          body,
+          files.references.length ? `\n\nREFERENCES:\n${files.references.map(f => `- ${f}`).join('\n')}` : '',
+          files.scripts.length ? `\n\nSCRIPTS:\n${files.scripts.map(f => `- ${f}`).join('\n')}` : '',
+        ].join('')
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Skill loaded: ${name}]\n${manifest}`,
+          tool_call_id: tu.id
+        })
+      } catch (e: any) {
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Error loading skill: ${e.message ?? e}]`,
+          tool_call_id: tu.id
+        })
+      }
+    } else if (tu.name === 'read_skill_file') {
+      const name = tu.input.name as string
+      const path = tu.input.path as string
+      try {
+        const content = await GetSkillFile(name, path)
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Skill file: ${name}/${path}]\n${content}`,
+          tool_call_id: tu.id
+        })
+      } catch (e: any) {
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Error reading skill file: ${e.message ?? e}]`,
           tool_call_id: tu.id
         })
       }

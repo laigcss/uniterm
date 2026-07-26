@@ -772,6 +772,13 @@ func (a *App) GetSkillFile(name, relPath string) (string, error) {
 	return a.skillsStore.GetSkillFile(name, relPath)
 }
 
+func (a *App) ListSkillFiles(name string) (store.SkillFileList, error) {
+	if a.skillsStore == nil {
+		return store.SkillFileList{}, fmt.Errorf("skills store not initialized")
+	}
+	return a.skillsStore.ListSkillFiles(name)
+}
+
 func (a *App) SetSkillEnabled(name string, enabled bool) error {
 	if a.skillsStore == nil {
 		return fmt.Errorf("skills store not initialized")
@@ -872,18 +879,18 @@ func (a *App) DeleteCommand(name string) error {
 	return a.commandsStore.Delete(name)
 }
 
-func (a *App) CreateCommand(name, description, body string) error {
+func (a *App) CreateCommand(name, description, argumentHint, body string) error {
 	if a.commandsStore == nil {
 		return fmt.Errorf("commands store not initialized")
 	}
-	return a.commandsStore.CreateCommand(name, description, body)
+	return a.commandsStore.CreateCommand(name, description, argumentHint, body)
 }
 
-func (a *App) SaveCommand(name, description, body string) error {
+func (a *App) SaveCommand(name, description, argumentHint, body string) error {
 	if a.commandsStore == nil {
 		return fmt.Errorf("commands store not initialized")
 	}
-	return a.commandsStore.SaveCommand(name, description, body)
+	return a.commandsStore.SaveCommand(name, description, argumentHint, body)
 }
 
 func (a *App) OpenFileDialog() (string, error) {
@@ -3274,14 +3281,28 @@ func (a *App) OpenPathInExplorer(path string) error {
 	if err != nil {
 		abs = path
 	}
+	isDir := false
+	if info, err := os.Stat(abs); err == nil {
+		isDir = info.IsDir()
+	}
 	switch goruntime.GOOS {
 	case "windows":
 		// explorer.exe returns exit code 1 on success; ignore Run's error.
-		_ = exec.Command("explorer", "/select,", abs).Run()
+		if isDir {
+			_ = exec.Command("explorer", abs).Run()
+		} else {
+			_ = exec.Command("explorer", "/select,", abs).Run()
+		}
 		return nil
 	case "darwin":
+		if isDir {
+			return exec.Command("open", abs).Run()
+		}
 		return exec.Command("open", "-R", abs).Run()
 	default:
+		if isDir {
+			return exec.Command("xdg-open", abs).Run()
+		}
 		return exec.Command("xdg-open", filepath.Dir(abs)).Run()
 	}
 }

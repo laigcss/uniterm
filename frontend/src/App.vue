@@ -1694,6 +1694,7 @@ watch(
 .app-container.has-bg .main-content :deep(.panel-more-menu),
 .app-container.has-bg .main-content :deep(.shell-submenu),
 .app-container.has-bg .main-content :deep(.hash-dropdown),
+.app-container.has-bg .main-content :deep(.skill-dropdown),
 .app-container.has-bg .main-content :deep(.drive-dropdown),
 .app-container.has-bg .main-content :deep(.bookmark-dropdown),
 .app-container.has-bg .main-content :deep(.type-filter-menu) {

@@ -28,7 +28,7 @@
       <Terminal :size="18" class="command-card-icon" />
       <div class="command-card-info">
         <div class="command-card-title">
-          <span class="command-card-name">/{{ cmd.name }}</span>
+          <span class="command-card-name">{{ cmd.name }}</span>
         </div>
         <div class="command-card-desc">{{ cmd.description }}</div>
         <div v-if="cmd.path" class="command-card-path" @click.stop="openFolder(cmd)" :title="t('settings.commandsOpenFolder')">
@@ -95,6 +95,13 @@
               :disabled="editCommand.locked"
             />
           </el-form-item>
+          <el-form-item :label="t('settings.commandsArgumentHint')">
+            <el-input
+              v-model="editForm.argumentHint"
+              :placeholder="t('settings.commandsArgumentHintPlaceholder')"
+              :disabled="editCommand.locked"
+            />
+          </el-form-item>
           <el-form-item :label="t('settings.commandsBody')">
             <el-input
               v-model="editForm.body"
@@ -137,7 +144,7 @@ const searchQuery = ref('')
 
 const showEdit = ref(false)
 const editCommand = ref<CommandMeta | null>(null)
-const editForm = ref({ description: '', body: '' })
+const editForm = ref({ description: '', argumentHint: '', body: '' })
 
 const filteredCommands = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -147,7 +154,7 @@ const filteredCommands = computed(() => {
 
 async function openEdit(cmd: CommandMeta) {
   editCommand.value = cmd
-  editForm.value = { description: cmd.description, body: '' }
+  editForm.value = { description: cmd.description, argumentHint: cmd.argumentHint || '', body: '' }
   showEdit.value = true
   try {
     editForm.value.body = await store.getBody(cmd.name)
@@ -159,7 +166,7 @@ async function openEdit(cmd: CommandMeta) {
 async function onSaveEdit() {
   if (!editCommand.value) return
   try {
-    await store.save(editCommand.value.name, editForm.value.description.trim(), editForm.value.body.trim())
+    await store.save(editCommand.value.name, editForm.value.description.trim(), editForm.value.body.trim(), editForm.value.argumentHint.trim())
     showEdit.value = false
   } catch (e: any) {
     ElMessage.error(e?.message || 'Save failed')
@@ -248,7 +255,6 @@ onMounted(() => {
   font-weight: 600;
   font-size: 13px;
   color: var(--el-text-color-primary);
-  font-family: var(--el-font-family-mono, monospace);
 }
 .command-card-desc {
   font-size: 12px;
