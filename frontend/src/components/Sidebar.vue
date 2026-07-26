@@ -305,6 +305,7 @@
       <div v-if="selectedConn && selectedConn.type === 'spice'" class="menu-item" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</div>
       <!-- Database & Monitor -->
       <div v-if="selectedConn && selectedConn.type === 'database'" class="menu-item" @click="doConnectDB">{{ t('db.connectDB') }}</div>
+      <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</div>
@@ -450,7 +451,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -474,7 +475,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'toggle', 'new-local-terminal-with-shell'])
+const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
@@ -540,6 +541,7 @@ const TYPE_LABELS: Record<string, string> = {
   s3: 'S3',
   webdav: 'WebDAV',
   monitor: 'Monitor',
+  k8s: 'Kubernetes',
   'database:mysql': 'MySQL',
   'database:postgres': 'PostgreSQL',
   'database:rqlite': 'rqlite',
@@ -1266,6 +1268,16 @@ function doConnectDB() {
   }
 }
 
+function doConnectK8s() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  selectedIds.value = new Set()
+  closeMenu()
+  for (const c of conns) {
+    emit('connectK8s', c)
+  }
+}
+
 function doEdit() {
   if (selectedConn.value) {
     editConfig.value = { ...selectedConn.value }
@@ -1650,6 +1662,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'spice': return MonitorCloud
     case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : Database
     case 'monitor': return Activity
+    case 'k8s': return ShipWheel
     default: return SquareTerminal
   }
 }

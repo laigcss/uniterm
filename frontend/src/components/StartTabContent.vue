@@ -124,6 +124,7 @@
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
                   <Database v-else :size="28" />
                 </el-icon>
+                <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
                 <el-icon v-else><Server :size="28" /></el-icon>
               </div>
               <div>
@@ -208,6 +209,7 @@
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
                   <Database v-else :size="28" />
                 </el-icon>
+                <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
                 <el-icon v-else><Server :size="28" /></el-icon>
               </div>
               <div>
@@ -278,6 +280,7 @@
                 <DatabaseZap v-if="config.dbType === 'redis'" :size="28" />
                 <Database v-else :size="28" />
               </el-icon>
+              <el-icon v-else-if="config.type === 'k8s'"><ShipWheel :size="28" /></el-icon>
               <el-icon v-else><Server :size="28" /></el-icon>
             </div>
             <div>
@@ -341,6 +344,7 @@
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'spice'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSpice(contextMenuConfig)">{{ t('sidebar.connectSPICE') }}</div>
       <!-- Database & Monitor -->
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'database'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectDb(contextMenuConfig)">{{ t('db.connectDB') }}</div>
+      <div v-if="contextMenuConfig && contextMenuConfig.type === 'k8s'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectK8s(contextMenuConfig)">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectMonitor(contextMenuConfig)">{{ t('sidebar.connectMonitor') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEditConnection(contextMenuConfig)">{{ t('sidebar.edit') }}</div>
@@ -437,7 +441,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { GetRecentConnections } from '../../wailsjs/go/main/App'
 import { formatConnSubtitle } from '../utils/quickConnect'
-import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown } from '@lucide/vue'
+import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel } from '@lucide/vue'
 
 const props = defineProps<{
   tab: StartTab
@@ -527,6 +531,7 @@ const searchInputRef = ref<HTMLInputElement>()
 const TYPE_LABELS: Record<string, string> = {
   ssh: 'SSH', telnet: 'Telnet', mosh: 'Mosh', rdp: 'RDP', vnc: 'VNC', spice: 'SPICE',
   local: 'Local', sftp: 'SFTP', ftp: 'FTP', smb: 'SMB', s3: 'S3', webdav: 'WebDAV', monitor: 'Monitor',
+  k8s: 'Kubernetes',
   'database:mysql': 'MySQL', 'database:postgres': 'PostgreSQL', 'database:rqlite': 'rqlite',
   'database:oracle': 'Oracle', 'database:sqlserver': 'SQL Server', 'database:redis': 'Redis',
   'database:mongodb': 'MongoDB',
@@ -1197,6 +1202,7 @@ function doConnectRdp(config: ConnectionConfig) { closeContextMenu(); window.dis
 function doConnectVnc(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-vnc', { detail: config })) }
 function doConnectSpice(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-spice', { detail: config })) }
 function doConnectDb(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-db', { detail: config })) }
+function doConnectK8s(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-k8s', { detail: config })) }
 function doConnectFtp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-ftp', { detail: config })) }
 function doConnectSmb(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-smb', { detail: config })) }
 function doConnectS3(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-s3', { detail: config })) }
@@ -1533,6 +1539,7 @@ async function doDelete(config: ConnectionConfig | null) {
 .start-card-icon.rdp,
 .start-card-icon.vnc,
 .start-card-icon.spice { color: var(--accent); }
+.start-card-icon.k8s { color: var(--accent); }
 .start-card-icon.serial { color: var(--success-dim); }
 .start-card-icon.group { color: var(--text-secondary); }
 .start-card-icon.ungrouped { color: var(--text-muted); }

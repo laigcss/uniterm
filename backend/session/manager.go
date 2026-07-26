@@ -83,6 +83,12 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	return s, nil
 }
 
+func (sm *SessionManager) Add(s Session) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.sessions[s.ID()] = s
+}
+
 func (sm *SessionManager) Close(sessionID string) error {
 	sm.mu.Lock()
 	s, ok := sm.sessions[sessionID]
