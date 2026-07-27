@@ -462,34 +462,14 @@ function resize() {
     fitAddon.fit()
     if (terminal.cols <= 0 || terminal.rows <= 0) return
 
-    let cellWidth = 0
-    let cellHeight = 0
-    try {
-      const core = (terminal as any)._core
-      const dims = core?._renderService?.dimensions
-      if (dims) {
-        cellWidth = dims.css?.cell?.width || 0
-        cellHeight = dims.css?.cell?.height || 0
-      }
-    } catch {
-      cellWidth = 0
-      cellHeight = 0
-    }
-
-    if (cellWidth === 0 || cellHeight === 0) {
-      SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
-      return
-    }
-
-    const TERMINAL_PADDING = 4
-    const scrollbarWidth = (terminal as any)._core?.viewport?.scrollBarWidth || 0
-    const cols = Math.floor((rect.width - TERMINAL_PADDING * 2 - scrollbarWidth) / cellWidth)
-    const rows = Math.floor((rect.height - TERMINAL_PADDING * 2) / cellHeight)
-    const newCols = Math.max(2, cols)
-    const newRows = Math.max(1, rows)
-
-    terminal.resize(newCols, newRows)
-    SessionResize(sid, newCols, newRows).catch(() => {})
+    // Trust terminal.cols/rows set by fitAddon.fit() — xterm's internal
+    // measure already accounts for the scrollbar gutter. The previous
+    // Math.floor((rect.width - TERMINAL_PADDING * 2 - scrollbarWidth) /
+    // cellWidth) recomputation double-subtracted the gutter and produced
+    // an off-by-one column on every Claude Code table border, causing the
+    // whole rendered table to drift half a cell.
+    terminal.resize(terminal.cols, terminal.rows)
+    SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
   } else {
     getFitAddon()?.fit()
   }
