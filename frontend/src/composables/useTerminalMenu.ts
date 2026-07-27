@@ -57,11 +57,21 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
   }
 
   // Write to the OS clipboard via Wails first (reliable in WebView2), falling
-  // back to the browser clipboard API when the runtime call fails.
+  // back to the browser clipboard API when the runtime call reports failure.
+  //
+  // Wails' ClipboardSetText returns Promise<boolean> — `false` means the OS
+  // refused (focus loss, AppKit permission glitch on macOS), NOT a thrown
+  // error. The previous try/catch only handled rejections, so a `resolve(false)`
+  // silently left the clipboard empty. Now we check the resolved value and
+  // fall through to navigator.clipboard.writeText in that case.
   async function writeClipboard(text: string) {
+    let ok = false
     try {
-      await ClipboardSetText(text)
+      ok = await ClipboardSetText(text)
     } catch {
+      ok = false
+    }
+    if (!ok) {
       try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
     }
   }
