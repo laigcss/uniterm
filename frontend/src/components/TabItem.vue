@@ -100,15 +100,19 @@ import { useK8sStore } from '../stores/k8sStore'
 import { useI18n } from '../i18n'
 import {
   CreateSession,
+  CloseSession,
   K8sExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
+  SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
+import type { ConnectionConfig } from '../types/session'
+import { waitForTerminalSize } from '../services/terminalManager'
 import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box } from '@lucide/vue'
 
 const props = defineProps<{
@@ -398,9 +402,26 @@ async function duplicateTab() {
         sessionStore.updateStatus(info.id, 'connected')
       } else {
         const sessionType = resolveSessionType(tab.type, panel.config)
-        info = await CreateSession(sessionType, panel.config)
+        const config: ConnectionConfig = {
+          ...panel.config,
+          deferConnect: true,
+          initialCols: 0,
+          initialRows: 0,
+        }
+        info = await CreateSession(sessionType, config)
         panelStore.bindSession(newPanel.id, info.id)
-        if (tab.type !== 'terminal') sessionStore.initSession(info.id)
+        sessionStore.initSession(info.id)
+        if (tab.type === 'terminal') {
+          const size = await waitForTerminalSize(info.id)
+          if (size.cols > 0 && size.rows > 0) {
+            config.initialCols = size.cols
+            config.initialRows = size.rows
+          }
+          await SessionStart(info.id, config).catch((e) => {
+            console.error('Failed to start duplicated session:', e)
+            CloseSession(info.id).catch(() => {})
+          })
+        }
       }
     } catch (e) {
       console.error('Failed to duplicate session:', e)

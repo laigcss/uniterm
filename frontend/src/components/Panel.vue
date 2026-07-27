@@ -94,15 +94,18 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
   CreateSession,
+  CloseSession,
   K8sExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
+  SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
 import type { Panel } from '../types/workspace'
+import { waitForTerminalSize } from '../services/terminalManager'
 import type { ConnectionConfig } from '../types/session'
 import type { CredentialResult } from './CredentialPrompt.vue'
 
@@ -318,10 +321,26 @@ async function retryConnection(silent = false) {
     }
     try {
       const shellPath = props.panel.config?.shellPath || ''
-      const config = { ...props.panel.config, type: 'local', shellPath } as ConnectionConfig
+      const config: ConnectionConfig = {
+        ...props.panel.config,
+        type: 'local',
+        shellPath,
+        deferConnect: true,
+        initialCols: 0,
+        initialRows: 0,
+      }
       const info = await CreateSession('local', config)
       panelStore.bindSession(props.panel.id, info.id)
       sessionStore.initSession(info.id)
+      const size = await waitForTerminalSize(info.id)
+      if (size.cols > 0 && size.rows > 0) {
+        config.initialCols = size.cols
+        config.initialRows = size.rows
+      }
+      await SessionStart(info.id, config).catch((e) => {
+        baseTerminalRef.value?.write(`\r\n\x1b[31mFailed to start local shell: ${e}\x1b[0m\r\n`)
+        CloseSession(info.id).catch(() => {})
+      })
       retryAttempt = 0
     } catch (e: any) {
       baseTerminalRef.value?.write(`\r\n\x1b[31mFailed to start local shell: ${e}\x1b[0m\r\n`)
@@ -381,9 +400,24 @@ async function retryConnection(silent = false) {
   const reconnectAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   baseTerminalRef.value?.write(RESET_MOUSE_MODES + `\r\n\x1b[33mReconnecting... (${reconnectAt})\x1b[0m\r\n`)
   try {
-    const info = await CreateSession(props.panel.config.type, props.panel.config)
+    const config: ConnectionConfig = {
+      ...props.panel.config,
+      deferConnect: true,
+      initialCols: 0,
+      initialRows: 0,
+    }
+    const info = await CreateSession(props.panel.config.type, config)
     panelStore.bindSession(props.panel.id, info.id)
     sessionStore.initSession(info.id)
+    const size = await waitForTerminalSize(info.id)
+    if (size.cols > 0 && size.rows > 0) {
+      config.initialCols = size.cols
+      config.initialRows = size.rows
+    }
+    await SessionStart(info.id, config).catch((e) => {
+      baseTerminalRef.value?.write(`\r\n\x1b[31mReconnect failed: ${e}\x1b[0m\r\n`)
+      CloseSession(info.id).catch(() => {})
+    })
   } catch (e: any) {
     baseTerminalRef.value?.write(`\r\n\x1b[31mReconnect failed: ${e}\x1b[0m\r\n`)
     baseTerminalRef.value?.setRetryOnEnter(true)
