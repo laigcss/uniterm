@@ -110,6 +110,12 @@ func (s *FTPSession) Resize(cols, rows int) error {
 }
 
 func (s *FTPSession) Disconnect() error {
+	// Serialize close against in-flight data transfers and ChangeRemoteDir
+	// (which also touches s.conn without holding connMu — see SESSION-15).
+	// Without connMu here, ftp.ServerConn.Quit() can race a concurrent
+	// Stor/Retr and panic inside the FTP library.
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
 	if s.conn != nil {
 		s.conn.Quit()
 		s.conn = nil
@@ -196,8 +202,11 @@ func (s *FTPSession) ChangeRemoteDir(dir string) (FileListResult, error) {
 	if !path.IsAbs(dir) {
 		target = path.Join(s.cwd, dir)
 	}
-	// Validate directory exists by listing it
+	// Validate directory exists by listing it — must hold connMu because
+	// the FTP control connection is not concurrent-safe (SESSION-15).
+	s.connMu.Lock()
 	entries, err := s.conn.List(target)
+	s.connMu.Unlock()
 	if err != nil {
 		return FileListResult{}, fmt.Errorf("no such directory: %s", target)
 	}
