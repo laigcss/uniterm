@@ -86,10 +86,19 @@ export function acquireTerminal(
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
     const unicodeAddon = new Unicode11Addon()
+    // Activate Unicode 11 widths before any data is written. The default is
+    // v6, which under-counts cells for many CJK ideographs and full-width
+    // punctuation that Claude Code emits — the terminal would wrap rows at
+    // a different column than the backend PTY (which uses Unicode 11 widths
+    // too), producing the offset-between-rows table misalignment users see.
+    terminal.unicode.activeVersion = '11'
 
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(searchAddon)
     terminal.loadAddon(unicodeAddon)
+    // Activate Unicode 11 widths (default v6 miscounts CJK cells). Must come
+    // AFTER loadAddon — the unicode property is provided by the addon.
+    terminal.unicode.activeVersion = '11'
 
     managed = {
       terminal,

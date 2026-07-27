@@ -462,13 +462,11 @@ function resize() {
     fitAddon.fit()
     if (terminal.cols <= 0 || terminal.rows <= 0) return
 
-    // Trust terminal.cols/rows set by fitAddon.fit() — xterm's internal
-    // measure already accounts for the scrollbar gutter. The previous
-    // Math.floor((rect.width - TERMINAL_PADDING * 2 - scrollbarWidth) /
-    // cellWidth) recomputation double-subtracted the gutter and produced
-    // an off-by-one column on every Claude Code table border, causing the
-    // whole rendered table to drift half a cell.
+    // Trust fitAddon.fit() — its measure already accounts for the scrollbar
+    // gutter; manual recomputation double-subtracts it.
     terminal.resize(terminal.cols, terminal.rows)
+    // Full-viewport redraw — prevents canvas ghosting during rapid write bursts.
+    terminal.refresh(0, terminal.rows - 1)
     SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
   } else {
     getFitAddon()?.fit()
@@ -758,8 +756,8 @@ onMounted(() => {
   )
   terminal.loadAddon(webLinksAddon)
 
-  // Unicode 11 support
-  try { terminal.unicode.activeVersion = '11' } catch (_) {}
+  // Unicode 11 activeVersion is set in terminalManager.ts right after the
+  // addon loads; no need to set it here again.
 
   // Set up search results listener from shared SearchAddon
   const managed = getManagedTerminal(props.sessionId || '')
