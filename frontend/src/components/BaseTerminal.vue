@@ -100,6 +100,10 @@ import {
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
 import { stripCursorBlink } from '../utils/cursor'
+import {
+  sanitizeTerminalOutput,
+  sanitizeLiveTerminalOutput,
+} from '../utils/terminalSanitize'
 import { useTerminalInput } from '../composables/useTerminalInput'
 import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
@@ -358,20 +362,7 @@ const searchResultIndex = ref(0)
 const searchResultCount = ref(0)
 
 function sanitizeTerminalHistory(text: string): string {
-  if (!text) return text
-  let cleaned = text
-  // ZModem HEX header fragments
-  cleaned = cleaned.replace(/\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}/g, '')
-  // ZModem ZDLE (0x18) and backspace (0x08) sequences
-  cleaned = cleaned.replace(/\x18+/g, '')
-  cleaned = cleaned.replace(/\x08+/g, '')
-  // ASCII control chars except \n, \r, \t and ESC
-  cleaned = cleaned.replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
-  // Drop binary garbage decoded as random Unicode blocks. Keep ASCII plus CJK
-  // so normal Chinese/Japanese/Korean terminal output is preserved.
-  cleaned = cleaned.replace(/[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯]/g, '')
-  // Collapse blank lines left by removed garbage
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+  const cleaned = sanitizeTerminalOutput(text)
   // Forward debug info to backend log so we can inspect the raw garbage.
   if (cleaned !== text) {
     FrontendLog('sanitizeTerminalHistory', `raw last 400: ${JSON.stringify(text.slice(-400))}`)
@@ -1139,6 +1130,10 @@ onMounted(() => {
       data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
       data = data.replace(/\x1b\[2J/g, scrollClear)
     }
+// Drop U+FFFD + binary garbage. See utils/terminalSanitize for the
+    // full filter chain (box-drawing / braille preservation, control-char
+    // stripping, etc.). Live path skips the blank-line collapse step.
+    data = sanitizeLiveTerminalOutput(data)
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
