@@ -765,8 +765,9 @@ onMounted(() => {
   )
   terminal.loadAddon(webLinksAddon)
 
-  // Unicode 11 support
-  try { terminal.unicode.activeVersion = '11' } catch (_) {}
+  // Unicode 11 activeVersion is set inside terminalManager.ts right after
+  // the addon is loaded, so it's already in effect by the time this
+  // component mounts. No need to set it here again.
 
   // Set up search results listener from shared SearchAddon
   const managed = getManagedTerminal(props.sessionId || '')
