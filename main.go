@@ -53,14 +53,21 @@ func main() {
 		maxW, maxH = 9999, 9999
 	}
 
-	// Only set an (empty) app menu on macOS — this is the trick that hides
-	// Wails' default Edit/Window menus there. On Linux (GTK) a non-nil Menu
-	// makes the backend create an empty GtkMenuBar at the top of the window,
-	// which shows up as a thin white line in the Frameless window. Leaving
-	// Menu as nil elsewhere avoids that. See issue #291.
+	// On macOS, install the standard App + Edit menus. The Edit menu is what
+	// routes the native Cmd+C/V/X/A/Z shortcuts to the first responder — every
+	// WKWebView text field (input/textarea/contenteditable) relies on it. An
+	// empty menu here used to suppress Wails' defaults but also killed those
+	// shortcuts app-wide, forcing per-component JS reimplementations. The menu
+	// lives in the top system menu bar, so it doesn't affect the frameless
+	// window. On Linux (GTK) a non-nil Menu creates an empty GtkMenuBar that
+	// shows as a thin white line in the frameless window, so leave it nil
+	// there. See issue #291.
 	var appMenu *menu.Menu
 	if runtime.GOOS == "darwin" {
-		appMenu = &menu.Menu{}
+		appMenu = menu.NewMenuFromItems(
+			menu.AppMenu(),
+			menu.EditMenu(),
+		)
 	}
 
 	// Read the persisted window-frame preference before wails.Run — the frame
