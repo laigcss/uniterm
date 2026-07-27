@@ -42,6 +42,12 @@ export interface ConnectionConfig {
   dbType?: string   // database type key
   dbName?: string   // default database name
   dbParams?: string // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
+  // Redis Sentinel fields (only used when redisMode === 'sentinel')
+  redisMode?: string        // ''/'standalone'(default) | 'sentinel'
+  redisMasterName?: string  // Sentinel primary group name, e.g. "mymaster"
+  redisSentinels?: string   // comma-separated sentinel host:port list
+  sentinelUser?: string     // Sentinel ACL user (optional)
+  sentinelPassword?: string // Sentinel requirepass (optional)
   postLoginScript?: string
   postLoginExpectSteps?: PostLoginExpectStep[]
   // SSH tunnel: reference to an existing SSH connection used as a jump host

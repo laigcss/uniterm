@@ -62,6 +62,12 @@ type ConnectionConfig struct {
 	DBType   string `json:"dbType,omitempty"`   // "mysql", "postgres", "rqlite", "oracle", "sqlserver"
 	DBName   string `json:"dbName,omitempty"`   // default database name
 	DBParams string `json:"dbParams,omitempty"` // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
+	// Redis Sentinel fields (only used when RedisMode == "sentinel")
+	RedisMode        string `json:"redisMode,omitempty"`        // ""/"standalone"(default) | "sentinel"
+	RedisMasterName  string `json:"redisMasterName,omitempty"`  // Sentinel primary group name, e.g. "mymaster"
+	RedisSentinels   string `json:"redisSentinels,omitempty"`   // comma-separated sentinel host:port list
+	SentinelUser     string `json:"sentinelUser,omitempty"`     // Sentinel ACL user (optional)
+	SentinelPassword string `json:"sentinelPassword,omitempty"` // Sentinel requirepass (optional)
 	// SSH post-login script: commands to execute after successful login
 	PostLoginScript string `json:"postLoginScript,omitempty"`
 	// Post-login expect/send automation: interactive steps executed after login.

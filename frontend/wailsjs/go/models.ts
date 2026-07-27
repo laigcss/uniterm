@@ -331,6 +331,11 @@ export namespace session {
 	    dbType?: string;
 	    dbName?: string;
 	    dbParams?: string;
+	    redisMode?: string;
+	    redisMasterName?: string;
+	    redisSentinels?: string;
+	    sentinelUser?: string;
+	    sentinelPassword?: string;
 	    postLoginScript?: string;
 	    postLoginExpectSteps?: PostLoginExpectStep[];
 	    tunnelSSHConnId?: string;
@@ -382,6 +387,11 @@ export namespace session {
 	        this.dbType = source["dbType"];
 	        this.dbName = source["dbName"];
 	        this.dbParams = source["dbParams"];
+	        this.redisMode = source["redisMode"];
+	        this.redisMasterName = source["redisMasterName"];
+	        this.redisSentinels = source["redisSentinels"];
+	        this.sentinelUser = source["sentinelUser"];
+	        this.sentinelPassword = source["sentinelPassword"];
 	        this.postLoginScript = source["postLoginScript"];
 	        this.postLoginExpectSteps = this.convertValues(source["postLoginExpectSteps"], PostLoginExpectStep);
 	        this.tunnelSSHConnId = source["tunnelSSHConnId"];
