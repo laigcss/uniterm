@@ -367,6 +367,11 @@ function sanitizeTerminalHistory(text: string): string {
   cleaned = cleaned.replace(/\x08+/g, '')
   // ASCII control chars except \n, \r, \t and ESC
   cleaned = cleaned.replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
+  // Drop U+FFFD replacement chars. Live data is stripped before write
+  // (see the session:data handler) but history restore goes through this
+  // path, so the same filter applies here. Without it a tab switch
+  // replays the '─���─' pattern Claude Code emits.
+  cleaned = cleaned.replace(/�/g, '')
   // Drop binary garbage decoded as random Unicode blocks. Keep ASCII, CJK,
   // box-drawing, block elements, arrows, math symbols and braille so that
   // Claude Code / modern TUI output survives a KeepAlive history restore
@@ -1132,6 +1137,12 @@ onMounted(() => {
       data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
       data = data.replace(/\x1b\[2J/g, scrollClear)
     }
+    // Drop U+FFFD replacement chars. Claude Code occasionally embeds
+    // partial UTF-8 sequences or genuinely invalid bytes in its output
+    // (visible as '���' between box-drawing chars, e.g. '─���─'); the
+    // Go decoder surfaces these as U+FFFD on its way through Wails IPC.
+    // They serve no purpose for the user, only clutter the rendered line.
+    data = data.replace(/�/g, '')
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
