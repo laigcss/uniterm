@@ -77,6 +77,11 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
   }
 
   function copySelection() {
+    // Re-read the xterm selection at click time. hasSelection.value was
+    // captured during contextmenu, but in WKWebView the right-click
+    // mousedown can clear the xterm selection between contextmenu and the
+    // menu click, leaving hasSelection stale. Trust getSelection() — the
+    // authoritative source — rather than the cached ref.
     const text = options.getSelection()
     if (text) {
       writeClipboard(text)
