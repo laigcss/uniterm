@@ -606,6 +606,10 @@ export function SessionResize(arg1, arg2, arg3) {
   return window['go']['main']['App']['SessionResize'](arg1, arg2, arg3);
 }
 
+export function SessionStart(arg1, arg2) {
+  return window['go']['main']['App']['SessionStart'](arg1, arg2);
+}
+
 export function SessionStartZmodem(arg1) {
   return window['go']['main']['App']['SessionStartZmodem'](arg1);
 }
