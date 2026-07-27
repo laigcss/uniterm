@@ -159,7 +159,20 @@ export function attachTerminal(sessionId: string, container: HTMLElement): void 
     container.appendChild(managed.terminal.element)
   }
 
-  requestAnimationFrame(() => managed.fitAddon.fit())
+  // Wait for the font to actually paint before measuring cell width — if
+  // we measure while JetBrains Mono Variable (or whatever the user picked)
+  // is still loading, fitAddon reads a fallback width and reports wrong
+  // cols. document.fonts.ready resolves once every face in the page is
+  // loaded; that's the signal Claude Code (and any TUI app) needs to see
+  // a consistent terminal size from the first byte.
+  const fontReady = (typeof document !== 'undefined' && document.fonts && document.fonts.ready)
+    ? document.fonts.ready
+    : Promise.resolve()
+  fontReady.finally(() => {
+    // Two rAFs: one for the .xterm element to receive its size, one for
+    // the canvas to render with the now-loaded font.
+    requestAnimationFrame(() => requestAnimationFrame(() => managed.fitAddon.fit()))
+  })
 }
 
 export function detachTerminal(sessionId: string, container: HTMLElement): void {
@@ -181,6 +194,16 @@ export function getTerminal(sessionId: string): Terminal | undefined {
 
 export function getManagedTerminal(sessionId: string): ManagedTerminal | undefined {
   return terminals.get(sessionId)
+}
+
+/** Return the xterm-measured cols/rows for an existing session, or
+ * {0,0} if the session has no terminal yet. Callers use this to learn
+ * the actual size to send to the backend as InitialCols/Rows BEFORE
+ * CreateSession so the remote PTY starts at the right dimensions. */
+export function getTerminalSize(sessionId: string): { cols: number; rows: number } {
+  const m = terminals.get(sessionId)
+  if (!m) return { cols: 0, rows: 0 }
+  return { cols: m.terminal.cols, rows: m.terminal.rows }
 }
 
 /** Bump the shared onData generation counter for the given terminal.
