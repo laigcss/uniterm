@@ -53,7 +53,21 @@
                 </el-button>
               </div>
             </el-form-item>
-            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s'">
+            <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisMode')">
+              <el-radio-group v-model="form.redisMode">
+                <el-radio-button label="standalone">{{ t('conn.redisModeStandalone') }}</el-radio-button>
+                <el-radio-button label="sentinel">{{ t('conn.redisModeSentinel') }}</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <template v-if="isRedisSentinel">
+              <el-form-item :label="t('conn.redisSentinels')" required>
+                <el-input v-model="form.redisSentinels" :placeholder="t('conn.redisSentinelsPlaceholder')" />
+              </el-form-item>
+              <el-form-item :label="t('conn.redisMasterName')" required>
+                <el-input v-model="form.redisMasterName" placeholder="mymaster" />
+              </el-form-item>
+            </template>
+            <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && !isRedisSentinel">
               <div class="host-port-row">
                 <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
@@ -82,6 +96,14 @@
             <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : ''" />
             </el-form-item>
+            <template v-if="isRedisSentinel">
+              <el-form-item :label="t('conn.sentinelUser')">
+                <el-input v-model="form.sentinelUser" :placeholder="t('conn.sentinelAuthHint')" />
+              </el-form-item>
+              <el-form-item :label="t('conn.sentinelPassword')">
+                <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
+              </el-form-item>
+            </template>
             <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPath')">
               <el-input v-model="form.keyPath" :placeholder="t('conn.keyPathPlaceholder')">
                 <template #append>
@@ -596,6 +618,10 @@ const showAdvancedToggle = computed(() =>
   showTunnel.value || form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
 )
 
+const isRedisSentinel = computed(() =>
+  form.type === 'database' && form.dbType === 'redis' && form.redisMode === 'sentinel'
+)
+
 const defaultParamsHint = computed(() => {
   switch (form.dbType) {
     case 'mysql': return '默认: charset=utf8mb4'
@@ -623,6 +649,11 @@ const form = reactive<ConnectionConfig>({
   dbType: '',
   dbName: '',
   dbParams: '',
+  redisMode: 'standalone',
+  redisMasterName: '',
+  redisSentinels: '',
+  sentinelUser: '',
+  sentinelPassword: '',
   postLoginScript: '',
   postLoginExpectSteps: [],
   sftpMaxConcurrency: 5,
@@ -812,6 +843,11 @@ function resetForm() {
   form.dbType = ''
   form.dbName = ''
   form.dbParams = ''
+  form.redisMode = 'standalone'
+  form.redisMasterName = ''
+  form.redisSentinels = ''
+  form.sentinelUser = ''
+  form.sentinelPassword = ''
   form.postLoginScript = ''
   form.postLoginExpectSteps = []
   postLoginMode.value = 'script'
@@ -948,7 +984,11 @@ function normalizeForm(): ConnectionConfig {
   } else {
     normalized.postLoginScript = ''
   }
-  if (normalized.type !== 'local' && normalized.type !== 'serial' && normalized.type !== 'k8s' && !normalized.host.trim()) {
+  const redisSentinel = normalized.type === 'database' && normalized.dbType === 'redis' && normalized.redisMode === 'sentinel'
+  if (redisSentinel) {
+    if (!normalized.redisSentinels?.trim()) throw new Error(t('conn.redisSentinelsRequired'))
+    if (!normalized.redisMasterName?.trim()) throw new Error(t('conn.redisMasterNameRequired'))
+  } else if (normalized.type !== 'local' && normalized.type !== 'serial' && normalized.type !== 'k8s' && !normalized.host.trim()) {
     throw new Error(t('conn.hostRequired'))
   }
   if (normalized.type === 's3') {
@@ -962,6 +1002,7 @@ function normalizeForm(): ConnectionConfig {
     normalized.name = generateUniqueName(
       normalized.type === 'serial' ? (normalized.serialPort || 'Serial')
         : normalized.type === 'k8s' ? (normalized.k8sContext || 'Kubernetes')
+        : redisSentinel ? (normalized.redisMasterName?.trim() || 'redis')
         : normalized.host.trim()
     )
   }

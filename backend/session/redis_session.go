@@ -65,17 +65,46 @@ func (s *RedisSession) Connect(config ConnectionConfig) error {
 
 	if config.Name != "" {
 		s.title = config.Name
+	} else if config.RedisMode == "sentinel" {
+		s.title = fmt.Sprintf("redis:%s", config.RedisMasterName)
 	} else {
 		s.title = fmt.Sprintf("redis:%s:%d", config.Host, config.Port)
 	}
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Username: config.User,
-		Password: config.Password,
-		DB:       0,
-	})
+	var client *redis.Client
+	if config.RedisMode == "sentinel" {
+		addrs := make([]string, 0)
+		for _, a := range strings.Split(config.RedisSentinels, ",") {
+			if a = strings.TrimSpace(a); a != "" {
+				addrs = append(addrs, a)
+			}
+		}
+		if len(addrs) == 0 {
+			s.setStatus(StatusError)
+			return fmt.Errorf("redis sentinel: no sentinel addresses")
+		}
+		if config.RedisMasterName == "" {
+			s.setStatus(StatusError)
+			return fmt.Errorf("redis sentinel: master name required")
+		}
+		client = redis.NewFailoverClient(&redis.FailoverOptions{
+			MasterName:       config.RedisMasterName,
+			SentinelAddrs:    addrs,
+			SentinelUsername: config.SentinelUser,
+			SentinelPassword: config.SentinelPassword,
+			Username:         config.User,
+			Password:         config.Password,
+			DB:               0,
+		})
+	} else {
+		addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+		client = redis.NewClient(&redis.Options{
+			Addr:     addr,
+			Username: config.User,
+			Password: config.Password,
+			DB:       0,
+		})
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -84,7 +113,7 @@ func (s *RedisSession) Connect(config ConnectionConfig) error {
 		log.Writef("[RedisSession.Connect] PING failed: %v", err)
 		client.Close()
 		s.setStatus(StatusError)
-		return fmt.Errorf("redis ping %s: %w", addr, err)
+		return fmt.Errorf("redis ping: %w", err)
 	}
 
 	s.mu.Lock()
