@@ -206,6 +206,22 @@ export function getTerminalSize(sessionId: string): { cols: number; rows: number
   return { cols: m.terminal.cols, rows: m.terminal.rows }
 }
 
+/** Poll for the terminal to report a non-zero size, up to timeoutMs.
+ * Returns the latest size (possibly {0,0}) if the timeout elapses —
+ * callers should fall back to defaults rather than treat it as an error. */
+export async function waitForTerminalSize(
+  sessionId: string,
+  timeoutMs = 1500
+): Promise<{ cols: number; rows: number }> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const s = getTerminalSize(sessionId)
+    if (s.cols > 0 && s.rows > 0) return s
+    await new Promise(r => setTimeout(r, 30))
+  }
+  return getTerminalSize(sessionId)
+}
+
 /** Bump the shared onData generation counter for the given terminal.
  * Returns the NEW generation value. Callers should capture this value
  * in their onData callback and bail out if the terminal's current

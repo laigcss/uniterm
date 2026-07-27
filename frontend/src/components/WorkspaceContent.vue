@@ -27,8 +27,9 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import type { WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
+import { waitForTerminalSize } from '../services/terminalManager'
 import PanelGrid from './PanelGrid.vue'
-import { CreateSession, CloseSession } from '../../wailsjs/go/main/App'
+import { CreateSession, CloseSession, SessionStart } from '../../wailsjs/go/main/App'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 
@@ -84,11 +85,26 @@ async function onDuplicatePanel(panelId: string) {
 
   if (panel.config) {
     try {
-      const info = await CreateSession(panel.config.type, panel.config)
+      const config: ConnectionConfig = {
+        ...panel.config,
+        deferConnect: true,
+        initialCols: 0,
+        initialRows: 0,
+      }
+      const info = await CreateSession(panel.config.type, config)
       panelStore.bindSession(newPanel.id, info.id)
       // Create tab AFTER session is bound, so BaseTerminal mounts with valid sessionId
       const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
       panelStore.movePanelToTab(newPanel.id, newTab.id)
+      const size = await waitForTerminalSize(info.id)
+      if (size.cols > 0 && size.rows > 0) {
+        config.initialCols = size.cols
+        config.initialRows = size.rows
+      }
+      await SessionStart(info.id, config).catch((e) => {
+        console.error('Failed to start duplicated session:', e)
+        CloseSession(info.id).catch(() => {})
+      })
     } catch (e) {
       console.error('Failed to duplicate session:', e)
     }

@@ -188,7 +188,7 @@ import { focusPanelTerminal, installTerminalFocusRestore } from './composables/u
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
 import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart } from '../wailsjs/go/main/App'
-import { getTerminalSize } from './services/terminalManager'
+import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
@@ -828,6 +828,7 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
       }
       await SessionStart(info.id, dupConfig).catch((e) => {
         console.error('Failed to start duplicated session:', e)
+        CloseSession(info.id).catch(() => {})
       })
     } catch (e) {
       console.error('Failed to duplicate session:', e)
@@ -1163,17 +1164,11 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     await SessionStart(sessionId, config)
   } catch (e) {
     console.error('Failed to start session:', e)
+    // Session is registered in the backend but never connected — close it
+    // so it doesn't leak until app shutdown. UI rollback is the caller's
+    // responsibility (this helper is reused across connect / duplicate).
+    CloseSession(sessionId).catch(() => {})
   }
-}
-
-async function waitForTerminalSize(sessionId: string, timeoutMs = 1500): Promise<{ cols: number; rows: number }> {
-  const start = Date.now()
-  while (Date.now() - start < timeoutMs) {
-    const s = getTerminalSize(sessionId)
-    if (s.cols > 0 && s.rows > 0) return s
-    await new Promise(r => setTimeout(r, 30))
-  }
-  return getTerminalSize(sessionId)
 }
 
 function getShellLabel(path: string): string {
@@ -1288,6 +1283,7 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       await SessionStart(info.id, config)
     } catch (e) {
       console.error('Failed to start local session:', e)
+      CloseSession(info.id).catch(() => {})
     }
   } catch (e) {
     console.error('Failed to create local terminal:', e)
