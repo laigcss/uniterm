@@ -115,19 +115,15 @@ function highlightPlainText(text: string): string {
 // merely coloured parts of the line. Cursor movement / erase / OSC / private
 // modes indicate a TUI app (k9s, vim, htop…) drawing a screen; those lines
 // must stay untouched.
-//
-// Additionally skip lines that look like fenced code blocks / indented code
-// (Claude Code's stdout is heavy on them). Re-coloring braces / brackets
-// inside code with a different SGR than the surrounding text creates extra
-// reset sequences that some TUI apps misinterpret, producing overlapping
-// glyphs.
 const SGR_ONLY_LINE = /^(?:[^\x1b]|\x1b\[[\d;]*m)*$/
-const CODE_FENCE_LINE = /^\s{0,3}(?:```|~~~)|^ {4,}\S/
+const FENCE_OPEN = /^\s{0,3}(`{3,}|~{3,})/
+const INDENTED_CODE_LINE = /^ {4,}\S/
 
 export function highlight(text: string): string {
   // Process line by line to avoid cross-line regex matches.
   const lines = text.split(/(\r?\n)/)
   let result = ''
+  let fenceChar: '`' | '~' | null = null
   for (const line of lines) {
     if (line === '\r\n' || line === '\n' || line === '\r') {
       result += line
@@ -138,13 +134,23 @@ export function highlight(text: string): string {
       // gets highlighted. Same for plain text lines.
       if (line.indexOf('\x1b') !== -1 && !SGR_ONLY_LINE.test(line)) {
         result += line
-      } else if (CODE_FENCE_LINE.test(line)) {
-        // Skip brace / bracket highlighting inside code fences / indented
-        // code — Claude Code uses those heavily and re-coloring those
-        // chars produces SGR noise that interferes with TUI redraws.
-        result += line
       } else {
-        result += highlightPlainText(line)
+        const m = FENCE_OPEN.exec(line)
+        if (fenceChar) {
+          // Inside a fenced block — pass through until matching close fence.
+          if (m && m[1][0] === fenceChar) fenceChar = null
+          result += line
+        } else if (m) {
+          // Opening fence (``` or ~~~) — re-coloring braces / brackets
+          // inside fenced code injects SGR resets that some TUI apps
+          // misinterpret and produce overlapping glyphs.
+          fenceChar = m[1][0] as '`' | '~'
+          result += line
+        } else if (INDENTED_CODE_LINE.test(line)) {
+          result += line
+        } else {
+          result += highlightPlainText(line)
+        }
       }
     }
   }
