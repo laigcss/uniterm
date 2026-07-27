@@ -991,6 +991,17 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	if setter, ok := s.(interface{ SetLogOnConnect(bool) }); ok {
 		setter.SetLogOnConnect(config.LogOnConnect)
 	}
+	// Stash the initial terminal size the frontend measured BEFORE
+	// calling CreateSession. Connect() (called async below) reads it via
+	// getInitialSize() and uses it for PTY sizing — so the remote shell
+	// and Claude Code see the actual xterm cols from the first byte, not
+	// the default 80x24 that would otherwise be in use until the late
+	// SessionResize arrives.
+	if config.InitialCols > 0 && config.InitialRows > 0 {
+		if sz, ok := s.(interface{ SetPendingSize(int, int) }); ok {
+			sz.SetPendingSize(config.InitialCols, config.InitialRows)
+		}
+	}
 	// Apply terminal character encoding (SSH only). No-op for utf-8/empty.
 	if ssh, ok := s.(*session.SSHSession); ok {
 		ssh.SetEncoding(config.Encoding)
@@ -1162,52 +1173,16 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			return nil, fmt.Errorf("database connect failed: %w", err)
 		}
 		log.Writef("[CreateSession] database session connected successfully, id=%s", s.ID())
-	} else {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Writef("session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
-				}
-			}()
-
-			// RDP TCP pre-check: fail fast before creating the ActiveX window.
-			if sessionType == "rdp" {
-				port := config.Port
-				if port <= 0 { port = 3389 }
-				addr := fmt.Sprintf("%s:%d", config.Host, port)
-				tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
-				if tcpErr != nil {
-					log.Writef("[CreateSession] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
-					if a.ctx != nil {
-						runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
-							"id":           s.ID(),
-							"status":       "error",
-							"errorMessage": fmt.Sprintf("Cannot reach %s: %v", addr, tcpErr),
-						})
-					}
-					if a.sessionManager != nil {
-						_ = a.sessionManager.Close(s.ID())
-					}
-					return
-				}
-				tcpConn.Close()
-				log.Writef("[CreateSession] RDP TCP pre-check to %s succeeded", addr)
-			}
-
-			if err := s.Connect(config); err != nil {
-				if a.ctx != nil {
-					runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-						"id":   s.ID(),
-						"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
-					})
-				}
-				log.Writef("session %s connect error: %v", s.ID(), err)
-				// Remove failed session from manager to avoid leaking stale entries
-				if a.sessionManager != nil {
-					_ = a.sessionManager.Close(s.ID())
-				}
-			}
-		}()
+	} else if !config.DeferConnect {
+		// Non-database sessions (SSH, Local, Mosh, Telnet, SFTP, FTP, SMB,
+		// WebDAV, S3, Serial, K8s, Mongo, Spice) auto-connect UNLESS the
+		// frontend set DeferConnect — which it does so it can mount the
+		// xterm terminal, fitAddon-measure the real cols/rows, write them
+		// into config.InitialCols/InitialRows and only THEN call
+		// SessionStart. Without that gap Claude Code draws tables at the
+		// 80x24 default before SessionResize propagates the real width,
+		// and the borders drift across output batches.
+		a.launchConnectGoroutine(s, sessionType, config)
 	}
 
 	info := &session.SessionInfo{
@@ -1217,6 +1192,80 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		Status: s.Status(),
 	}
 	return info, nil
+}
+
+// launchConnectGoroutine starts the async Connect path that used to live
+// inline in CreateSession. Extracted so CreateSession can skip it when
+// the frontend opts into a deferred-start flow (DeferConnect=true) and
+// instead drives the connection via SessionStart after measuring cols/rows.
+func (a *App) launchConnectGoroutine(s session.Session, sessionType string, config session.ConnectionConfig) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Writef("session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
+			}
+		}()
+
+		// RDP TCP pre-check: fail fast before creating the ActiveX window.
+		if sessionType == "rdp" {
+			port := config.Port
+			if port <= 0 { port = 3389 }
+			addr := fmt.Sprintf("%s:%d", config.Host, port)
+			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
+			if tcpErr != nil {
+				log.Writef("[CreateSession] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
+				if a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+						"id":           s.ID(),
+						"status":       "error",
+						"errorMessage": fmt.Sprintf("Cannot reach %s: %v", addr, tcpErr),
+					})
+				}
+				if a.sessionManager != nil {
+					_ = a.sessionManager.Close(s.ID())
+				}
+				return
+			}
+			tcpConn.Close()
+			log.Writef("[CreateSession] RDP TCP pre-check to %s succeeded", addr)
+		}
+
+		if err := s.Connect(config); err != nil {
+			if a.ctx != nil {
+				runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+					"id":   s.ID(),
+					"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
+				})
+			}
+			log.Writef("session %s connect error: %v", s.ID(), err)
+			if a.sessionManager != nil {
+				_ = a.sessionManager.Close(s.ID())
+			}
+		}
+	}()
+}
+
+// SessionStart triggers the actual Connect() for a session that was
+// created with config.DeferConnect=true. The frontend calls this AFTER
+// mounting the xterm terminal and writing the measured InitialCols/InitialRows
+// into the deferred config, so the PTY is created at the correct
+// dimensions from the first byte — no 80x24 default phase where Claude
+// Code can draw tables at the wrong column count.
+func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+	// Re-stash the latest measured size in case the deferred config
+	// carries the real cols/rows the frontend discovered after mount.
+	if config.InitialCols > 0 && config.InitialRows > 0 {
+		s.SetPendingSize(config.InitialCols, config.InitialRows)
+	}
+	a.launchConnectGoroutine(s, config.Type, config)
+	return nil
 }
 
 func (a *App) CloseSession(sessionID string) error {

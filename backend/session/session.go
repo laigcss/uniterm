@@ -80,6 +80,23 @@ type ConnectionConfig struct {
 	TunnelSSHPassword string `json:"tunnelSSHPassword,omitempty"`
 	// SFTP max concurrent transfers (0 = unlimited)
 	SftpMaxConcurrency int `json:"sftpMaxConcurrency,omitempty"`
+	// Initial terminal size reported by the frontend BEFORE the
+	// SSH/local PTY is created. Without this the backend starts the
+	// remote shell with the default 80x24 and Claude Code draws tables
+	// at that width; by the time the frontend's fitAddon measures the
+	// actual xterm cols and sends SessionResize, several lines are
+	// already wrapped at 80 cols and the rest at the real cols — table
+	// borders drift apart. 0/0 means "use default"; otherwise fed into
+	// SetPendingSize before Connect so getInitialSize picks them up.
+	InitialCols int `json:"initialCols,omitempty"`
+	InitialRows int `json:"initialRows,omitempty"`
+	// DeferConnect tells the App layer to skip the auto-Connect goroutine
+	// when CreateSession is called. The frontend then calls SessionStart
+	// after mounting the xterm terminal and writing InitialCols/InitialRows
+	// via SetPendingSize — guarantees the PTY starts at the real xterm
+	// size, not the 80x24 default that would otherwise wrap Claude Code
+	// tables at the wrong column count.
+	DeferConnect bool `json:"deferConnect,omitempty"`
 	// FTP-specific fields
 	FtpEncryption string `json:"ftpEncryption,omitempty"` // "none"(default) | "auto" | "required"
 	FtpPassive    bool   `json:"ftpPassive"`              // passive mode (default true)
@@ -129,6 +146,11 @@ type Session interface {
 	Disconnect() error
 	IsConnected() bool
 	Resize(cols, rows int) error
+	// SetPendingSize stashes cols/rows to be applied at Connect time, for
+	// the deferred-start flow where the frontend mounts the xterm and
+	// measures the real size AFTER CreateSession has already created the
+	// session object but BEFORE SessionStart runs Connect.
+	SetPendingSize(cols, rows int)
 
 	Write(data []byte) error
 	SetOnDataCallback(cb func([]byte))
