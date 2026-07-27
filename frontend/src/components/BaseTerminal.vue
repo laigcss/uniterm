@@ -367,9 +367,16 @@ function sanitizeTerminalHistory(text: string): string {
   cleaned = cleaned.replace(/\x08+/g, '')
   // ASCII control chars except \n, \r, \t and ESC
   cleaned = cleaned.replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
-  // Drop binary garbage decoded as random Unicode blocks. Keep ASCII plus CJK
-  // so normal Chinese/Japanese/Korean terminal output is preserved.
-  cleaned = cleaned.replace(/[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯]/g, '')
+  // Drop binary garbage decoded as random Unicode blocks. Keep ASCII, CJK,
+  // box-drawing, block elements, arrows, math symbols and braille so that
+  // Claude Code / modern TUI output survives a KeepAlive history restore
+  // intact. Previously only ASCII + CJK survived — every box border, spinner
+  // and progress bar was stripped on tab switch, leaving tables as raw text
+  // with no alignment.
+  cleaned = cleaned.replace(
+    /[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯─-╿▀-▟←-⇿∀-⋿⟀-⟯⠀-⣿⬀-⯿]/g,
+    ''
+  )
   // Collapse blank lines left by removed garbage
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
   // Forward debug info to backend log so we can inspect the raw garbage.
