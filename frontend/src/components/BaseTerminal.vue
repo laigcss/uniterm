@@ -371,7 +371,7 @@ function sanitizeTerminalHistory(text: string): string {
   // (see the session:data handler) but history restore goes through this
   // path, so the same filter applies here. Without it a tab switch
   // replays the '─���─' pattern Claude Code emits.
-  cleaned = cleaned.replace(/�/g, '')
+  cleaned = cleaned.replace(/\uFFFD/g, '')
   // Drop binary garbage decoded as random Unicode blocks. Keep ASCII, CJK,
   // box-drawing, block elements, arrows, math symbols and braille so that
   // Claude Code / modern TUI output survives a KeepAlive history restore
@@ -1142,7 +1142,7 @@ onMounted(() => {
     // (visible as '���' between box-drawing chars, e.g. '─���─'); the
     // Go decoder surfaces these as U+FFFD on its way through Wails IPC.
     // They serve no purpose for the user, only clutter the rendered line.
-    data = data.replace(/�/g, '')
+    data = data.replace(/\uFFFD/g, '')
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
