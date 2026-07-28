@@ -84,6 +84,11 @@
               :tab="activeTab"
               :connection="k8sConnectionForTab(activeTab)"
             />
+            <ContainerTabContent
+              v-else-if="activeTab.type === 'container'"
+              :key="activeTab.id"
+              :tab="activeTab"
+            />
             <StartTabContent
               v-else-if="activeTab.type === 'start'"
               :key="activeTab.id"
@@ -158,6 +163,7 @@ import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
 import MonitorTabContent from './components/MonitorTabContent.vue'
 import K8sTabContent from './components/K8sTabContent.vue'
+import ContainerTabContent from './components/ContainerTabContent.vue'
 import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
@@ -175,6 +181,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
 import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
+import { useContainerStore } from './stores/containerStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
@@ -233,6 +240,7 @@ const sessionStore = useSessionStore()
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
+const containerStore = useContainerStore()
 const updateCheck = useUpdateCheck()
 let uninstallFocusRestore: (() => void) | null = null
 const { t, locale } = useI18n()
@@ -941,6 +949,11 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       try { await CloseSession(p.sessionId) } catch (_) {}
     }
   }
+  // Close container session (KeepAlive may keep the component mounted, so the
+  // poll timer + backend connection in containerStore must be closed explicitly)
+  if (tab && tab.type === 'container') {
+    containerStore.close(tab.id)
+  }
   // Terminal sessions must be explicitly closed to terminate the connection/shell process
   if (tab && tab.type === 'terminal') {
     const p = panelStore.getPanel(tab.panelId)
@@ -1074,6 +1087,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   if (config.type === 'spice') { await onConnectSPICE(config, prevStart); return }
   if (config.type === 'database') { await onConnectDB(config, prevStart); return }
   if (config.type === 'k8s') { await onConnectK8s(config, prevStart); return }
+  if (config.type === 'container') { onConnectContainer(config, prevStart); return }
 
   // Credential check
   const resolved = await ensureCredentials(config)
@@ -1498,6 +1512,19 @@ async function onConnectK8s(config: ConnectionConfig, prevStart?: any) {
   const reposition = prevStart ? closeStartAndReposition(prevStart) : null
   const nsDefault = config.k8sNamespace || 'default'
   const tab = tabStore.createK8sTab(displayTitle, panel.id, config.id, nsDefault)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  RecordRecentConnection(config.id)
+}
+
+function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
+  connectionStore.add(config)
+
+  const displayTitle = config.name || 'Container'
+  const panel = panelStore.createPanel(config, 'container')
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const tab = tabStore.createContainerTab(displayTitle, panel.id, config.id, config.containerRuntime ?? 'docker')
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)

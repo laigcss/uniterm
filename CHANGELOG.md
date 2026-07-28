@@ -5,6 +5,7 @@
 ### What's Changed
 
 **New Features**
+- Container management for Docker, Podman, and nerdctl — on the local machine or on remote hosts over SSH. Browse containers with live status; run lifecycle actions (start/stop/restart/pause/unpause/rename/remove); follow logs with tail control; exec into a container in a terminal tab; view inspect details; list, pull, and remove images; and create containers from a dedicated dialog. nerdctl connections can also switch namespaces. Localized in all 9 languages.
 - Kubernetes management. Connect to clusters via kubeconfig with optional SSH tunnel; browse and manage resources, edit YAML, follow Pod logs, exec into containers in a terminal tab, and view Pod/Node CPU and memory metrics.
 - AI skills. Create, import, and manage skills under Settings → Skills & Commands, then type `/` in the AI input to attach one to your request; the AI can also save new skills itself. (@surenwuyuwuqiu)
 - AI commands: reusable prompt templates. Pick one from the `/` dropdown to attach it as a `/name` tag, optionally type arguments, and send; managed under Settings → Skills & Commands. (@surenwuyuwuqiu)
@@ -32,6 +33,7 @@ Thanks to @surenwuyuwuqiu for their contributions to this release.
 ### 更新内容
 
 **新功能**
+- 容器管理：支持 Docker、Podman、nerdctl，可管理本机或 SSH 远程主机。浏览容器列表并查看实时状态；执行生命周期操作（启动/停止/重启/暂停/恢复/重命名/删除）；跟随查看日志并支持 tail 控制；在终端标签页中 exec 进入容器；查看 inspect 详情；列出、拉取、删除镜像；通过专用对话框创建容器。nerdctl 连接还支持切换 namespace。已覆盖全部 9 种语言。
 - Kubernetes 管理。通过 kubeconfig 接入集群（支持 SSH 隧道），浏览与管理集群资源、编辑 YAML、跟随查看 Pod 日志、exec 进入容器终端，并展示 Pod/Node CPU、内存指标。
 - AI 技能（Skills）。在设置 → 技能与命令中创建、导入和管理技能，AI 输入框输入 `/` 即可为本次请求挂载；AI 也可自行保存新技能。（@surenwuyuwuqiu）
 - AI 命令（Commands）：可复用的 Prompt 模板。`/` 下拉选择后以 `/名称` 标签挂载，可附加参数后发送；在设置 → 技能与命令中管理。（@surenwuyuwuqiu）

@@ -57,9 +57,9 @@ Legend: ✅ Shipped, 🚧 Planned
 | Protocol | Status | Since | Notes | Contributor |
 |----------|--------|-------|-------|-------------|
 | Kubernetes | ✅ | v1.6.0-alpha | Cluster browsing and pod management |  |
-| Docker | 🚧 | — | Manage remote containers over SSH |  |
-| nerdctl | 🚧 | — | Manage remote containers over SSH |  |
-| Podman | 🚧 | — | Manage remote containers over SSH |  |
+| Docker | ✅ | v1.6.0-alpha | Local and remote (SSH) container management |  |
+| nerdctl | ✅ | v1.6.0-alpha | Local and remote (SSH) container management |  |
+| Podman | ✅ | v1.6.0-alpha | Local and remote (SSH) container management |  |
 
 ## Core Features
 
