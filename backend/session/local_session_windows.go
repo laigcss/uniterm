@@ -199,10 +199,8 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 			if isMSYSBash {
 				go forceUTF8ConsoleCodePage(c.Pid())
 			}
-			// Do NOT call s.Disconnect() from this goroutine: Disconnect is
-			// safe to call concurrently via disconnectOnce, but the waitDone
-			// channel below serialises callers waiting for the child to exit
-			// and a self-call would deadlock.
+			// Goroutine must NOT call s.Disconnect() — disconnectOnce makes
+			// it safe, but we don't want Disconnect to depend on it.
 			go func() {
 				_, _ = s.cpty.Wait(context.Background())
 			}()
@@ -236,9 +234,7 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 	s.stdout = stdoutPipe
 	s.cmd = cmd
 
-	// Do NOT call s.Disconnect() from here: the channel close in
-	// disconnectOnce means a self-call would deadlock (Disconnect closes
-	// the quit channel and waits on waitDone-like state).
+	// Goroutine must NOT call s.Disconnect(); see ConPTY branch above.
 	go func() {
 		_ = s.cmd.Wait()
 	}()

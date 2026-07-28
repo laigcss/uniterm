@@ -121,11 +121,10 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 	s.pty = ptyFile
 	s.waitDone = make(chan struct{})
 
-	// Run cmd.Wait in its own goroutine and signal completion on waitDone so
-	// Disconnect can join it before tearing the child down. The goroutine
-	// intentionally does NOT call s.Disconnect(): doing so deadlocks because
-	// Disconnect itself waits on waitDone, which only closes via the defer
-	// that fires AFTER Disconnect returns.
+	// Run cmd.Wait in its own goroutine; the defer-close of waitDone lets
+	// Disconnect join the wait. The goroutine must NOT call s.Disconnect() —
+	// that would deadlock (Disconnect waits on waitDone, only closed by the
+	// defer that fires AFTER Disconnect returns).
 	go func() {
 		defer close(s.waitDone)
 		_ = s.cmd.Wait()
