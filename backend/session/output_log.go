@@ -504,7 +504,7 @@ func (l *OutputLogger) Enable(dir, name, protocol string) (string, error) {
 		l.bw = bufio.NewWriterSize(file, logBufferSize)
 		l.flushCh = make(chan struct{})
 		l.flushDone = make(chan struct{})
-		go l.flushLoop()
+		go l.flushLoop(l.flushCh, l.flushDone)
 	}
 
 	fmt.Fprintf(file, "%s\nName: %s\nProtocol: %s\nStarted: %s\n\n",
@@ -625,15 +625,18 @@ func (l *OutputLogger) SetBuffered(buffered bool) {
 	l.bufferedSet = true
 }
 
-// flushLoop is the periodic flush goroutine. It exits when flushCh is
-// closed (by Disable) and signals flushDone so the closer can wait.
-func (l *OutputLogger) flushLoop() {
-	defer close(l.flushDone)
+// flushLoop is the periodic flush goroutine. It exits when stopCh is
+// closed (by Disable) and signals done so the closer can wait. Both
+// channels are captured locally so the loop reads stable pointers —
+// Disable can write to l.flushCh / l.flushDone while this goroutine is
+// parked on the select without triggering a data race.
+func (l *OutputLogger) flushLoop(stopCh, done chan struct{}) {
+	defer close(done)
 	ticker := time.NewTicker(logFlushInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-l.flushCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			l.mu.Lock()
