@@ -122,7 +122,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         const belowY = (cursorY + 1) * cellHeight
         cursorPixelPos.value = { x, y: belowY }
       }
-      // Echo off detection: local buffer grew but terminal cursor didn't. →
+      // Echo off (password mode): local buffer grew but terminal cursor didn't.
       if (lineChars.value.length > 0 && cursorX === lastTerminalCursorX && cursorX >= 0) {
         isPasswordPrompt = true
       } else if (cursorX !== lastTerminalCursorX) {
