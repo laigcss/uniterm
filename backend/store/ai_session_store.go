@@ -86,10 +86,14 @@ func (s *AISessionStore) Save(data AISessionData) error {
 		if err != nil {
 			return fmt.Errorf("marshal session %s: %w", sess.ID, err)
 		}
-		if err := atomicWriteFile(s.shardPath(sess.ID), payload, 0600); err != nil {
+		// Use filepath.Base(id) for both the shard name and the wanted
+		// key so orphan cleanup matches against the actual on-disk name
+		// (the only path the cleanup pass sees).
+		name := filepath.Base(sess.ID)
+		if err := atomicWriteFile(filepath.Join(s.shardDir(), name+".json"), payload, 0600); err != nil {
 			return fmt.Errorf("write shard %s: %w", sess.ID, err)
 		}
-		wanted[sess.ID] = struct{}{}
+		wanted[name] = struct{}{}
 	}
 
 	entries, err := os.ReadDir(s.shardDir())
