@@ -2555,14 +2555,35 @@ type ModelInfo struct {
 	DisplayName string `json:"display_name"`
 }
 
-// FetchModels fetches the available model list from an OpenAI-compatible /v1/models endpoint.
-func (a *App) FetchModels(apiKey, baseURL string) ([]ModelInfo, error) {
-	url := strings.TrimRight(baseURL, "/") + "/models"
+// FetchModels fetches the available model list. openai/responses hit an
+// OpenAI-compatible /models endpoint with a Bearer token; anthropic hits
+// /v1/models with the x-api-key + anthropic-version headers, mirroring
+// chatCompletionAnthropic's URL and auth handling.
+func (a *App) FetchModels(apiKey, baseURL, protocol string) ([]ModelInfo, error) {
+	base := strings.TrimRight(baseURL, "/")
+
+	var url string
+	if protocol == "anthropic" {
+		// Base URL conventionally omits /v1; tolerate legacy configs with it.
+		if strings.HasSuffix(base, "/v1") {
+			url = base + "/models"
+		} else {
+			url = base + "/v1/models"
+		}
+	} else {
+		url = base + "/models"
+	}
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if protocol == "anthropic" {
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	req.Header.Set("User-Agent", "uniTerm")
 
 	client := &http.Client{Timeout: 10 * time.Second}
