@@ -305,7 +305,7 @@ export const useAIStore = defineStore('ai', () => {
             s.name = trimmed.length > 20 ? trimmed.slice(0, 20) + '...' : trimmed
           }
         }
-        doSave()
+        debouncedSave()
       }
     }
     messagesVersion.value++
@@ -326,7 +326,7 @@ export const useAIStore = defineStore('ai', () => {
       if (s) {
         s.messages.push(r)
         s.updatedAt = Date.now()
-        doSave()
+        debouncedSave()
       }
     }
     messagesVersion.value++
@@ -346,7 +346,7 @@ export const useAIStore = defineStore('ai', () => {
       if (s) {
         s.messages.push(r)
         s.updatedAt = Date.now()
-        doSave()
+        debouncedSave()
       }
     }
     messagesVersion.value++
@@ -359,7 +359,7 @@ export const useAIStore = defineStore('ai', () => {
       if (s) {
         s.messages = []
         s.updatedAt = Date.now()
-        doSave()
+        debouncedSave()
       }
     }
     messagesVersion.value++
@@ -475,6 +475,25 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  // F-304: debounce doSave by 500ms to coalesce bursts from addMessage and
+  // multi-token streaming. saveNow() flushes immediately for explicit user
+  // actions (deleteSession, renameSession, after-chat completion).
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  function debouncedSave() {
+    if (saveTimer) return
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      doSave()
+    }, 500)
+  }
+  async function saveNow() {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    await doSave()
+  }
+
   function createSession(name?: string) {
     const now = Date.now()
     const session: AISession = {
@@ -524,7 +543,7 @@ export const useAIStore = defineStore('ai', () => {
     const idx = sessions.value.findIndex(s => s.id === sessionId)
     if (idx === -1) return
     sessions.value.splice(idx, 1)
-    doSave()
+    saveNow()
     if (currentSessionId.value === sessionId) {
       if (sessions.value.length > 0) {
         switchSession(sessions.value[0].id)
@@ -538,7 +557,7 @@ export const useAIStore = defineStore('ai', () => {
     const s = sessions.value.find(s => s.id === sessionId)
     if (s) {
       s.name = name
-      doSave()
+      saveNow()
     }
   }
 
