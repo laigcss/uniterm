@@ -196,7 +196,10 @@ func (s *SkillsStore) savePrefs(data skillPrefsData) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.prefsPath(), bytes, 0600)
+	// Atomic write (tmp + rename): concurrent List callers all scan the
+	// same dir and converge on identical prefs, so racing saves are safe
+	// — readers must not see a half-written file though.
+	return atomicWriteFile(s.prefsPath(), bytes, 0600)
 }
 
 // ---- 目录扫描（B1，内容/存在性以目录为真相源）----
