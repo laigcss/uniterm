@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 
 export interface CursorPosition {
@@ -15,7 +15,13 @@ export interface UseTerminalInputOptions {
 }
 
 export function useTerminalInput(terminal: Terminal | null, options: UseTerminalInputOptions) {
-  const lineBuffer = ref('')
+  // Char-array source of truth — mid-string inserts cost O(n) splice instead
+  // of two string copies + concat per keystroke. lineBuffer mirrors as string.
+  const lineChars = ref<string[]>([])
+  const lineBuffer = computed<string>({
+    get: () => lineChars.value.join(''),
+    set: (val) => { lineChars.value = Array.from(val) }
+  })
   const cursorIndex = ref(0)
   const currentToken = ref('')
   const cursorPixelPos = ref<CursorPosition>({ x: 0, y: 0 })
@@ -46,10 +52,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
       // Prompt endings: $ # > ] plus common zsh/oh-my-zsh/powerline glyphs
       const PROMPT_RE = /(.+?[$#>\]❯➜→»λ])(?:\s+|$)(.*)/
       const rows = (terminal as any).rows || 24
-      // Cursor row is the cheapest probe: the running command (if any) lives
-      // on the line where the cursor currently sits. Check it first, then only
-      // walk up until we find a prompt — don't scan the full visible row span
-      // when only the most recent prompt line is interesting.
+      // Cursor row first: running command lives where the cursor sits.
       const cursorY = (buffer.y ?? 0) + (buffer.baseY ?? 0)
       const tryLine = (y: number): string | null => {
         if (y < 0) return null
@@ -73,7 +76,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
       }
       const fromCursor = tryLine(cursorY)
       if (fromCursor !== null) return fromCursor
-      // Walk up from the cursor row toward the top of the visible buffer.
+      // Walk up until we find a prompt — stop at the first match.
       for (let dy = 1; dy < rows; dy++) {
         const y = cursorY - dy
         if (y < 0) break
@@ -87,9 +90,10 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
   }
 
   function updateToken() {
-    const text = lineBuffer.value
+    const buf = lineChars.value
     const idx = cursorIndex.value
-    const beforeCursor = text.slice(0, idx)
+    let beforeCursor = ''
+    for (let i = 0; i < idx && i < buf.length; i++) beforeCursor += buf[i]
     // Use the entire command before cursor for suggestion matching,
     // so "git status" matches history entries like "git status --short".
     currentToken.value = beforeCursor.trim()
@@ -118,9 +122,8 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         const belowY = (cursorY + 1) * cellHeight
         cursorPixelPos.value = { x, y: belowY }
       }
-      // Detect hidden input: local lineBuffer grew but terminal cursor
-      // didn't advance → echo is off (password mode)
-      if (lineBuffer.value.length > 0 && cursorX === lastTerminalCursorX && cursorX >= 0) {
+      // Echo off detection: local buffer grew but terminal cursor didn't. →
+      if (lineChars.value.length > 0 && cursorX === lastTerminalCursorX && cursorX >= 0) {
         isPasswordPrompt = true
       } else if (cursorX !== lastTerminalCursorX) {
         isPasswordPrompt = false
@@ -136,7 +139,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
   }
 
   function isAtLineEnd(): boolean {
-    return cursorIndex.value >= lineBuffer.value.length
+    return cursorIndex.value >= lineChars.value.length
   }
 
   function handleInput(data: string) {
@@ -158,7 +161,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         if (isPasswordPrompt) {
           isPasswordPrompt = false
         }
-        lineBuffer.value = ''
+        lineChars.value = []
         cursorIndex.value = 0
         // Reset suggestion suppress on new command
         if (options.onResetSuppress) {
@@ -166,7 +169,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         }
       } else if (code === 127 || char === '\b') {
         if (cursorIndex.value > 0) {
-          lineBuffer.value = lineBuffer.value.slice(0, cursorIndex.value - 1) + lineBuffer.value.slice(cursorIndex.value)
+          lineChars.value.splice(cursorIndex.value - 1, 1)
           cursorIndex.value--
         }
       } else if (code === 1) {
@@ -174,13 +177,13 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         cursorIndex.value = 0
       } else if (code === 5) {
         // Ctrl+E — end of line
-        cursorIndex.value = lineBuffer.value.length
+        cursorIndex.value = lineChars.value.length
       } else if (code === 11) {
         // Ctrl+K — delete from cursor to end of line
-        lineBuffer.value = lineBuffer.value.slice(0, cursorIndex.value)
+        lineChars.value.length = cursorIndex.value
       } else if (code === 21) {
         // Ctrl+U — delete from beginning to cursor
-        lineBuffer.value = lineBuffer.value.slice(cursorIndex.value)
+        lineChars.value.splice(0, cursorIndex.value)
         cursorIndex.value = 0
       } else if (code === 27) {
         i++
@@ -197,31 +200,31 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
             if (cursorIndex.value > 0) cursorIndex.value--
           } else if (finalChar === 'C') {
             // Right arrow
-            if (cursorIndex.value < lineBuffer.value.length) cursorIndex.value++
+            if (cursorIndex.value < lineChars.value.length) cursorIndex.value++
           } else if (finalChar === 'H' && param === '') {
             // Home
             cursorIndex.value = 0
           } else if (finalChar === 'F' && param === '') {
             // End
-            cursorIndex.value = lineBuffer.value.length
+            cursorIndex.value = lineChars.value.length
           } else if (finalChar === '~') {
             if (param === '1' || param === '7') {
               // Home (alternate)
               cursorIndex.value = 0
             } else if (param === '4' || param === '8') {
               // End (alternate)
-              cursorIndex.value = lineBuffer.value.length
+              cursorIndex.value = lineChars.value.length
             } else if (param === '3') {
               // Delete
-              if (cursorIndex.value < lineBuffer.value.length) {
-                lineBuffer.value = lineBuffer.value.slice(0, cursorIndex.value) + lineBuffer.value.slice(cursorIndex.value + 1)
+              if (cursorIndex.value < lineChars.value.length) {
+                lineChars.value.splice(cursorIndex.value, 1)
               }
             }
           }
         }
       } else if (code >= 32) {
         // Support all printable characters including CJK
-        lineBuffer.value = lineBuffer.value.slice(0, cursorIndex.value) + char + lineBuffer.value.slice(cursorIndex.value)
+        lineChars.value.splice(cursorIndex.value, 0, char)
         cursorIndex.value++
       }
     }
@@ -251,7 +254,7 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
   }
 
   function clearBuffer() {
-    lineBuffer.value = ''
+    lineChars.value = []
     cursorIndex.value = 0
     currentToken.value = ''
   }
