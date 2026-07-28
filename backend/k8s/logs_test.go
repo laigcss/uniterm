@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -71,6 +72,105 @@ func TestLogStreamDeliversLines(t *testing.T) {
 	defer mu.Unlock()
 	if len(got) != 3 {
 		t.Fatalf("want 3 lines, got %d: %v", len(got), got)
+	}
+}
+
+// TestLogReconnectDoesNotCallOnEnd (F-404): same contract as
+// TestWatchReconnectDoesNotCallOnEnd but for the log stream — a
+// transient pod log disconnect fires onReconnect and reopens the
+// stream, onEnd is reserved for the terminal case.
+func TestLogReconnectDoesNotCallOnEnd(t *testing.T) {
+	var hits int
+	srv, ca := startTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		flusher, _ := w.(http.Flusher)
+		w.WriteHeader(200)
+		if hits == 1 {
+			fmt.Fprintln(w, "boot-line")
+			flusher.Flush()
+			hj, ok := w.(http.Hijacker)
+			if ok {
+				conn, _, _ := hj.Hijack()
+				conn.Close()
+			}
+			return
+		}
+		for i := 0; ; i++ {
+			select {
+			case <-r.Context().Done():
+				return
+			default:
+			}
+			fmt.Fprintf(w, "line-%d\n", i)
+			flusher.Flush()
+			time.Sleep(20 * time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+
+	kc := &Kubeconfig{
+		CurrentContext: "t",
+		Contexts:       map[string]contextEntry{"t": {Cluster: "c", User: "u"}},
+		Clusters:       map[string]clusterEntry{"c": {Server: srv.URL, CertificateAuthorityData: ca}},
+		Users:          map[string]userEntry{"u": {Token: "x"}},
+	}
+	client, base, _ := BuildClient(kc, "t")
+
+	var (
+		mu         sync.Mutex
+		endCalls   int
+		reconCalls int
+	)
+	ended := make(chan struct{})
+	wrappedEnd := func(err error) {
+		mu.Lock()
+		endCalls++
+		mu.Unlock()
+		select {
+		case <-ended:
+			t.Errorf("onEnd called more than once (err=%v)", err)
+		default:
+			close(ended)
+		}
+	}
+	onReconnect := func(err error) {
+		mu.Lock()
+		reconCalls++
+		mu.Unlock()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := startLogStream(ctx, client, base, "/api/v1/namespaces/default/pods/p1/log?follow=true&container=c",
+		func(string) {}, wrappedEnd, onReconnect, make(chan struct{})); err != nil {
+		t.Fatalf("startLogStream: %v", err)
+	}
+
+	time.Sleep(1500 * time.Millisecond)
+	mu.Lock()
+	preEnd := endCalls
+	preRecon := reconCalls
+	mu.Unlock()
+	if preEnd != 0 {
+		t.Errorf("onEnd called %d times during reconnect (want 0)", preEnd)
+	}
+	if preRecon == 0 {
+		t.Errorf("onReconnect called %d times (want >= 1)", preRecon)
+	}
+	if hits < 2 {
+		t.Errorf("server saw %d requests, want >= 2", hits)
+	}
+
+	cancel()
+	select {
+	case <-ended:
+	case <-time.After(2 * time.Second):
+		t.Fatal("onEnd never called after ctx cancel")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if endCalls != 1 {
+		t.Errorf("onEnd calls = %d, want exactly 1", endCalls)
 	}
 }
 
