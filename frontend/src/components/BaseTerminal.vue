@@ -165,6 +165,10 @@ let writtenChunks = 0
 // bottom; otherwise the viewport stays where the user left it.
 let savedViewportY: number | null = null
 let savedBaseY: number | null = null
+// Original scrollback saved before shrinking the buffer on KeepAlive
+// deactivation; restored on activation so the user sees their history.
+let savedScrollback: number | null = null
+const INACTIVE_SCROLLBACK = 500
 let unsubscribe: (() => void) | null = null
 let statusUnsubscribe: (() => void) | null = null
 let onDocumentMouseDown: ((e: MouseEvent) => void) | null = null
@@ -200,17 +204,6 @@ const SFTP_OSC633_RE = /\x1b\]633;S[^\x07]*\x07/g
 // accumulate and flush once per frame; the pending buffer is instance-
 // scoped so two BaseTerminal instances don't share a queue.
 
-// F-030: hot-path regex literals hoisted to module scope. Inline `/re/g`
-// creates a fresh RegExp object on every entry of the session:data
-// callback, which fires on every chunk the Go backend emits (50+/sec
-// during Claude Code streaming). At module scope the engine reuses the
-// compiled automaton once per page load.
-const ZMODEM_HEX_RE = /\*{2,}\x18[ABC][0-9a-fA-F]{10,}/
-const ED3_RE = /\x1b\[3J/g
-const ED2_COMBINED_RE = /\x1b\[H\x1b\[2J/g
-const ED2_RE = /\x1b\[2J/g
-const FFFD_RE = new RegExp('�', 'g')
-const SFTP_OSC633_RE = /\x1b\]633;S[^\x07]*\x07/g
 
 function initZmodemService(sessionId: string) {
   if (!sessionId || props.mode !== 'ssh') return
@@ -1366,6 +1359,10 @@ onActivated(() => {
   // that succeeds will run _innerRefresh which writes scrollTop from the
   // restored ydisp; once scrollTop matches the desired value, the next
   // _innerRefresh is a no-op.
+  if (savedScrollback != null && terminal) {
+    terminal.options.scrollback = savedScrollback
+    savedScrollback = null
+  }
   resize()
   ;[0, 50, 150, 300, 600].forEach(d => setTimeout(resize, d))
   // Re-initialize zmodem service only if it was disposed in onDeactivated.
@@ -1392,6 +1389,18 @@ onDeactivated(() => {
   }
   if (buf && typeof buf.baseY === 'number') {
     savedBaseY = buf.baseY
+  }
+  // F-026: shrink xterm's pixel buffer for inactive KeepAlive tabs. The full
+  // 2500-line scrollback stays attached to xterm's internal grid — we'd have
+  // to re-stream every byte to fully detach it. Instead, dropping scrollback
+  // to 500 lines forces xterm to release the older rows' canvas + line
+  // objects, freeing ~80% of the inactive buffer's footprint without losing
+  // the visible scrollback on reactivation. Reactivation restores the
+  // user-configured scrollback (and re-renders the canvas from the
+  // sessionStore replay path).
+  if (terminal && (terminal.options.scrollback ?? 0) > INACTIVE_SCROLLBACK) {
+    savedScrollback = terminal.options.scrollback ?? null
+    terminal.options.scrollback = INACTIVE_SCROLLBACK
   }
   // Dispose per-component listeners to prevent duplicate input when another
   // BaseTerminal mounts with the same shared terminal instance.
