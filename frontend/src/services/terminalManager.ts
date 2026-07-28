@@ -82,6 +82,14 @@ export function acquireTerminal(
     // faces when the system has them. The fix sketch's "install addon"
     // step is a no-op against the v5.5 source; the lineHeight bump above
     // is the actual rendering improvement.
+    //
+    // F-037: DEC mode 2026 (synchronized output, \`\e[?2026h…\e[?2026l\`)
+    // bracketing used by Claude Code's thinking-block redraws is not
+    // honored by xterm.js v5.5 — the parser core has no handler for
+    // SET/RESET 2026, and no SyncAddon is published on npm. Mode 2026
+    // was added to xterm.js after v5 (the synchronized output feature
+    // landed upstream in 2024). Until the v6 upgrade, the thinking-block
+    // flicker noted in the finding is structural to this xterm major.
     const terminal = new Terminal({
       fontSize: options.fontSize ?? 13,
       fontFamily: formatFontFamily(options.fontFamily ?? 'Consolas, "Courier New", monospace'),
