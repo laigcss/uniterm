@@ -2,7 +2,6 @@ package session
 
 import (
 	"bufio"
-	crand "crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -187,14 +186,7 @@ func (p *lineProcessor) Feed(in []byte) []byte {
 		return nil
 	}
 	now := time.Now()
-	// Pre-size out: at most every byte in `in` can produce one byte of
-	// output, plus the trailing pending line tail (F-015). Avoids the
-	// var-out nil growth that paid one allocation per append.
-	cap := len(in) + (len(p.line) - p.emitted)
-	if cap < 0 {
-		cap = len(in)
-	}
-	out := make([]byte, 0, cap)
+	var out []byte
 	// If we have been idle long enough and there is un-emitted content in
 	// the buffer, flush only the new tail (bytes past the high-water mark)
 	// so timestamps in the log roughly track the wall clock. The partial
@@ -328,6 +320,12 @@ func (p *lineProcessor) applyCSI(csi []byte) {
 		}
 		ins := make([]byte, n)
 		p.line = append(p.line[:p.pos], append(ins, p.line[p.pos:]...)...)
+		// Bytes that were past the insert point shifted right by n. If any of
+		// those were already emitted, bump the high-water mark so they aren't
+		// double-flushed on the next sweep.
+		if p.emitted > p.pos {
+			p.emitted += n
+		}
 	}
 	// If the buffer was shortened past the emitted mark, pull it back so
 	// we don't silently lose bytes that were already flushed.
@@ -335,6 +333,11 @@ func (p *lineProcessor) applyCSI(csi []byte) {
 		p.emitted = len(p.line)
 	}
 }
+
+// maxCSIParam caps parsed CSI numeric parameters so a hostile or buggy
+// remote can't feed values that overflow int arithmetic and drive p.pos
+// negative downstream. Real terminals never exceed a few thousand.
+const maxCSIParam = 4096
 
 // parseCSIParam extracts the idx-th semicolon-separated numeric parameter
 // from params. Returns defaultVal if the parameter is missing or empty.
@@ -365,7 +368,13 @@ func parseCSIParam(params []byte, idx, defaultVal int) int {
 	}
 	n := 0
 	for _, b := range params[start:end] {
+		if b < '0' || b > '9' {
+			break
+		}
 		n = n*10 + int(b-'0')
+		if n > maxCSIParam {
+			return maxCSIParam
+		}
 	}
 	return n
 }
@@ -403,19 +412,14 @@ func (p *lineProcessor) Reset() {
 // The zero value is a disabled logger; Enable installs a file, Disable
 // closes it. All methods are safe for concurrent use.
 type OutputLogger struct {
-	mu        sync.Mutex
-	file      *os.File
-	bw        *bufio.Writer
-	path      string
-	stripper  ansiStripper
-	lines     lineProcessor
-	flushCh   chan struct{}
+	mu       sync.Mutex
+	file     *os.File
+	bw       *bufio.Writer
+	path     string
+	stripper ansiStripper
+	lines    lineProcessor
+	flushCh  chan struct{}
 	flushDone chan struct{}
-	// dirtySignal is a 1-slot buffered channel that WriteOutput pushes
-	// to (non-blocking) when there is pending data to flush. flushLoop
-	// blocks on it instead of a fixed ticker, so idle sessions do not
-	// wake once per second (F-011).
-	dirtySignal chan struct{}
 	// buffered controls whether writes go through bufio + periodic flush.
 	// SetBuffered(false) opts back into the legacy Sync-per-write path,
 	// useful for callers that need durable-per-write semantics (and for
@@ -429,36 +433,12 @@ type OutputLogger struct {
 // syscalls on the hot path (see SESSION-07).
 const logBufferSize = 64 * 1024
 
-// logFlushInterval is the maximum age of buffered bytes before the
-// flush goroutine forwards them to the underlying file. The OS coalesces
-// the actual disk write; we only need to forward buffered bytes out of
-// user-space.
+// logFlushInterval is how often the periodic goroutine flushes the
+// buffered writer to the underlying file. The OS coalesces the actual
+// disk write; we only need to forward buffered bytes out of user-space.
 const logFlushInterval = 1 * time.Second
 
-// logFlushIdleExit is how long the flush goroutine stays alive after the
-// last write before it parks itself. On a long idle session this avoids
-// the previous 1 Hz wakeup that the user reported as one of the dominant
-// sources of idle CPU (F-011): the goroutine now sleeps silently after
-// logFlushIdleExit of inactivity and is re-armed by WriteOutput.
-const logFlushIdleExit = 30 * time.Second
-
 const bannerHeader = "=== uniTerm session log ==="
-
-// randSuffix returns a short random suffix for log filenames so that a
-// same-second Enable collision resolves in one OpenFile call (F-012)
-// instead of a 100-iteration scan. Six lowercase hex chars = ~16M
-// distinct values per timestamp second, far more than any user opens
-// in practice. crypto/rand seeded by the runtime; we don't need
-// cryptographic strength here, only uniqueness.
-func randSuffix() string {
-	var b [3]byte
-	if _, err := crand.Read(b[:]); err != nil {
-		// crypto/rand failure is exceedingly rare; fall back to nanosecond
-		// timestamp so a collision still resolves deterministically.
-		return fmt.Sprintf("%09x", time.Now().UnixNano())
-	}
-	return fmt.Sprintf("%x", b[:])
-}
 
 // Enable opens the log file and writes the header banner. Returns the
 // final path. If dir is empty, defaultSessionLogDir() is used. If name
@@ -480,15 +460,27 @@ func (l *OutputLogger) Enable(dir, name, protocol string) (string, error) {
 	now := time.Now()
 	stamp := now.Format("20060102_150405")
 
-	// Pick a unique filename. The previous brute-force loop tried up to
-	// 100 numeric suffixes via os.OpenFile(O_CREATE|O_EXCL), costing up
-	// to 100 stat+create syscalls on collision (F-012). Use a randomized
-	// temp pattern instead — one syscall, no scan loop. The human-readable
-	// name still encodes the timestamp so directory listings stay useful.
-	final := filepath.Join(dir, base+"_"+stamp+"_"+randSuffix()+".log")
-	file, err := os.OpenFile(final, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return "", fmt.Errorf("open log %s: %w", final, err)
+	var file *os.File
+	var final string
+	for suffix := 1; suffix <= 100; suffix++ {
+		var candidate string
+		if suffix == 1 {
+			candidate = filepath.Join(dir, base+"_"+stamp+".log")
+		} else {
+			candidate = filepath.Join(dir, fmt.Sprintf("%s_%s_%d.log", base, stamp, suffix))
+		}
+		f, err := os.OpenFile(candidate, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			file = f
+			final = candidate
+			break
+		}
+		if !os.IsExist(err) {
+			return "", fmt.Errorf("open log %s: %w", candidate, err)
+		}
+	}
+	if file == nil {
+		return "", fmt.Errorf("could not allocate log filename in %s", dir)
 	}
 
 	l.mu.Lock()
@@ -512,13 +504,17 @@ func (l *OutputLogger) Enable(dir, name, protocol string) (string, error) {
 		l.bw = bufio.NewWriterSize(file, logBufferSize)
 		l.flushCh = make(chan struct{})
 		l.flushDone = make(chan struct{})
-		l.dirtySignal = make(chan struct{}, 1)
 		go l.flushLoop()
 	}
 
 	fmt.Fprintf(file, "%s\nName: %s\nProtocol: %s\nStarted: %s\n\n",
 		bannerHeader, name, protocol, now.Format("2006-01-02 15:04:05 -0700"))
-	_ = file.Sync()
+	if l.bw != nil {
+		_ = l.bw.Flush()
+		_ = file.Sync()
+	} else {
+		_ = file.Sync()
+	}
 	return final, nil
 }
 
@@ -532,12 +528,36 @@ func (l *OutputLogger) Disable() {
 	// Flush any buffered partial line so an unterminated last command
 	// still appears in the log.
 	if partial := l.lines.FlushPartial(); len(partial) > 0 {
-		_, _ = l.file.Write(partial)
+		if l.bw != nil {
+			_, _ = l.bw.Write(partial)
+		} else {
+			_, _ = l.file.Write(partial)
+		}
 	}
-	fmt.Fprintf(l.file, "\n=== Ended: %s ===\n", time.Now().Format("2006-01-02 15:04:05 -0700"))
+	if l.bw != nil {
+		fmt.Fprintf(l.bw, "\n=== Ended: %s ===\n", time.Now().Format("2006-01-02 15:04:05 -0700"))
+		_ = l.bw.Flush()
+	} else {
+		fmt.Fprintf(l.file, "\n=== Ended: %s ===\n", time.Now().Format("2006-01-02 15:04:05 -0700"))
+		_ = l.file.Sync()
+	}
+	// Stop the periodic flush goroutine.
+	if l.flushCh != nil {
+		close(l.flushCh)
+		l.flushCh = nil
+	}
+	if l.flushDone != nil {
+		// Wait outside the lock — the goroutine may need to take it.
+		done := l.flushDone
+		l.flushDone = nil
+		l.mu.Unlock()
+		<-done
+		l.mu.Lock()
+	}
 	_ = l.file.Sync()
 	_ = l.file.Close()
 	l.file = nil
+	l.bw = nil
 	l.path = ""
 }
 
@@ -560,47 +580,32 @@ func (l *OutputLogger) Path() string {
 // disabled or if there is nothing to write. Errors from writing are
 // swallowed — a session must not fail because a log file cannot be
 // written.
-//
-// F-013: the stripper and lineProcessor are pure byte transforms and
-// don't need the file lock. We acquire it briefly to check that a file
-// is open and to hand the resulting bytes to bufio.Writer; the heavy
-// work happens under l.mu but released before the disk-bound write so
-// the file lock window is just the bw.Write call.
 func (l *OutputLogger) WriteOutput(data []byte) {
 	if len(data) == 0 {
 		return
 	}
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.file == nil {
-		l.mu.Unlock()
 		return
 	}
 	stripped := l.stripper.Strip(data)
 	if len(stripped) == 0 {
-		l.mu.Unlock()
 		return
 	}
 	toWrite := l.lines.Feed(stripped)
 	if len(toWrite) == 0 {
-		l.mu.Unlock()
 		return
 	}
 	if l.bw != nil {
 		// Buffered mode: hand bytes to bufio.Writer; the periodic flush
 		// goroutine (or Disable) forwards them to the file. No Sync per write.
 		_, _ = l.bw.Write(toWrite)
-		// Nudge the flush goroutine. Non-blocking — the signal coalesces
-		// bursts of writes into a single flush.
-		select {
-		case l.dirtySignal <- struct{}{}:
-		default:
-		}
 	} else {
 		if _, err := l.file.Write(toWrite); err == nil {
 			_ = l.file.Sync()
 		}
 	}
-	l.mu.Unlock()
 }
 
 // SetBuffered toggles the bufio + periodic-flush path. When buffered is
@@ -620,57 +625,22 @@ func (l *OutputLogger) SetBuffered(buffered bool) {
 	l.bufferedSet = true
 }
 
-// flushLoop forwards buffered bytes to the underlying file. It is
-// event-driven on WriteOutput's dirtySignal and arms a one-shot timer
-// at logFlushInterval after each dirty event, so idle sessions do not
-// wake once per second (F-011). After logFlushIdleExit without writes
-// the goroutine parks itself silently until the next dirty signal.
+// flushLoop is the periodic flush goroutine. It exits when flushCh is
+// closed (by Disable) and signals flushDone so the closer can wait.
 func (l *OutputLogger) flushLoop() {
 	defer close(l.flushDone)
-	var timer *time.Timer
-	stopTimer := func() {
-		if timer == nil {
-			return
-		}
-		if !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-	}
+	ticker := time.NewTicker(logFlushInterval)
+	defer ticker.Stop()
 	for {
-		// Drain any pending dirty signal before sleeping. Bursts of
-		// WriteOutput calls collapse into a single flush arm.
 		select {
-		case <-l.dirtySignal:
-		default:
-		}
-		if timer != nil {
-			select {
-			case <-l.flushCh:
-				stopTimer()
-				return
-			case <-l.dirtySignal:
-				stopTimer()
-				timer = time.NewTimer(logFlushInterval)
-			case <-timer.C:
-				l.mu.Lock()
-				if l.bw != nil {
-					_ = l.bw.Flush()
-				}
-				l.mu.Unlock()
-				// Re-arm an idle-exit timer. If no further writes arrive
-				// within logFlushIdleExit, we stop the timer and park.
-				timer = time.NewTimer(logFlushIdleExit)
+		case <-l.flushCh:
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			if l.bw != nil {
+				_ = l.bw.Flush()
 			}
-		} else {
-			select {
-			case <-l.flushCh:
-				return
-			case <-l.dirtySignal:
-				timer = time.NewTimer(logFlushInterval)
-			}
+			l.mu.Unlock()
 		}
 	}
 }
