@@ -357,21 +357,16 @@ const searchText = ref('')
 const searchResultIndex = ref(0)
 const searchResultCount = ref(0)
 
+// F-029: single alternation regex covers all six "drop garbage" passes
+// plus the \n{3,}→\n\n collapse; callback dispatches on whether match starts with \n.
+const SANITIZE_STRIP_RE =
+  /\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}|\x18+|\x08+|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]|\uFFFD|[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯─-╿▀-▟←-⇿∀-⋿⟀-⟯⠀-⣿⬀-⯿]|\n{3,}/g
+
 function sanitizeTerminalHistory(text: string): string {
   if (!text) return text
-  let cleaned = text
-  // ZModem HEX header fragments
-  cleaned = cleaned.replace(/\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}/g, '')
-  // ZModem ZDLE (0x18) and backspace (0x08) sequences
-  cleaned = cleaned.replace(/\x18+/g, '')
-  cleaned = cleaned.replace(/\x08+/g, '')
-  // ASCII control chars except \n, \r, \t and ESC
-  cleaned = cleaned.replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
-  // Drop binary garbage decoded as random Unicode blocks. Keep ASCII plus CJK
-  // so normal Chinese/Japanese/Korean terminal output is preserved.
-  cleaned = cleaned.replace(/[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯]/g, '')
-  // Collapse blank lines left by removed garbage
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+  const cleaned = text.replace(SANITIZE_STRIP_RE, (m) =>
+    m.charCodeAt(0) === 0x0a ? '\n\n' : ''
+  )
   // Forward debug info to backend log so we can inspect the raw garbage.
   if (cleaned !== text) {
     FrontendLog('sanitizeTerminalHistory', `raw last 400: ${JSON.stringify(text.slice(-400))}`)
