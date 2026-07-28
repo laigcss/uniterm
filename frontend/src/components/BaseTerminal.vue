@@ -200,6 +200,18 @@ const SFTP_OSC633_RE = /\x1b\]633;S[^\x07]*\x07/g
 // accumulate and flush once per frame; the pending buffer is instance-
 // scoped so two BaseTerminal instances don't share a queue.
 
+// F-030: hot-path regex literals hoisted to module scope. Inline `/re/g`
+// creates a fresh RegExp object on every entry of the session:data
+// callback, which fires on every chunk the Go backend emits (50+/sec
+// during Claude Code streaming). At module scope the engine reuses the
+// compiled automaton once per page load.
+const ZMODEM_HEX_RE = /\*{2,}\x18[ABC][0-9a-fA-F]{10,}/
+const ED3_RE = /\x1b\[3J/g
+const ED2_COMBINED_RE = /\x1b\[H\x1b\[2J/g
+const ED2_RE = /\x1b\[2J/g
+const FFFD_RE = new RegExp('�', 'g')
+const SFTP_OSC633_RE = /\x1b\]633;S[^\x07]*\x07/g
+
 function initZmodemService(sessionId: string) {
   if (!sessionId || props.mode !== 'ssh') return
   // Don't create a duplicate zmodem service if a transfer is already
@@ -1092,7 +1104,7 @@ onMounted(() => {
       // contain `**B<hex>` — which previously flipped the session into binary
       // ZMODEM mode and made the sentry write protocol bytes back to the
       // server, crashing the remote shell (issue #242).
-      const ZMODEM_HEX_RE = /\*{2,}\x18[ABC][0-9a-fA-F]{10,}/
+      // F-030: regex literal hoisted to module scope (ZMODEM_HEX_RE).
       if (ZMODEM_HEX_RE.test(payload.data)) {
         console.debug('[zmodem] header detected, entering transfer mode')
         isZmodemStarting = true
@@ -1146,12 +1158,12 @@ onMounted(() => {
     if (data.includes('\x1b[2J') && terminal.buffer.active.type !== 'alternate') {
       const rows = terminal.rows
       const scrollClear = '\n'.repeat(rows) + '\x1b[H'
-      data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
-      data = data.replace(/\x1b\[2J/g, scrollClear)
+      data = data.replace(ED2_COMBINED_RE, scrollClear)
+      data = data.replace(ED2_RE, scrollClear)
     }
-      const cleaned = data.replace(SFTP_OSC633_RE, '')
+    data = data.replace(FFFD_RE, '')
     if (props.mode === 'sftp') {
-      const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
+      const cleaned = data.replace(SFTP_OSC633_RE, '')
       if (cleaned) {
         terminal.write(cleaned)
       }
