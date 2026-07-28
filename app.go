@@ -63,6 +63,13 @@ type App struct {
 	chatCancelMu         stdsync.Mutex      // guards chatCancel
 	moveResizeCh         chan string        // defer EventsEmit from WndProc
 
+	// F-208: single shared http.Client for chatCompletion* /
+	// FetchModels calls. Built lazily once on first use so tests that
+	// don't hit the LLM path don't pay for the transport; subsequent
+	// calls reuse the keep-alive pool and skip the TCP+TLS handshake.
+	httpClient     *http.Client
+	httpClientOnce stdsync.Once
+
 	// Session output log state (issue #227). Logs are keyed by panelID so
 	// they survive reconnects — a single panel may cycle through many
 	// session objects and the log file spans all of them. sessionToPanel
@@ -265,6 +272,156 @@ func (a *App) SaveWindowState(x, y, width, height int, maximised bool) {
 	ls.WindowHeight = height
 	ls.WindowMaximised = maximised
 	a.localStateStore.Save(ls)
+}
+
+// IsForeground reports whether the app window is currently in the
+// foreground. Background goroutines consult this before running work
+// that should pause when the user can't see the terminal (F-043).
+func (a *App) IsForeground() bool {
+	return a.foreground.Load()
+}
+
+// SetAppVisibility is the lifecycle hook the frontend fires from
+// document.visibilitychange. It updates the foreground flag, emits a
+// `app:visibility` event so other Go-side listeners (e.g. auto-sync,
+// AI SSE keepalive) can pause/resume, and is safe to call from any
+// goroutine.
+//
+// Pass visible=false when the page goes hidden (tab switch, OS minimise,
+// Cmd+H, etc.). The polling goroutine started in startup() is a
+// fallback for cases where the JS event doesn't fire (e.g. macOS Cmd+H
+// before any document has loaded).
+func (a *App) SetAppVisibility(visible bool) {
+	prev := a.foreground.Load()
+	if prev == visible {
+		return
+	}
+	a.foreground.Store(visible)
+	a.foregroundMu.Lock()
+	a.foregroundMu.Unlock()
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "app:visibility", visible)
+	}
+}
+
+// connDelta is the wire shape for store:connections:delta — only the
+// changed connection (or all connections on first emit) crosses the
+// bridge instead of the full store blob. See F-204.
+type connDelta struct {
+	Kind string                    `json:"kind"`             // "upsert" | "remove" | "replace"
+	ID   string                    `json:"id,omitempty"`     // for upsert/remove
+	Conn *session.ConnectionConfig `json:"connection,omitempty"`
+	All  *session.ConnectionStoreData `json:"all,omitempty"`  // for replace (first emit)
+}
+
+// F-205: typed event shapes + pooled buffer so session:data emits
+// stop allocating a fresh map[string]interface{} per chunk.
+type sessionDataEvent struct {
+	ID   string `json:"id"`
+	Data string `json:"data"`
+}
+
+type sessionBinaryEvent struct {
+	ID   string `json:"id"`
+	Data string `json:"data"`
+}
+
+var sessionDataPool = stdsync.Pool{
+	New: func() any {
+		b := &bytes.Buffer{}
+		b.Grow(8 * 1024) // typical SSH chunk size, avoids re-grow on small inputs
+		return b
+	},
+}
+
+// computeConnDelta returns the set of upsert/remove deltas between
+// the last snapshot and newData. If no snapshot exists yet (first save
+// after startup), returns a single "replace" delta carrying the full
+// new data so the frontend can hydrate without waiting for a sync.
+func (a *App) computeConnDelta(newData session.ConnectionStoreData) []connDelta {
+	a.lastConnSnapshotMu.RLock()
+	prev := a.lastConnSnapshot
+	a.lastConnSnapshotMu.RUnlock()
+
+	if prev.Connections == nil && prev.Groups == nil {
+		// F-204: no prior snapshot — ship a single replace so the
+		// frontend can hydrate without waiting for sync.
+		all := newData
+		return []connDelta{{Kind: "replace", All: &all}}
+	}
+
+	prevIDs := make(map[string]struct{}, len(prev.Connections))
+	for _, c := range prev.Connections {
+		prevIDs[c.ID] = struct{}{}
+	}
+	newIDs := make(map[string]struct{}, len(newData.Connections))
+	for _, c := range newData.Connections {
+		newIDs[c.ID] = struct{}{}
+	}
+
+	var deltas []connDelta
+	for _, c := range newData.Connections {
+		if _, ok := prevIDs[c.ID]; !ok {
+			cc := c
+			deltas = append(deltas, connDelta{Kind: "upsert", ID: c.ID, Conn: &cc})
+		}
+	}
+	for id := range prevIDs {
+		if _, ok := newIDs[id]; !ok {
+			deltas = append(deltas, connDelta{Kind: "remove", ID: id})
+		}
+	}
+	return deltas
+}
+
+// saveConnSnapshot updates the snapshot used for future delta
+// computation. Called after every successful Save.
+func (a *App) saveConnSnapshot(data session.ConnectionStoreData) {
+	a.lastConnSnapshotMu.Lock()
+	a.lastConnSnapshot = data
+	a.lastConnSnapshotMu.Unlock()
+}
+
+// llmHTTPClient returns the App-wide *http.Client used by every
+// LLM-bound call. F-208: hoisted here so three back-to-back
+// ChatCompletion calls reuse the same TCP+TLS connection instead of
+// paying a fresh handshake each time. FetchModels uses a shorter
+// timeout via a derived client (see FetchModels).
+func (a *App) llmHTTPClient() *http.Client {
+	a.httpClientOnce.Do(func() {
+		tr := &http.Transport{
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   8,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			ExpectContinueTimeout: 2 * time.Second,
+		}
+		a.httpClient = &http.Client{Transport: tr}
+	})
+	return a.httpClient
+}
+// which don't fire the JS visibilitychange event (Cmd+H on macOS before
+// the WebView is loaded, OS-level Alt+Tab) still update the foreground
+// flag. Runs every 2s — coarse on purpose, this is a lifecycle hint not
+// a hot path. Exits when ctx is done.
+func (a *App) watchForeground(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if a.ctx == nil {
+				continue
+			}
+			visible := !runtime.WindowIsMinimised(a.ctx)
+			if visible != a.foreground.Load() {
+				a.SetAppVisibility(visible)
+			}
+		}
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -1656,7 +1813,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 	req.Header.Set("User-Agent", userAgent)
 
-	client := &http.Client{Timeout: 0}
+	client := a.llmHTTPClient()
 	res, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -1975,7 +2132,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	client := &http.Client{Timeout: 0}
+	client := a.llmHTTPClient()
 	res, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -2362,7 +2519,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("User-Agent", userAgent)
 
-	client := &http.Client{Timeout: 0}
+	client := a.llmHTTPClient()
 	res, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -2586,8 +2743,13 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string) ([]ModelInfo, error)
 	}
 	req.Header.Set("User-Agent", "uniTerm")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	res, err := client.Do(req)
+	// F-208: share the same transport as the LLM clients so the model
+	// list call also benefits from the keep-alive pool; the request
+	// itself carries its own 10s deadline via the per-request context.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+	res, err := a.llmHTTPClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
