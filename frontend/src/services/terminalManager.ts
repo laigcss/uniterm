@@ -90,6 +90,14 @@ export function acquireTerminal(
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(searchAddon)
     terminal.loadAddon(unicodeAddon)
+    // F-035: xterm.js v5.5 does not expose a charSizeCompat option, and
+    // ITheme has no codeBlockBackground field — both suggested by the
+    // finding's fix sketch. The Unicode 11 activeVersion here is the
+    // best available WC-width alignment in this xterm major; downstream
+    // the backend PTY uses the same Unicode 11 tables so column counts
+    // match. Upgrading to xterm.js v6 would unlock the extended-theme
+    // codeBlockBackground support needed for Claude Code's 256-color code
+    // blocks to stand out from prose — tracked as a v6 dependency bump.
 
     managed = {
       terminal,
