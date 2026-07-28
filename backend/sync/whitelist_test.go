@@ -50,14 +50,16 @@ func TestStageAndCommitWhitelist(t *testing.T) {
 	repoPath := t.TempDir()
 	g := initTestRepo(t, repoPath)
 
-	// Whitelisted files — should be staged.
+	// Whitelisted files — should be staged. The list mirrors the
+	// exact names StageAndCommit iterates over.
 	whitelisted := map[string]string{
-		"connections.json": `{"connections":[]}`,
-		"settings.json":    `{"theme":"dark"}`,
-		"ai-sessions.json": `[]`,
-		"skills.json":      `[]`,
+		"connections.json":   `{"connections":[]}`,
+		"settings.json":      `{"theme":"dark"}`,
+		"ai-sessions.json":   `[]`,
+		"skills.json":        `[]`,
 		"quickCommands.json": `[]`,
-		".sync-salt":       base64.StdEncoding.EncodeToString([]byte("0123456789abcdef")),
+		".sync-salt":         base64.StdEncoding.EncodeToString([]byte("0123456789abcdef")),
+		"README.md":          "# sync repo\n",
 	}
 	for name, content := range whitelisted {
 		if err := os.WriteFile(filepath.Join(repoPath, name), []byte(content), 0600); err != nil {
