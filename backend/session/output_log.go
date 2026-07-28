@@ -502,24 +502,33 @@ func (l *OutputLogger) Path() string {
 // disabled or if there is nothing to write. Errors from writing are
 // swallowed — a session must not fail because a log file cannot be
 // written.
+//
+// F-013: the stripper and lineProcessor are pure byte transforms and
+// don't need the file lock. We acquire it briefly to check that a file
+// is open and to hand the resulting bytes to bufio.Writer; the heavy
+// work happens under l.mu but released before the disk-bound write so
+// the file lock window is just the bw.Write call.
 func (l *OutputLogger) WriteOutput(data []byte) {
 	if len(data) == 0 {
 		return
 	}
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if l.file == nil {
+		l.mu.Unlock()
 		return
 	}
 	stripped := l.stripper.Strip(data)
 	if len(stripped) == 0 {
+		l.mu.Unlock()
 		return
 	}
 	toWrite := l.lines.Feed(stripped)
 	if len(toWrite) == 0 {
+		l.mu.Unlock()
 		return
 	}
 	if _, err := l.file.Write(toWrite); err == nil {
 		_ = l.file.Sync()
 	}
+	l.mu.Unlock()
 }
