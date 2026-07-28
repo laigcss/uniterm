@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -68,6 +69,7 @@ type LocalSession struct {
 	baseSession
 	cmd                  *exec.Cmd
 	pty                  *os.File
+	waitDone             chan struct{} // closed when cmd.Wait() returns
 	quit                 chan struct{}
 	quitOnce             sync.Once
 	mouseTrackingEnabled atomic.Bool
@@ -117,10 +119,16 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("start pty: %w", err)
 	}
 	s.pty = ptyFile
+	s.waitDone = make(chan struct{})
 
+	// Run cmd.Wait in its own goroutine and signal completion on waitDone so
+	// Disconnect can join it before tearing the child down. The goroutine
+	// intentionally does NOT call s.Disconnect(): doing so deadlocks because
+	// Disconnect itself waits on waitDone, which only closes via the defer
+	// that fires AFTER Disconnect returns.
 	go func() {
+		defer close(s.waitDone)
 		_ = s.cmd.Wait()
-		s.Disconnect()
 	}()
 
 	s.setStatus(StatusConnected)
@@ -199,6 +207,13 @@ func (s *LocalSession) Disconnect() error {
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
 		s.cmd.Process.Kill()
+	}
+	if s.waitDone != nil {
+		// Bound the wait so a hung child can't block teardown forever.
+		select {
+		case <-s.waitDone:
+		case <-time.After(2 * time.Second):
+		}
 	}
 	s.setStatus(StatusDisconnected)
 	return nil
