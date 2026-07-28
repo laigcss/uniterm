@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	stdsync "sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -59,9 +60,21 @@ type App struct {
 	wndProcCb            uintptr // keep alive to prevent GC
 	inSizeMove           bool
 	webviewDataPath      string
-	chatCancel           context.CancelFunc // active stream cancellation
-	chatCancelMu         stdsync.Mutex      // guards chatCancel
+	chatCancel           atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
 	moveResizeCh         chan string        // defer EventsEmit from WndProc
+	// F-043: foreground flag — true while the window is visible and the
+	// user is interacting; background goroutines (keepalive, output_log
+	// flush, k8s watches, auto-sync) should consult IsForeground before
+	// burning CPU. Updated via SetAppVisibility (frontend bridge) and a
+	// low-frequency minimised poll as a fallback for paths that don't
+	// fire visibilitychange (e.g. app hidden via Cmd+H on macOS).
+	foreground   atomic.Bool
+	foregroundMu stdsync.RWMutex
+	// F-212: last seen connections snapshot so emitConnDelta (F-204) can
+	// compute upsert/remove deltas without re-shipping the full store on
+	// every save.
+	lastConnSnapshot   session.ConnectionStoreData
+	lastConnSnapshotMu stdsync.RWMutex
 
 	// F-208: single shared http.Client for chatCompletion* /
 	// FetchModels calls. Built lazily once on first use so tests that
@@ -190,24 +203,11 @@ func (a *App) startup(ctx context.Context) {
 	// primary entry point — this is belt-and-suspenders.
 	go a.watchForeground(ctx)
 
-	// F-407: NewSyncService's disk-touching init (UserConfigDir +
-	// MkdirAll + NewKeychain probing the OS keychain) can take
-	// 50–500ms+ on macOS. Run it on a goroutine so OnStartup returns
-	// promptly and the main window can paint. Wails callers that hit
-	// a.syncService before init completes briefly wait on Ready().
-	syncSvc, _ := sync.NewSyncServiceAsync()
-	a.syncService = syncSvc
-	// Schedule the post-init wiring (password store + auto-sync) once
-	// init completes so we don't race the goroutine.
-	go func() {
-		select {
-		case <-syncSvc.Ready():
-		case <-ctx.Done():
-			return
-		}
-		if syncSvc.PasswordStore() == nil {
-			return
-		}
+	syncSvc, err := sync.NewSyncService()
+	if err != nil {
+		log.Writef("Failed to create sync service: %v", err)
+	} else {
+		a.syncService = syncSvc
 		// Wire keychain into stores for password/API key migration
 		if a.connectionStore != nil {
 			a.connectionStore.SetPasswordStore(syncSvc.PasswordStore())
@@ -217,17 +217,19 @@ func (a *App) startup(ctx context.Context) {
 		}
 		// Auto-sync on startup if enabled
 		if syncSvc.IsAutoSyncEnabled() {
-			result, err := syncSvc.Sync()
-			if err != nil {
-				log.Writef("Auto-sync on startup failed: %v", err)
-			} else if result != nil && result.Direction == sync.SyncConflict {
-				runtime.EventsEmit(a.ctx, "sync:conflict", map[string]interface{}{
-					"localTime":  result.Conflict.LocalTime.Format(time.RFC3339),
-					"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
-				})
-			}
+			go func() {
+				result, err := syncSvc.Sync()
+				if err != nil {
+					log.Writef("Auto-sync on startup failed: %v", err)
+				} else if result.Direction == sync.SyncConflict {
+					runtime.EventsEmit(a.ctx, "sync:conflict", map[string]interface{}{
+						"localTime":  result.Conflict.LocalTime.Format(time.RFC3339),
+						"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
+					})
+				}
+			}()
 		}
-	}()
+	}
 
 	// Restore window position and size from last session
 	a.restoreWindow(ctx)
@@ -1898,13 +1900,17 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	a.chatCancelMu.Lock()
-	a.chatCancel = cancel
-	a.chatCancelMu.Unlock()
+	// F-308: register our cancel in the App-level pointer and only
+	// clear it on the way out if no one replaced us. The previous code
+	// stored a single context.CancelFunc under a mutex and unconditionally
+	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
+	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
 	defer func() {
-		a.chatCancelMu.Lock()
-		a.chatCancel = nil
-		a.chatCancelMu.Unlock()
+		// CAS the slot back to nil, but only if it still points at our
+		// own cancel — a newer call may have already taken over the slot.
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
 	}()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(modifiedJSON))
@@ -2297,13 +2303,17 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	a.chatCancelMu.Lock()
-	a.chatCancel = cancel
-	a.chatCancelMu.Unlock()
+	// F-308: register our cancel in the App-level pointer and only
+	// clear it on the way out if no one replaced us. The previous code
+	// stored a single context.CancelFunc under a mutex and unconditionally
+	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
+	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
 	defer func() {
-		a.chatCancelMu.Lock()
-		a.chatCancel = nil
-		a.chatCancelMu.Unlock()
+		// CAS the slot back to nil, but only if it still points at our
+		// own cancel — a newer call may have already taken over the slot.
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
 	}()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
@@ -2713,13 +2723,17 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	a.chatCancelMu.Lock()
-	a.chatCancel = cancel
-	a.chatCancelMu.Unlock()
+	// F-308: register our cancel in the App-level pointer and only
+	// clear it on the way out if no one replaced us. The previous code
+	// stored a single context.CancelFunc under a mutex and unconditionally
+	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
+	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
 	defer func() {
-		a.chatCancelMu.Lock()
-		a.chatCancel = nil
-		a.chatCancelMu.Unlock()
+		// CAS the slot back to nil, but only if it still points at our
+		// own cancel — a newer call may have already taken over the slot.
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
 	}()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
@@ -2819,8 +2833,8 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			switch itemType {
 			case "message":
 				block := map[string]interface{}{"type": "text", "text": ""}
-				blockByOutputIdx[ev.OutputIndex] = block
-				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
+				blockByOutputIdx[outputIdx] = block
+				idxByOutputIdx[outputIdx] = nextBlockIndex
 				// F-320: typed payload.
 				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
 					Index:        nextBlockIndex,
@@ -2834,8 +2848,8 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 					"name":  item["name"],
 					"input": "",
 				}
-				blockByOutputIdx[ev.OutputIndex] = block
-				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
+				blockByOutputIdx[outputIdx] = block
+				idxByOutputIdx[outputIdx] = nextBlockIndex
 				// F-320: typed payload.
 				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
 					Index: nextBlockIndex,
@@ -2859,17 +2873,17 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			}
 			// F-307: append to per-block *bytes.Buffer instead of
 			// O(n²) string concatenation. Flushed on output_item.done.
-			buf, ok := textBufs[ev.OutputIndex]
+			buf, ok := textBufs[outputIdx]
 			if !ok {
 				buf = &bytes.Buffer{}
-				textBufs[ev.OutputIndex] = buf
+				textBufs[outputIdx] = buf
 			}
-			buf.WriteString(ev.Delta)
+			buf.WriteString(delta)
 			// F-320: typed struct + dropped unused fields — see
 			// chatCompletionAnthropic for rationale.
 			runtime.EventsEmit(a.ctx, "ai:token", aiTokenEvent{
-				Text:  ev.Delta,
-				Index: idxByOutputIdx[ev.OutputIndex],
+				Text:  delta,
+				Index: idxByOutputIdx[outputIdx],
 			})
 
 		case "response.function_call_arguments.delta":
@@ -2881,15 +2895,15 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			if delta == "" {
 				continue
 			}
-			buf, ok := inputBufs[ev.OutputIndex]
+			buf, ok := inputBufs[outputIdx]
 			if !ok {
 				buf = &bytes.Buffer{}
-				inputBufs[ev.OutputIndex] = buf
+				inputBufs[outputIdx] = buf
 			}
-			buf.WriteString(ev.Delta)
+			buf.WriteString(delta)
 			// F-320: typed payload.
 			runtime.EventsEmit(a.ctx, "ai:input_json_delta", aiInputJsonDeltaEvent{
-				PartialJSON: ev.Delta,
+				PartialJSON: delta,
 			})
 
 		case "response.output_item.done":
@@ -2898,13 +2912,13 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				continue
 			}
 			// F-307: flush per-block buffers once into the block map.
-			if buf, ok := textBufs[ev.OutputIndex]; ok {
+			if buf, ok := textBufs[outputIdx]; ok {
 				if buf.Len() > 0 {
 					block["text"] = buf.String()
 				}
-				delete(textBufs, ev.OutputIndex)
+				delete(textBufs, outputIdx)
 			}
-			if buf, ok := inputBufs[ev.OutputIndex]; ok {
+			if buf, ok := inputBufs[outputIdx]; ok {
 				if buf.Len() > 0 {
 					inputStr := buf.String()
 					if block["type"] == "tool_use" {
@@ -2918,12 +2932,12 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 						block["input"] = inputStr
 					}
 				}
-				delete(inputBufs, ev.OutputIndex)
+				delete(inputBufs, outputIdx)
 			}
 			contentBlocks = append(contentBlocks, block)
 			// F-320: typed payload.
 			runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
-				Index: idxByOutputIdx[ev.OutputIndex],
+				Index: idxByOutputIdx[outputIdx],
 			})
 			delete(blockByOutputIdx, outputIdx)
 
@@ -2956,10 +2970,8 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 
 // CancelChatStream cancels the currently active ChatCompletion stream.
 func (a *App) CancelChatStream() {
-	a.chatCancelMu.Lock()
-	defer a.chatCancelMu.Unlock()
-	if a.chatCancel != nil {
-		a.chatCancel()
+	if c := a.chatCancel.Load(); c != nil {
+		(*c)()
 	}
 }
 
