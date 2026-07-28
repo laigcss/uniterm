@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, reactive, watch } from 'vue'
+import { ref, computed, reactive, shallowReactive, shallowRef, watch, markRaw } from 'vue'
 import type { AIMessage, AIConfig, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
 import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../wailsjs/go/main/App'
 import { useLocalStateStore } from './localStateStore'
@@ -271,6 +271,7 @@ export const useAIStore = defineStore('ai', () => {
         doSave()
       }
     }
+    messagesVersion.value++
     return r
   }
 
@@ -291,6 +292,7 @@ export const useAIStore = defineStore('ai', () => {
         doSave()
       }
     }
+    messagesVersion.value++
   }
 
   function addCommandCard(name: string, args: string) {
@@ -310,6 +312,7 @@ export const useAIStore = defineStore('ai', () => {
         doSave()
       }
     }
+    messagesVersion.value++
   }
 
   function clearMessages() {
@@ -322,6 +325,7 @@ export const useAIStore = defineStore('ai', () => {
         doSave()
       }
     }
+    messagesVersion.value++
   }
 
   async function init() {
@@ -358,6 +362,7 @@ export const useAIStore = defineStore('ai', () => {
     } else {
       createSession()
     }
+    messagesVersion.value++
   }
 
   async function initConfig() {
@@ -434,6 +439,7 @@ export const useAIStore = defineStore('ai', () => {
       sessions.value = sessions.value.slice(0, 15)
     }
     clearQueue()
+    messagesVersion.value++
     // Don't save empty sessions — only persist when first message is added
   }
 
@@ -443,6 +449,7 @@ export const useAIStore = defineStore('ai', () => {
     currentSessionId.value = sessionId
     messages.value = s.messages.map(m => reactive({ ...m }) as AIMessage)
     clearQueue()
+    messagesVersion.value++
   }
 
   function deleteSession(sessionId: string) {
@@ -477,8 +484,13 @@ export const useAIStore = defineStore('ai', () => {
     stopRequested.value = false
   }
 
-  // Build Anthropic-native message array (system is separate top-level field)
-  const conversation = computed(() => {
+  // Build Anthropic-native message array (system is separate top-level field).
+  // F-301: conversation is rebuilt only when messagesVersion bumps (add/remove),
+  // not when per-token content mutates. Stored as a shallowRef; the computed
+  // wrapper preserves the existing public API.
+  const conversationValue = shallowRef<Array<Record<string, unknown>>>([])
+
+  function buildConversation() {
     // Token budget: 80% of Claude's 200K context window, minus headroom
     const MAX_CONTEXT_TOKENS = 160000
 
@@ -650,11 +662,15 @@ export const useAIStore = defineStore('ai', () => {
       }
     }
 
-    // Messages are inherently dynamic — no cache_control breakpoints here.
-    // Caching is handled entirely on the system prompt (see llm.ts).
+    conversationValue.value = deduped
+  }
 
-    return deduped
-  })
+  // F-301: rebuild conversation only when messages are added/removed.
+  const messagesVersion = ref(0)
+  watch(messagesVersion, () => buildConversation())
+  buildConversation()
+
+  const conversation = computed(() => conversationValue.value)
 
   const systemPrompt = computed(() => SYSTEM_RULES)
 
