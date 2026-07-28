@@ -184,6 +184,21 @@ let zmodemStartTimer: ReturnType<typeof setTimeout> | null = null
 let zmodemDirection: 'upload' | 'download' | undefined = undefined
 let zmodemCancellingUntil = 0
 let exporting = false
+// F-032: rAF coalescer state. Per-instance (see comment above for why).
+let pendingDataChunks: string[] = []
+let pendingFlushRAF: number | null = null
+
+// F-030: hot-path regex literals hoisted to module scope.
+const ZMODEM_HEX_RE = /\*{2,}\x18[ABC][0-9a-fA-F]{10,}/
+const ED3_RE = /\x1b\[3J/g
+const ED2_COMBINED_RE = /\x1b\[H\x1b\[2J/g
+const ED2_RE = /\x1b\[2J/g
+const FFFD_RE = new RegExp('�', 'g')
+const SFTP_OSC633_RE = /\x1b\]633;S[^\x07]*\x07/g
+
+// F-032: rAF coalescer for session:data -> terminal.write. Chunks
+// accumulate and flush once per frame; the pending buffer is instance-
+// scoped so two BaseTerminal instances don't share a queue.
 
 function initZmodemService(sessionId: string) {
   if (!sessionId || props.mode !== 'ssh') return
@@ -1104,8 +1119,27 @@ onMounted(() => {
       return
     }
 
+    // F-032: defer the regex pipeline + terminal.write to the next paint
+    // frame. Multiple chunks within one frame collapse into a single pass
+    // instead of paying 5 regex replacements + highlight() per chunk.
+    // writtenChunks is incremented synchronously below so KeepAlive replay
+    // tracking sees the correct count. Zmodem detection ran synchronously
+    // above (it has async handoff); the rAF flush only handles terminal
+    // output.
+    pendingDataChunks.push(payload.data)
+    writtenChunks++
+    if (pendingFlushRAF === null) {
+      pendingFlushRAF = requestAnimationFrame(flushPendingData)
+    }
+  })
+
+  function flushPendingData() {
+    pendingFlushRAF = null
+    if (pendingDataChunks.length === 0 || !terminal) return
+    const raw = pendingDataChunks.join('')
+    pendingDataChunks = []
     // Filter ED3 (erase scrollback).
-    let data = stripCursorBlink(payload.data, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, '')
+    let data = stripCursorBlink(raw, settingsStore.settings.terminal.cursorBlink ?? true).replace(ED3_RE, '')
     // For ED2 (clear screen) in the main buffer, replace with scrolling
     // to preserve scrollback history. In alternate screen (vim, less,
     // k9s), pass through unchanged — the app manages its own screen.
@@ -1115,14 +1149,17 @@ onMounted(() => {
       data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
       data = data.replace(/\x1b\[2J/g, scrollClear)
     }
+      const cleaned = data.replace(SFTP_OSC633_RE, '')
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
         terminal.write(cleaned)
       }
-      writtenChunks++
     } else {
-      // Extract history commands from SSH output
+      // Extract history commands from SSH output. handleSessionData only
+      // checks for the alternate-screen enter/exit sequences; running it
+      // on the coalesced blob is equivalent to running on individual chunks
+      // (the markers are present iff any sub-chunk contains them).
       if (props.mode === 'ssh' && terminalInput) {
         terminalInput.handleSessionData(data)
         // Close suggestions if we entered an alternate screen app (vim, k9s, etc.)
@@ -1132,12 +1169,8 @@ onMounted(() => {
       }
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
       terminal.write(hlOn ? highlight(data) : data)
-      writtenChunks++
-      if (props.mode === 'ssh' && props.onSessionStatus) {
-        // onSessionData is handled by the consumer via EventsOn if needed
-      }
     }
-  })
+  }
 
   // SSH/Local: session status events
   if (props.mode === 'ssh' || props.mode === 'local') {
