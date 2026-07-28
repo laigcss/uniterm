@@ -26,6 +26,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"github.com/google/uuid"
+	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/database"
 	"github.com/ys-ll/uniterm/backend/k8s"
 	"github.com/ys-ll/uniterm/backend/log"
@@ -40,6 +41,7 @@ type App struct {
 	ctx                  context.Context
 	sessionManager       *session.SessionManager
 	k8sManager           *k8s.Manager
+	containerManager     *container.Manager
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
@@ -86,6 +88,7 @@ func NewApp(webviewDataPath string) *App {
 		sessionToPanel:     make(map[string]string),
 		panelAutoTriggered: make(map[string]bool),
 		k8sManager:         k8s.NewManager(),
+		containerManager:   container.NewManager(),
 	}
 }
 
@@ -93,6 +96,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	a.k8sManager.SetEventEmitter(func(name string, payload any) {
+		runtime.EventsEmit(a.ctx, name, payload)
+	})
+	a.containerManager.SetEventEmitter(func(name string, payload any) {
 		runtime.EventsEmit(a.ctx, name, payload)
 	})
 
@@ -4068,4 +4074,196 @@ func readKubeconfigSource(source string, sourceIsPath bool) ([]byte, error) {
 		}
 	}
 	return os.ReadFile(source)
+}
+
+// ─── Container ─────────────────────────────────────────────────
+
+// ContainerConnect 打开容器连接：解析配置、按 transport 建 Local 或 SSH runner。
+// SSH 传输时若被引用连接配了跳板机（TunnelSSHConnID），先起本地转发隧道，
+// 与 CreateSession 的单层隧道行为一致。
+func (a *App) ContainerConnect(connectionID string) error {
+	if a.containerManager == nil || a.connectionStore == nil {
+		return fmt.Errorf("container manager not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	var cfg *session.ConnectionConfig
+	for _, c := range data.Connections {
+		if c.ID == connectionID {
+			cfg = &c
+			break
+		}
+	}
+	if cfg == nil {
+		return fmt.Errorf("connection not found: %s", connectionID)
+	}
+	if cfg.Type != "container" {
+		return fmt.Errorf("connection %s is not a container connection", connectionID)
+	}
+	rt := container.Runtime(cfg.ContainerRuntime)
+
+	if cfg.ContainerTransport == "local" {
+		return a.containerManager.ConnectLocal(connectionID, rt, "")
+	}
+
+	var sshCfg *session.ConnectionConfig
+	for _, c := range data.Connections {
+		if c.ID == cfg.ContainerSSHConnID {
+			sshCfg = &c
+			break
+		}
+	}
+	if sshCfg == nil {
+		return fmt.Errorf("referenced SSH connection missing: %s", cfg.ContainerSSHConnID)
+	}
+
+	// 跳板机：被引用连接自身的 tunnel 配置
+	if sshCfg.TunnelSSHConnID != "" && a.tunnelService != nil {
+		var tunnelCfg *session.ConnectionConfig
+		for _, c := range data.Connections {
+			if c.ID == sshCfg.TunnelSSHConnID {
+				tunnelCfg = &c
+				break
+			}
+		}
+		if tunnelCfg == nil {
+			return fmt.Errorf("tunnel SSH connection not found: %s", sshCfg.TunnelSSHConnID)
+		}
+		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port)
+		if err != nil {
+			return fmt.Errorf("tunnel start: %w", err)
+		}
+		sshCfg.Host = "127.0.0.1"
+		sshCfg.Port = localPort
+		if err := a.containerManager.ConnectSSH(connectionID, rt, "", *sshCfg); err != nil {
+			a.tunnelService.Stop(connectionID) // 与 K8sConnect 一致：连接失败时回收隧道
+			return err
+		}
+		return nil
+	}
+	return a.containerManager.ConnectSSH(connectionID, rt, "", *sshCfg)
+}
+
+func (a *App) ContainerDisconnect(connectionID string) {
+	a.containerManager.Disconnect(connectionID)
+	if a.tunnelService != nil {
+		a.tunnelService.Stop(connectionID) // 无同名隧道时为 no-op
+	}
+}
+
+func (a *App) ContainerList(connectionID string) ([]container.Container, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.List(a.ctx)
+}
+
+func (a *App) ContainerInspect(connectionID, containerID string) (container.InspectResult, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return container.InspectResult{}, err
+	}
+	return p.Inspect(a.ctx, containerID)
+}
+
+func (a *App) ContainerAction(connectionID, containerID, action string) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.Action(a.ctx, containerID, action)
+}
+
+func (a *App) ContainerRename(connectionID, containerID, newName string) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.Rename(a.ctx, containerID, newName)
+}
+
+func (a *App) ContainerStats(connectionID string) ([]container.Stats, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.Stats(a.ctx)
+}
+
+func (a *App) ContainerImages(connectionID string) ([]container.Image, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.Images(a.ctx)
+}
+
+func (a *App) ContainerRemoveImage(connectionID, imageID string) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.RemoveImage(a.ctx, imageID)
+}
+
+func (a *App) ContainerCreate(connectionID string, opts container.CreateOptions) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.Create(a.ctx, opts)
+}
+
+func (a *App) ContainerNamespaces(connectionID string) ([]string, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.Namespaces(a.ctx)
+}
+
+func (a *App) ContainerSetNamespace(connectionID, ns string) error {
+	return a.containerManager.SetNamespace(connectionID, ns)
+}
+
+func (a *App) ContainerStartLogs(connectionID, containerID string, tail int, timestamps bool) (string, error) {
+	return a.containerManager.StartLogStream(connectionID, containerID, tail, timestamps)
+}
+
+func (a *App) ContainerStartPull(connectionID, image string) (string, error) {
+	return a.containerManager.StartPullStream(connectionID, image)
+}
+
+func (a *App) ContainerStopStream(streamID string) {
+	a.containerManager.StopStream(streamID)
+}
+
+func (a *App) ContainerExecSession(connectionID, containerID, shell string) (*session.SessionInfo, error) {
+	if a.containerManager == nil {
+		return nil, fmt.Errorf("container manager not initialized")
+	}
+	// initial size fallback; real size arrives via Resize after the frontend mounts xterm
+	pty, err := a.containerManager.Exec(connectionID, containerID, shell, 80, 24)
+	if err != nil {
+		return nil, err
+	}
+	id := uuid.New().String()
+	sess := session.NewContainerExecSession(id, pty)
+	sess.SetOnDataCallback(func(data []byte) {
+		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+			"id":   sess.ID(),
+			"data": string(data),
+		})
+	})
+	sess.SetOnStatusChangeCallback(func(status session.SessionStatus) {
+		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+			"id":     sess.ID(),
+			"status": status,
+		})
+	})
+	a.sessionManager.Add(sess)
+	return &session.SessionInfo{ID: id, Type: "container-exec", Title: containerID, Status: session.StatusConnected}, nil
 }
