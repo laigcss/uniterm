@@ -326,6 +326,9 @@ export function useTerminal(
   let terminal: Terminal | null = null
   let fitAddon: FitAddon | null = null
   let searchAddon: SearchAddon | null = null
+  // Track loaded addons for unmount dispose; some (e.g. WebLinks) leave
+  // host elements behind after terminal.dispose() in older xterm.
+  const loadedAddons: Array<{ dispose?: () => void }> = []
   let resizeObserver: ResizeObserver | null = null
   let intersectionObserver: IntersectionObserver | null = null
   let unsubscribe: (() => void) | null = null
@@ -490,8 +493,8 @@ export function useTerminal(
 
     fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    loadedAddons.push(fitAddon)
     // Register web links addon: underline http/https links, Ctrl+Click to open
-    let hoverEl: HTMLDivElement | null = null
     const webLinksAddon = new WebLinksAddon(
       (event, uri) => {
         if (event.ctrlKey || event.metaKey) {
@@ -519,9 +522,11 @@ export function useTerminal(
       }
     )
     terminal.loadAddon(webLinksAddon)
+    loadedAddons.push(webLinksAddon)
 
     searchAddon = new SearchAddon()
     terminal.loadAddon(searchAddon)
+    loadedAddons.push(searchAddon)
 
     terminal.open(terminalRef.value)
     // Force synchronous layout so grid rows are sized before xterm measures
@@ -715,6 +720,20 @@ export function useTerminal(
   onUnmounted(() => {
     resizeObserver?.disconnect()
     intersectionObserver?.disconnect()
+    // Addons detach listeners through the terminal; dispose them first.
+    for (const addon of loadedAddons) {
+      try {
+        addon.dispose?.()
+      } catch {
+        // ignore — some addons don't fully implement dispose
+      }
+    }
+    loadedAddons.length = 0
+    // Detach the tooltip element the WebLinksAddon may have left behind.
+    if (hoverEl && hoverEl.parentElement) {
+      hoverEl.parentElement.removeChild(hoverEl)
+    }
+    hoverEl = null
     terminal?.dispose()
     unsubscribe?.()
     statusUnsubscribe?.()
