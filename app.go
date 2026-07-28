@@ -2351,8 +2351,9 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	// Emit message_start at the beginning
-	runtime.EventsEmit(a.ctx, "ai:message_start", map[string]interface{}{
-		"message": map[string]interface{}{"role": "assistant"},
+	// F-320: typed payload (frontend reads event.message.role).
+	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
+		Role: "assistant",
 	})
 
 	for scanner.Scan() {
@@ -2366,27 +2367,28 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
 				contentBlocks = append(contentBlocks, currentBlock)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-					"index": currentBlockIndex,
+				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					Index: currentBlockIndex,
 				})
 				currentBlock = nil
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
 				contentBlocks = append(contentBlocks, tc)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-					"index": idx,
+				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
 
 			// Emit message_delta and message_stop
-			runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-				"message": map[string]interface{}{
+			// F-320: typed payload.
+			runtime.EventsEmit(a.ctx, "ai:done", aiDoneEvent{
+				Message: map[string]interface{}{
 					"role":    messageRole,
 					"content": contentBlocks,
 				},
-				"stop_reason": "end_turn",
+				StopReason: "end_turn",
 			})
 
 			fullMessage := map[string]interface{}{
@@ -2413,8 +2415,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				// Close previous block if any
 				if currentBlock != nil {
 					contentBlocks = append(contentBlocks, currentBlock)
-					runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-						"index": currentBlockIndex,
+					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+						Index: currentBlockIndex,
 					})
 				}
 				currentBlockIndex++
@@ -2422,9 +2424,11 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					"type": "text",
 					"text": "",
 				}
-				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
-					"index":         currentBlockIndex,
-					"content_block": currentBlock,
+				currentTextBuf.Reset()
+				// F-320: typed payload.
+				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+					Index:        currentBlockIndex,
+					ContentBlock: currentBlock,
 				})
 			}
 			currentTextBuf.WriteString(delta.Content)
@@ -2447,8 +2451,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				// Close current text block if open
 				if currentBlock != nil {
 					contentBlocks = append(contentBlocks, currentBlock)
-					runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-						"index": currentBlockIndex,
+					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+						Index: currentBlockIndex,
 					})
 					currentBlock = nil
 				}
@@ -2459,9 +2463,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					"name":  "",
 					"input": "",
 				}
-				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
-					"index": currentBlockIndex,
-					"content_block": map[string]interface{}{
+				// F-320: typed payload.
+				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+					Index: currentBlockIndex,
+					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
 						"id":   tc.ID,
 					},
@@ -2481,8 +2486,9 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					toolInputBufs[idx] = buf
 				}
 				buf.WriteString(args)
-				runtime.EventsEmit(a.ctx, "ai:input_json_delta", map[string]interface{}{
-					"partial_json": args,
+				// F-320: typed payload.
+				runtime.EventsEmit(a.ctx, "ai:input_json_delta", aiInputJsonDeltaEvent{
+					PartialJSON: args,
 				})
 			}
 		}
@@ -2493,8 +2499,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			// Close any open text block
 			if currentBlock != nil {
 				contentBlocks = append(contentBlocks, currentBlock)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-					"index": currentBlockIndex,
+				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					Index: currentBlockIndex,
 				})
 				currentBlock = nil
 			}
@@ -2517,8 +2523,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					}
 				}
 				contentBlocks = append(contentBlocks, tc)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-					"index": idx,
+				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
@@ -2534,12 +2540,13 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				stopReason = "end_turn"
 			}
 
-			runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-				"message": map[string]interface{}{
+			// F-320: typed payload.
+			runtime.EventsEmit(a.ctx, "ai:done", aiDoneEvent{
+				Message: map[string]interface{}{
 					"role":    messageRole,
 					"content": contentBlocks,
 				},
-				"stop_reason": stopReason,
+				StopReason: stopReason,
 			})
 
 			fullMessage := map[string]interface{}{
@@ -2757,8 +2764,9 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	runtime.EventsEmit(a.ctx, "ai:message_start", map[string]interface{}{
-		"message": map[string]interface{}{"role": "assistant"},
+	// F-320: typed payload.
+	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
+		Role: "assistant",
 	})
 
 	finish := func(stopReason string) (string, error) {
@@ -2770,9 +2778,14 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		if err != nil {
 			return "", fmt.Errorf("marshal final message: %w", err)
 		}
-		runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-			"message":     json.RawMessage(resultJSON),
-			"stop_reason": stopReason,
+		// F-320: typed payload with json.RawMessage so the
+		// already-marshaled message bytes pass through untouched.
+		runtime.EventsEmit(a.ctx, "ai:done", struct {
+			Message    json.RawMessage `json:"message"`
+			StopReason string          `json:"stop_reason"`
+		}{
+			Message:    json.RawMessage(resultJSON),
+			StopReason: stopReason,
 		})
 		return string(resultJSON), nil
 	}
@@ -2806,11 +2819,12 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			switch itemType {
 			case "message":
 				block := map[string]interface{}{"type": "text", "text": ""}
-				blockByOutputIdx[outputIdx] = block
-				idxByOutputIdx[outputIdx] = nextBlockIndex
-				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
-					"index":         nextBlockIndex,
-					"content_block": block,
+				blockByOutputIdx[ev.OutputIndex] = block
+				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
+				// F-320: typed payload.
+				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+					Index:        nextBlockIndex,
+					ContentBlock: block,
 				})
 				nextBlockIndex++
 			case "function_call":
@@ -2820,11 +2834,12 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 					"name":  item["name"],
 					"input": "",
 				}
-				blockByOutputIdx[outputIdx] = block
-				idxByOutputIdx[outputIdx] = nextBlockIndex
-				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
-					"index": nextBlockIndex,
-					"content_block": map[string]interface{}{
+				blockByOutputIdx[ev.OutputIndex] = block
+				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
+				// F-320: typed payload.
+				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+					Index: nextBlockIndex,
+					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
 						"id":   item["call_id"],
 						"name": item["name"],
@@ -2872,8 +2887,9 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				inputBufs[ev.OutputIndex] = buf
 			}
 			buf.WriteString(ev.Delta)
-			runtime.EventsEmit(a.ctx, "ai:input_json_delta", map[string]interface{}{
-				"partial_json": delta,
+			// F-320: typed payload.
+			runtime.EventsEmit(a.ctx, "ai:input_json_delta", aiInputJsonDeltaEvent{
+				PartialJSON: ev.Delta,
 			})
 
 		case "response.output_item.done":
@@ -2905,8 +2921,9 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				delete(inputBufs, ev.OutputIndex)
 			}
 			contentBlocks = append(contentBlocks, block)
-			runtime.EventsEmit(a.ctx, "ai:content_block_stop", map[string]interface{}{
-				"index": idxByOutputIdx[outputIdx],
+			// F-320: typed payload.
+			runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+				Index: idxByOutputIdx[ev.OutputIndex],
 			})
 			delete(blockByOutputIdx, outputIdx)
 
