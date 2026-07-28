@@ -56,15 +56,19 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     return { left: left + 'px', top: top + 'px' }
   }
 
-  // Write to the OS clipboard via Wails first (reliable in WebView2), falling
-  // back to the browser clipboard API when the runtime call fails.
-  async function writeClipboard(text: string) {
-    try {
-      await ClipboardSetText(text)
-    } catch {
-      try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
-    }
+  // Write to the OS clipboard. Pick the API once at module load: Wails'
+  // ClipboardSetText is reliable in WebView2; the browser API stays as a
+  // fallback when Wails itself is missing (dev outside the runtime).
+  type ClipboardWriter = (text: string) => Promise<boolean>
+  const wailsWriter: ClipboardWriter = async (text) => {
+    try { return await ClipboardSetText(text) } catch { return false }
   }
+  const browserWriter: ClipboardWriter = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true } catch { return false }
+  }
+  const writeClipboard: ClipboardWriter = typeof ClipboardSetText === 'function'
+    ? wailsWriter
+    : browserWriter
 
   function copySelection() {
     const text = options.getSelection()
