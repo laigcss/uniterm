@@ -29,6 +29,9 @@
 - Fixed some remote apps (e.g. hermes CLI on Ubuntu 26.04) failing with a tcsetattr error: SSH PTY modes now use the standard baud rate 38400 instead of a non-standard value that polluted the remote termios.
 - Fixed RPM packages failing to install on Fedora due to wrong dependency names.
 
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
 Thanks to @surenwuyuwuqiu for their contributions to this release.
 
 ### 更新内容
@@ -57,6 +60,9 @@ Thanks to @surenwuyuwuqiu for their contributions to this release.
 - 修复 AI「拉取模型列表」在 Anthropic 兼容端点上失败（404 或鉴权错误）的问题：拉取请求改为协议感知，Anthropic 使用 `/v1/models` 路径与 x-api-key 鉴权。
 - 修复部分远程程序（如 Ubuntu 26.04 上的 hermes CLI）报 tcsetattr 错误的问题：SSH PTY 模式改用标准波特率 38400，不再使用会污染远端 termios 的非标准值。
 - 修复 RPM 安装包在 Fedora 上因依赖名错误无法安装的问题。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
 
 感谢 @surenwuyuwuqiu 对本版本的贡献。
 
