@@ -6,6 +6,11 @@ import { useLocalStateStore } from './localStateStore'
 import { EventsOn } from '../../wailsjs/runtime'
 import { t } from '../i18n'
 
+// Module-level un-subscriber for the cross-window store:settings:changed listener.
+// Tracked at module scope so re-imports under HMR can detach the previous
+// listener before re-subscribing (FE-03).
+let unsubSettingsChanged: (() => void) | null = null
+
 /**
  * Estimate token count for a string using character-based heuristics.
  * ASCII/English: ~3.5 chars per token. CJK/non-ASCII: ~1.8 chars per token.
@@ -784,9 +789,15 @@ export const useAIStore = defineStore('ai', () => {
   const systemPrompt = computed(() => SYSTEM_RULES)
 
   // Reload AI config when settings change via sync
-  EventsOn('store:settings:changed', () => {
+  unsubSettingsChanged?.()
+  unsubSettingsChanged = EventsOn('store:settings:changed', () => {
     initConfig()
   })
+
+  function dispose() {
+    unsubSettingsChanged?.()
+    unsubSettingsChanged = null
+  }
 
   return {
     visible,
@@ -829,6 +840,7 @@ export const useAIStore = defineStore('ai', () => {
     enqueueMessage,
     removeQueuedMessage,
     clearQueue,
-    doSave
+    doSave,
+    dispose
   }
 })
