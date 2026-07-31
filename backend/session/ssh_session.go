@@ -26,7 +26,7 @@ const (
 	// server/NAT/firewall idle timeout doesn't drop an otherwise-healthy
 	// connection. Dead-connection detection is NOT done here — see readLoop
 	// (EOF) and the OS-level TCP keepalive set in Connect.
-	sshKeepAliveInterval = 60 * time.Second
+	sshKeepAliveInterval = 90 * time.Second
 )
 
 type SSHSession struct {
@@ -42,8 +42,11 @@ type SSHSession struct {
 	expectOutput *postLoginOutputBuffer
 
 	enc            encoding.Encoding // input(write) codec; nil = utf-8 passthrough
+	encoder        transform.Transformer // cached encoder; nil = utf-8 passthrough (F-003)
 	decoder        *encoding.Decoder // persistent streaming decoder for output(read)
 	decodeLeftover []byte            // trailing partial multibyte bytes between reads
+	decodeScratch  []byte            // reusable src buffer for decodeOutput (F-002)
+	encScratch     []byte            // reusable dst buffer for encodeInput (F-003)
 
 	// Disconnect diagnostics (see readLoop / disconnect logs).
 	lastRecv atomic.Value // []byte: tail of most recent server output (diagnostics)
@@ -296,12 +299,18 @@ func (s *SSHSession) readStderr() {
 }
 
 func (s *SSHSession) readLoop() {
-	buf := make([]byte, 4096)
+	// 16K read buffer (F-001) reused across iterations. Each consumer either
+	// copies into its own storage (lastRecv, decodeOutput, offerExpectOutput's
+	// string conversion) or passes the slice to a callback that owns the data
+	// lifecycle (emitData / emitBinary), so reusing the backing array is safe.
+	buf := make([]byte, 16*1024)
 	for {
 		n, err := s.stdout.Read(buf)
 		if n > 0 {
 			s.RecordReadActivity()
-			data := append([]byte(nil), buf[:n]...)
+			data := buf[:n]
+			// lastRecv outlives this iteration (Disconnect logs it after
+			// readLoop returns) so it must hold an independent copy.
 			s.lastRecv.Store(append([]byte(nil), data...))
 			s.offerExpectOutput(data)
 			if s.IsZmodemMode() {
@@ -499,8 +508,10 @@ func (s *SSHSession) SetEncoding(name string) {
 	s.enc = enc
 	if enc == nil {
 		s.decoder = nil
+		s.encoder = nil
 	} else {
 		s.decoder = enc.NewDecoder()
+		s.encoder = enc.NewEncoder()
 	}
 	s.decodeLeftover = nil
 	s.mu.Unlock()
@@ -515,9 +526,10 @@ func (s *SSHSession) decodeOutput(data []byte) []byte {
 	if s.decoder == nil {
 		return data
 	}
-	src := make([]byte, 0, len(s.decodeLeftover)+len(data))
-	src = append(src, s.decodeLeftover...)
-	src = append(src, data...)
+	s.decodeScratch = s.decodeScratch[:0]
+	s.decodeScratch = append(s.decodeScratch, s.decodeLeftover...)
+	s.decodeScratch = append(s.decodeScratch, data...)
+	src := s.decodeScratch
 
 	var out []byte
 	dst := make([]byte, 8192)
@@ -530,7 +542,14 @@ func (s *SSHSession) decodeOutput(data []byte) []byte {
 		}
 		break // nil or ErrShortSrc: remaining src is an incomplete trailing rune
 	}
-	s.decodeLeftover = append([]byte(nil), src...)
+	// Buffer any incomplete trailing rune into a fresh slice so the next
+	// read's append(s.decodeScratch, data...) isn't racing with decodeLeftover
+	// backing storage.
+	if len(src) > 0 {
+		s.decodeLeftover = append(s.decodeLeftover[:0], src...)
+	} else {
+		s.decodeLeftover = src[:0]
+	}
 	return out
 }
 
@@ -538,16 +557,18 @@ func (s *SSHSession) decodeOutput(data []byte) []byte {
 // before writing to the remote. Each call handles a complete UTF-8 input.
 func (s *SSHSession) encodeInput(data []byte) []byte {
 	s.mu.RLock()
-	enc := s.enc
+	encoder := s.encoder
 	s.mu.RUnlock()
-	if enc == nil {
+	if encoder == nil {
 		return data
 	}
-	out, err := enc.NewEncoder().Bytes(data)
-	if err != nil {
+	encoder.Reset()
+	s.encScratch = s.encScratch[:0]
+	nDst, _, err := encoder.Transform(s.encScratch, data, true)
+	if err != nil && err != transform.ErrShortSrc {
 		return data
 	}
-	return out
+	return s.encScratch[:nDst]
 }
 
 // encodingByName maps a connection's encoding setting to an x/text codec.

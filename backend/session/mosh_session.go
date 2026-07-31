@@ -137,14 +137,24 @@ func startMoshServer(client *ssh.Client) (key string, udpPort int, err error) {
 
 	var output strings.Builder
 	stdoutScanner := bufio.NewScanner(stdout)
+	// Raise the default 64 KiB line cap so a chatty mosh-server banner
+	// (key + port) doesn't get truncated (SESSION-13).
+	stdoutScanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for stdoutScanner.Scan() {
 		output.WriteString(stdoutScanner.Text())
 		output.WriteByte('\n')
 	}
+	if err := stdoutScanner.Err(); err != nil {
+		return "", 0, fmt.Errorf("read mosh stdout: %w", err)
+	}
 	stderrScanner := bufio.NewScanner(stderr)
+	stderrScanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for stderrScanner.Scan() {
 		output.WriteString(stderrScanner.Text())
 		output.WriteByte('\n')
+	}
+	if err := stderrScanner.Err(); err != nil {
+		return "", 0, fmt.Errorf("read mosh stderr: %w", err)
 	}
 	session.Wait()
 
@@ -175,18 +185,27 @@ func startMoshServer(client *ssh.Client) (key string, udpPort int, err error) {
 	return key, udpPort, nil
 }
 
+// moshReadInterval is the timeout passed to moshClient.Recv. The previous
+// 100 ms value woke the readLoop 10 times/sec per idle session and was the
+// dominant contributor to the user's reported 900+ idle wakeups (F-009).
+// 1 s keeps the keepalive-feel responsive while only waking the goroutine
+// once per second on idle; shutdown still happens via ctx.Done() / s.quit.
+const moshReadInterval = 1 * time.Second
+
 func (s *MoshSession) readLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-s.quit:
+			return
 		default:
 		}
 
-		data := s.moshClient.Recv(100 * time.Millisecond)
+		data := s.moshClient.Recv(moshReadInterval)
 		if len(data) > 0 {
 			s.RecordReadActivity()
-			s.emitData(append([]byte(nil), data...))
+			s.emitData(data)
 		}
 
 		if s.moshClient == nil {

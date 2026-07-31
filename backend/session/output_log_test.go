@@ -453,6 +453,66 @@ func TestOutputLoggerLineBufferedEndToEnd(t *testing.T) {
 	}
 }
 
+// TestOutputLoggerBufferedModeEventualFlush (output_log buffered writes)
+// verifies that in the default buffered mode the periodic flush goroutine
+// drains bufio into the file within logFlushInterval (1s) even when
+// Disable() has not been called. Without the buffered-writes change we
+// Sync per WriteOutput, so this would always be instant — the test
+// pins the new contract: writes are accumulated and forwarded by the
+// ticker, not by per-write Sync.
+func TestOutputLoggerBufferedModeEventualFlush(t *testing.T) {
+	var l OutputLogger
+	dir := t.TempDir()
+	path, err := l.Enable(dir, "buf", "ssh")
+	if err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+	defer l.Disable()
+
+	// Force flushTimeout to be much longer than the test wait so the
+	// line processor doesn't pre-flush via its own mechanism — we want
+	// to exercise the WriteOutput → bufio → flushLoop → file path.
+	l.WriteOutput([]byte("buffered line one\n"))
+
+	// Within logFlushInterval the ticker must drain the buffer into
+	// the underlying file. Poll briefly so the test stays fast on
+	// happy-path while still detecting a missing flush loop.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		content, _ := os.ReadFile(path)
+		if strings.Contains(string(content), "buffered line one") {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	content, _ := os.ReadFile(path)
+	t.Errorf("ticker flush never landed buffered content:\n%s", content)
+}
+
+// TestOutputLoggerSetBufferedTogglesMode checks that SetBuffered(false)
+// before Enable opts the logger back into the legacy Sync-per-write
+// path. Subsequent writes must be durable on disk immediately.
+func TestOutputLoggerSetBufferedTogglesMode(t *testing.T) {
+	var l OutputLogger
+	l.SetBuffered(false)
+	dir := t.TempDir()
+	path, err := l.Enable(dir, "sync", "ssh")
+	if err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+	defer l.Disable()
+
+	l.WriteOutput([]byte("legacy sync line\n"))
+	// No sleep — the legacy path syncs on each WriteOutput.
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(content), "legacy sync line") {
+		t.Errorf("legacy sync mode did not land write:\n%s", content)
+	}
+}
+
 func TestOutputLoggerReusableAcrossWriters(t *testing.T) {
 	// This mirrors the App-layer scenario where a single OutputLogger
 	// stays alive across session disconnect/reconnect: both sessions'
