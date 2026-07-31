@@ -99,6 +99,7 @@ import {
   bumpOnDataGeneration,
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
+import { resolveXtermBackground } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import {
   sanitizeTerminalOutput,
@@ -1453,10 +1454,11 @@ function onSearchPrev() {
 
 function applyXtermTheme(themeName: string) {
   if (!terminal) return
-  const theme = getXtermTheme(themeName, settingsStore.settings.customTerminalThemes)
-  if (localStateStore.state.backgroundEnabled && localStateStore.state.backgroundImage) {
-    theme.background = 'rgba(0,0,0,0)'
-  }
+  const theme = resolveXtermBackground(
+    getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+    localStateStore.state.backgroundEnabled,
+    localStateStore.state.backgroundImage
+  )
   terminal.options.theme = theme
 }
 
