@@ -56,19 +56,27 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     return { left: left + 'px', top: top + 'px' }
   }
 
-  // Wails ClipboardSetText resolves false (not rejects) on focus loss /
-  // AppKit glitches; fall through to navigator.clipboard in that case.
-  async function writeClipboard(text: string) {
+  // Write to the OS clipboard. Wails' ClipboardSetText resolves false (it
+  // does not reject) on focus loss / AppKit glitches, so a false return has
+  // to fall through to the browser API rather than being treated as done.
+  // browserWriter is also the standalone path when Wails is absent (dev
+  // outside the runtime).
+  type ClipboardWriter = (text: string) => Promise<boolean>
+  const browserWriter: ClipboardWriter = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true } catch { return false }
+  }
+  const wailsWriter: ClipboardWriter = async (text) => {
     let ok = false
     try {
       ok = await ClipboardSetText(text)
     } catch {
       ok = false
     }
-    if (!ok) {
-      try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
-    }
+    return ok || browserWriter(text)
   }
+  const writeClipboard: ClipboardWriter = typeof ClipboardSetText === 'function'
+    ? wailsWriter
+    : browserWriter
 
   function copySelection() {
     // Trust getSelection() at click time; the contextmenu-captured ref can
