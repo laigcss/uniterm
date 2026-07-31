@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -59,7 +60,7 @@ func (s *TelnetSession) Connect(config ConnectionConfig) error {
 		s.title = fmt.Sprintf("%s:%d", config.Host, config.Port)
 	}
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
 	dialer := net.Dialer{Timeout: 15 * time.Second}
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,7 +45,7 @@ func (s *MoshSession) Connect(config ConnectionConfig) error {
 
 	// Step 1: SSH to remote and start mosh-server to get key + UDP port.
 	authMethods := makeSSHAuthMethods(config, nil)
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
 	clientConfig := &ssh.ClientConfig{
 		User:            config.User,
 		Auth:            authMethods,

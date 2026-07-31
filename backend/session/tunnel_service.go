@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -53,7 +54,7 @@ func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, tar
 
 	// 1. Establish SSH connection
 	authMethods := makeSSHAuthMethods(sshConfig, nil)
-	addr := fmt.Sprintf("%s:%d", sshConfig.Host, sshConfig.Port)
+	addr := net.JoinHostPort(sshConfig.Host, strconv.Itoa(sshConfig.Port))
 	clientConfig := &ssh.ClientConfig{
 		User:            sshConfig.User,
 		Auth:            authMethods,
