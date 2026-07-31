@@ -90,6 +90,9 @@ export function acquireTerminal(
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(searchAddon)
     terminal.loadAddon(unicodeAddon)
+    // Activate Unicode 11 widths (default v6 miscounts CJK cells). Must come
+    // AFTER loadAddon — the unicode property is provided by the addon.
+    terminal.unicode.activeVersion = '11'
 
     managed = {
       terminal,

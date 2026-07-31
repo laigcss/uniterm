@@ -326,6 +326,9 @@ export function useTerminal(
   let terminal: Terminal | null = null
   let fitAddon: FitAddon | null = null
   let searchAddon: SearchAddon | null = null
+  // Track loaded addons for unmount dispose; some (e.g. WebLinks) leave
+  // host elements behind after terminal.dispose() in older xterm.
+  const loadedAddons: Array<{ dispose?: () => void }> = []
   let resizeObserver: ResizeObserver | null = null
   let intersectionObserver: IntersectionObserver | null = null
   let unsubscribe: (() => void) | null = null
@@ -338,6 +341,10 @@ export function useTerminal(
   let splitResizing = false
   let suppressResizeUntil = 0
   let retryOnEnter = false
+  let hoverEl: HTMLDivElement | null = null
+  let cachedCellWidth = 0
+  let cachedCellHeight = 0
+  let cachedFontKey = ''
 
   function getTerminalOptions() {
     const ts = settingsStore.settings.terminal
@@ -378,16 +385,27 @@ export function useTerminal(
     // Use try/catch because these are internal APIs that may change between versions.
     let cellWidth = 0
     let cellHeight = 0
-    try {
-      const core = (terminal as any)._core
-      const dims = core?._renderService?.dimensions
-      if (dims) {
-        cellWidth = dims.css?.cell?.width || 0
-        cellHeight = dims.css?.cell?.height || 0
+    const fontKey = `${terminal.options.fontSize}|${terminal.options.fontFamily}`
+    if (fontKey === cachedFontKey && cachedCellWidth > 0 && cachedCellHeight > 0) {
+      cellWidth = cachedCellWidth
+      cellHeight = cachedCellHeight
+    } else {
+      try {
+        const core = (terminal as any)._core
+        const dims = core?._renderService?.dimensions
+        if (dims) {
+          cellWidth = dims.css?.cell?.width || 0
+          cellHeight = dims.css?.cell?.height || 0
+        }
+      } catch {
+        cellWidth = 0
+        cellHeight = 0
       }
-    } catch {
-      cellWidth = 0
-      cellHeight = 0
+      if (cellWidth > 0 && cellHeight > 0) {
+        cachedCellWidth = cellWidth
+        cachedCellHeight = cellHeight
+        cachedFontKey = fontKey
+      }
     }
 
     if (cellWidth === 0 || cellHeight === 0) {
@@ -475,8 +493,8 @@ export function useTerminal(
 
     fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    loadedAddons.push(fitAddon)
     // Register web links addon: underline http/https links, Ctrl+Click to open
-    let hoverEl: HTMLDivElement | null = null
     const webLinksAddon = new WebLinksAddon(
       (event, uri) => {
         if (event.ctrlKey || event.metaKey) {
@@ -504,9 +522,11 @@ export function useTerminal(
       }
     )
     terminal.loadAddon(webLinksAddon)
+    loadedAddons.push(webLinksAddon)
 
     searchAddon = new SearchAddon()
     terminal.loadAddon(searchAddon)
+    loadedAddons.push(searchAddon)
 
     terminal.open(terminalRef.value)
     // Force synchronous layout so grid rows are sized before xterm measures
@@ -700,6 +720,20 @@ export function useTerminal(
   onUnmounted(() => {
     resizeObserver?.disconnect()
     intersectionObserver?.disconnect()
+    // Addons detach listeners through the terminal; dispose them first.
+    for (const addon of loadedAddons) {
+      try {
+        addon.dispose?.()
+      } catch {
+        // ignore — some addons don't fully implement dispose
+      }
+    }
+    loadedAddons.length = 0
+    // Detach the tooltip element the WebLinksAddon may have left behind.
+    if (hoverEl && hoverEl.parentElement) {
+      hoverEl.parentElement.removeChild(hoverEl)
+    }
+    hoverEl = null
     terminal?.dispose()
     unsubscribe?.()
     statusUnsubscribe?.()

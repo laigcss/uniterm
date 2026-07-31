@@ -453,34 +453,12 @@ function resize() {
     fitAddon.fit()
     if (terminal.cols <= 0 || terminal.rows <= 0) return
 
-    let cellWidth = 0
-    let cellHeight = 0
-    try {
-      const core = (terminal as any)._core
-      const dims = core?._renderService?.dimensions
-      if (dims) {
-        cellWidth = dims.css?.cell?.width || 0
-        cellHeight = dims.css?.cell?.height || 0
-      }
-    } catch {
-      cellWidth = 0
-      cellHeight = 0
-    }
-
-    if (cellWidth === 0 || cellHeight === 0) {
-      SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
-      return
-    }
-
-    const TERMINAL_PADDING = 4
-    const scrollbarWidth = (terminal as any)._core?.viewport?.scrollBarWidth || 0
-    const cols = Math.floor((rect.width - TERMINAL_PADDING * 2 - scrollbarWidth) / cellWidth)
-    const rows = Math.floor((rect.height - TERMINAL_PADDING * 2) / cellHeight)
-    const newCols = Math.max(2, cols)
-    const newRows = Math.max(1, rows)
-
-    terminal.resize(newCols, newRows)
-    SessionResize(sid, newCols, newRows).catch(() => {})
+    // Trust fitAddon.fit() — its measure already accounts for the scrollbar
+    // gutter; manual recomputation double-subtracts it.
+    terminal.resize(terminal.cols, terminal.rows)
+    // Full-viewport redraw — prevents canvas ghosting during rapid write bursts.
+    terminal.refresh(0, terminal.rows - 1)
+    SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
   } else {
     getFitAddon()?.fit()
   }
@@ -769,8 +747,8 @@ onMounted(() => {
   )
   terminal.loadAddon(webLinksAddon)
 
-  // Unicode 11 support
-  try { terminal.unicode.activeVersion = '11' } catch (_) {}
+  // Unicode 11 activeVersion is set in terminalManager.ts right after the
+  // addon loads; no need to set it here again.
 
   // Set up search results listener from shared SearchAddon
   const managed = getManagedTerminal(props.sessionId || '')
