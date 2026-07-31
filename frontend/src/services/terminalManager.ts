@@ -74,6 +74,26 @@ export function acquireTerminal(
       ls.state.backgroundEnabled,
       ls.state.backgroundImage
     )
+    // F-036: italic SGR-3 is handled natively by xterm.js — its DOM
+    // renderer emits <span class="xterm-italic">…</span> and applies
+    // `font-style: italic` via xterm.css. No @xterm/addon-italic package
+    // is published on npm (verified: npm view @xterm/addon-italic → 404),
+    // and xterm.js already routes the italic attribute through the
+    // browser's CSS font-matching — so the JetBrains Mono Variable /
+    // Consolas / Courier New chain in fontFamily already renders italic
+    // faces when the system has them.
+    //
+    // F-037: DEC mode 2026 (synchronized output) bracketing used by
+    // Claude Code's thinking-block redraws was not honored by xterm.js
+    // v5.5 — the parser core had no handler for SET/RESET 2026. The v6
+    // upgrade (PR #437) is what addresses the thinking-block flicker.
+    //
+    // F-038: bracketed-paste (`\e[?2004h`) and mouse-reporting modes
+    // (1000/1006/1015) are handled by the xterm.js parser core itself
+    // and surfaced via `terminal.modes`. This is a verification gap,
+    // not a production bug — a smoke test asserting
+    // terminal.modes.bracketedPasteMode after writing the sequence
+    // would catch a regression on future upgrades.
     const terminal = new Terminal({
       fontSize: options.fontSize ?? 13,
       fontFamily: formatFontFamily(options.fontFamily ?? 'Consolas, "Courier New", monospace'),
@@ -92,6 +112,12 @@ export function acquireTerminal(
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(searchAddon)
     terminal.loadAddon(unicodeAddon)
+    // F-035: charSizeCompat / ITheme.codeBlockBackground do not exist in
+    // xterm.js v5.5. The Unicode 11 activeVersion below is the available
+    // WC-width alignment — the backend PTY uses the same Unicode 11
+    // tables so column counts match. The v6 upgrade (PR #437) is what
+    // unlocks extended-theme support.
+    //
     // Activate Unicode 11 widths (default v6 miscounts CJK cells). Must come
     // AFTER loadAddon — the unicode property is provided by the addon.
     terminal.unicode.activeVersion = '11'
