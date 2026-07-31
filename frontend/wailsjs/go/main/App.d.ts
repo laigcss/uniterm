@@ -343,6 +343,8 @@ export function SessionEndZmodem(arg1:string):Promise<void>;
 
 export function SessionResize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function SessionStart(arg1:string,arg2:session.ConnectionConfig):Promise<void>;
+
 export function SessionStartZmodem(arg1:string):Promise<void>;
 
 export function SessionWrite(arg1:string,arg2:string):Promise<void>;

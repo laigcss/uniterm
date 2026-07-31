@@ -187,7 +187,8 @@ import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from 
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart } from '../wailsjs/go/main/App'
+import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
@@ -807,10 +808,28 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     )
     panelStore.updateTitle(newPanel.id, panel.title)
     try {
-      const info = await CreateSession(panel.config.type, panel.config)
+      // Same D1 deferred-start pattern as onConnect — see that helper
+      // for the rationale.
+      const dupConfig: ConnectionConfig = {
+        ...panel.config,
+        deferConnect: true,
+        initialCols: 0,
+        initialRows: 0,
+      }
+      const info = await CreateSession(panel.config.type, dupConfig)
       panelStore.bindSession(newPanel.id, info.id)
+      sessionStore.initSession(info.id)
       const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
       panelStore.movePanelToTab(newPanel.id, newTab.id)
+      const size = await waitForTerminalSize(info.id)
+      if (size.cols > 0 && size.rows > 0) {
+        dupConfig.initialCols = size.cols
+        dupConfig.initialRows = size.rows
+      }
+      await SessionStart(info.id, dupConfig).catch((e) => {
+        console.error('Failed to start duplicated session:', e)
+        CloseSession(info.id).catch(() => {})
+      })
     } catch (e) {
       console.error('Failed to duplicate session:', e)
     }
@@ -1097,7 +1116,16 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   // Create session BEFORE panel so the terminal has a sessionId when it first
   // fires SessionResize. Otherwise the resize is silently dropped because the
   // terminal calls getSessionId() too early and never retries.
+  //
+  // Defer the actual Connect until BaseTerminal has mounted, fitAddon has
+  // measured the real xterm cols/rows, and we can write that into
+  // config.initialCols/Rows — otherwise the SSH/local PTY starts at the
+  // default 80x24 and Claude Code draws its first batch of tables at that
+  // width, drifting relative to later output that wraps at the real cols.
   let sessionId = ''
+  config.deferConnect = true
+  config.initialCols = 0
+  config.initialRows = 0
   try {
     const info = await CreateSession(config.type, config)
     sessionId = info.id
@@ -1122,6 +1150,25 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     : tabStore.createTerminalTab(panel.title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
+
+  // Wait for BaseTerminal to mount + fitAddon.fit() to compute the real
+  // xterm cols/rows (which itself waits for document.fonts.ready + 2 rAFs
+  // to ensure the actually-loaded font is being measured). Then start the
+  // session with those dimensions so the remote PTY matches from byte 0.
+  const size = await waitForTerminalSize(sessionId)
+  if (size.cols > 0 && size.rows > 0) {
+    config.initialCols = size.cols
+    config.initialRows = size.rows
+  }
+  try {
+    await SessionStart(sessionId, config)
+  } catch (e) {
+    console.error('Failed to start session:', e)
+    // Session is registered in the backend but never connected — close it
+    // so it doesn't leak until app shutdown. UI rollback is the caller's
+    // responsibility (this helper is reused across connect / duplicate).
+    CloseSession(sessionId).catch(() => {})
+  }
 }
 
 function getShellLabel(path: string): string {
@@ -1204,7 +1251,13 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       port: 0,
       user: '',
       authType: 'password' as any,
-      shellPath: shellPath || undefined
+      shellPath: shellPath || undefined,
+      // Defer Connect until BaseTerminal has measured the real cols/rows;
+      // same D1 fix as onConnect — without it Claude Code's first batch
+      // of tables wraps at the 80x24 default.
+      deferConnect: true,
+      initialCols: 0,
+      initialRows: 0,
     }
     panel.config = config
     connectionStore.add(config)
@@ -1218,6 +1271,20 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
       : tabStore.createTerminalTab(panel.title, panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
+
+    // Same as onConnect: measure the real xterm size, then start the PTY
+    // at those dimensions.
+    const size = await waitForTerminalSize(info.id)
+    if (size.cols > 0 && size.rows > 0) {
+      config.initialCols = size.cols
+      config.initialRows = size.rows
+    }
+    try {
+      await SessionStart(info.id, config)
+    } catch (e) {
+      console.error('Failed to start local session:', e)
+      CloseSession(info.id).catch(() => {})
+    }
   } catch (e) {
     console.error('Failed to create local terminal:', e)
     panelStore.removePanel(panel.id)
