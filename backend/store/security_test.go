@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ys-ll/uniterm/backend/session"
 )
@@ -56,9 +57,21 @@ func TestAtomicWrite_NotPartialOnCrash(t *testing.T) {
 		}
 	}()
 
-	if err := atomicWriteFile(path, newJSON, 0600); err != nil {
+	// On Windows an open handle blocks os.Rename, so the polling reader
+	// above can make the rename fail spuriously. Retry briefly — the
+	// property under test is atomicity of the visible content, not the
+	// rename winning on the first attempt.
+	var writeErr error
+	for i := 0; i < 50; i++ {
+		writeErr = atomicWriteFile(path, newJSON, 0600)
+		if writeErr == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if writeErr != nil {
 		close(stop)
-		t.Fatalf("atomicWriteFile: %v", err)
+		t.Fatalf("atomicWriteFile: %v", writeErr)
 	}
 	close(stop)
 

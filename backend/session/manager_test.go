@@ -36,6 +36,7 @@ func (f *fakeSession) Disconnect() error {
 }
 func (f *fakeSession) IsConnected() bool          { return f.status == StatusConnected }
 func (f *fakeSession) Resize(cols, rows int) error { return nil }
+func (f *fakeSession) SetPendingSize(cols, rows int) {}
 func (f *fakeSession) Write(data []byte) error     { return nil }
 func (f *fakeSession) SetOnDataCallback(func([]byte))          {}
 func (f *fakeSession) SetOnBinaryCallback(func([]byte))        {}

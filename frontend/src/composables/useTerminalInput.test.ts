@@ -1,5 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { useTerminalInput } from './useTerminalInput'
+
+// handleInput schedules cursor-position reads through requestAnimationFrame
+// (PR #434 rAF coalescing). The default vitest environment is node, which
+// has no rAF — run the callback synchronously so assertions see the result.
+beforeAll(() => {
+  const g = globalThis as any
+  if (typeof g.requestAnimationFrame !== 'function') {
+    g.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      cb(0)
+      return 0
+    }
+    g.cancelAnimationFrame = () => {}
+  }
+})
 
 function mkTerminal(opts: { cursorY?: number; lines: string[]; rows?: number } = { lines: [] }) {
   const { cursorY = 0, lines, rows = 24 } = opts

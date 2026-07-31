@@ -1525,7 +1525,7 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 		if sessionType == "rdp" {
 			port := config.Port
 			if port <= 0 { port = 3389 }
-			addr := fmt.Sprintf("%s:%d", config.Host, port)
+			addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
 			if tcpErr != nil {
 				log.Writef("[CreateSession] RDP TCP pre-check to %s failed: %v", addr, tcpErr)

@@ -41,6 +41,7 @@ const mockPanel = {
 }
 const mockGetPanel = vi.fn().mockReturnValue(mockPanel)
 const mockGetAILockedPanel = vi.fn().mockReturnValue(null)
+const mockGetAILockedPanels = vi.fn().mockReturnValue([])
 
 const mockActiveTab: { type: string; panelId: string } = {
   type: 'terminal',
@@ -48,6 +49,7 @@ const mockActiveTab: { type: string; panelId: string } = {
 }
 const mockTabStore = {
   getAILockedPanel: mockGetAILockedPanel,
+  getAILockedPanels: mockGetAILockedPanels,
   activeTab: mockActiveTab,
 }
 const mockPanelStore = {
@@ -312,6 +314,7 @@ describe('executeCommand', () => {
     vi.mocked(mockSessionWrite).mockClear()
     vi.mocked(mockGetPanel).mockReturnValue(mockPanel)
     vi.mocked(mockGetAILockedPanel).mockReturnValue(null)
+    vi.mocked(mockGetAILockedPanels).mockReturnValue([])
     mockActiveTab.type = 'terminal'
     mockActiveTab.panelId = 'panel-1'
   })
@@ -411,9 +414,12 @@ describe('executeCommand', () => {
     expect(result.exitCode).toBe(0)
     expect(result.timedOut).toBe(false)
     expect(result.output).toContain('截断')
+    // headLines=3 keeps the echoed command line + line1 + line2;
+    // tailLines=3 keeps line9 + line10 + the returning prompt. line8
+    // falls inside the omitted middle.
     expect(result.output).toContain('line1')
     expect(result.output).toContain('line2')
-    expect(result.output).toContain('line8')
+    expect(result.output).not.toContain('line8')
     expect(result.output).toContain('line9')
     expect(result.output).toContain('line10')
 

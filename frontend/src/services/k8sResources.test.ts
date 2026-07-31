@@ -29,7 +29,12 @@ describe('k8sResources', () => {
   it('pods columns cover Name / Namespace / Ready / Status / Restarts / Age / Node', () => {
     const pods = getResource('pods')!
     const headers = pods.columns.map(c => c.header)
-    expect(headers).toEqual(['Name', 'Namespace', 'Ready', 'Status', 'Restarts', 'Age', 'Node'])
+    // Assert containment rather than exact equality — the metrics columns
+    // (CPU / MEM / request-limit percentages / IP) sit between Restarts and
+    // Node, and more may be added.
+    for (const core of ['Name', 'Namespace', 'Ready', 'Status', 'Restarts', 'Age', 'Node']) {
+      expect(headers).toContain(core)
+    }
   })
 
   it('every column value fn returns non-undefined for a minimal pod fixture', () => {
