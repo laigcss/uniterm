@@ -116,11 +116,14 @@ function highlightPlainText(text: string): string {
 // modes indicate a TUI app (k9s, vim, htop…) drawing a screen; those lines
 // must stay untouched.
 const SGR_ONLY_LINE = /^(?:[^\x1b]|\x1b\[[\d;]*m)*$/
+const FENCE_OPEN = /^\s{0,3}(`{3,}|~{3,})/
+const INDENTED_CODE_LINE = /^ {4,}\S/
 
 export function highlight(text: string): string {
   // Process line by line to avoid cross-line regex matches.
   const lines = text.split(/(\r?\n)/)
   let result = ''
+  let fenceChar: '`' | '~' | null = null
   for (const line of lines) {
     if (line === '\r\n' || line === '\n' || line === '\r') {
       result += line
@@ -128,11 +131,26 @@ export function highlight(text: string): string {
       // For SGR-only lines, let highlightPlainText run — it splits on CSI
       // boundaries and only touches the plain segments, so already-coloured
       // spans pass through unchanged while the uncoloured remainder still
-      // gets highlighted.
+      // gets highlighted. Same for plain text lines.
       if (line.indexOf('\x1b') !== -1 && !SGR_ONLY_LINE.test(line)) {
         result += line
       } else {
-        result += highlightPlainText(line)
+        const m = FENCE_OPEN.exec(line)
+        if (fenceChar) {
+          // Inside a fenced block — pass through until matching close fence.
+          if (m && m[1][0] === fenceChar) fenceChar = null
+          result += line
+        } else if (m) {
+          // Opening fence (``` or ~~~) — re-coloring braces / brackets
+          // inside fenced code injects SGR resets that some TUI apps
+          // misinterpret and produce overlapping glyphs.
+          fenceChar = m[1][0] as '`' | '~'
+          result += line
+        } else if (INDENTED_CODE_LINE.test(line)) {
+          result += line
+        } else {
+          result += highlightPlainText(line)
+        }
       }
     }
   }
