@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,13 @@ type SyncService struct {
 	keychain    *Keychain
 	configStore *SyncConfigStore
 	mu          sync.Mutex
+
+	// ready is closed by NewSyncService() once the disk-touching
+	// init (UserConfigDir → MkdirAll → NewKeychain → NewSyncConfigStore)
+	// has finished. Callers that arrive during the brief startup window
+	// can wait on Ready() with a short timeout (F-407).
+	ready     chan struct{}
+	readyOnce sync.Once
 }
 
 type SyncResult struct {
@@ -41,12 +50,53 @@ func NewSyncService() (*SyncService, error) {
 		return nil, err
 	}
 
-	return &SyncService{
+	s := &SyncService{
 		configDir:   appDir,
 		repoPath:    filepath.Join(appDir, "sync-repo"),
 		keychain:    NewKeychain(),
 		configStore: NewSyncConfigStore(appDir),
-	}, nil
+		ready:       make(chan struct{}),
+	}
+	s.readyOnce.Do(func() { close(s.ready) })
+	return s, nil
+}
+
+// NewSyncServiceAsync returns a SyncService whose disk-touching init
+// (UserConfigDir / MkdirAll / NewKeychain) runs on a background
+// goroutine. F-407: macOS Security framework keychain IPC + the
+// PBKDF2 600k iterations probe can take 50–500ms+ on first launch —
+// doing it synchronously inside wails.OnStartup blocks the first
+// paint of the main window.
+//
+// Callers should `Ready()` (with a short timeout) before invoking
+// service methods; otherwise methods may fail with
+// ErrSyncNotInitialized until init completes.
+func NewSyncServiceAsync() (*SyncService, context.Context) {
+	s := &SyncService{ready: make(chan struct{})}
+	initDone, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer s.readyOnce.Do(func() { close(s.ready) })
+		cfg, err := os.UserConfigDir()
+		if err != nil {
+			return
+		}
+		appDir := filepath.Join(cfg, "uniTerm")
+		if err := os.MkdirAll(appDir, 0755); err != nil {
+			return
+		}
+		s.configDir = appDir
+		s.repoPath = filepath.Join(appDir, "sync-repo")
+		s.keychain = NewKeychain()
+		s.configStore = NewSyncConfigStore(appDir)
+		cancel()
+	}()
+	return s, initDone
+}
+
+// Ready returns a channel closed once init has finished. Pair with
+// a short timeout in callers that race startup (F-407).
+func (s *SyncService) Ready() <-chan struct{} {
+	return s.ready
 }
 
 // GetConfig returns the current sync configuration.
@@ -97,9 +147,19 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 		return nil, fmt.Errorf("open repo: %w", err)
 	}
 
-	// 2. Encrypt and commit only if local config has actually changed
+	// 2. Encrypt and commit only if local config has actually changed.
+	// A decrypt error means the stored master password / key cannot
+	// open the remote ciphertext (wrong password or corrupted blob);
+	// refuse to push and surface the error to the user rather than
+	// overwriting the only good remote copy with locally-derived
+	// ciphertext (SYNC-P1-11).
 	committed := false
-	if same, _ := s.compareLocalWithRepo(encKey); !same {
+	same, cmpErr := s.compareLocalWithRepo(encKey)
+	if cmpErr != nil {
+		s.updateLastSyncResult("password_mismatch", cmpErr.Error())
+		return nil, cmpErr
+	}
+	if !same {
 		if err := EncryptConfigFiles(s.configDir, s.repoPath, encKey, s.keychain); err != nil {
 			s.updateLastSyncResult("failed", fmt.Sprintf("encrypt files: %v", err))
 			return nil, fmt.Errorf("encrypt files: %w", err)
@@ -473,6 +533,9 @@ func compareConfigDirs(localDir, remoteDir string, kc *Keychain) (bool, error) {
 }
 
 // compareConfigFiles compares two config files after backfilling local passwords from keychain.
+// JSON is re-marshaled via json.MarshalIndent so Go's encoding/json sorts map
+// keys deterministically before byte comparison — prevents spurious diffs from
+// non-deterministic key ordering in the underlying JSON.
 func compareConfigFiles(localPath, remotePath string, kc *Keychain) (bool, error) {
 	localData, err := os.ReadFile(localPath)
 	if err != nil {
@@ -484,14 +547,24 @@ func compareConfigFiles(localPath, remotePath string, kc *Keychain) (bool, error
 	}
 
 	var localObj, remoteObj map[string]interface{}
-	json.Unmarshal(localData, &localObj)
-	json.Unmarshal(remoteData, &remoteObj)
+	if err := json.Unmarshal(localData, &localObj); err != nil {
+		return false, fmt.Errorf("parse local %s: %w", localPath, err)
+	}
+	if err := json.Unmarshal(remoteData, &remoteObj); err != nil {
+		return false, fmt.Errorf("parse remote %s: %w", remotePath, err)
+	}
 
 	// Backfill passwords from keychain on the local side so both sides are comparable
 	backfillFromKeychain(localObj, kc)
 
-	localNorm, _ := json.Marshal(localObj)
-	remoteNorm, _ := json.Marshal(remoteObj)
+	localNorm, err := json.MarshalIndent(localObj, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("marshal local: %w", err)
+	}
+	remoteNorm, err := json.MarshalIndent(remoteObj, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("marshal remote: %w", err)
+	}
 	return string(localNorm) == string(remoteNorm), nil
 }
 
@@ -597,7 +670,12 @@ func (s *SyncService) VerifySyncPassword(password, username, token string) error
 	return nil
 }
 
-// ChangePassword re-encrypts all synced files with a new master password.
+// ChangePassword re-encrypts all synced files with a new master password
+// and a fresh random salt. A new salt is required so PBKDF2 work cannot be
+// amortized across old and new passwords (SYNC-P1-6). The repo's existing
+// ciphertext is decrypted with the old key and re-encrypted with the new
+// key via a temp-then-rename pattern, so a crash mid-rotation leaves the
+// repo decryptable with the old key.
 func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -610,33 +688,76 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 		return fmt.Errorf("no repo configured")
 	}
 
-	salt, err := ReadSaltFile(s.repoPath)
+	oldSalt, err := ReadSaltFile(s.repoPath)
 	if err != nil {
 		return fmt.Errorf("read salt: %w", err)
 	}
-	if salt == nil {
+	if oldSalt == nil {
 		return fmt.Errorf("远端仓库数据异常，缺少密钥盐值")
 	}
 
-	// Verify old password
-	oldKey := DeriveKey(oldPassword, salt)
+	// Verify old password can decrypt the repo.
+	oldKey := DeriveKey(oldPassword, oldSalt)
 	if err := verifyDecryption(s.repoPath, oldKey); err != nil {
 		return fmt.Errorf("当前密码错误")
 	}
 
-	// Derive new key and store
-	newKey := DeriveKey(newPassword, salt)
+	// Fresh 16-byte salt via crypto/rand (SYNC-P1-6).
+	newSalt, err := GenerateSalt()
+	if err != nil {
+		return fmt.Errorf("generate new salt: %w", err)
+	}
+	newKey := DeriveKey(newPassword, newSalt)
 	if err := s.keychain.StoreEncryptionKey(newKey); err != nil {
 		return fmt.Errorf("store new encryption key: %w", err)
 	}
 
-	// Re-encrypt all files with new key and push
+	// Re-encrypt every existing repo ciphertext: decrypt with oldKey,
+	// re-encrypt with newKey, atomic rename. A crash before the rename
+	// leaves the original ciphertext intact and decryptable with oldKey.
+	repoFiles := []string{"connections.json", "settings.json", "quickCommands.json"}
+	for _, name := range repoFiles {
+		srcPath := filepath.Join(s.repoPath, name)
+		ciphertext, err := os.ReadFile(srcPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		plaintext, err := decryptBytes(string(ciphertext), oldKey)
+		if err != nil {
+			return fmt.Errorf("decrypt %s: %w", name, err)
+		}
+		encoded, err := encryptBytes(plaintext, newKey)
+		if err != nil {
+			return fmt.Errorf("encrypt %s: %w", name, err)
+		}
+		tmpPath := srcPath + ".tmp"
+		if err := os.WriteFile(tmpPath, []byte(encoded), 0600); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("write %s.tmp: %w", name, err)
+		}
+		if err := os.Rename(tmpPath, srcPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("rename %s: %w", name, err)
+		}
+	}
+
+	// Atomic swap of .sync-salt.
+	saltPath := filepath.Join(s.repoPath, ".sync-salt")
+	saltTmp := saltPath + ".tmp"
+	if err := os.WriteFile(saltTmp, []byte(hex.EncodeToString(newSalt)), 0600); err != nil {
+		os.Remove(saltTmp)
+		return fmt.Errorf("write .sync-salt.tmp: %w", err)
+	}
+	if err := os.Rename(saltTmp, saltPath); err != nil {
+		os.Remove(saltTmp)
+		return fmt.Errorf("rename .sync-salt: %w", err)
+	}
+
 	username := config.Username
 	token := s.getToken()
-
-	if err := EncryptConfigFiles(s.configDir, s.repoPath, newKey, s.keychain); err != nil {
-		return fmt.Errorf("encrypt files: %w", err)
-	}
 
 	repo, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token)
 	if err != nil {
@@ -677,6 +798,8 @@ func commitMsg(action string) string {
 
 // compareLocalWithRepo decrypts repo files and compares them with local config.
 // Returns true if the local config content matches what's already in the repo.
+// A decrypt error is surfaced (not swallowed) so callers can refuse to push
+// over an undecryptable remote (SYNC-P1-11).
 func (s *SyncService) compareLocalWithRepo(encKey []byte) (bool, error) {
 	if !repoHasFiles(s.repoPath) {
 		return false, nil
@@ -688,7 +811,7 @@ func (s *SyncService) compareLocalWithRepo(encKey []byte) (bool, error) {
 	defer os.RemoveAll(tmpDir)
 
 	if err := DecryptConfigFiles(s.repoPath, tmpDir, encKey, nil); err != nil {
-		return false, nil // can't decrypt → treat as changed
+		return false, fmt.Errorf("decrypt remote: %w", err)
 	}
 	return compareConfigDirs(s.configDir, tmpDir, s.keychain)
 }
