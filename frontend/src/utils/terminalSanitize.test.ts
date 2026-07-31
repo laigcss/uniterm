@@ -86,9 +86,16 @@ describe('sanitizeTerminalOutput()', () => {
     expect(sanitizeTerminalOutput('ab')).toBe('ab')
   })
 
-  it('strips an astral-plane codepoint that is not in any kept block', () => {
-    // U+1F600 GRINNING FACE — emoji, not TUI / CJK / box-drawing.
-    expect(sanitizeTerminalOutput('a😀b')).toBe('ab')
+  it('keeps an astral-plane symbol such as an emoji', () => {
+    // U+1F600 GRINNING FACE is \p{S}, the same category as the ● ⏺ ✓ glyphs
+    // Claude Code draws with — they cannot be separated, and emoji in command
+    // output is legitimate anyway.
+    expect(sanitizeTerminalOutput('a😀b')).toBe('a😀b')
+  })
+
+  it('keeps the Claude Code glyph set through a history restore', () => {
+    const glyphs = '● ⏺ ⏵ ⌘ ⌥ ⌫ ↵ ⏎ ✓ ✗ ■ □ ▶ ◆ ★'
+    expect(sanitizeTerminalOutput(glyphs)).toBe(glyphs)
   })
 
   it('collapses 3+ consecutive newlines down to 2', () => {
