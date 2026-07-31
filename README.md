@@ -19,6 +19,12 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 
 </div>
 
+<div align="center">
+
+This is a personal hobby project maintained in the author's spare time. There is no commercialization plan, and we do not accept any form of sponsorship. Contributors who share the same interest are warmly welcomed to join, discuss, and build together.
+
+</div>
+
 ## Table of Contents
 
 - [Features](#features)
