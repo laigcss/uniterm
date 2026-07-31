@@ -67,6 +67,8 @@ export function acquireTerminal(
     managed.isNew = false
   } else {
     const cursorBlink = useSettingsStore().settings.terminal.cursorBlink ?? true
+    const wordSeparator = useSettingsStore().settings.terminal.wordSeparator
+      || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
     const ls = useLocalStateStore()
     const theme = getXtermTheme(options.themeName ?? 'dark', customThemes)
     if (ls.state.backgroundEnabled && ls.state.backgroundImage) {
@@ -81,6 +83,7 @@ export function acquireTerminal(
       scrollback: options.scrollback ?? 2500,
       allowProposedApi: true,
       allowTransparency: true,
+      wordSeparator,
     })
 
     const fitAddon = new FitAddon()

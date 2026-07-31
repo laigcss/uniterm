@@ -271,6 +271,21 @@
 
           <div class="setting-card">
             <div class="setting-info">
+              <div class="setting-title">{{ t('settings.wordSeparator') }}</div>
+              <div class="setting-desc">{{ t('settings.wordSeparatorDesc') }}</div>
+            </div>
+            <div class="setting-control setting-control-wide">
+              <el-input
+                v-model="settingsStore.settings.terminal.wordSeparator"
+                :placeholder="defaultWordSeparator"
+                clearable
+                @change="settingsStore.save()"
+              />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
               <div class="setting-title">{{ t('settings.rightClick') }}</div>
               <div class="setting-desc">{{ t('settings.rightClickDesc') }}</div>
             </div>
@@ -798,6 +813,11 @@ onMounted(async () => {
 // default plus any current override (so if the user cleared their
 // override, the placeholder shows the fallback path).
 const defaultLogDir = ref('')
+
+// Default word separator for xterm's double-click selection; shown in
+// the settings input as a placeholder so the user can see what to
+// reset to.
+const defaultWordSeparator = '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
 
 async function pickLogDir() {
   try {

@@ -332,6 +332,8 @@
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
   "settings.selectionActionDesc": "텍스트 선택 후 기본 동작",
+  "settings.wordSeparator": "단어 구분 문자",
+  "settings.wordSeparatorDesc": "더블 클릭으로 단어를 선택할 때 사용되는 구분 문자입니다. 비워 두면 기본값을 사용합니다.",
   "settings.rightClickDesc": "터미널에서 오른쪽 클릭 동작",
   "settings.middleClick": "가운데 클릭 동작",
   "settings.middleClickDesc": "터미널에서 가운데 클릭 동작",

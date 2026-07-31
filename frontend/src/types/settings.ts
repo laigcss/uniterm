@@ -55,6 +55,11 @@ export interface TerminalSettings {
   // Override for the session output log directory. Empty means the
   // OS default under ~/Documents/uniTerm/logs.
   sessionLogDir: string
+  // Characters that act as word boundaries for xterm.js's double-click
+  // word selection. Default mirrors the built-in xterm separators
+  // extended with the most common shell / path punctuation, so that
+  // e.g. `foo;bar` selects only `foo` on double-click.
+  wordSeparator: string
 }
 
 export interface AIModelConfig {
@@ -167,7 +172,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     smartCompletion: true,
     highlightEnabled: true,
     cursorBlink: true,
-    sessionLogDir: ''
+    sessionLogDir: '',
+    wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
   },
   ai: {
     maxTurns: 20,

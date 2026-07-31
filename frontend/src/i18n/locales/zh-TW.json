@@ -332,6 +332,8 @@
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
   "settings.selectionActionDesc": "選取文字後的預設操作",
+  "settings.wordSeparator": "選詞分隔符",
+  "settings.wordSeparatorDesc": "雙擊選詞時作為分詞邊界的字元。留空使用預設值。",
   "settings.rightClickDesc": "右鍵點擊終端機的行為",
   "settings.middleClick": "中鍵功能",
   "settings.middleClickDesc": "中鍵點擊終端的行為",

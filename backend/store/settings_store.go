@@ -24,6 +24,10 @@ type TerminalSettings struct {
 	// output logs (issue #227). Empty means: use the OS-appropriate
 	// default under ~/Documents/uniTerm/logs.
 	SessionLogDir string `json:"sessionLogDir,omitempty"`
+	// WordSeparator overrides xterm.js's double-click word-selection
+	// separators. Empty means the frontend falls back to its built-in
+	// default. Mirrors the `wordSeparator` Terminal option.
+	WordSeparator string `json:"wordSeparator,omitempty"`
 }
 
 // TerminalThemeColors mirrors xterm.js's ITheme shape: the 4 base colors

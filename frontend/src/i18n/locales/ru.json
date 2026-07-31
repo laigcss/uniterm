@@ -332,6 +332,8 @@
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
   "settings.selectionActionDesc": "Действие по умолчанию после выделения текста",
+  "settings.wordSeparator": "Разделитель слов",
+  "settings.wordSeparatorDesc": "Символы-разделители слов при двойном щелчке. Оставьте пустым, чтобы использовать значение по умолчанию.",
   "settings.rightClickDesc": "Поведение правой кнопки мыши в терминале",
   "settings.middleClick": "Действие средней кнопки",
   "settings.middleClickDesc": "Поведение средней кнопки в терминале",

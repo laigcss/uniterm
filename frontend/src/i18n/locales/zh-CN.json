@@ -335,6 +335,8 @@
   "settings.defaultLocalShell": "默认本地终端",
   "settings.defaultLocalShellDesc": "在起始页点击本地终端按钮时使用的 Shell",
   "settings.selectionActionDesc": "选中文字后的默认操作",
+  "settings.wordSeparator": "选词分隔符",
+  "settings.wordSeparatorDesc": "双击选词时作为分词边界的字符。留空使用默认值。",
   "settings.rightClickDesc": "右键点击终端的行为",
   "settings.middleClick": "中键功能",
   "settings.middleClickDesc": "中键点击终端的行为",
