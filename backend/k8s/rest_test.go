@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -76,3 +77,36 @@ func TestDoPatchWithContentType(t *testing.T) {
 	}
 }
 
+// TestDoBodySizeLimit (K8S-05): a response body above maxK8sResponseBytes
+// must surface a clear error and not stream a giant slice back to the
+// caller. We exercise the cap via a fake RoundTripper so the test stays
+// O(1) in memory — no 64 MiB allocation, no real TLS handshake.
+func TestDoBodySizeLimit(t *testing.T) {
+	fake := &fakeTripper{resp: &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(bytes.NewReader(make([]byte, maxK8sResponseBytes+1))),
+	}}
+	client := &http.Client{Transport: fake}
+
+	status, body, err := Do(context.Background(), client, "http://example.invalid", "GET", "/huge", nil, "")
+	if err == nil {
+		t.Fatalf("expected oversize error, got nil (status=%d body=%d bytes)", status, len(body))
+	}
+	if !strings.Contains(err.Error(), "64 MiB") && !strings.Contains(err.Error(), "limit") {
+		t.Errorf("error = %v; want message mentioning the 64 MiB limit", err)
+	}
+	if len(body) != 0 {
+		t.Errorf("body should be nil on oversize, got %d bytes", len(body))
+	}
+	if status != 200 {
+		t.Errorf("status = %d, want 200 (response was received, just too big)", status)
+	}
+}
+
+// fakeTripper returns a canned response without touching the network.
+type fakeTripper struct{ resp *http.Response }
+
+func (f *fakeTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f.resp, nil
+}
