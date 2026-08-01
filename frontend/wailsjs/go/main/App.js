@@ -290,6 +290,10 @@ export function ImportSkillFromZip(arg1) {
   return window['go']['main']['App']['ImportSkillFromZip'](arg1);
 }
 
+export function IsForeground() {
+  return window['go']['main']['App']['IsForeground']();
+}
+
 export function K8sConnect(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['K8sConnect'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -686,6 +690,10 @@ export function SessionWriteBinary(arg1, arg2) {
   return window['go']['main']['App']['SessionWriteBinary'](arg1, arg2);
 }
 
+export function SetAppVisibility(arg1) {
+  return window['go']['main']['App']['SetAppVisibility'](arg1);
+}
+
 export function SetBackgroundImage(arg1) {
   return window['go']['main']['App']['SetBackgroundImage'](arg1);
 }
@@ -828,6 +836,10 @@ export function SftpResumeTransfer(arg1, arg2) {
 
 export function StartTunnel(arg1) {
   return window['go']['main']['App']['StartTunnel'](arg1);
+}
+
+export function StartupError() {
+  return window['go']['main']['App']['StartupError']();
 }
 
 export function StopTunnel(arg1) {

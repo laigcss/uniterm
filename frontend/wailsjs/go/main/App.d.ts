@@ -153,6 +153,8 @@ export function ImportSkillFromDir(arg1:string):Promise<string>;
 
 export function ImportSkillFromZip(arg1:string):Promise<string>;
 
+export function IsForeground():Promise<boolean>;
+
 export function K8sConnect(arg1:string,arg2:boolean,arg3:string,arg4:string,arg5:string,arg6:string):Promise<string>;
 
 export function K8sDisconnect(arg1:string):Promise<void>;
@@ -351,6 +353,8 @@ export function SessionWrite(arg1:string,arg2:string):Promise<void>;
 
 export function SessionWriteBinary(arg1:string,arg2:string):Promise<void>;
 
+export function SetAppVisibility(arg1:boolean):Promise<void>;
+
 export function SetBackgroundImage(arg1:string):Promise<string>;
 
 export function SetCommandEnabled(arg1:string,arg2:boolean):Promise<void>;
@@ -422,6 +426,8 @@ export function SftpRename(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function SftpResumeTransfer(arg1:string,arg2:string):Promise<void>;
 
 export function StartTunnel(arg1:string):Promise<session.TunnelState>;
+
+export function StartupError():Promise<string>;
 
 export function StopTunnel(arg1:string):Promise<void>;
 
