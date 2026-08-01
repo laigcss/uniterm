@@ -128,4 +128,24 @@ describe('sanitizeLiveTerminalOutput()', () => {
     const input = '─│┌┐\n⠋⠙⠹'
     expect(sanitizeLiveTerminalOutput(input)).toBe(input)
   })
+
+  // Regression guard: the live path used to run the same control-character
+  // filter as the history path, which broke interactive line editing. A
+  // shell steers the cursor with these bytes; dropping them left the cursor
+  // to the right of where the shell believed it was, so typing "12" rendered
+  // as "112" and backspace erased the glyph but left its column as a space.
+  it('preserves BS so a shell line editor can move the cursor back', () => {
+    expect(sanitizeLiveTerminalOutput('\x08 \x08')).toBe('\x08 \x08')
+  })
+
+  it('preserves a PSReadLine redraw sequence verbatim', () => {
+    const redraw = '\x1b[?25l\x08\x1b[K12\x1b[?25h'
+    expect(sanitizeLiveTerminalOutput(redraw)).toBe(redraw)
+  })
+
+  it('preserves the C0 control characters a PTY relies on', () => {
+    // BEL, BS, TAB, LF, CR, ESC — all meaningful to xterm's parser.
+    const controls = '\x07\x08\x09\x0a\x0d\x1b'
+    expect(sanitizeLiveTerminalOutput(controls)).toBe(controls)
+  })
 })

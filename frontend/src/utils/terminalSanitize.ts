@@ -1,10 +1,24 @@
 // Strip transport-level noise and binary garbage from a block of terminal
-// output before it lands in xterm. Shared by the live `session:data` handler
-// and the KeepAlive history-replay path so both see identical input.
+// output before it lands in xterm.
+//
+// The two exports are deliberately asymmetric: the history-replay path
+// filters aggressively, the live `session:data` path only drops U+FFFD.
+// See FFFD_RE below for why.
 //
 // All replacements are pure — no side effects, no logger calls — so the
-// function is trivially unit-testable. Callers that want a debug log do it
+// functions are trivially unit-testable. Callers that want a debug log do it
 // around the call site.
+
+// Live `session:data` only drops U+FFFD. It must NOT touch control
+// characters: an interactive shell's line editor drives the cursor with
+// them, and PSReadLine in particular redraws the input line using BS
+// (\x08) runs. Stripping those leaves the cursor parked to the right of
+// where the shell thinks it is, so typing "12" renders as "112" and a
+// backspace erases the glyph but leaves the column behind as a space.
+//
+// The heavier filter below is safe on the history path because a restored
+// scrollback is a static snapshot — there is no cursor left to steer.
+const FFFD_RE = /�/g
 
 // Single alternation covering every "drop this garbage" pass plus the
 // \n{3,}→\n\n collapse. Six sequential .replace() calls each allocated a
@@ -25,20 +39,14 @@
 const SANITIZE_STRIP_RE =
   /\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}|\x18+|\x08+|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]|�|[^\x09\x0a\x0d\x1b\p{L}\p{N}\p{P}\p{S}\p{Z}\p{M}]|\n{3,}/gu
 
-// Same alternation minus the trailing \n{3,} branch. Running output does not
-// accumulate blank runs, so collapsing them in the hot path would only churn
-// bytes.
-const SANITIZE_STRIP_LIVE_RE =
-  /\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}|\x18+|\x08+|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]|�|[^\x09\x0a\x0d\x1b\p{L}\p{N}\p{P}\p{S}\p{Z}\p{M}]/gu
-
 export function sanitizeTerminalOutput(text: string): string {
   if (!text) return text
   return text.replace(SANITIZE_STRIP_RE, (m) => (m.charCodeAt(0) === 0x0a ? '\n\n' : ''))
 }
 
-// Live session:data path is identical except the blank-line collapse is
-// skipped — see SANITIZE_STRIP_LIVE_RE.
+// Live path: U+FFFD only. See FFFD_RE for why the control-character and
+// binary-garbage passes are deliberately absent here.
 export function sanitizeLiveTerminalOutput(text: string): string {
   if (!text) return text
-  return text.replace(SANITIZE_STRIP_LIVE_RE, '')
+  return text.replace(FFFD_RE, '')
 }
