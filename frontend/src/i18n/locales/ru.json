@@ -823,6 +823,7 @@
   "conn.ftpPassive": "Пассивный режим",
   "conn.ftpEncoding": "Кодировка символов",
   "conn.encoding": "Кодировка",
+  "conn.backspaceKey": "Клавиша Backspace",
   "quickCommands.quickCommandsTab": "Быстрые команды",
   "quickCommands.historyTab": "История",
   "quickCommands.saveAs": "Сохранить как быструю команду",

@@ -607,6 +607,7 @@ export namespace session {
 	    s3Region?: string;
 	    s3Bucket?: string;
 	    encoding?: string;
+	    backspaceKey?: string;
 	    k8sConfigPath?: string;
 	    k8sConfigInline?: string;
 	    k8sContext?: string;
@@ -670,6 +671,7 @@ export namespace session {
 	        this.s3Region = source["s3Region"];
 	        this.s3Bucket = source["s3Bucket"];
 	        this.encoding = source["encoding"];
+	        this.backspaceKey = source["backspaceKey"];
 	        this.k8sConfigPath = source["k8sConfigPath"];
 	        this.k8sConfigInline = source["k8sConfigInline"];
 	        this.k8sContext = source["k8sContext"];

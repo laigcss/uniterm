@@ -823,6 +823,7 @@
   "conn.ftpPassive": "Mode passif",
   "conn.ftpEncoding": "Encodage",
   "conn.encoding": "Encodage",
+  "conn.backspaceKey": "Touche Retour arrière",
   "quickCommands.quickCommandsTab": "Commandes rapides",
   "quickCommands.historyTab": "Historique",
   "quickCommands.saveAs": "Enregistrer comme commande rapide",

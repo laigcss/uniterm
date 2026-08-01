@@ -872,6 +872,7 @@
   "conn.ftpSkipVerify": "允许不安全的 TLS（跳过证书校验）",
   "conn.ftpSkipVerifyDesc": "关闭 FTPS 的证书校验。容易被中间人攻击，仅在自签名证书等可信场景下开启。",
   "conn.encoding": "终端编码",
+  "conn.backspaceKey": "退格键",
   "quickCommands.quickCommandsTab": "快捷命令",
   "quickCommands.historyTab": "历史命令",
   "quickCommands.saveAs": "保存为快捷命令",

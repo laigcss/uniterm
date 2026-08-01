@@ -823,6 +823,7 @@
   "conn.ftpPassive": "被動模式",
   "conn.ftpEncoding": "字元編碼",
   "conn.encoding": "終端編碼",
+  "conn.backspaceKey": "退格鍵",
   "quickCommands.quickCommandsTab": "快捷命令",
   "quickCommands.historyTab": "歷史命令",
   "quickCommands.saveAs": "儲存為快捷命令",

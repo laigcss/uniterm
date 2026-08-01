@@ -101,6 +101,7 @@ import {
 import { getXtermTheme } from '../composables/useTerminal'
 import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
+import { applyBackspaceKey } from '../utils/backspaceKey'
 import {
   sanitizeTerminalOutput,
   sanitizeLiveTerminalOutput,
@@ -627,14 +628,25 @@ function writeTerminalInput(data: string, inAlternateScreen: boolean) {
       for (const pid of targets) {
         const p = panelStore.getPanel(pid)
         if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
-          SessionWrite(p.sessionId, filtered)
+          const translated = applyBackspaceKey(
+            filtered,
+            p.config?.backspaceKey,
+            p.config?.type,
+          )
+          SessionWrite(p.sessionId, translated)
         }
       }
       return
     }
   }
 
-  SessionWrite(sid, filtered)
+  const panel = props.panelId ? panelStore.getPanel(props.panelId) : undefined
+  const translated = applyBackspaceKey(
+    filtered,
+    panel?.config?.backspaceKey,
+    panel?.config?.type,
+  )
+  SessionWrite(sid, translated)
 }
 
 function handleTerminalKey(e: KeyboardEvent): boolean {
