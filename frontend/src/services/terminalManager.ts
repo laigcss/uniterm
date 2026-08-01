@@ -110,6 +110,10 @@ export function acquireTerminal(
       allowTransparency: true,
     })
 
+    // ctrl+wheel is font zoom (App.vue). xterm v6 reports wheel events to the
+    // app regardless of defaultPrevented, so vim would scroll on zoom too.
+    terminal.attachCustomWheelEventHandler(ev => !ev.ctrlKey)
+
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
     const unicodeAddon = new Unicode11Addon()

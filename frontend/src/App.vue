@@ -669,7 +669,9 @@ onMounted(async () => {
   window.addEventListener('input:contextmenu', onInputContextMenu)
   window.addEventListener('global:close-context-menus', closeInputMenu)
   document.addEventListener('click', closeInputMenu)
-  document.addEventListener('wheel', onWheel, { passive: false })
+  // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
+  // scrolls, but bails on defaultPrevented — so we must preempt it.
+  document.addEventListener('wheel', onWheel, { passive: false, capture: true })
   // WKWebView doesn't forward Cmd+A/C/V on input/textarea/contenteditable — handle globally.
   document.addEventListener('keydown', onEditShortcut)
   // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
@@ -854,7 +856,7 @@ onUnmounted(() => {
   window.removeEventListener('input:contextmenu', onInputContextMenu)
   window.removeEventListener('global:close-context-menus', closeInputMenu)
   document.removeEventListener('click', closeInputMenu)
-  document.removeEventListener('wheel', onWheel)
+  document.removeEventListener('wheel', onWheel, { capture: true })
   document.removeEventListener('keydown', onMacSystemShortcut, true)
   // RDP overlay tracking
   window.removeEventListener('rdp:overlay-push', RDPHideForOverlay)
