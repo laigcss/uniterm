@@ -158,7 +158,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'system',
   terminal: {
     theme: 'uniterm-dark',
-    fontFamily: 'Consolas, "Courier New", monospace',
+    fontFamily: '"JetBrains Mono Variable", Menlo, Consolas, "Courier New", monospace',
     fontSize: 14,
     selectionAction: 'none',
     rightClickAction: 'menu',

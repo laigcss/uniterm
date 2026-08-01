@@ -94,16 +94,19 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
   CreateSession,
+  CloseSession,
   K8sExecSession,
   ContainerExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
+  SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
 import type { Panel } from '../types/workspace'
+import { waitForTerminalSize } from '../services/terminalManager'
 import type { ConnectionConfig } from '../types/session'
 import type { CredentialResult } from './CredentialPrompt.vue'
 
@@ -284,45 +287,47 @@ function cancelEdit() {
 }
 
 let retryAttempt = 0
-let autoRetried = false
 
 function onSessionStatus(status: string) {
   if (status === 'retry') {
     // Manual retry — user pressed Enter
-    autoRetried = false
-    retryConnection(false)
+    retryConnection()
   } else if (status === 'connected') {
     retryAttempt = 0
-    autoRetried = false
-  } else if (status === 'disconnected' && props.panel.type === 'local') {
-    // Auto-reconnect local sessions silently on disconnect to handle
-    // ConPTY edge cases where a child process (e.g. opencode /exit)
-    // tears down the pseudo-console. Only auto-retry once per disconnect
-    // cycle (manual Enter resets the guard).
-    if (!autoRetried) {
-      autoRetried = true
-      setTimeout(() => retryConnection(true), 200)
-    }
   }
+  // Local sessions previously auto-reconnected here after a 200ms delay to
+  // paper over ConPTY tearing down the pseudo-console (e.g. opencode /exit).
+  // That raced the "Press Enter to restart" prompt and left users unable to
+  // tell a dead shell from a live one, so a dead local shell now just waits
+  // for Enter like every other session type.
 }
 
-async function retryConnection(silent = false) {
+async function retryConnection() {
   retryAttempt++
   if (props.panel.type === 'local') {
-    // Auto-retry (silent): just reset mouse modes and add a newline so the
-    // new prompt is separated from the previous session's output.
-    // Manual retry: show the yellow "Restarting..." message.
-    if (silent) {
-      baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n')
-    } else {
-      baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n\x1b[33mRestarting local shell...\x1b[0m\r\n')
-    }
+    baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n\x1b[33mRestarting local shell...\x1b[0m\r\n')
     try {
       const shellPath = props.panel.config?.shellPath || ''
-      const config = { ...props.panel.config, type: 'local', shellPath } as ConnectionConfig
+      const config: ConnectionConfig = {
+        ...props.panel.config,
+        type: 'local',
+        shellPath,
+        deferConnect: true,
+        initialCols: 0,
+        initialRows: 0,
+      }
       const info = await CreateSession('local', config)
       panelStore.bindSession(props.panel.id, info.id)
       sessionStore.initSession(info.id)
+      const size = await waitForTerminalSize(info.id)
+      if (size.cols > 0 && size.rows > 0) {
+        config.initialCols = size.cols
+        config.initialRows = size.rows
+      }
+      await SessionStart(info.id, config).catch((e) => {
+        baseTerminalRef.value?.write(`\r\n\x1b[31mFailed to start local shell: ${e}\x1b[0m\r\n`)
+        CloseSession(info.id).catch(() => {})
+      })
       retryAttempt = 0
     } catch (e: any) {
       baseTerminalRef.value?.write(`\r\n\x1b[31mFailed to start local shell: ${e}\x1b[0m\r\n`)
@@ -384,9 +389,24 @@ async function retryConnection(silent = false) {
   const reconnectAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   baseTerminalRef.value?.write(RESET_MOUSE_MODES + `\r\n\x1b[33mReconnecting... (${reconnectAt})\x1b[0m\r\n`)
   try {
-    const info = await CreateSession(props.panel.config.type, props.panel.config)
+    const config: ConnectionConfig = {
+      ...props.panel.config,
+      deferConnect: true,
+      initialCols: 0,
+      initialRows: 0,
+    }
+    const info = await CreateSession(props.panel.config.type, config)
     panelStore.bindSession(props.panel.id, info.id)
     sessionStore.initSession(info.id)
+    const size = await waitForTerminalSize(info.id)
+    if (size.cols > 0 && size.rows > 0) {
+      config.initialCols = size.cols
+      config.initialRows = size.rows
+    }
+    await SessionStart(info.id, config).catch((e) => {
+      baseTerminalRef.value?.write(`\r\n\x1b[31mReconnect failed: ${e}\x1b[0m\r\n`)
+      CloseSession(info.id).catch(() => {})
+    })
   } catch (e: any) {
     baseTerminalRef.value?.write(`\r\n\x1b[31mReconnect failed: ${e}\x1b[0m\r\n`)
     baseTerminalRef.value?.setRetryOnEnter(true)

@@ -12,6 +12,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { highlight } from './useHighlight'
 import { stripCursorBlink } from '../utils/cursor'
+import { resolveXtermBackground, applyTerminalBgVar } from './useTerminalTheme'
 import type { CustomTerminalTheme } from '../types/settings'
 
 export interface UseTerminalOptions {
@@ -60,11 +61,11 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
     }
   }
   const base = {
-    background: 'var(--bg-base)',
-    foreground: 'var(--text-primary)',
-    cursor: 'var(--accent)',
+    background: '#18181b',
+    foreground: '#e4e4e7',
+    cursor: '#22d3ee',
     selectionBackground: 'rgba(34, 211, 238, 0.2)',
-    black: '#1e1e22',
+    black: '#3f3f46',
     red: '#f87171',
     green: '#34d399',
     yellow: '#fbbf24',
@@ -72,7 +73,7 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
     magenta: '#c084fc',
     cyan: '#22d3ee',
     white: '#b0b0b8',
-    brightBlack: '#3f3f46',
+    brightBlack: '#666670',
     brightRed: '#fca5a5',
     brightGreen: '#6ee7b7',
     brightYellow: '#fde68a',
@@ -86,22 +87,22 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
       return base
     case 'uniterm-light':
       return {
-        background: '#fafafa',
+        background: '#e8e8e8',
         foreground: '#2c2c2c',
         cursor: '#1976d2',
         selectionBackground: 'rgba(25, 118, 210, 0.15)',
         black: '#1e1e22',
         red: '#d32f2f',
         green: '#388e3c',
-        yellow: '#c68600',
+        yellow: '#a06a00',
         blue: '#1976d2',
         magenta: '#7b1fa2',
         cyan: '#00838f',
-        white: '#9e9e9e',
+        white: '#757575',
         brightBlack: '#555555',
         brightRed: '#c62828',
         brightGreen: '#2e7d32',
-        brightYellow: '#b87a00',
+        brightYellow: '#9c6600',
         brightBlue: '#1565c0',
         brightMagenta: '#6a1b9a',
         brightCyan: '#006064',
@@ -326,6 +327,9 @@ export function useTerminal(
   let terminal: Terminal | null = null
   let fitAddon: FitAddon | null = null
   let searchAddon: SearchAddon | null = null
+  // Track loaded addons for unmount dispose; some (e.g. WebLinks) leave
+  // host elements behind after terminal.dispose() in older xterm.
+  const loadedAddons: Array<{ dispose?: () => void }> = []
   let resizeObserver: ResizeObserver | null = null
   let intersectionObserver: IntersectionObserver | null = null
   let unsubscribe: (() => void) | null = null
@@ -338,15 +342,20 @@ export function useTerminal(
   let splitResizing = false
   let suppressResizeUntil = 0
   let retryOnEnter = false
+  let hoverEl: HTMLDivElement | null = null
+  let cachedCellWidth = 0
+  let cachedCellHeight = 0
+  let cachedFontKey = ''
 
   function getTerminalOptions() {
     const ts = settingsStore.settings.terminal
     const ls = useLocalStateStore()
     const themeName = ts.theme || 'uniterm-dark'
-    const theme = getXtermTheme(themeName, settingsStore.settings.customTerminalThemes)
-    if (ls.state.backgroundEnabled && ls.state.backgroundImage) {
-      theme.background = 'rgba(0,0,0,0)'
-    }
+    const theme = resolveXtermBackground(
+      getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+      ls.state.backgroundEnabled,
+      ls.state.backgroundImage
+    )
     return {
       fontSize: ts.fontSize || 13,
       fontFamily: ts.fontFamily || 'Consolas, "Courier New", monospace',
@@ -378,16 +387,27 @@ export function useTerminal(
     // Use try/catch because these are internal APIs that may change between versions.
     let cellWidth = 0
     let cellHeight = 0
-    try {
-      const core = (terminal as any)._core
-      const dims = core?._renderService?.dimensions
-      if (dims) {
-        cellWidth = dims.css?.cell?.width || 0
-        cellHeight = dims.css?.cell?.height || 0
+    const fontKey = `${terminal.options.fontSize}|${terminal.options.fontFamily}`
+    if (fontKey === cachedFontKey && cachedCellWidth > 0 && cachedCellHeight > 0) {
+      cellWidth = cachedCellWidth
+      cellHeight = cachedCellHeight
+    } else {
+      try {
+        const core = (terminal as any)._core
+        const dims = core?._renderService?.dimensions
+        if (dims) {
+          cellWidth = dims.css?.cell?.width || 0
+          cellHeight = dims.css?.cell?.height || 0
+        }
+      } catch {
+        cellWidth = 0
+        cellHeight = 0
       }
-    } catch {
-      cellWidth = 0
-      cellHeight = 0
+      if (cellWidth > 0 && cellHeight > 0) {
+        cachedCellWidth = cellWidth
+        cachedCellHeight = cellHeight
+        cachedFontKey = fontKey
+      }
     }
 
     if (cellWidth === 0 || cellHeight === 0) {
@@ -475,8 +495,8 @@ export function useTerminal(
 
     fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    loadedAddons.push(fitAddon)
     // Register web links addon: underline http/https links, Ctrl+Click to open
-    let hoverEl: HTMLDivElement | null = null
     const webLinksAddon = new WebLinksAddon(
       (event, uri) => {
         if (event.ctrlKey || event.metaKey) {
@@ -504,11 +524,14 @@ export function useTerminal(
       }
     )
     terminal.loadAddon(webLinksAddon)
+    loadedAddons.push(webLinksAddon)
 
     searchAddon = new SearchAddon()
     terminal.loadAddon(searchAddon)
+    loadedAddons.push(searchAddon)
 
     terminal.open(terminalRef.value)
+    applyTerminalBgVar(terminal, terminal.options.theme ?? {})
     // Force synchronous layout so grid rows are sized before xterm measures
     void terminalRef.value.offsetHeight
     fitAddon.fit()
@@ -669,11 +692,13 @@ export function useTerminal(
   function applyXtermTheme(themeName: string) {
     if (!terminal) return
     const ls = useLocalStateStore()
-    const theme = getXtermTheme(themeName, settingsStore.settings.customTerminalThemes)
-    if (ls.state.backgroundEnabled && ls.state.backgroundImage) {
-      theme.background = 'rgba(0,0,0,0)'
-    }
+    const theme = resolveXtermBackground(
+      getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+      ls.state.backgroundEnabled,
+      ls.state.backgroundImage
+    )
     terminal.options.theme = theme
+    applyTerminalBgVar(terminal, theme)
   }
 
   // Watch terminal settings changes
@@ -700,6 +725,20 @@ export function useTerminal(
   onUnmounted(() => {
     resizeObserver?.disconnect()
     intersectionObserver?.disconnect()
+    // Addons detach listeners through the terminal; dispose them first.
+    for (const addon of loadedAddons) {
+      try {
+        addon.dispose?.()
+      } catch {
+        // ignore — some addons don't fully implement dispose
+      }
+    }
+    loadedAddons.length = 0
+    // Detach the tooltip element the WebLinksAddon may have left behind.
+    if (hoverEl && hoverEl.parentElement) {
+      hoverEl.parentElement.removeChild(hoverEl)
+    }
+    hoverEl = null
     terminal?.dispose()
     unsubscribe?.()
     statusUnsubscribe?.()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -59,7 +60,7 @@ func (s *TelnetSession) Connect(config ConnectionConfig) error {
 		s.title = fmt.Sprintf("%s:%d", config.Host, config.Port)
 	}
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
 	dialer := net.Dialer{Timeout: 15 * time.Second}
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
@@ -96,7 +97,7 @@ func (s *TelnetSession) Connect(config ConnectionConfig) error {
 }
 
 func (s *TelnetSession) readLoop(ctx context.Context) {
-	buf := make([]byte, 4096)
+	buf := make([]byte, 16384)
 	for {
 		select {
 		case <-ctx.Done():
@@ -107,10 +108,7 @@ func (s *TelnetSession) readLoop(ctx context.Context) {
 		n, err := s.conn.Read(buf)
 		if n > 0 {
 			s.RecordReadActivity()
-			filtered := s.filterIAC(buf[:n])
-			if len(filtered) > 0 {
-				s.emitData(filtered)
-			}
+			s.handleRead(buf[:n])
 		}
 		if err != nil {
 			if err != io.EOF {
@@ -121,6 +119,13 @@ func (s *TelnetSession) readLoop(ctx context.Context) {
 			s.Disconnect()
 			return
 		}
+	}
+}
+
+func (s *TelnetSession) handleRead(data []byte) {
+	filtered := s.filterIAC(data)
+	if len(filtered) > 0 {
+		s.emitData(filtered)
 	}
 }
 
@@ -232,7 +237,12 @@ func (s *TelnetSession) sendNAWS(cols, rows int) {
 }
 
 func (s *TelnetSession) sendAutoLogin(ctx context.Context, user, password string) {
-	time.Sleep(1500 * time.Millisecond)
+	// Conservative fix (SESSION-05): the previous fixed 1500ms / 1200ms
+	// sleeps could land the username in the shell prompt on slow
+	// servers. Replace with a shorter initial wait and bail early on
+	// context cancel. A full prompt-detection rewrite would require
+	// touching the readLoop and is out of scope for a conservative fix.
+	time.Sleep(500 * time.Millisecond)
 
 	select {
 	case <-ctx.Done():
@@ -245,7 +255,7 @@ func (s *TelnetSession) sendAutoLogin(ctx context.Context, user, password string
 	}
 
 	if password != "" {
-		time.Sleep(1200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			return

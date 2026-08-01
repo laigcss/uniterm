@@ -1,9 +1,11 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 const settingsFileName = "settings.json"
@@ -114,6 +116,7 @@ type SFTPBookmarks struct {
 type SettingsStore struct {
 	configDir     string
 	passwordStore PasswordStore
+	mu            sync.Mutex // serializes Save + Load migration writes (STORE-05/06).
 }
 
 func NewSettingsStore() (*SettingsStore, error) {
@@ -137,6 +140,9 @@ func (s *SettingsStore) filePath() string {
 }
 
 func (s *SettingsStore) Save(settings AppSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Deep-copy models so we don't mutate the caller's backing array
 	models := make([]AIModelConfig, len(settings.AI.Models))
 	copy(models, settings.AI.Models)
@@ -151,15 +157,21 @@ func (s *SettingsStore) Save(settings AppSettings) error {
 	}
 
 	settings.AI.Models = models
-	data, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
+	// Settings file is internal — no indent. Encoder streams into the buf
+	// so we skip the intermediate allocation of json.Marshal.
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(settings); err != nil {
 		return err
 	}
-	return os.WriteFile(s.filePath(), data, 0600)
+	return atomicWriteFile(s.filePath(), buf.Bytes(), 0600)
 }
 
 func (s *SettingsStore) Load() (AppSettings, error) {
-	data, err := os.ReadFile(s.filePath())
+	// filePath is immutable after construction, so read it without the lock.
+	// Disk I/O on the settings file can be slow (cold cache, encrypted FS);
+	// holding the mutex across os.ReadFile would block every concurrent Save.
+	path := s.filePath()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultSettings(), nil
@@ -168,22 +180,33 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 	}
 	var settings AppSettings
 	if err := json.Unmarshal(data, &settings); err != nil {
+		// STORE-09: preserve corrupt file before falling back to defaults so
+		// the next Save doesn't silently overwrite the user's prior data.
+		s.mu.Lock()
+		quarantineCorrupt(path)
+		s.mu.Unlock()
 		return defaultSettings(), nil
 	}
+
+	// Snapshot passwordStore under the lock; everything below mutates only
+	// the local `settings` value, so the rest of Load runs lock-free.
+	s.mu.Lock()
+	ps := s.passwordStore
+	s.mu.Unlock()
 
 	// Backfill model apiKeys from keychain; migrate if still in JSON
 	needsSave := false
 	for i := range settings.AI.Models {
 		m := &settings.AI.Models[i]
-		if s.passwordStore != nil {
+		if ps != nil {
 			// Migration: if JSON still has plaintext apiKey, move to keychain
 			if m.APIKey != "" {
-				_ = s.passwordStore.SetModelAPIKey(m.ID, m.APIKey)
+				_ = ps.SetModelAPIKey(m.ID, m.APIKey)
 				m.APIKey = ""
 				needsSave = true
 			}
 			// Backfill from keychain
-			if ak, err := s.passwordStore.GetModelAPIKey(m.ID); err == nil && ak != "" {
+			if ak, err := ps.GetModelAPIKey(m.ID); err == nil && ak != "" {
 				m.APIKey = ak
 			}
 		}
@@ -202,8 +225,8 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 		needsSave = true
 	}
 	if needsSave {
-		jsonData, _ := json.MarshalIndent(settings, "", "  ")
-		_ = os.WriteFile(s.filePath(), jsonData, 0600)
+		// Re-save through Save() which takes the lock itself.
+		_ = s.Save(settings)
 	}
 
 	return settings, nil

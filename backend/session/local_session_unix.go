@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -68,6 +69,7 @@ type LocalSession struct {
 	baseSession
 	cmd                  *exec.Cmd
 	pty                  *os.File
+	waitDone             chan struct{} // closed when cmd.Wait() returns
 	quit                 chan struct{}
 	quitOnce             sync.Once
 	mouseTrackingEnabled atomic.Bool
@@ -117,10 +119,15 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("start pty: %w", err)
 	}
 	s.pty = ptyFile
+	s.waitDone = make(chan struct{})
 
+	// Run cmd.Wait in its own goroutine; the defer-close of waitDone lets
+	// Disconnect join the wait. The goroutine must NOT call s.Disconnect() —
+	// that would deadlock (Disconnect waits on waitDone, only closed by the
+	// defer that fires AFTER Disconnect returns).
 	go func() {
+		defer close(s.waitDone)
 		_ = s.cmd.Wait()
-		s.Disconnect()
 	}()
 
 	s.setStatus(StatusConnected)
@@ -136,7 +143,9 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 }
 
 func (s *LocalSession) readLoop() {
-	buf := make([]byte, 4096)
+	// 16 KiB reused read buffer; emitData's callbacks copy the bytes, so
+	// buf[:n] can be handed off without an extra append.
+	buf := make([]byte, 16384)
 	for {
 		select {
 		case <-s.quit:
@@ -147,7 +156,7 @@ func (s *LocalSession) readLoop() {
 		n, err := s.pty.Read(buf)
 		if n > 0 {
 			s.RecordReadActivity()
-			data := append([]byte(nil), buf[:n]...)
+			data := buf[:n]
 			s.emitData(data)
 			s.updateMouseTrackingState(data)
 		}
@@ -199,6 +208,13 @@ func (s *LocalSession) Disconnect() error {
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
 		s.cmd.Process.Kill()
+	}
+	if s.waitDone != nil {
+		// Bound the wait so a hung child can't block teardown forever.
+		select {
+		case <-s.waitDone:
+		case <-time.After(2 * time.Second):
+		}
 	}
 	s.setStatus(StatusDisconnected)
 	return nil

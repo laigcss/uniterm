@@ -99,7 +99,12 @@ import {
   bumpOnDataGeneration,
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
+import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
+import {
+  sanitizeTerminalOutput,
+  sanitizeLiveTerminalOutput,
+} from '../utils/terminalSanitize'
 import { useTerminalInput } from '../composables/useTerminalInput'
 import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
@@ -358,20 +363,7 @@ const searchResultIndex = ref(0)
 const searchResultCount = ref(0)
 
 function sanitizeTerminalHistory(text: string): string {
-  if (!text) return text
-  let cleaned = text
-  // ZModem HEX header fragments
-  cleaned = cleaned.replace(/\*{2,}(?:\x18)?[ABC][0-9a-fA-F]{10,}/g, '')
-  // ZModem ZDLE (0x18) and backspace (0x08) sequences
-  cleaned = cleaned.replace(/\x18+/g, '')
-  cleaned = cleaned.replace(/\x08+/g, '')
-  // ASCII control chars except \n, \r, \t and ESC
-  cleaned = cleaned.replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
-  // Drop binary garbage decoded as random Unicode blocks. Keep ASCII plus CJK
-  // so normal Chinese/Japanese/Korean terminal output is preserved.
-  cleaned = cleaned.replace(/[^\x00-\x7f一-鿿぀-ゟ゠-ヿ가-힯]/g, '')
-  // Collapse blank lines left by removed garbage
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+  const cleaned = sanitizeTerminalOutput(text)
   // Forward debug info to backend log so we can inspect the raw garbage.
   if (cleaned !== text) {
     FrontendLog('sanitizeTerminalHistory', `raw last 400: ${JSON.stringify(text.slice(-400))}`)
@@ -462,34 +454,12 @@ function resize() {
     fitAddon.fit()
     if (terminal.cols <= 0 || terminal.rows <= 0) return
 
-    let cellWidth = 0
-    let cellHeight = 0
-    try {
-      const core = (terminal as any)._core
-      const dims = core?._renderService?.dimensions
-      if (dims) {
-        cellWidth = dims.css?.cell?.width || 0
-        cellHeight = dims.css?.cell?.height || 0
-      }
-    } catch {
-      cellWidth = 0
-      cellHeight = 0
-    }
-
-    if (cellWidth === 0 || cellHeight === 0) {
-      SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
-      return
-    }
-
-    const TERMINAL_PADDING = 4
-    const scrollbarWidth = (terminal as any)._core?.viewport?.scrollBarWidth || 0
-    const cols = Math.floor((rect.width - TERMINAL_PADDING * 2 - scrollbarWidth) / cellWidth)
-    const rows = Math.floor((rect.height - TERMINAL_PADDING * 2) / cellHeight)
-    const newCols = Math.max(2, cols)
-    const newRows = Math.max(1, rows)
-
-    terminal.resize(newCols, newRows)
-    SessionResize(sid, newCols, newRows).catch(() => {})
+    // Trust fitAddon.fit() — its measure already accounts for the scrollbar
+    // gutter; manual recomputation double-subtracts it.
+    terminal.resize(terminal.cols, terminal.rows)
+    // Full-viewport redraw — prevents canvas ghosting during rapid write bursts.
+    terminal.refresh(0, terminal.rows - 1)
+    SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
   } else {
     getFitAddon()?.fit()
   }
@@ -497,6 +467,41 @@ function resize() {
 
 function write(data: string) {
   terminal?.write(data)
+}
+
+// Restore the scroll position captured on deactivation. Returns true when the
+// position has landed (or there was nothing to restore) so callers can stop
+// retrying.
+//
+// xterm v6 moved scrolling into the VS Code Scrollable widget: .xterm-viewport
+// is no longer the scroll container and viewport._currentRowHeight is gone, so
+// the old "write scrollTop by hand" fallback silently did nothing. The position
+// now lives in the Scrollable and is derived from render dimensions — right
+// after KeepAlive activation the container can still be 0×0, where cell height
+// is unknown and any position we set clamps back to 0. So we bail while
+// dimensions are invalid and re-apply after each resize() retry instead.
+function restoreSavedScroll(): boolean {
+  if (savedViewportY == null || savedBaseY == null) return true
+  const buf = terminal?.buffer?.active
+  const core = (terminal as any)?._core
+  const cellHeight: number = core?._renderService?.dimensions?.css?.cell?.height ?? 0
+  if (!buf || cellHeight <= 0) return false
+
+  const wasAtBottom = savedViewportY >= savedBaseY - 1
+  const target = wasAtBottom ? buf.baseY : Math.min(savedViewportY, buf.length - 1)
+  // scrollToLine(line, true) on the internal viewport skips the smooth-scroll
+  // animation and syncs ydisp in the same tick; the public scrollToLine() would
+  // animate the jump on every tab switch.
+  const vp = core?._viewport
+  if (typeof vp?.scrollToLine === 'function') {
+    vp.scrollToLine(target, true)
+  } else {
+    terminal?.scrollToLine(target)
+  }
+  if (buf.viewportY !== target) return false
+  savedViewportY = null
+  savedBaseY = null
+  return true
 }
 
 function focus() {
@@ -778,8 +783,8 @@ onMounted(() => {
   )
   terminal.loadAddon(webLinksAddon)
 
-  // Unicode 11 support
-  try { terminal.unicode.activeVersion = '11' } catch (_) {}
+  // Unicode 11 activeVersion is set in terminalManager.ts right after the
+  // addon loads; no need to set it here again.
 
   // Set up search results listener from shared SearchAddon
   const managed = getManagedTerminal(props.sessionId || '')
@@ -1139,6 +1144,10 @@ onMounted(() => {
       data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
       data = data.replace(/\x1b\[2J/g, scrollClear)
     }
+// Drop U+FFFD + binary garbage. See utils/terminalSanitize for the
+    // full filter chain (box-drawing / braille preservation, control-char
+    // stripping, etc.). Live path skips the blank-line collapse step.
+    data = sanitizeLiveTerminalOutput(data)
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
@@ -1190,6 +1199,20 @@ onMounted(() => {
         retryOnEnter = true
         if (props.onSessionStatus) {
           props.onSessionStatus(payload.status)
+        }
+        // Local shells exit for ordinary reasons (`exit`, or a child like
+        // opencode's /exit tearing down the ConPTY), so say the shell ended
+        // rather than implying a failure. Without this the pane just freezes
+        // mid-output and looks hung — see the stray `+q4d73` case.
+        //
+        // Reset mouse tracking here too: an app that exited without
+        // disabling it leaves selection broken, and the backend's
+        // reset-on-Enter path needs a live session it no longer has.
+        if (props.mode === 'local') {
+          terminal?.write(
+            '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l' +
+            '\r\n\x1b[33mShell exited. Press Enter to restart.\x1b[0m\r\n'
+          )
         }
       } else {
         // Focus terminal on connecting so user can type password immediately.
@@ -1294,50 +1317,21 @@ onActivated(() => {
   }
   // Re-register onData/keyHandler listeners that were disposed in onDeactivated.
   bindListeners?.()
-  // Restore the user's scroll position captured on deactivation BEFORE
-  // resize. resize() triggers viewport.syncScrollArea → _innerRefresh
-  // which reads ydisp and writes scrollTop. We must keep ydisp and the
-  // DOM scrollTop in sync — wheel events compute the next ydisp from
-  // scrollTop, so a mismatch (e.g. ydisp = 100 but scrollTop = 0 after
-  // the element was moved out of a display:none holding container)
-  // breaks scroll-up/scroll-down.
+  // Restore the user's scroll position captured on deactivation. Try once now
+  // (cheap when layout already settled), then again after each resize() retry —
+  // restoreSavedScroll() bails while render dimensions are still invalid, which
+  // is the normal state right after KeepAlive activation.
   //
-  // We can't rely solely on scrollToLine() because it only updates ydisp;
-  // the DOM scrollTop stays at 0 (or whatever the browser left it at)
-  // until _innerRefresh runs with a valid viewport height. resize() bails
-  // when the container has zero size, which is the case right after
-  // KeepAlive activation before layout settles. So we do three things:
-  //   1. scrollToLine(target) to restore ydisp immediately.
-  //   2. If rowHeight is known, also set scrollTop directly so the
-  //      viewport shows the right content from the first paint — no
-  //      flash to position 0.
-  //   3. retry resize() a few times; once layout settles and resize()
-  //      succeeds, _innerRefresh writes scrollTop = ydisp * rowHeight,
-  //      which matches what we set in step 2, so it is a no-op.
-  // If no position was saved, leave the viewport alone — the natural
-  // _innerRefresh path during resize lands on the bottom.
-  if (savedViewportY != null && savedBaseY != null) {
-    const probeBuf = terminal?.buffer?.active as { baseY?: number; length?: number } | undefined
-    if (probeBuf && typeof probeBuf.baseY === 'number' && typeof probeBuf.length === 'number') {
-      const wasAtBottom = savedViewportY >= savedBaseY - 1
-      const target = wasAtBottom ? probeBuf.baseY : Math.min(savedViewportY, probeBuf.length - 1)
-      terminal?.scrollToLine(target)
-      const vp = terminal?.element?.querySelector('.xterm-viewport') as HTMLElement | null
-      const core = (terminal as any)?._core
-      const rowHeight: number = core?.viewport?._currentRowHeight ?? 0
-      if (vp && rowHeight > 0) {
-        vp.scrollTop = target * rowHeight
-      }
-    }
-  }
-  // Terminal dimensions may be stale after tab switch; recalculate.
-  // resize() bails when rect is 0×0 — common right after KeepAlive
-  // activation before layout settles — so retry a few times. Each retry
-  // that succeeds will run _innerRefresh which writes scrollTop from the
-  // restored ydisp; once scrollTop matches the desired value, the next
-  // _innerRefresh is a no-op.
+  // Terminal dimensions may also be stale after a tab switch; resize() bails
+  // when the rect is 0×0, so it is retried on the same schedule. Both are
+  // self-clearing: restoreSavedScroll() nulls the saved position once it lands
+  // and returns true immediately afterwards.
+  restoreSavedScroll()
   resize()
-  ;[0, 50, 150, 300, 600].forEach(d => setTimeout(resize, d))
+  ;[0, 50, 150, 300, 600].forEach(d => setTimeout(() => {
+    resize()
+    restoreSavedScroll()
+  }, d))
   // Re-initialize zmodem service only if it was disposed in onDeactivated.
   // If a transfer was active, the service is still running — skip recreate.
   // safe: no focus() call here, avoids WebView2 crash race with native dialogs.
@@ -1480,11 +1474,13 @@ function onSearchPrev() {
 
 function applyXtermTheme(themeName: string) {
   if (!terminal) return
-  const theme = getXtermTheme(themeName, settingsStore.settings.customTerminalThemes)
-  if (localStateStore.state.backgroundEnabled && localStateStore.state.backgroundImage) {
-    theme.background = 'rgba(0,0,0,0)'
-  }
+  const theme = resolveXtermBackground(
+    getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+    localStateStore.state.backgroundEnabled,
+    localStateStore.state.backgroundImage
+  )
   terminal.options.theme = theme
+  applyTerminalBgVar(terminal, theme)
 }
 
 // Watch terminal settings changes
@@ -1710,27 +1706,25 @@ defineExpose({
   height: 100%;
   display: block;
   box-sizing: border-box;
-  padding: 4px;
+  /* 右侧不留：那 14px 的滚动条轨道本身已把文本挡开（文本右缘与轨道间还有 2px），
+     右 padding 只会把整条滚动条往左推、在轨道外侧留一条空白。 */
+  padding: 4px 0 4px 4px;
 }
+/* 4px padding 那圈用终端背景色，而不是应用主题色（--bg-base）。
+   v5 时 xterm 把终端色内联在 .xterm-viewport 上，而它 absolute inset:0
+   盖满 padding box，边缘因此自带终端色；v6 改成内联到 .xterm-scrollable-element，
+   该元素止于 padding 内侧，边缘便露出 .xterm 自身的应用主题色 ——
+   深色应用 + 浅色终端时就是一圈深色边框。--terminal-bg 由
+   applyTerminalBgVar() 写在终端根元素上，取不到时回退旧行为。 */
 .terminal-area :deep(.xterm),
 .terminal-area :deep(.xterm-viewport) {
-  background: var(--bg-base);
+  background: var(--terminal-bg, var(--bg-base));
 }
+/* v6 起 .xterm-viewport 只是 overview ruler 的定位锚点，不再是滚动容器；
+   留着 overflow-y: scroll 会多出一条空的原生轨道。终端滚动条样式见
+   style.css 里的 .xterm-scrollable-element > .scrollbar 规则。 */
 .terminal-area :deep(.xterm-viewport) {
-  overflow-y: scroll !important;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 8px;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background: var(--bg-elevated);
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background: var(--scrollbar-thumb);
-  border-radius: 10px;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
-  background: var(--scrollbar-thumb-hover);
+  overflow: hidden;
 }
 
 .context-menu {

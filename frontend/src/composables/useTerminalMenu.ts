@@ -56,17 +56,31 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     return { left: left + 'px', top: top + 'px' }
   }
 
-  // Write to the OS clipboard via Wails first (reliable in WebView2), falling
-  // back to the browser clipboard API when the runtime call fails.
-  async function writeClipboard(text: string) {
-    try {
-      await ClipboardSetText(text)
-    } catch {
-      try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
-    }
+  // Write to the OS clipboard. Wails' ClipboardSetText resolves false (it
+  // does not reject) on focus loss / AppKit glitches, so a false return has
+  // to fall through to the browser API rather than being treated as done.
+  // browserWriter is also the standalone path when Wails is absent (dev
+  // outside the runtime).
+  type ClipboardWriter = (text: string) => Promise<boolean>
+  const browserWriter: ClipboardWriter = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true } catch { return false }
   }
+  const wailsWriter: ClipboardWriter = async (text) => {
+    let ok = false
+    try {
+      ok = await ClipboardSetText(text)
+    } catch {
+      ok = false
+    }
+    return ok || browserWriter(text)
+  }
+  const writeClipboard: ClipboardWriter = typeof ClipboardSetText === 'function'
+    ? wailsWriter
+    : browserWriter
 
   function copySelection() {
+    // Trust getSelection() at click time; the contextmenu-captured ref can
+    // be stale in WKWebView (right-click mousedown clears the xterm selection).
     const text = options.getSelection()
     if (text) {
       writeClipboard(text)

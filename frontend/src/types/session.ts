@@ -52,6 +52,22 @@ export interface ConnectionConfig {
   postLoginExpectSteps?: PostLoginExpectStep[]
   // SSH tunnel: reference to an existing SSH connection used as a jump host
   tunnelSSHConnId?: string
+  // Initial terminal size reported by the frontend BEFORE the SSH/local PTY
+  // is created. Without this the backend starts the remote shell with the
+  // default 80x24 and Claude Code (or any TUI app) draws tables at that
+  // width; by the time the frontend's fitAddon measures the actual xterm
+  // cols and sends SessionResize, several lines of output are already
+  // wrapped at 80 cols and the rest at the real cols — the table borders
+  // drift apart. Frontend fills these after acquireTerminal + fitAddon.fit()
+  // and passes them in CreateSession.
+  initialCols?: number
+  initialRows?: number
+  // When true, CreateSession returns immediately without connecting.
+  // The frontend calls SessionStart after it has mounted the xterm
+  // terminal and written initialCols/Rows via SetPendingSize — so the
+  // PTY starts at the real xterm size, not the 80x24 default that
+  // would otherwise wrap Claude Code tables at the wrong column count.
+  deferConnect?: boolean
   tunnelSSHUser?: string
   tunnelSSHPassword?: string
   // SFTP max concurrent transfers (0 = unlimited)
@@ -60,6 +76,11 @@ export interface ConnectionConfig {
   ftpEncryption?: string  // "none" | "auto" | "required"
   ftpPassive?: boolean
   ftpEncoding?: string    // "utf-8" | "gbk" | "shift-jis" | "latin-1"
+  // Opt in to FTPS InsecureSkipVerify. Defaults to false (verify enabled).
+  // Off by default preserves backwards compatibility for users today who
+  // rely on it for self-signed certs — but the toggle now exists so the
+  // choice is explicit, and a one-shot session-log warning fires on connect.
+  ftpSkipVerify?: boolean
   // SMB-specific
   smbDomain?: string
   smbShare?: string

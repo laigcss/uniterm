@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,10 +46,11 @@ func (s *SMBSession) Connect(config ConnectionConfig) error {
 	s.setStatus(StatusConnecting)
 	s.title = fmt.Sprintf("%s@%s", config.User, config.Host)
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	if config.Port <= 0 {
-		addr = fmt.Sprintf("%s:445", config.Host)
+	port := config.Port
+	if port <= 0 {
+		port = 445
 	}
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 	if err != nil {

@@ -182,12 +182,15 @@ import { useQuickCommandStore } from './stores/quickCommandStore'
 import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
 import { useContainerStore } from './stores/containerStore'
+import { useSyncStore } from './stores/syncStore'
+import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart } from '../wailsjs/go/main/App'
+import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
@@ -241,8 +244,14 @@ const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
 const containerStore = useContainerStore()
+const syncStore = useSyncStore()
+const tunnelStore = useTunnelStore()
 const updateCheck = useUpdateCheck()
 let uninstallFocusRestore: (() => void) | null = null
+// Unsubscribers for module-level Wails EventsOn listeners (FE-03).
+let unsubRdpFullscreenExit: (() => void) | null = null
+let unsubRdpMoveResizeStart: (() => void) | null = null
+let unsubRdpMoveResizeEnd: (() => void) | null = null
 const { t, locale } = useI18n()
 const EL_LOCALE_MAP: Record<string, typeof enUs> = {
   'zh-CN': zhCn, 'zh-TW': zhTw, en: enUs, ja, ko, de, es, fr, ru,
@@ -660,7 +669,9 @@ onMounted(async () => {
   window.addEventListener('input:contextmenu', onInputContextMenu)
   window.addEventListener('global:close-context-menus', closeInputMenu)
   document.addEventListener('click', closeInputMenu)
-  document.addEventListener('wheel', onWheel, { passive: false })
+  // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
+  // scrolls, but bails on defaultPrevented — so we must preempt it.
+  document.addEventListener('wheel', onWheel, { passive: false, capture: true })
   // WKWebView doesn't forward Cmd+A/C/V on input/textarea/contenteditable — handle globally.
   document.addEventListener('keydown', onEditShortcut)
   // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
@@ -683,10 +694,10 @@ onMounted(async () => {
   // RDP native full-screen enter/exit
   window.addEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
   // Exit is emitted from Go when the user uses the connection bar's restore button.
-  EventsOn('rdp:fullscreen-exit', () => onRdpFullScreenExit())
+  unsubRdpFullscreenExit = EventsOn('rdp:fullscreen-exit', () => onRdpFullScreenExit())
   // Go-side WndProc events: window move/resize start/end
-  EventsOn('rdp:move-resize-start', () => RDPHideForOverlay())
-  EventsOn('rdp:move-resize-end', () => RDPShowForOverlay())
+  unsubRdpMoveResizeStart = EventsOn('rdp:move-resize-start', () => RDPHideForOverlay())
+  unsubRdpMoveResizeEnd = EventsOn('rdp:move-resize-end', () => RDPShowForOverlay())
 
   // Panel/Tab/StartTab menu actions
   window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
@@ -807,10 +818,28 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     )
     panelStore.updateTitle(newPanel.id, panel.title)
     try {
-      const info = await CreateSession(panel.config.type, panel.config)
+      // Same D1 deferred-start pattern as onConnect — see that helper
+      // for the rationale.
+      const dupConfig: ConnectionConfig = {
+        ...panel.config,
+        deferConnect: true,
+        initialCols: 0,
+        initialRows: 0,
+      }
+      const info = await CreateSession(panel.config.type, dupConfig)
       panelStore.bindSession(newPanel.id, info.id)
+      sessionStore.initSession(info.id)
       const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
       panelStore.movePanelToTab(newPanel.id, newTab.id)
+      const size = await waitForTerminalSize(info.id)
+      if (size.cols > 0 && size.rows > 0) {
+        dupConfig.initialCols = size.cols
+        dupConfig.initialRows = size.rows
+      }
+      await SessionStart(info.id, dupConfig).catch((e) => {
+        console.error('Failed to start duplicated session:', e)
+        CloseSession(info.id).catch(() => {})
+      })
     } catch (e) {
       console.error('Failed to duplicate session:', e)
     }
@@ -827,7 +856,7 @@ onUnmounted(() => {
   window.removeEventListener('input:contextmenu', onInputContextMenu)
   window.removeEventListener('global:close-context-menus', closeInputMenu)
   document.removeEventListener('click', closeInputMenu)
-  document.removeEventListener('wheel', onWheel)
+  document.removeEventListener('wheel', onWheel, { capture: true })
   document.removeEventListener('keydown', onMacSystemShortcut, true)
   // RDP overlay tracking
   window.removeEventListener('rdp:overlay-push', RDPHideForOverlay)
@@ -836,7 +865,17 @@ onUnmounted(() => {
   window.removeEventListener('split:resize-end', RDPShowForOverlay)
   window.removeEventListener('rdp:sync-position', rdpResetTracking)
   window.removeEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
-
+  // Wails EventsOn teardown (FE-03)
+  unsubRdpFullscreenExit?.()
+  unsubRdpMoveResizeStart?.()
+  unsubRdpMoveResizeEnd?.()
+  // Tear down store-level EventsOn registrations (FE-03)
+  aiStore.dispose?.()
+  settingsStore.dispose?.()
+  connectionStore.dispose?.()
+  syncStore.dispose?.()
+  tunnelStore.dispose?.()
+  disposeSessionStore?.()
 })
 
 function openSettings() {
@@ -1097,7 +1136,16 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   // Create session BEFORE panel so the terminal has a sessionId when it first
   // fires SessionResize. Otherwise the resize is silently dropped because the
   // terminal calls getSessionId() too early and never retries.
+  //
+  // Defer the actual Connect until BaseTerminal has mounted, fitAddon has
+  // measured the real xterm cols/rows, and we can write that into
+  // config.initialCols/Rows — otherwise the SSH/local PTY starts at the
+  // default 80x24 and Claude Code draws its first batch of tables at that
+  // width, drifting relative to later output that wraps at the real cols.
   let sessionId = ''
+  config.deferConnect = true
+  config.initialCols = 0
+  config.initialRows = 0
   try {
     const info = await CreateSession(config.type, config)
     sessionId = info.id
@@ -1122,6 +1170,25 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     : tabStore.createTerminalTab(panel.title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
+
+  // Wait for BaseTerminal to mount + fitAddon.fit() to compute the real
+  // xterm cols/rows (which itself waits for document.fonts.ready + 2 rAFs
+  // to ensure the actually-loaded font is being measured). Then start the
+  // session with those dimensions so the remote PTY matches from byte 0.
+  const size = await waitForTerminalSize(sessionId)
+  if (size.cols > 0 && size.rows > 0) {
+    config.initialCols = size.cols
+    config.initialRows = size.rows
+  }
+  try {
+    await SessionStart(sessionId, config)
+  } catch (e) {
+    console.error('Failed to start session:', e)
+    // Session is registered in the backend but never connected — close it
+    // so it doesn't leak until app shutdown. UI rollback is the caller's
+    // responsibility (this helper is reused across connect / duplicate).
+    CloseSession(sessionId).catch(() => {})
+  }
 }
 
 function getShellLabel(path: string): string {
@@ -1204,7 +1271,13 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       port: 0,
       user: '',
       authType: 'password' as any,
-      shellPath: shellPath || undefined
+      shellPath: shellPath || undefined,
+      // Defer Connect until BaseTerminal has measured the real cols/rows;
+      // same D1 fix as onConnect — without it Claude Code's first batch
+      // of tables wraps at the 80x24 default.
+      deferConnect: true,
+      initialCols: 0,
+      initialRows: 0,
     }
     panel.config = config
     connectionStore.add(config)
@@ -1218,6 +1291,20 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
       : tabStore.createTerminalTab(panel.title, panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
+
+    // Same as onConnect: measure the real xterm size, then start the PTY
+    // at those dimensions.
+    const size = await waitForTerminalSize(info.id)
+    if (size.cols > 0 && size.rows > 0) {
+      config.initialCols = size.cols
+      config.initialRows = size.rows
+    }
+    try {
+      await SessionStart(info.id, config)
+    } catch (e) {
+      console.error('Failed to start local session:', e)
+      CloseSession(info.id).catch(() => {})
+    }
   } catch (e) {
     console.error('Failed to create local terminal:', e)
     panelStore.removePanel(panel.id)
@@ -1759,13 +1846,8 @@ watch(
 .app-container.has-bg .main-content :deep(.xterm-selection div) {
   background-color: rgba(120, 150, 200, 0.4) !important;
 }
-/* 终端滚动条：轨道透明，滑块用半透明白（同全局滚动条，背景上可见）*/
-.app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background: transparent !important;
-}
-.app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background: var(--scrollbar-thumb) !important;
-}
+/* 终端滚动条（xterm v6 自绘 div）在 style.css 里统一处理：轨道本身已是透明，
+   开背景图时无需再开例外。 */
 /* el-table（el-scrollbar）横/纵滚动条：滑块是 div，被全局 * 透明规则抹掉了，
    这里恢复半透明滑块，背景图下仍可见。 */
 .app-container.has-bg .main-content :deep(.el-scrollbar__thumb) {
