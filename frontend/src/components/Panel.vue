@@ -287,39 +287,25 @@ function cancelEdit() {
 }
 
 let retryAttempt = 0
-let autoRetried = false
 
 function onSessionStatus(status: string) {
   if (status === 'retry') {
     // Manual retry — user pressed Enter
-    autoRetried = false
-    retryConnection(false)
+    retryConnection()
   } else if (status === 'connected') {
     retryAttempt = 0
-    autoRetried = false
-  } else if (status === 'disconnected' && props.panel.type === 'local') {
-    // Auto-reconnect local sessions silently on disconnect to handle
-    // ConPTY edge cases where a child process (e.g. opencode /exit)
-    // tears down the pseudo-console. Only auto-retry once per disconnect
-    // cycle (manual Enter resets the guard).
-    if (!autoRetried) {
-      autoRetried = true
-      setTimeout(() => retryConnection(true), 200)
-    }
   }
+  // Local sessions previously auto-reconnected here after a 200ms delay to
+  // paper over ConPTY tearing down the pseudo-console (e.g. opencode /exit).
+  // That raced the "Press Enter to restart" prompt and left users unable to
+  // tell a dead shell from a live one, so a dead local shell now just waits
+  // for Enter like every other session type.
 }
 
-async function retryConnection(silent = false) {
+async function retryConnection() {
   retryAttempt++
   if (props.panel.type === 'local') {
-    // Auto-retry (silent): just reset mouse modes and add a newline so the
-    // new prompt is separated from the previous session's output.
-    // Manual retry: show the yellow "Restarting..." message.
-    if (silent) {
-      baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n')
-    } else {
-      baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n\x1b[33mRestarting local shell...\x1b[0m\r\n')
-    }
+    baseTerminalRef.value?.write(RESET_MOUSE_MODES + '\r\n\x1b[33mRestarting local shell...\x1b[0m\r\n')
     try {
       const shellPath = props.panel.config?.shellPath || ''
       const config: ConnectionConfig = {

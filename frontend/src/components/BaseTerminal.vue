@@ -1165,6 +1165,20 @@ onMounted(() => {
         if (props.onSessionStatus) {
           props.onSessionStatus(payload.status)
         }
+        // Local shells exit for ordinary reasons (`exit`, or a child like
+        // opencode's /exit tearing down the ConPTY), so say the shell ended
+        // rather than implying a failure. Without this the pane just freezes
+        // mid-output and looks hung — see the stray `+q4d73` case.
+        //
+        // Reset mouse tracking here too: an app that exited without
+        // disabling it leaves selection broken, and the backend's
+        // reset-on-Enter path needs a live session it no longer has.
+        if (props.mode === 'local') {
+          terminal?.write(
+            '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l' +
+            '\r\n\x1b[33mShell exited. Press Enter to restart.\x1b[0m\r\n'
+          )
+        }
       } else {
         // Focus terminal on connecting so user can type password immediately.
         focus()

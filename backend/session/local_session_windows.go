@@ -199,10 +199,13 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 			if isMSYSBash {
 				go forceUTF8ConsoleCodePage(c.Pid())
 			}
-			// Goroutine must NOT call s.Disconnect() — disconnectOnce makes
-			// it safe, but we don't want Disconnect to depend on it.
+			// cpty.Wait returning is the only reliable signal that the shell
+			// exited — readLoop's EOF path can return early via the quit
+			// check and never report the status. disconnectOnce makes the
+			// double call harmless.
 			go func() {
-				_, _ = s.cpty.Wait(context.Background())
+				_, _ = c.Wait(context.Background())
+				s.Disconnect()
 			}()
 			s.setStatus(StatusConnected)
 			go s.readLoop()
@@ -299,7 +302,8 @@ func (s *LocalSession) readLoop() {
 
 		var n int
 		var err error
-		if s.cpty != nil {
+		usingConPty := s.cpty != nil
+		if usingConPty {
 			n, err = s.cpty.Read(buf)
 		} else {
 			n, err = s.stdout.Read(buf)
@@ -326,8 +330,9 @@ func (s *LocalSession) readLoop() {
 				// process exits is a predictable consequence of the pipe
 				// breaking — treat it as clean EOF instead of showing a
 				// raw OS error message that confuses users (e.g. when
-				// opencode /exit kills the parent shell).
-				if s.cpty == nil {
+				// opencode /exit kills the parent shell). Only the pipe
+				// fallback surfaces read errors to the user.
+				if !usingConPty {
 					s.emitData([]byte(fmt.Sprintf("\r\n[read error: %v]\r\n", err)))
 				}
 			}
@@ -368,8 +373,10 @@ func (s *LocalSession) Disconnect() error {
 	s.disconnectOnce.Do(func() {
 		close(s.quit)
 		if s.cpty != nil {
+			// Close but leave the field set: readLoop, Write and Resize read
+			// s.cpty without holding a lock, and nilling it here raced them.
+			// A closed ConPty returns errors, which those paths handle.
 			s.cpty.Close()
-			s.cpty = nil
 		}
 		if s.stdin != nil {
 			s.stdin.Close()
