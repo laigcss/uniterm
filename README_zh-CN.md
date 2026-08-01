@@ -19,12 +19,6 @@
 
 </div>
 
-<div align="center">
-
-本项目为作者纯个人业余兴趣项目，无商业化计划，亦不接受任何形式的赞助。欢迎志同道合的朋友一起交流、参与共建。
-
-</div>
-
 ## 目录
 
 - [功能特性](#功能特性)
@@ -261,13 +255,16 @@ uniTerm/
 
 ## 反馈与贡献
 
-欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 参与共建。
+本项目为纯个人业余兴趣项目，无商业化及接收赞助计划，欢迎志同道合的朋友一起交流，参与共建。
+
+欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 贡献代码。
 
 感谢以下朋友为 uniTerm 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 uniTerm 变得更好 ❤️
 
 - [@yuwei5380](https://github.com/yuwei5380)
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
 - [@wangxufeng](https://github.com/wangxufeng)
+- [@coderstory](https://github.com/coderstory)
 
 ## 开源协议
 

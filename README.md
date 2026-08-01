@@ -19,12 +19,6 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 
 </div>
 
-<div align="center">
-
-This is a personal hobby project maintained in the author's spare time. There is no commercialization plan, and we do not accept any form of sponsorship. Contributors who share the same interest are warmly welcomed to join, discuss, and build together.
-
-</div>
-
 ## Table of Contents
 
 - [Features](#features)
@@ -261,13 +255,16 @@ If uniTerm is helpful to you, please consider giving it a ⭐ Star — it's the 
 
 ## Feedback &amp; Contributing
 
-Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome.
+This is a personal hobby project maintained in the author's spare time, with no commercialization or sponsorship plans — anyone who shares the same interest is warmly welcome to join, discuss, and build together.
+
+Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome.
 
 Thanks to the following people for contributing code and improvements, and to everyone who reported issues and shared suggestions — you help make uniTerm better ❤️
 
 - [@yuwei5380](https://github.com/yuwei5380)
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
 - [@wangxufeng](https://github.com/wangxufeng)
+- [@coderstory](https://github.com/coderstory)
 
 ## License
 
