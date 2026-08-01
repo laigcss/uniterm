@@ -4,8 +4,8 @@
   --bg-elevated: #191c24;
   --bg-surface: #1f222b;
   --bg-overlay: #252933;
-  --bg-hover: #2b2f3b;
-  --bg-active: #333845;
+  --bg-hover: #313643;
+  --bg-active: #3b4252;
 
   /* Text */
   --text-primary: #e6e8ed;
@@ -85,7 +85,7 @@
   --el-fill-color-blank: #1f222b;
   --el-fill-color: #191c24;
   --el-fill-color-light: #252933;
-  --el-fill-color-lighter: #2b2f3b;
+  --el-fill-color-lighter: #313643;
   --el-text-color-primary: #e6e8ed;
   --el-text-color-regular: #9ea3ae;
   --el-text-color-secondary: #737984;
@@ -242,129 +242,6 @@
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
 }
 
-/* Windows 11 - mica light */
-[data-theme="win11"] {
-  --bg-base: #f3f7fc;
-  --bg-elevated: #eaf2fb;
-  --bg-surface: #ffffff;
-  --bg-overlay: #e0eaf5;
-  --bg-hover: #d8e4f3;
-  --bg-active: #c5d8ec;
-  --text-primary: #1c1c1c;
-  --text-secondary: #5c5c5c;
-  --text-muted: #707070;
-  --text-disabled: #9a9a9a;
-  --accent: #0067c0;
-  --accent-glow: rgba(0, 103, 192, 0.24);
-  --accent-subtle: rgba(0, 103, 192, 0.10);
-  --info: #005ba1;
-  --info-subtle: rgba(0, 106, 177, 0.08);
-  --on-accent: #ffffff;
-  --chart-1: #16a34a;
-  --chart-2: #2563eb;
-  --chart-3: #d97706;
-  --chart-4: #7c3aed;
-  --chart-4-alt: #a78bfa;
-  --success: #107c41;
-  --success-dim: #0b5e30;
-  --success-subtle: rgba(16, 124, 65, 0.06);
-  --success-glow: rgba(16, 124, 65, 0.15);
-  --warning: #e07b00;
-  --warning-subtle: rgba(224, 123, 0, 0.08);
-  --error: #d13438;
-  --error-subtle: rgba(209, 52, 56, 0.06);
-  --error-glow: rgba(209, 52, 56, 0.15);
-  --border-subtle: rgba(0, 0, 0, 0.0578);
-  --border-hover: rgba(0, 0, 0, 0.16);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10);
-  --scrim: rgba(255, 255, 255, 0.6);
-  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.22);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
-  --el-bg-color: #ffffff;
-  --el-bg-color-page: #fafafa;
-  --el-fill-color-blank: #ffffff;
-  --el-fill-color: #f3f3f3;
-  --el-fill-color-light: #ebebeb;
-  --el-fill-color-lighter: #e5e5e5;
-  --el-text-color-primary: #1c1c1c;
-  --el-text-color-regular: #5c5c5c;
-  --el-text-color-secondary: #707070;
-  --el-text-color-placeholder: #9a9a9a;
-  --el-border-color: rgba(0, 0, 0, 0.16);
-  --el-border-color-light: rgba(0, 0, 0, 0.10);
-  --el-border-color-lighter: rgba(0, 0, 0, 0.0578);
-  --el-input-height: 28px;
-  --el-component-size: 28px;
-}
-
-/* Windows 11 - mica dark (auto-toggled by OS appearance) */
-@media (prefers-color-scheme: dark) {
-  [data-theme="win11"] {
-    --bg-base: #202020;
-    --bg-elevated: #2c2c2c;
-    --bg-surface: #2c2c2c;
-    --bg-overlay: #383838;
-    --bg-hover: #3f3f3f;
-    --bg-active: #4a4a4a;
-    --text-primary: #f0f0f0;
-    --text-secondary: #c8c8c8;
-    --text-muted: #a0a0a0;
-    --text-disabled: #6a6a6a;
-    --accent: #4cc2ff;
-    --accent-glow: rgba(76, 194, 255, 0.22);
-    --accent-subtle: rgba(76, 194, 255, 0.08);
-    --info: #5eb3f5;
-    --info-subtle: rgba(94, 179, 245, 0.1);
-    --on-accent: #000000;
-    --success: #34d399;
-    --success-dim: #059669;
-    --success-subtle: rgba(52, 211, 153, 0.06);
-    --success-glow: rgba(52, 211, 153, 0.15);
-    --warning: #f59e0b;
-    --warning-subtle: rgba(245, 158, 11, 0.1);
-    --error: #f87171;
-    --error-subtle: rgba(248, 113, 113, 0.06);
-    --error-glow: rgba(248, 113, 113, 0.15);
-    --border-subtle: rgba(255, 255, 255, 0.0837);
-    --border-hover: rgba(255, 255, 255, 0.16);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-    --scrim: rgba(0, 0, 0, 0.35);
-    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
-    --el-bg-color: #2c2c2c;
-    --el-bg-color-page: #202020;
-    --el-fill-color-blank: #2c2c2c;
-    --el-fill-color: #2c2c2c;
-    --el-fill-color-light: #383838;
-    --el-fill-color-lighter: #3f3f3f;
-    --el-text-color-primary: #f0f0f0;
-    --el-text-color-regular: #c8c8c8;
-    --el-text-color-secondary: #a0a0a0;
-    --el-text-color-placeholder: #6a6a6a;
-    --el-border-color: rgba(255, 255, 255, 0.16);
-    --el-border-color-light: rgba(255, 255, 255, 0.10);
-    --el-border-color-lighter: rgba(255, 255, 255, 0.0837);
-  }
-}
-
-/* Windows 11 - body background gradient (Mica simulation) */
-[data-theme="win11"] body {
-  background: linear-gradient(180deg, #e8f0fa 0%, #d8e4f3 100%);
-}
-@media (prefers-color-scheme: dark) {
-  [data-theme="win11"] body {
-    background: linear-gradient(180deg, #2b2b2b 0%, #202020 100%);
-  }
-}
-
 * {
   margin: 0;
   padding: 0;
@@ -387,6 +264,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Subtle vertical gradient instead of a flat fill so large empty areas don't
+   read as a single dead slab. Always lighter at the top: the dark themes lift
+   the top off --bg-base, while light's --bg-base is already white so it dims
+   the bottom instead. The :not() arm covers the first paint before
+   applyTheme() sets data-theme. */
+html:not([data-theme]) body,
+[data-theme="dark"] body {
+  background: linear-gradient(180deg, #1b1f27 0%, var(--bg-base) 100%);
+}
+
+[data-theme="deep-blue"] body {
+  background: linear-gradient(180deg, #101728 0%, var(--bg-base) 100%);
+}
+
+[data-theme="light"] body {
+  background: linear-gradient(180deg, var(--bg-base) 0%, #f2f2f2 100%);
 }
 
 /* Noise texture overlay for atmosphere */
