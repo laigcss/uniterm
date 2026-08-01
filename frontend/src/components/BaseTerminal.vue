@@ -469,6 +469,41 @@ function write(data: string) {
   terminal?.write(data)
 }
 
+// Restore the scroll position captured on deactivation. Returns true when the
+// position has landed (or there was nothing to restore) so callers can stop
+// retrying.
+//
+// xterm v6 moved scrolling into the VS Code Scrollable widget: .xterm-viewport
+// is no longer the scroll container and viewport._currentRowHeight is gone, so
+// the old "write scrollTop by hand" fallback silently did nothing. The position
+// now lives in the Scrollable and is derived from render dimensions — right
+// after KeepAlive activation the container can still be 0×0, where cell height
+// is unknown and any position we set clamps back to 0. So we bail while
+// dimensions are invalid and re-apply after each resize() retry instead.
+function restoreSavedScroll(): boolean {
+  if (savedViewportY == null || savedBaseY == null) return true
+  const buf = terminal?.buffer?.active
+  const core = (terminal as any)?._core
+  const cellHeight: number = core?._renderService?.dimensions?.css?.cell?.height ?? 0
+  if (!buf || cellHeight <= 0) return false
+
+  const wasAtBottom = savedViewportY >= savedBaseY - 1
+  const target = wasAtBottom ? buf.baseY : Math.min(savedViewportY, buf.length - 1)
+  // scrollToLine(line, true) on the internal viewport skips the smooth-scroll
+  // animation and syncs ydisp in the same tick; the public scrollToLine() would
+  // animate the jump on every tab switch.
+  const vp = core?._viewport
+  if (typeof vp?.scrollToLine === 'function') {
+    vp.scrollToLine(target, true)
+  } else {
+    terminal?.scrollToLine(target)
+  }
+  if (buf.viewportY !== target) return false
+  savedViewportY = null
+  savedBaseY = null
+  return true
+}
+
 function focus() {
   // Don't steal focus while the user is typing in an input (e.g. renaming a
   // tab); a stray session:status event would otherwise blur the rename box.
@@ -1282,50 +1317,21 @@ onActivated(() => {
   }
   // Re-register onData/keyHandler listeners that were disposed in onDeactivated.
   bindListeners?.()
-  // Restore the user's scroll position captured on deactivation BEFORE
-  // resize. resize() triggers viewport.syncScrollArea → _innerRefresh
-  // which reads ydisp and writes scrollTop. We must keep ydisp and the
-  // DOM scrollTop in sync — wheel events compute the next ydisp from
-  // scrollTop, so a mismatch (e.g. ydisp = 100 but scrollTop = 0 after
-  // the element was moved out of a display:none holding container)
-  // breaks scroll-up/scroll-down.
+  // Restore the user's scroll position captured on deactivation. Try once now
+  // (cheap when layout already settled), then again after each resize() retry —
+  // restoreSavedScroll() bails while render dimensions are still invalid, which
+  // is the normal state right after KeepAlive activation.
   //
-  // We can't rely solely on scrollToLine() because it only updates ydisp;
-  // the DOM scrollTop stays at 0 (or whatever the browser left it at)
-  // until _innerRefresh runs with a valid viewport height. resize() bails
-  // when the container has zero size, which is the case right after
-  // KeepAlive activation before layout settles. So we do three things:
-  //   1. scrollToLine(target) to restore ydisp immediately.
-  //   2. If rowHeight is known, also set scrollTop directly so the
-  //      viewport shows the right content from the first paint — no
-  //      flash to position 0.
-  //   3. retry resize() a few times; once layout settles and resize()
-  //      succeeds, _innerRefresh writes scrollTop = ydisp * rowHeight,
-  //      which matches what we set in step 2, so it is a no-op.
-  // If no position was saved, leave the viewport alone — the natural
-  // _innerRefresh path during resize lands on the bottom.
-  if (savedViewportY != null && savedBaseY != null) {
-    const probeBuf = terminal?.buffer?.active as { baseY?: number; length?: number } | undefined
-    if (probeBuf && typeof probeBuf.baseY === 'number' && typeof probeBuf.length === 'number') {
-      const wasAtBottom = savedViewportY >= savedBaseY - 1
-      const target = wasAtBottom ? probeBuf.baseY : Math.min(savedViewportY, probeBuf.length - 1)
-      terminal?.scrollToLine(target)
-      const vp = terminal?.element?.querySelector('.xterm-viewport') as HTMLElement | null
-      const core = (terminal as any)?._core
-      const rowHeight: number = core?.viewport?._currentRowHeight ?? 0
-      if (vp && rowHeight > 0) {
-        vp.scrollTop = target * rowHeight
-      }
-    }
-  }
-  // Terminal dimensions may be stale after tab switch; recalculate.
-  // resize() bails when rect is 0×0 — common right after KeepAlive
-  // activation before layout settles — so retry a few times. Each retry
-  // that succeeds will run _innerRefresh which writes scrollTop from the
-  // restored ydisp; once scrollTop matches the desired value, the next
-  // _innerRefresh is a no-op.
+  // Terminal dimensions may also be stale after a tab switch; resize() bails
+  // when the rect is 0×0, so it is retried on the same schedule. Both are
+  // self-clearing: restoreSavedScroll() nulls the saved position once it lands
+  // and returns true immediately afterwards.
+  restoreSavedScroll()
   resize()
-  ;[0, 50, 150, 300, 600].forEach(d => setTimeout(resize, d))
+  ;[0, 50, 150, 300, 600].forEach(d => setTimeout(() => {
+    resize()
+    restoreSavedScroll()
+  }, d))
   // Re-initialize zmodem service only if it was disposed in onDeactivated.
   // If a transfer was active, the service is still running — skip recreate.
   // safe: no focus() call here, avoids WebView2 crash race with native dialogs.
@@ -1705,21 +1711,11 @@ defineExpose({
 .terminal-area :deep(.xterm-viewport) {
   background: var(--bg-base);
 }
+/* v6 起 .xterm-viewport 只是 overview ruler 的定位锚点，不再是滚动容器；
+   留着 overflow-y: scroll 会多出一条空的原生轨道。终端滚动条样式见
+   style.css 里的 .xterm-scrollable-element > .scrollbar 规则。 */
 .terminal-area :deep(.xterm-viewport) {
-  overflow-y: scroll !important;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 8px;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background: var(--bg-elevated);
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background: var(--scrollbar-thumb);
-  border-radius: 10px;
-}
-.terminal-area :deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
-  background: var(--scrollbar-thumb-hover);
+  overflow: hidden;
 }
 
 .context-menu {

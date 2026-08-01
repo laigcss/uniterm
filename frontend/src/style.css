@@ -425,6 +425,31 @@ body::before {
   background: transparent;
 }
 
+/* xterm.js v6 滚动条：不再是原生滚动条，而是 VS Code 那套自绘 div
+   (.xterm-scrollable-element > .scrollbar.vertical > .slider)。所以
+   ::-webkit-scrollbar 规则对终端无效，滑块要在这里对齐全局 8px 圆角样式。
+   滑块宽度/left 是 JS 写的行内样式，颜色是 xterm 注入的 <style>，都得 !important。
+   带 .vertical 是为了把特异性抬到 5 个 class，压过 App.vue 里 has-bg 的
+   通配透明规则（4 个 class，:where() 不计特异性），无论加载顺序都稳。
+   不改 .scrollbar 容器自身的 14px 宽度：FitAddon 按 14px 预留了右侧空间，
+   点击轨道翻页的热区也是它，改窄会留下 6px 死区。 */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: 8px !important;
+  left: 3px !important;
+  border-radius: 10px;
+  background: var(--scrollbar-thumb) !important;
+}
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  background: var(--scrollbar-thumb-hover) !important;
+}
+/* v6 默认悬停才显示、离开后淡出；v5 的原生滚动条只要可滚动就常显。
+   `invisible fade` 精确对应「可滚动但未悬停」，不可滚动时只有 `invisible`
+   无 `fade`，所以不会留下一条空滑块。 */
+.xterm .xterm-scrollable-element > .scrollbar.vertical.invisible.fade {
+  opacity: 1;
+}
+
 /* Element Plus dark theme overrides */
 .el-dialog {
   background: var(--bg-surface) !important;

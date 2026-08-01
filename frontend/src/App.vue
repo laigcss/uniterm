@@ -1844,13 +1844,8 @@ watch(
 .app-container.has-bg .main-content :deep(.xterm-selection div) {
   background-color: rgba(120, 150, 200, 0.4) !important;
 }
-/* 终端滚动条：轨道透明，滑块用半透明白（同全局滚动条，背景上可见）*/
-.app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background: transparent !important;
-}
-.app-container.has-bg .main-content :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background: var(--scrollbar-thumb) !important;
-}
+/* 终端滚动条（xterm v6 自绘 slider）在 style.css 里统一处理：那边的选择器
+   特异性已高于本文件的 has-bg 通配透明规则，无需在此再开例外。 */
 /* el-table（el-scrollbar）横/纵滚动条：滑块是 div，被全局 * 透明规则抹掉了，
    这里恢复半透明滑块，背景图下仍可见。 */
 .app-container.has-bg .main-content :deep(.el-scrollbar__thumb) {
