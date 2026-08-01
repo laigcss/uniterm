@@ -50,6 +50,14 @@ func (s *S3Session) Connect(config ConnectionConfig) error {
 
 	s3Client := simples3.New(config.S3Region, config.User, config.Password)
 	s3Client.Endpoint = strings.TrimSuffix(config.Host, "/")
+	// S3URLStyle="" or "virtual" uses virtual-hosted URLs
+	// (https://bucket.endpoint/key) — required by Alibaba Cloud OSS, Tencent
+	// COS and Huawei OBS, which reject path-style requests with
+	// "SecondLevelDomainForbidden" (issue #452). "path" keeps the legacy
+	// path-style (https://endpoint/bucket/key) for AWS S3 and MinIO.
+	if config.S3URLStyle != "path" {
+		s3Client.SetVirtualHostedStyle(true)
+	}
 
 	s.s3 = s3Client
 	s.bucket = config.S3Bucket
