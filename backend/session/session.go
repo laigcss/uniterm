@@ -113,6 +113,13 @@ type ConnectionConfig struct {
 	// S3-specific fields
 	S3Region string `json:"s3Region,omitempty"`
 	S3Bucket string `json:"s3Bucket,omitempty"`
+	// S3URLStyle chooses URL addressing for S3 requests against a custom
+	// endpoint. "" / "virtual" (default) uses virtual-hosted style
+	// (https://bucket.endpoint/key) — required by Alibaba Cloud OSS,
+	// Tencent COS and Huawei OBS; they reject path-style requests with
+	// "SecondLevelDomainForbidden" (issue #452). "path" uses path-style
+	// (https://endpoint/bucket/key) for AWS S3 and MinIO.
+	S3URLStyle string `json:"s3UrlStyle,omitempty"`
 	// Terminal character encoding for ssh/telnet:
 	// "" / "utf-8"(default) | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
 	Encoding string `json:"encoding,omitempty"`

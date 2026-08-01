@@ -87,6 +87,11 @@ export interface ConnectionConfig {
   // S3-specific
   s3Region?: string
   s3Bucket?: string
+  // S3 URL addressing style. "virtual" (default) uses virtual-hosted style
+  // URLs (https://bucket.endpoint/key) — required by Alibaba Cloud OSS /
+  // Tencent COS / Huawei OBS. "path" uses path-style
+  // (https://endpoint/bucket/key) for AWS S3 and MinIO.
+  s3UrlStyle?: 'virtual' | 'path'
   // Terminal encoding (SSH/Telnet)
   encoding?: string // "utf-8" | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
   // Backspace key byte sequence for terminal-stream types (ssh/telnet/serial).

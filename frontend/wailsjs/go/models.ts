@@ -606,6 +606,7 @@ export namespace session {
 	    smbShare?: string;
 	    s3Region?: string;
 	    s3Bucket?: string;
+	    s3UrlStyle?: string;
 	    encoding?: string;
 	    backspaceKey?: string;
 	    k8sConfigPath?: string;
@@ -670,6 +671,7 @@ export namespace session {
 	        this.smbShare = source["smbShare"];
 	        this.s3Region = source["s3Region"];
 	        this.s3Bucket = source["s3Bucket"];
+	        this.s3UrlStyle = source["s3UrlStyle"];
 	        this.encoding = source["encoding"];
 	        this.backspaceKey = source["backspaceKey"];
 	        this.k8sConfigPath = source["k8sConfigPath"];

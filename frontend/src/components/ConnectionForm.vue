@@ -69,7 +69,7 @@
             </template>
             <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
               <div class="host-port-row">
-                <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
+                <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
                   <span class="host-port-sep">:</span>
                   <el-input-number v-model="form.port" :min="0" :max="65535" class="port-input" />
@@ -188,6 +188,12 @@
               </el-form-item>
               <el-form-item label="Bucket">
                 <el-input v-model="form.s3Bucket" placeholder="my-bucket (leave empty to list all buckets)" />
+              </el-form-item>
+              <el-form-item label="URL style">
+                <el-select v-model="form.s3UrlStyle">
+                  <el-option label="Virtual-hosted (https://bucket.endpoint/key)" value="virtual" />
+                  <el-option label="Path (https://endpoint/bucket/key)" value="path" />
+                </el-select>
               </el-form-item>
             </template>
             <!-- ── K8s 字段 ── -->
@@ -722,6 +728,7 @@ const form = reactive<ConnectionConfig>({
   smbShare: '',
   s3Region: 'us-east-1',
   s3Bucket: '',
+  s3UrlStyle: 'virtual',
   logOnConnect: false,
   k8sConfigPath: '~/.kube/config',
   k8sConfigInline: '',
