@@ -872,6 +872,7 @@
   "conn.ftpSkipVerify": "Allow insecure TLS (skip verification)",
   "conn.ftpSkipVerifyDesc": "Disables certificate verification for FTPS. Vulnerable to MITM attacks — only enable for trusted self-signed certificates.",
   "conn.encoding": "Encoding",
+  "conn.backspaceKey": "Backspace Key",
   "quickCommands.quickCommandsTab": "Quick Commands",
   "quickCommands.historyTab": "History",
   "quickCommands.saveAs": "Save as Quick Command",

@@ -116,6 +116,12 @@ type ConnectionConfig struct {
 	// Terminal character encoding for ssh/telnet:
 	// "" / "utf-8"(default) | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
 	Encoding string `json:"encoding,omitempty"`
+	// Backspace key byte sequence for terminal-stream types (ssh/telnet/serial).
+	// The translation happens on the frontend in applyBackspaceKey before the
+	// byte hits SessionWrite, so the backend does not read this field — it is
+	// kept here so the Wails binding reflects the full connection contract.
+	// ""(default) | "del"(0x7F) | "bs"(0x08) | "vt220"(ESC[3~)
+	BackspaceKey string `json:"backspaceKey,omitempty"`
 	// K8s-specific fields
 	K8sConfigPath   string `json:"k8sConfigPath,omitempty"`   // File 模式：kubeconfig 文件路径
 	K8sConfigInline string `json:"k8sConfigInline,omitempty"` // Inline 模式：kubeconfig YAML 全文（明文存储，同其他连接密码策略）

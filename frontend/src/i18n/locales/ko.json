@@ -823,6 +823,7 @@
   "conn.ftpPassive": "수동 모드",
   "conn.ftpEncoding": "문자 인코딩",
   "conn.encoding": "인코딩",
+  "conn.backspaceKey": "백스페이스 키",
   "quickCommands.quickCommandsTab": "빠른 명령",
   "quickCommands.historyTab": "명령 기록",
   "quickCommands.saveAs": "빠른 명령으로 저장",

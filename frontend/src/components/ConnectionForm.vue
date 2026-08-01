@@ -354,6 +354,16 @@
                 <el-option label="Korean (EUC-KR)" value="euc-kr" />
               </el-select>
             </el-form-item>
+            <el-form-item
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh'"
+              :label="t('conn.backspaceKey')"
+            >
+              <el-select v-model="form.backspaceKey">
+                <el-option label="ASCII Backspace (0x08)" value="bs" />
+                <el-option label="ASCII Delete (0x7F)" value="del" />
+                <el-option label="VT220 Delete (ESC[3~)" value="vt220" />
+              </el-select>
+            </el-form-item>
             <el-form-item v-if="form.type === 'ssh'" :label="t('conn.sftpMaxConcurrency')">
               <el-input-number v-model="form.sftpMaxConcurrency" :min="0" :max="20" />
             </el-form-item>
@@ -706,6 +716,7 @@ const form = reactive<ConnectionConfig>({
   ftpEncoding: 'utf-8',
   ftpSkipVerify: false,
   encoding: 'utf-8',
+  backspaceKey: 'bs',
   shellPath: '',
   smbDomain: 'WORKGROUP',
   smbShare: '',
@@ -910,6 +921,7 @@ function resetForm() {
   form.ftpEncoding = 'utf-8'
   form.ftpSkipVerify = false
   form.encoding = 'utf-8'
+  form.backspaceKey = 'bs'
   form.shellPath = ''
   form.serialPort = ''
   form.serialBaudRate = 115200
