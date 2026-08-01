@@ -1458,6 +1458,7 @@ export namespace store {
 	    smartCompletion?: boolean;
 	    highlightEnabled?: boolean;
 	    sessionLogDir?: string;
+	    wordSeparator?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TerminalSettings(source);
@@ -1474,6 +1475,7 @@ export namespace store {
 	        this.smartCompletion = source["smartCompletion"];
 	        this.highlightEnabled = source["highlightEnabled"];
 	        this.sessionLogDir = source["sessionLogDir"];
+	        this.wordSeparator = source["wordSeparator"];
 	    }
 	}
 	export class AppSettings {

@@ -365,6 +365,7 @@ export function useTerminal(
       scrollback: ts.maxHistoryLines || 2500,
       allowProposedApi: true,
       allowTransparency: true,
+      wordSeparator: ts.wordSeparator || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
     }
   }
 

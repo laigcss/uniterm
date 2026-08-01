@@ -332,6 +332,8 @@
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
   "settings.selectionActionDesc": "テキスト選択後の既定アクション",
+  "settings.wordSeparator": "単語区切り文字",
+  "settings.wordSeparatorDesc": "ダブルクリックで単語選択するときの区切り文字。空欄の場合は既定値を使用。",
   "settings.rightClickDesc": "ターミナル内での右クリックの動作",
   "settings.middleClick": "中ボタン機能",
   "settings.middleClickDesc": "端末内での中ボタンクリックの動作",

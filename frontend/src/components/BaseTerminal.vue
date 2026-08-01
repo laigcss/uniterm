@@ -1498,6 +1498,12 @@ watch(() => settingsStore.settings.terminal, (ts) => {
     // Force-reset by feeding the cursor a DECRST 12 sequence.
     if (!ts.cursorBlink) terminal.write('\x1b[?12l')
   }
+  if (ts.wordSeparator) {
+    // xterm reads wordSeparator on each selection via rawOptions; assigning
+    // here is enough to change the next double-click selection without
+    // recreating the terminal.
+    terminal.options.wordSeparator = ts.wordSeparator
+  }
   resize()
 }, { deep: true })
 

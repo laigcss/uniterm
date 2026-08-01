@@ -73,6 +73,8 @@ export function acquireTerminal(
     managed.isNew = false
   } else {
     const cursorBlink = useSettingsStore().settings.terminal.cursorBlink ?? true
+    const wordSeparator = useSettingsStore().settings.terminal.wordSeparator
+      || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
     const ls = useLocalStateStore()
     const theme = resolveXtermBackground(
       getXtermTheme(options.themeName ?? 'dark', customThemes),
@@ -108,6 +110,7 @@ export function acquireTerminal(
       scrollback: options.scrollback ?? 2500,
       allowProposedApi: true,
       allowTransparency: true,
+      wordSeparator,
     })
 
     // ctrl+wheel is font zoom (App.vue). xterm v6 reports wheel events to the

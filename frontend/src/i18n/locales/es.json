@@ -332,6 +332,8 @@
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
   "settings.selectionActionDesc": "Acción predeterminada después de seleccionar texto",
+  "settings.wordSeparator": "Separador de palabras",
+  "settings.wordSeparatorDesc": "Caracteres que separan palabras al hacer doble clic. Déjelo vacío para usar el valor predeterminado.",
   "settings.rightClickDesc": "Comportamiento del clic derecho en la terminal",
   "settings.middleClick": "Accion clic medio",
   "settings.middleClickDesc": "Comportamiento del clic medio en la terminal",
