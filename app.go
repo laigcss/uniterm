@@ -1317,9 +1317,12 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			sz.SetPendingSize(config.InitialCols, config.InitialRows)
 		}
 	}
-	// Apply terminal character encoding (SSH only). No-op for utf-8/empty.
+	// Apply terminal character encoding (SSH / Telnet). No-op for utf-8/empty.
 	if ssh, ok := s.(*session.SSHSession); ok {
 		ssh.SetEncoding(config.Encoding)
+	}
+	if telnet, ok := s.(*session.TelnetSession); ok {
+		telnet.SetEncoding(config.Encoding)
 	}
 
 	// Apply serial config; connection itself is handled by the async goroutine

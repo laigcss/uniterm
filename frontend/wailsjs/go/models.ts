@@ -1457,6 +1457,7 @@ export namespace store {
 	    maxHistoryLines: number;
 	    smartCompletion?: boolean;
 	    highlightEnabled?: boolean;
+	    cursorBlink?: boolean;
 	    sessionLogDir?: string;
 	    wordSeparator?: string;
 	
@@ -1474,6 +1475,7 @@ export namespace store {
 	        this.maxHistoryLines = source["maxHistoryLines"];
 	        this.smartCompletion = source["smartCompletion"];
 	        this.highlightEnabled = source["highlightEnabled"];
+	        this.cursorBlink = source["cursorBlink"];
 	        this.sessionLogDir = source["sessionLogDir"];
 	        this.wordSeparator = source["wordSeparator"];
 	    }
