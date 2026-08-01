@@ -430,25 +430,27 @@ body::before {
    ::-webkit-scrollbar 规则对终端无效，轨道和滑块都要在这里重建。
    滑块宽度/left 是 JS 写的行内样式，颜色是 xterm 注入的 <style>，
    App.vue 里 has-bg 的通配透明规则还带 !important，所以这里也得 !important。
-   不改 .scrollbar 容器自身的 14px 宽度：FitAddon 按 14px 预留了右侧空间，
+   不改 .scrollbar 容器自身的 14px 宽度：FitAddon 也按 14px 预留水平空间，
    点击轨道翻页的热区也是它，改窄会留下 6px 死区。 */
 
-/* 轨道刷应用主题背景色（对应 v5 的 ::-webkit-scrollbar-track）。滑块颜色
-   取自应用主题（深色主题下是半透明白），若直接落在终端自己的背景上，
-   「深色应用主题 + 浅色终端主题」这一组合里滑块会看不见；给轨道一个
-   来自应用主题的底色，滑块的对比度就与应用其他滚动条一致。 */
+/* 轨道保持透明。轨道现在贴容器右缘，但顶/底仍被 .xterm 的 4px padding 挤在
+   内侧，一旦上色就会把那圈 padding 显成边线。对比度全交给滑块承担。 */
 .xterm .xterm-scrollable-element > .scrollbar.vertical {
-  background: var(--bg-elevated) !important;
+  background: transparent !important;
 }
+/* 滑块颜色跟着「终端」背景明暗走，而不是应用主题：浅色终端配深滑块、
+   深色终端配浅滑块，这样在任意应用/终端主题组合下都看得见。
+   --terminal-scrollbar-thumb 由 applyTerminalBgVar() 写在终端根元素上，
+   取不到时回退到应用主题的 --scrollbar-thumb。 */
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
   width: 8px !important;
   left: 3px !important;
   border-radius: 10px;
-  background: var(--scrollbar-thumb) !important;
+  background: var(--terminal-scrollbar-thumb, var(--scrollbar-thumb)) !important;
 }
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
-  background: var(--scrollbar-thumb-hover) !important;
+  background: var(--terminal-scrollbar-thumb-hover, var(--scrollbar-thumb-hover)) !important;
 }
 /* v6 默认悬停才显示、离开后淡出；v5 的原生滚动条只要可滚动就常显。
    `invisible fade` 精确对应「可滚动但未悬停」，不可滚动时只有 `invisible`

@@ -1844,12 +1844,8 @@ watch(
 .app-container.has-bg .main-content :deep(.xterm-selection div) {
   background-color: rgba(120, 150, 200, 0.4) !important;
 }
-/* 终端滚动条（xterm v6 自绘 div）的滑块在 style.css 里统一处理。这里只改轨道：
-   开背景图时轨道要透明让图透出来，而 style.css 给的是应用主题背景色。
-   两边都带 !important，靠这条多一个 .has-bg 的特异性压过去。 */
-.app-container.has-bg .main-content :deep(.xterm-scrollable-element > .scrollbar.vertical) {
-  background: transparent !important;
-}
+/* 终端滚动条（xterm v6 自绘 div）在 style.css 里统一处理：轨道本身已是透明，
+   开背景图时无需再开例外。 */
 /* el-table（el-scrollbar）横/纵滚动条：滑块是 div，被全局 * 透明规则抹掉了，
    这里恢复半透明滑块，背景图下仍可见。 */
 .app-container.has-bg .main-content :deep(.el-scrollbar__thumb) {

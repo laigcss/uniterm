@@ -12,7 +12,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { highlight } from './useHighlight'
 import { stripCursorBlink } from '../utils/cursor'
-import { resolveXtermBackground } from './useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar } from './useTerminalTheme'
 import type { CustomTerminalTheme } from '../types/settings'
 
 export interface UseTerminalOptions {
@@ -600,6 +600,7 @@ export function useTerminal(
     loadedAddons.push(searchAddon)
 
     terminal.open(terminalRef.value)
+    applyTerminalBgVar(terminal, terminal.options.theme ?? {})
     // Force synchronous layout so grid rows are sized before xterm measures
     void terminalRef.value.offsetHeight
     fitAddon.fit()
@@ -766,6 +767,7 @@ export function useTerminal(
       ls.state.backgroundImage
     )
     terminal.options.theme = theme
+    applyTerminalBgVar(terminal, theme)
   }
 
   // Watch terminal settings changes

@@ -99,7 +99,7 @@ import {
   bumpOnDataGeneration,
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import {
   sanitizeTerminalOutput,
@@ -1480,6 +1480,7 @@ function applyXtermTheme(themeName: string) {
     localStateStore.state.backgroundImage
   )
   terminal.options.theme = theme
+  applyTerminalBgVar(terminal, theme)
 }
 
 // Watch terminal settings changes
@@ -1705,11 +1706,19 @@ defineExpose({
   height: 100%;
   display: block;
   box-sizing: border-box;
-  padding: 4px;
+  /* 右侧不留：那 14px 的滚动条轨道本身已把文本挡开（文本右缘与轨道间还有 2px），
+     右 padding 只会把整条滚动条往左推、在轨道外侧留一条空白。 */
+  padding: 4px 0 4px 4px;
 }
+/* 4px padding 那圈用终端背景色，而不是应用主题色（--bg-base）。
+   v5 时 xterm 把终端色内联在 .xterm-viewport 上，而它 absolute inset:0
+   盖满 padding box，边缘因此自带终端色；v6 改成内联到 .xterm-scrollable-element，
+   该元素止于 padding 内侧，边缘便露出 .xterm 自身的应用主题色 ——
+   深色应用 + 浅色终端时就是一圈深色边框。--terminal-bg 由
+   applyTerminalBgVar() 写在终端根元素上，取不到时回退旧行为。 */
 .terminal-area :deep(.xterm),
 .terminal-area :deep(.xterm-viewport) {
-  background: var(--bg-base);
+  background: var(--terminal-bg, var(--bg-base));
 }
 /* v6 起 .xterm-viewport 只是 overview ruler 的定位锚点，不再是滚动容器；
    留着 overflow-y: scroll 会多出一条空的原生轨道。终端滚动条样式见

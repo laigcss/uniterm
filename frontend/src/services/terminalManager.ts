@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { SearchAddon } from '@xterm/addon-search'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import type { CustomTerminalTheme } from '../types/settings'
@@ -204,6 +204,10 @@ export function attachTerminal(sessionId: string, container: HTMLElement): void 
   } else {
     container.appendChild(managed.terminal.element)
   }
+
+  // terminal.element only exists after open(), so the padding-ring color is
+  // published here rather than at construction time.
+  applyTerminalBgVar(managed.terminal, managed.terminal.options.theme ?? {})
 
   // Wait for the font to actually paint before measuring cell width — if
   // we measure while JetBrains Mono Variable (or whatever the user picked)
