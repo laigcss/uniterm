@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
 )
 
 const (
@@ -38,6 +41,13 @@ type TelnetSession struct {
 	cancel   context.CancelFunc
 	quit     chan struct{}
 	quitOnce sync.Once
+
+	enc            encoding.Encoding    // input(write) codec; nil = utf-8 passthrough
+	encoder        transform.Transformer // cached encoder; nil = utf-8 passthrough
+	decoder        *encoding.Decoder     // persistent streaming decoder for output(read)
+	decodeLeftover []byte                // trailing partial multibyte bytes between reads
+	decodeScratch  []byte                // reusable src buffer for decodeOutput
+	encScratch     []byte                // reusable dst buffer for encodeInput
 }
 
 func NewTelnetSession(id string) *TelnetSession {
@@ -125,7 +135,7 @@ func (s *TelnetSession) readLoop(ctx context.Context) {
 func (s *TelnetSession) handleRead(data []byte) {
 	filtered := s.filterIAC(data)
 	if len(filtered) > 0 {
-		s.emitData(filtered)
+		s.emitData(s.decodeOutput(filtered))
 	}
 }
 
@@ -279,7 +289,7 @@ func (s *TelnetSession) Write(data []byte) error {
 	if s.conn == nil {
 		return fmt.Errorf("not connected")
 	}
-	_, err := s.conn.Write(data)
+	_, err := s.conn.Write(s.encodeInput(data))
 	return err
 }
 
@@ -308,4 +318,73 @@ func (s *TelnetSession) Resize(cols, rows int) error {
 
 func (s *TelnetSession) IsConnected() bool {
 	return s.Status() == StatusConnected
+}
+
+// SetEncoding configures the character encoding for this session.
+// name: "" / "utf-8" (passthrough) | "gbk" | "gb2312" | "gb18030" |
+// "big5" | "shift-jis" | "euc-jp" | "euc-kr".
+func (s *TelnetSession) SetEncoding(name string) {
+	enc := encodingByName(name)
+	s.mu.Lock()
+	s.enc = enc
+	if enc == nil {
+		s.decoder = nil
+		s.encoder = nil
+	} else {
+		s.decoder = enc.NewDecoder()
+		s.encoder = enc.NewEncoder()
+	}
+	s.decodeLeftover = nil
+	s.mu.Unlock()
+}
+
+// decodeOutput converts a chunk of remote bytes to UTF-8 using the configured
+// decoder. Partial trailing multibyte sequences are buffered until the next
+// call. Must only be called from the single readLoop goroutine.
+func (s *TelnetSession) decodeOutput(data []byte) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.decoder == nil {
+		return data
+	}
+	s.decodeScratch = s.decodeScratch[:0]
+	s.decodeScratch = append(s.decodeScratch, s.decodeLeftover...)
+	s.decodeScratch = append(s.decodeScratch, data...)
+	src := s.decodeScratch
+
+	var out []byte
+	dst := make([]byte, 8192)
+	for {
+		nDst, nSrc, err := s.decoder.Transform(dst, src, false)
+		out = append(out, dst[:nDst]...)
+		src = src[nSrc:]
+		if err == transform.ErrShortDst {
+			continue
+		}
+		break
+	}
+	if len(src) > 0 {
+		s.decodeLeftover = append(s.decodeLeftover[:0], src...)
+	} else {
+		s.decodeLeftover = src[:0]
+	}
+	return out
+}
+
+// encodeInput converts user keystrokes (UTF-8) to the configured encoding
+// before writing to the remote. Each call handles a complete UTF-8 input.
+func (s *TelnetSession) encodeInput(data []byte) []byte {
+	s.mu.RLock()
+	encoder := s.encoder
+	s.mu.RUnlock()
+	if encoder == nil {
+		return data
+	}
+	encoder.Reset()
+	s.encScratch = s.encScratch[:0]
+	nDst, _, err := encoder.Transform(s.encScratch, data, true)
+	if err != nil && err != transform.ErrShortSrc {
+		return data
+	}
+	return s.encScratch[:nDst]
 }
