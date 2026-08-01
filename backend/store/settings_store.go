@@ -22,6 +22,11 @@ type TerminalSettings struct {
 	MaxHistoryLines  int    `json:"maxHistoryLines"`
 	SmartCompletion  *bool  `json:"smartCompletion"`
 	HighlightEnabled *bool  `json:"highlightEnabled"`
+	// CursorBlink controls xterm.js's cursor blink. Pointer + omitempty so
+	// settings.json written by older builds (which lack this field) still
+	// load; the frontend falls back to `true` when nil, matching the
+	// pre-existing default behaviour.
+	CursorBlink *bool `json:"cursorBlink,omitempty"`
 	// SessionLogDir overrides the default directory used for session
 	// output logs (issue #227). Empty means: use the OS-appropriate
 	// default under ~/Documents/uniTerm/logs.
