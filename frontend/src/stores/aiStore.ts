@@ -612,12 +612,22 @@ export const useAIStore = defineStore('ai', () => {
     })()
     for (let i = keptStart; i < n; i++) kept.push(msgs[i])
 
-    // F-313: single forward pass that:
-    //   - collects resolved tool_use IDs from tool_result messages,
+    // Collect every resolved tool_use ID up front. This pass cannot be folded
+    // into the build loop below: an assistant message carrying a tool_use comes
+    // *before* the tool message that resolves it, so a single forward pass sees
+    // an empty set at the moment it decides whether that tool_use is dangling.
+    // It then drops the tool_use, and the mirror pass drops the now-orphaned
+    // tool_result — silently erasing whole tool roundtrips from the payload, so
+    // the model never sees the commands it ran or their output.
+    const resolvedIds = new Set<string>()
+    for (const m of kept) {
+      if (m.role === 'tool' && m.tool_call_id) resolvedIds.add(m.tool_call_id)
+    }
+
+    // Forward pass that:
     //   - filters dangling tool_use blocks (assistant raw / legacy),
     //   - merges consecutive user messages,
     //   - validates pairings (assistant tool_use ↔ user tool_result).
-    const resolvedIds = new Set<string>()
     const result: Array<Record<string, unknown>> = []
     const pendingMsgId = pendingCommand.value?.messageId
 
@@ -632,10 +642,10 @@ export const useAIStore = defineStore('ai', () => {
       if ((m.skillName || m.commandName) && !m.content) continue
       if (m.role === 'user' && !m.content && !m._contextHeader) continue
 
-      // Tool message: register id, emit as user tool_result wrapper.
+      // Tool message: emit as user tool_result wrapper. The id is already in
+      // resolvedIds from the pre-pass above.
       if (m.role === 'tool') {
         if (m.tool_call_id) {
-          resolvedIds.add(m.tool_call_id)
           const toolResultBlocks = [{
             type: 'tool_result',
             tool_use_id: m.tool_call_id,
@@ -780,8 +790,14 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   // F-301: rebuild conversation only when messages are added/removed.
+  // flush: 'sync' is required — agent.ts reads store.conversation
+  // synchronously right after addMessage(), with no await in between. With
+  // Vue's default 'pre' flush the rebuild lands in a microtask, so the first
+  // turn would send an empty messages array (and every later turn would lag
+  // one message behind). An empty array marshals to "input":null on the
+  // OpenAI Responses path, which the API rejects as a missing parameter.
   const messagesVersion = ref(0)
-  watch(messagesVersion, () => buildConversation())
+  watch(messagesVersion, () => buildConversation(), { flush: 'sync' })
   buildConversation()
 
   const conversation = computed(() => conversationValue.value)

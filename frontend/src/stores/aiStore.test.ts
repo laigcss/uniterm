@@ -118,6 +118,155 @@ describe('aiStore conversation memoization (F-301)', () => {
     await nextTick()
     expect(store.conversation).not.toBe(first)
   })
+
+  // agent.ts builds its request body synchronously right after addMessage(),
+  // with no await in between. The F-301 rebuild therefore has to run on a sync
+  // watch flush; with Vue's default 'pre' flush the first turn shipped an empty
+  // messages array (and later turns lagged one message behind), which the
+  // OpenAI Responses API rejects as a missing `input` parameter.
+  it('reflects a new message synchronously, without awaiting a tick', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'm1', role: 'user', content: 'first question' } as any)
+
+    expect(store.conversation).toEqual([
+      { role: 'user', content: 'first question' },
+    ])
+  })
+
+  it('does not lag a turn behind across successive sends', async () => {
+    const store = useAIStore()
+    store.createSession()
+
+    store.addMessage({ id: 'm1', role: 'user', content: 'first' } as any)
+    expect(store.conversation).toHaveLength(1)
+
+    // Simulates the `await chat(...)` between agent turns.
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    store.addMessage({ id: 'm2', role: 'assistant', content: 'reply' } as any)
+    store.addMessage({ id: 'm3', role: 'user', content: 'second' } as any)
+    expect(store.conversation.map(m => m.content)).toEqual([
+      'first',
+      'reply',
+      'second',
+    ])
+  })
+})
+
+// An assistant message carrying a tool_use is built *before* the tool message
+// that resolves it. Collecting resolvedIds inside the same forward pass meant
+// the tool_use looked dangling and was dropped, and the mirror pass then
+// dropped the orphaned tool_result — erasing entire tool roundtrips, so the
+// model could not see the commands it ran or their output. On the Responses
+// API the resulting assistant-tailed payload was rejected outright.
+describe('aiStore keeps completed tool roundtrips in the payload', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  function addToolTurn(store: any, toolId: string, command: string, output: string) {
+    const assistant = store.addMessage({ id: `a-${toolId}`, role: 'assistant', content: '' } as any)
+    assistant._rawApiMsg = {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: toolId, name: 'execute_command', input: { command } }],
+    }
+    store.addMessage({
+      id: `t-${toolId}`,
+      role: 'tool',
+      content: output,
+      tool_call_id: toolId,
+    } as any)
+  }
+
+  it('emits assistant tool_use paired with a user tool_result', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'u1', role: 'user', content: 'run ls' } as any)
+    addToolTurn(store, 'tu1', 'ls', 'file.txt')
+
+    expect(store.conversation).toEqual([
+      { role: 'user', content: 'run ls' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'tu1', name: 'execute_command', input: { command: 'ls' } },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'file.txt' }],
+      },
+    ])
+  })
+
+  it('keeps every roundtrip across a multi-step agent turn', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'u1', role: 'user', content: 'do the thing' } as any)
+    addToolTurn(store, 't1', 'step-one', 'out-1')
+    addToolTurn(store, 't2', 'step-two', 'out-2')
+    addToolTurn(store, 't3', 'step-three', 'out-3')
+
+    // 1 user + 3 × (assistant tool_use + user tool_result)
+    expect(store.conversation).toHaveLength(7)
+    expect(store.conversation.map(m => m.role)).toEqual([
+      'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user',
+    ])
+  })
+
+  it('does not end the payload with an assistant message after a tool turn', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'u1', role: 'user', content: 'run ls' } as any)
+    addToolTurn(store, 'tu1', 'ls', 'file.txt')
+
+    // The OpenAI Responses API rejects a trailing assistant message.
+    expect(store.conversation[store.conversation.length - 1].role).toBe('user')
+  })
+
+  it('resolves legacy tool_calls messages the same way', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'u1', role: 'user', content: 'q' } as any)
+    store.addMessage({
+      id: 'a1',
+      role: 'assistant',
+      content: 'checking',
+      tool_calls: [{
+        id: 'lc1',
+        type: 'function',
+        function: { name: 'execute_command', arguments: '{"command":"ls"}' },
+      }],
+    } as any)
+    store.addMessage({ id: 't1', role: 'tool', content: 'out', tool_call_id: 'lc1' } as any)
+
+    expect(store.conversation).toEqual([
+      { role: 'user', content: 'q' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'checking' },
+          { type: 'tool_use', id: 'lc1', name: 'execute_command', input: { command: 'ls' } },
+        ],
+      },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'lc1', content: 'out' }] },
+    ])
+  })
+
+  it('still drops a tool message that carries no tool_call_id', () => {
+    const store = useAIStore()
+    store.createSession()
+    store.addMessage({ id: 'u1', role: 'user', content: 'q' } as any)
+    store.addMessage({ id: 'a1', role: 'assistant', content: 'partial' } as any)
+    store.addMessage({ id: 't1', role: 'tool', content: '[INTERRUPTED]' } as any)
+
+    // Display-only; it has no tool_use to pair with.
+    expect(store.conversation).toEqual([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'partial' },
+    ])
+  })
 })
 
 describe('aiStore lazy _rawApiMsg parse (F-316)', () => {

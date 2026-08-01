@@ -60,25 +60,35 @@ export async function chat(options: ChatOptions): Promise<void> {
 
   if (!apiKey) throw new Error('API key not configured')
 
-  // F-319: reuse the cached static prefix (model + max_tokens + tools) so
-  // each turn avoids re-serializing the ~6 KB tools array. cache_control on
-  // the last tool is paired with the backend's F-303 injectCacheControl.
-  // 16384 keeps long agent turns (tool call + assistant prose + final
-  // answer) from being truncated at 4096 — which used to surface as
-  // cut-off tool inputs. Per-model caps in the backend still apply.
-  const cacheKey = `${model}|16384`
-  if (cacheKey !== staticPrefixCacheKey) {
-    staticPrefixCacheKey = cacheKey
-    staticPrefixCache = `{"model":${JSON.stringify(model)},"max_tokens":16384,"tools":${TOOLS_JSON_WITH_CACHE}`
+  // F-319: the expensive part of building the request is serializing the
+  // ~6 KB tools array, so that is what gets cached — keyed by the array
+  // identity, which makes the agent's module-constant AVAILABLE_TOOLS a hit
+  // on every turn. Everything else goes through a single JSON.stringify.
+  //
+  // The tools array must come from the caller: chat() is also used by the DB
+  // assistant (get_table_schema), the Mongo assistant and command completion.
+  // Hardcoding AVAILABLE_TOOLS here broke the DB tool loop and pushed ten
+  // irrelevant terminal tools at the callers that pass none.
+  //
+  // 16384 keeps long agent turns (tool call + assistant prose + final answer)
+  // from being truncated at 4096 — which used to surface as cut-off tool
+  // inputs. Per-model caps in the backend still apply.
+  const requestBody: Record<string, unknown> = {
+    model,
+    max_tokens: 16384,
+    system: options.system,
+    messages: options.messages,
   }
 
-  // System + messages change every turn; stringify only those and concatenate
-  // with the cached static prefix. The result is valid JSON that the backend
-  // json.Unmarshal reads identically to a single-pass stringify.
-  const requestJSON = staticPrefixCache
-    + `,"system":${JSON.stringify(options.system)}`
-    + `,"messages":${JSON.stringify(options.messages)}`
-    + `}`
+  // Splice the cached tools JSON in rather than putting the array in
+  // requestBody, so the 6 KB serialization is reused across turns. Slicing
+  // the trailing `}` off a JSON object and appending `,"key":<json>}` is
+  // structurally safe for any content — unlike a sentinel + string replace,
+  // which a message body could collide with.
+  const head = JSON.stringify(requestBody)
+  const requestJSON = options.tools && options.tools.length > 0
+    ? `${head.slice(0, -1)},"tools":${serializeTools(options.tools)}}`
+    : head
 
   let responseText: string
   try {
@@ -365,17 +375,24 @@ export const AVAILABLE_TOOLS = [
   }
 ]
 
-// F-319: AVAILABLE_TOOLS is module-constant. Pre-stringify the JSON once so
-// each turn avoids re-serializing the ~6 KB tools array. The last tool
-// carries an Anthropic cache_control breakpoint (paired with the backend's
-// F-303 injectCacheControl — harmless overlap).
-const TOOLS_JSON_WITH_CACHE = JSON.stringify([
-  ...AVAILABLE_TOOLS.slice(0, -1),
-  { ...AVAILABLE_TOOLS[AVAILABLE_TOOLS.length - 1], cache_control: { type: 'ephemeral' } },
-])
+// F-319: serializing the tools array is the expensive part of building a
+// request, so cache it keyed by the array's identity. AVAILABLE_TOOLS is a
+// module constant, which makes the agent's per-turn call a cache hit; the DB /
+// Mongo / completion callers pass their own arrays and get serialized on use.
+//
+// The last tool carries an Anthropic cache_control breakpoint (paired with the
+// backend's F-303 injectCacheControl — harmless overlap, it rewrites the same
+// field with the same value).
+const toolsJSONCache = new WeakMap<object, string>()
 
-// F-319: cache the static `model + max_tokens + tools` JSON prefix per active
-// model. Built once when the model changes; the system prompt and messages
-// are stringified and concatenated per turn.
-let staticPrefixCache = ''
-let staticPrefixCacheKey = ''
+function serializeTools(tools: NonNullable<ChatOptions['tools']>): string {
+  const cached = toolsJSONCache.get(tools)
+  if (cached !== undefined) return cached
+  const withCacheControl = [
+    ...tools.slice(0, -1),
+    { ...tools[tools.length - 1], cache_control: { type: 'ephemeral' } },
+  ]
+  const json = JSON.stringify(withCacheControl)
+  toolsJSONCache.set(tools, json)
+  return json
+}
