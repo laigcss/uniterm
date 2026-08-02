@@ -602,6 +602,9 @@ export namespace session {
 	    ftpPassive: boolean;
 	    ftpEncoding?: string;
 	    ftpSkipVerify?: boolean;
+	    vncEncryption?: string;
+	    vncShared?: boolean;
+	    vncRepeaterID?: string;
 	    smbDomain?: string;
 	    smbShare?: string;
 	    s3Region?: string;
@@ -667,6 +670,9 @@ export namespace session {
 	        this.ftpPassive = source["ftpPassive"];
 	        this.ftpEncoding = source["ftpEncoding"];
 	        this.ftpSkipVerify = source["ftpSkipVerify"];
+	        this.vncEncryption = source["vncEncryption"];
+	        this.vncShared = source["vncShared"];
+	        this.vncRepeaterID = source["vncRepeaterID"];
 	        this.smbDomain = source["smbDomain"];
 	        this.smbShare = source["smbShare"];
 	        this.s3Region = source["s3Region"];

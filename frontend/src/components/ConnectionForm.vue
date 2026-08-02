@@ -274,6 +274,11 @@
                 <el-switch v-model="form.rdpSmartSizing" />
               </el-form-item>
             </template>
+            <template v-if="form.type === 'vnc'">
+              <el-form-item :label="t('conn.vncEncryptionRequire')">
+                <el-switch v-model="vncRequireTLS" />
+              </el-form-item>
+            </template>
             <div v-if="showAdvancedToggle" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
               <el-icon class="advanced-arrow" :class="{ expanded: showAdvanced }"><ChevronRight :size="14" /></el-icon>
               <span>{{ t('conn.advanced') }}</span>
@@ -395,6 +400,14 @@
                   <el-option label="Shift-JIS" value="shift-jis" />
                   <el-option label="Latin-1" value="latin-1" />
                 </el-select>
+              </el-form-item>
+            </template>
+            <template v-if="form.type === 'vnc'">
+              <el-form-item :label="t('conn.vncShared')">
+                <el-switch v-model="form.vncShared" />
+              </el-form-item>
+              <el-form-item :label="t('conn.vncRepeaterID')">
+                <el-input v-model="form.vncRepeaterID" :placeholder="t('conn.vncRepeaterIDPlaceholder')" />
               </el-form-item>
             </template>
             <el-form-item v-if="showTunnel" :label="t('conn.tunnel')">
@@ -582,6 +595,14 @@ const shellOptions = computed(() =>
 
 const isWindows = ref(/windows/i.test(navigator.userAgent))
 const passwordInputKey = ref(0)
+
+// vncEncryption is stored as 'auto' | 'require' in ConnectionConfig (matches
+// the Go side) but exposed in the form as a simple boolean switch: on means
+// "require TLS", off means "auto / whatever the server offers".
+const vncRequireTLS = computed({
+  get: () => form.vncEncryption === 'require',
+  set: (val) => { form.vncEncryption = val ? 'require' : 'auto' },
+})
 const postLoginMode = ref<'script' | 'expect'>('script')
 const showAdvanced = ref(false)
 
@@ -721,6 +742,9 @@ const form = reactive<ConnectionConfig>({
   ftpPassive: true,
   ftpEncoding: 'utf-8',
   ftpSkipVerify: false,
+  vncEncryption: 'auto',
+  vncShared: true,
+  vncRepeaterID: '',
   encoding: 'utf-8',
   backspaceKey: 'bs',
   shellPath: '',
@@ -927,6 +951,9 @@ function resetForm() {
   form.ftpPassive = true
   form.ftpEncoding = 'utf-8'
   form.ftpSkipVerify = false
+  form.vncEncryption = 'auto'
+  form.vncShared = true
+  form.vncRepeaterID = ''
   form.encoding = 'utf-8'
   form.backspaceKey = 'bs'
   form.shellPath = ''
