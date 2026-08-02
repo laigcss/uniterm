@@ -107,6 +107,20 @@ type ConnectionConfig struct {
 	// but the toggle now exists so the choice is explicit, and a one-shot
 	// session-log warning fires on connect when it is enabled.
 	FtpSkipVerify bool `json:"ftpSkipVerify,omitempty"`
+	// VNC-specific fields (issue #95)
+	// VncEncryption selects the post-handshake security-type policy.
+	//   "auto"    — accept whatever security type the server offers (noVNC default).
+	//   "require" — disconnect unless the server picks VeNCrypt (TLS).
+	// Empty / unknown values behave as "auto".
+	VncEncryption string `json:"vncEncryption,omitempty"`
+	// VncShared is forwarded to noVNC's RFB constructor as `shared`.
+	// true (default) — the new client may connect alongside other clients.
+	// false — the server will typically disconnect other clients on connect.
+	VncShared bool `json:"vncShared,omitempty"`
+	// VncRepeaterID is forwarded to noVNC's RFB constructor as `repeaterID`.
+	// Empty (default) — direct connection to the VNC server.
+	// Non-empty — connect via an UltraVNC-compatible repeater using the given ID.
+	VncRepeaterID string `json:"vncRepeaterID,omitempty"`
 	// SMB-specific fields
 	SmbDomain string `json:"smbDomain,omitempty"`
 	SmbShare  string `json:"smbShare,omitempty"`

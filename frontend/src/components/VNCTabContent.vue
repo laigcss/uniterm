@@ -9,6 +9,7 @@
     <!-- Error state -->
     <div v-else-if="status === 'error'" class="vnc-overlay">
       <p class="vnc-error-text">{{ t('vnc.error') }}</p>
+      <p v-if="lastError" class="vnc-error-detail">{{ lastError }}</p>
       <el-button type="primary" @click="reconnect">{{ t('vnc.retry') }}</el-button>
     </div>
 
@@ -34,12 +35,30 @@
       <span class="vnc-status-sep">|</span>
       <span>{{ config?.host }}:{{ config?.port || 5900 }}</span>
       <span class="vnc-status-sep">|</span>
-      <span class="vnc-scale-label">{{ t('vnc.scale') }}</span>
+      <span class="vnc-status-label">{{ t('vnc.scale') }}</span>
       <el-switch
         v-model="scaleViewport"
+        inline-prompt
         :active-text="t('vnc.scaleOn')"
         :inactive-text="t('vnc.scaleOff')"
+        style="--el-switch-on-color: var(--success); --el-switch-off-color: var(--text-disabled)"
+      />
+      <span class="vnc-status-sep">|</span>
+      <span class="vnc-status-label">{{ t('vnc.viewOnly') }}</span>
+      <el-switch
+        v-model="viewOnly"
         inline-prompt
+        :active-text="t('vnc.scaleOn')"
+        :inactive-text="t('vnc.scaleOff')"
+        style="--el-switch-on-color: var(--success); --el-switch-off-color: var(--text-disabled)"
+      />
+      <span class="vnc-status-sep">|</span>
+      <span class="vnc-status-label">{{ t('vnc.showDotCursor') }}</span>
+      <el-switch
+        v-model="showDotCursor"
+        inline-prompt
+        :active-text="t('vnc.scaleOn')"
+        :inactive-text="t('vnc.scaleOff')"
         style="--el-switch-on-color: var(--success); --el-switch-off-color: var(--text-disabled)"
       />
     </div>
@@ -65,10 +84,36 @@ const props = defineProps<{
 }>()
 
 const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
+const lastError = ref<string>('')
 const currentSessionId = ref<string | null>(props.sessionId)
 const vncContainer = ref<HTMLDivElement | null>(null)
 const savedPassword = ref<string>('')
 const scaleViewport = ref(false)
+const viewOnly = ref(false)
+const showDotCursor = ref(false)
+
+function readThemeBackground(): string {
+  // Pull the resolved --bg-base CSS variable, which the global theme
+  // system (settingsStore.applyTheme) updates on `data-theme` change.
+  // Returning the computed value rather than a hardcoded color keeps
+  // the VNC canvas background in sync with the app's light / dark /
+  // deep-blue / custom themes.
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--bg-base')
+    .trim() || '#000000'
+}
+
+let themeObserver: MutationObserver | null = null
+function watchThemeBackground() {
+  if (themeObserver) return
+  themeObserver = new MutationObserver(() => {
+    if (rfb) rfb.background = readThemeBackground()
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+}
 
 let rfb: any = null
 let unsubStatus: (() => void) | null = null
@@ -78,11 +123,13 @@ async function connect() {
   if (!props.config) return
   if (status.value === 'connecting' || status.value === 'connected') return
   status.value = 'connecting'
+  lastError.value = ''
   try {
     const info = await CreateSession('vnc', props.config)
     currentSessionId.value = info.id
   } catch (e: any) {
     console.error('VNC connect error:', e)
+    lastError.value = e?.message || String(e)
     status.value = 'error'
   }
 }
@@ -123,9 +170,18 @@ function initRFB(proxyAddr: string, password: string) {
     createRFB(LoadedRFB, proxyAddr, password)
   }).catch((e: any) => {
     console.error('Failed to load noVNC module:', e)
+    lastError.value = e?.message || String(e)
     status.value = 'error'
     isIniting = false
   })
+}
+
+function applyRFBOptions() {
+  if (!rfb) return
+  rfb.viewOnly = viewOnly.value
+  rfb.scaleViewport = scaleViewport.value
+  rfb.showDotCursor = showDotCursor.value
+  rfb.background = readThemeBackground()
 }
 
 function createRFB(RFB: any, proxyAddr: string, password: string) {
@@ -136,29 +192,57 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
 
   try {
     rfb = new RFB(vncContainer.value, proxyAddr, {
-      credentials: { password: password || '' }
+      credentials: { password: password || '' },
+      shared: props.config?.vncShared ?? true,
+      repeaterID: props.config?.vncRepeaterID || '',
     })
   } catch (e: any) {
     console.error('Failed to create RFB instance:', e)
+    lastError.value = e?.message || String(e)
     status.value = 'error'
     isIniting = false
     return
   }
 
-  rfb.scaleViewport = scaleViewport.value
+  applyRFBOptions()
+
+  // issue #95: only flip to 'connected' on the noVNC connect event.
+  // Previously status='connected' was set as soon as the local proxy was
+  // up, well before the RFB handshake completed, producing a black
+  // screen with no error on security failure or wrong password.
+  rfb.addEventListener('connect', () => {
+    const scheme = rfb._rfbAuthScheme as number | undefined
+
+    if (props.config?.vncEncryption === 'require' && scheme !== 19) {
+      rfb.disconnect()
+      lastError.value = t('vnc.errorRequireEncryption', { scheme: schemeName(scheme) })
+      status.value = 'error'
+      return
+    }
+
+    lastError.value = ''
+    status.value = 'connected'
+  })
+
+  rfb.addEventListener('securityfailure', (e: any) => {
+    const reason = e.detail?.reason ?? e.detail?.status
+    lastError.value = t('vnc.errorSecurity', { reason: String(reason ?? '') })
+    status.value = 'error'
+  })
+
+  rfb.addEventListener('credentialsrequired', (e: any) => {
+    const types = (e.detail?.types || []).join(', ')
+    lastError.value = t('vnc.errorCredentials', { types })
+    status.value = 'error'
+  })
 
   rfb.addEventListener('disconnect', (e: any) => {
     if (!e.detail.clean) {
+      if (!lastError.value) lastError.value = t('vnc.errorClosed')
       status.value = 'error'
+    } else {
+      status.value = 'disconnected'
     }
-  })
-
-  rfb.addEventListener('credentialsrequired', () => {
-    status.value = 'error'
-  })
-
-  rfb.addEventListener('securityfailure', () => {
-    status.value = 'error'
   })
 
   rfb.addEventListener('clipboard', (e: any) => {
@@ -167,6 +251,15 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
   })
 
   isIniting = false
+}
+
+function schemeName(scheme: number | undefined): string {
+  switch (scheme) {
+    case 1: return 'None'
+    case 2: return 'VNC-Auth'
+    case 19: return 'TLS'
+    default: return `unknown(${scheme})`
+  }
 }
 
 function onPaste(e: ClipboardEvent) {
@@ -178,7 +271,6 @@ function onPaste(e: ClipboardEvent) {
 
 function handleKeyDown(e: KeyboardEvent) {
   if (!rfb || status.value !== 'connected') return
-  // Ctrl+Shift+V: paste from local clipboard to VNC
   if (e.ctrlKey && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
     e.preventDefault()
     ClipboardGetText().then(text => {
@@ -194,7 +286,6 @@ onMounted(() => {
     currentSessionId.value = props.sessionId
   }
 
-  // Restore cached DOM + RFB if available (zero-delay tab switch)
   const cached = panelStore.getVNCCache(props.panelId)
   if (cached && vncContainer.value) {
     const children = Array.from(cached.container.children)
@@ -202,17 +293,17 @@ onMounted(() => {
     rfb = cached.rfb
     panelStore.removeVNCCache(props.panelId)
     status.value = 'connected'
+    applyRFBOptions()
     document.addEventListener('keydown', handleKeyDown)
+    watchThemeBackground()
     return
   }
 
   const storedProxy = panelStore.getProxyAddr(props.panelId)
   if (storedProxy && props.config) {
     savedPassword.value = props.config.password || ''
-    status.value = 'connected'
     initRFB(storedProxy, savedPassword.value)
   } else if (currentSessionId.value) {
-    status.value = 'connected'
     connect()
   } else {
     connect()
@@ -220,11 +311,15 @@ onMounted(() => {
 
   document.addEventListener('keydown', handleKeyDown)
 
+  watchThemeBackground()
+
   unsubStatus = EventsOn('session:status', (data: any) => {
     if (data.id !== currentSessionId.value) return
     switch (data.status) {
       case 'connected':
-        status.value = 'connected'
+        // issue #95: do NOT flip to 'connected' here. The RFB 'connect'
+        // event is the source of truth — see createRFB above. We only
+        // hand the proxyAddr off to noVNC.
         if (data.proxyAddr) {
           panelStore.setProxyAddr(props.panelId, data.proxyAddr)
         }
@@ -244,6 +339,7 @@ onMounted(() => {
         if (status.value !== 'error') status.value = 'disconnected'
         break
       case 'error':
+        if (!lastError.value) lastError.value = t('vnc.errorClosed')
         status.value = 'error'
         break
     }
@@ -252,9 +348,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeyDown)
+  themeObserver?.disconnect()
+  themeObserver = null
   unsubStatus?.()
 
-  // Cache DOM + RFB so switching back is instant
   if (rfb && vncContainer.value && vncContainer.value.childElementCount > 0) {
     const container = document.createElement('div')
     container.style.display = 'none'
@@ -275,9 +372,13 @@ watch(() => props.sessionId, (newId) => {
 })
 
 watch(scaleViewport, (val) => {
-  if (rfb) {
-    rfb.scaleViewport = val
-  }
+  if (rfb) rfb.scaleViewport = val
+})
+watch(viewOnly, (val) => {
+  if (rfb) rfb.viewOnly = val
+})
+watch(showDotCursor, (val) => {
+  if (rfb) rfb.showDotCursor = val
 })
 </script>
 
@@ -316,6 +417,13 @@ watch(scaleViewport, (val) => {
   z-index: 10;
 }
 .vnc-error-text { color: var(--error); }
+.vnc-error-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  max-width: 80%;
+  text-align: center;
+  word-break: break-word;
+}
 .vnc-statusbar {
   position: absolute;
   bottom: 0;
@@ -339,8 +447,5 @@ watch(scaleViewport, (val) => {
   flex-shrink: 0;
 }
 .vnc-status-sep { color: var(--text-disabled); }
-.vnc-scale-label {
-  margin-left: auto;
-  font-size: 11px;
-}
+.vnc-status-label { font-size: 11px; }
 </style>
