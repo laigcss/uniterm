@@ -137,6 +137,14 @@ type ConnectionConfig struct {
 	// Terminal character encoding for ssh/telnet:
 	// "" / "utf-8"(default) | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
 	Encoding string `json:"encoding,omitempty"`
+	// X11Forwarding enables SSH X11 forwarding (ssh -X semantics). Sends an
+	// "x11-req" global request after RequestPty; accepts "x11" channels from
+	// the server and bridges them to the local X server at $DISPLAY. If
+	// $DISPLAY is unset, xauth is missing, or the local X server is
+	// unreachable the connection still succeeds and a yellow warning is
+	// emitted in the terminal (silent degradation). Trusted mode is used as
+	// fallback when MIT-MAGIC-COOKIE-1 cannot be read from $XAUTHORITY.
+	X11Forwarding bool `json:"x11Forwarding,omitempty"`
 	// Backspace key byte sequence for terminal-stream types (ssh/telnet/serial).
 	// The translation happens on the frontend in applyBackspaceKey before the
 	// byte hits SessionWrite, so the backend does not read this field — it is

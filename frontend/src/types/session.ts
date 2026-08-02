@@ -113,6 +113,11 @@ export interface ConnectionConfig {
   // 'bs'   = ASCII BS  (0x08) — Huawei/H3C/Cisco network gear, Windows convention
   // 'vt220'= VT220 Delete (ESC[3~) — H3C / late Cisco IOS
   backspaceKey?: 'del' | 'bs' | 'vt220'
+  // Enable SSH X11 forwarding (ssh -X semantics). Bridges remote X11
+  // clients to the local X server at $DISPLAY. Requires a local X server
+  // (XQuartz on macOS, VcXsrv/Xming on Windows). Silent degradation on
+  // missing $DISPLAY / xauth — see backend x11_forward.go.
+  x11Forwarding?: boolean
   // Enable session output log automatically on first connect. Applies
   // to terminal-stream types (ssh/telnet/serial/mosh/local).
   logOnConnect?: boolean

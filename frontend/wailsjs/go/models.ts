@@ -611,6 +611,7 @@ export namespace session {
 	    s3Bucket?: string;
 	    s3UrlStyle?: string;
 	    encoding?: string;
+	    x11Forwarding?: boolean;
 	    backspaceKey?: string;
 	    k8sConfigPath?: string;
 	    k8sConfigInline?: string;
@@ -679,6 +680,7 @@ export namespace session {
 	        this.s3Bucket = source["s3Bucket"];
 	        this.s3UrlStyle = source["s3UrlStyle"];
 	        this.encoding = source["encoding"];
+	        this.x11Forwarding = source["x11Forwarding"];
 	        this.backspaceKey = source["backspaceKey"];
 	        this.k8sConfigPath = source["k8sConfigPath"];
 	        this.k8sConfigInline = source["k8sConfigInline"];

@@ -2,9 +2,11 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -41,6 +43,7 @@ type SSHSession struct {
 	quitOnce     sync.Once
 	authAnswerCh chan []byte
 	expectOutput *postLoginOutputBuffer
+	x11Forwarder *x11Forwarder
 
 	enc            encoding.Encoding // input(write) codec; nil = utf-8 passthrough
 	encoder        transform.Transformer // cached encoder; nil = utf-8 passthrough (F-003)
@@ -215,6 +218,34 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	}
 
 	cols, rows := s.getInitialSize(80, 24)
+
+	// X11 forwarding: per RFC 4254 §6.3.1, x11-req is a *channel request*
+	// sent on the session channel. Sending it via client.SendRequest
+	// routes it through the global-request transport path and OpenSSH
+	// servers silently return REQUEST_FAILURE. We send it BEFORE
+	// RequestPty so the SSH server has $DISPLAY ready for the initial
+	// shell.
+	if config.X11Forwarding {
+		xauthPath := os.Getenv("XAUTHORITY")
+		if xauthPath == "" {
+			if home, herr := os.UserHomeDir(); herr == nil {
+				xauthPath = home + "/.Xauthority"
+			}
+		}
+		fwd, ferr := startX11Forward(client, session, xauthPath, os.Getenv("DISPLAY"))
+		switch {
+		case ferr == nil, errors.Is(ferr, errX11TrustedFallback):
+			s.x11Forwarder = fwd
+		default:
+			s.emitData([]byte("\r\n\x1b[31m[x11: " + ferr.Error() + "]\x1b[0m\r\n"))
+		}
+		if s.x11Forwarder != nil {
+			s.x11Forwarder.onError = func(msg string) {
+				s.emitData([]byte("\r\n\x1b[33m" + msg + "\x1b[0m\r\n"))
+			}
+		}
+	}
+
 	if err := session.RequestPty("xterm-256color", rows, cols, modes); err != nil {
 		session.Close()
 		client.Close()
@@ -476,6 +507,10 @@ func (s *SSHSession) Write(data []byte) error {
 func (s *SSHSession) Disconnect() error {
 	s.quitOnce.Do(func() {
 		close(s.quit)
+		if s.x11Forwarder != nil {
+			s.x11Forwarder.stop()
+			s.x11Forwarder = nil
+		}
 		if s.session != nil {
 			s.session.Close()
 		}
