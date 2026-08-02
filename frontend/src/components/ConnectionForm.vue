@@ -378,6 +378,10 @@
             <el-form-item v-if="form.type === 'ssh'" :label="t('conn.sftpMaxConcurrency')">
               <el-input-number v-model="form.sftpMaxConcurrency" :min="0" :max="20" />
             </el-form-item>
+            <el-form-item v-if="form.type === 'ssh'" :label="t('conn.x11Forwarding')">
+              <el-switch v-model="form.x11Forwarding" />
+              <span class="field-hint" style="margin-left: 12px;">{{ t(x11HintKey) }}</span>
+            </el-form-item>
             <template v-if="form.type === 'ftp'">
               <el-form-item :label="t('conn.ftpEncryption')">
                 <el-select v-model="form.ftpEncryption">
@@ -479,10 +483,9 @@ import { useConnectionStore } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
-import { OpenFileDialog } from '../../wailsjs/go/main/App'
+import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
 import { ElMessage } from 'element-plus'
 import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel } from '@lucide/vue'
-import { ListSerialPorts } from '../../wailsjs/go/main/App'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 
@@ -594,6 +597,13 @@ const shellOptions = computed(() =>
 )
 
 const isWindows = ref(/windows/i.test(navigator.userAgent))
+const platform = ref<string>('')
+GetPlatform().then(p => { platform.value = p })
+const x11HintKey = computed(() => {
+  if (platform.value === 'windows') return 'conn.x11ForwardingDescWin'
+  if (platform.value === 'darwin') return 'conn.x11ForwardingDescMac'
+  return 'conn.x11ForwardingDescLinux'
+})
 const passwordInputKey = ref(0)
 
 // vncEncryption is stored as 'auto' | 'require' in ConnectionConfig (matches
@@ -738,6 +748,7 @@ const form = reactive<ConnectionConfig>({
   postLoginScript: '',
   postLoginExpectSteps: [],
   sftpMaxConcurrency: 5,
+  x11Forwarding: false,
   ftpEncryption: 'none',
   ftpPassive: true,
   ftpEncoding: 'utf-8',
@@ -830,6 +841,7 @@ watch(() => props.editConfig, (config) => {
     Object.assign(form, { ...config, postLoginExpectSteps: cloneExpectSteps(config.postLoginExpectSteps || []) })
     // Existing connections without the field default to NLA off (old behavior).
     form.rdpEnableNLA = config.rdpEnableNLA ?? false
+    form.x11Forwarding = config.x11Forwarding ?? false
     postLoginMode.value = (config.postLoginExpectSteps?.length || 0) > 0 ? 'expect' : 'script'
     selectedGroupId.value = config.groupId || undefined
     // Sync serial refs from config
