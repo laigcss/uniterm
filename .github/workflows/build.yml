@@ -258,16 +258,16 @@ jobs:
             NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
             RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             cat > release_body.md <<EOF
-    ## ⚠️ Preview Release / 预览版本
+          ## ⚠️ Preview Release / 预览版本
 
-    This is a **preview/draft** build, **not an official release**. Do not distribute.
-    本次为**预览构建，非正式发布版本**，请勿对外分发。
+          This is a **preview/draft** build, **not an official release**. Do not distribute.
+          本次为**预览构建，非正式发布版本**，请勿对外分发。
 
-    - Commit: \`${SHORT}\`
-    - Branch: \`${{ github.ref_name }}\`
-    - Built: ${NOW}
-    - Run: ${RUN_URL}
-    EOF
+          - Commit: \`${SHORT}\`
+          - Branch: \`${{ github.ref_name }}\`
+          - Built: ${NOW}
+          - Run: ${RUN_URL}
+          EOF
           else
             sed -n "/^## ${{ github.ref_name }}$/,/^## v/p" CHANGELOG.md | sed '$d' > release_body.md
           fi
