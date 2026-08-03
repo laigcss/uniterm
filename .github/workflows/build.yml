@@ -90,6 +90,7 @@ jobs:
         run: |
           choco install nsis -y
           NSIS_BIN="/c/Program Files (x86)/NSIS/Bin"
+          export PATH="$NSIS_BIN:$PATH"
           if [ ! -f "$NSIS_BIN/makensis.exe" ]; then echo "ERROR: makensis.exe not found at $NSIS_BIN"; exit 1; fi
           echo "makensis: $NSIS_BIN/makensis.exe"
 
