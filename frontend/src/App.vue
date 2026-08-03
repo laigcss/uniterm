@@ -4,6 +4,8 @@
     <div v-if="bgVisible" class="app-bg" :style="bgStyle"></div>
     <AppHeader
       @toggle-ai="aiStore.toggle"
+      @toggle-files="companionStore.toggleFiles"
+      @toggle-monitor="companionStore.toggleMonitor"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
       @open-settings="openSettings"
       @close-tab="closeTab"
@@ -106,6 +108,8 @@
           </KeepAlive>
         </template>
       </div>
+      <FileSidebar />
+      <MonitorOverviewSidebar />
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
     <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
@@ -167,6 +171,8 @@ import ContainerTabContent from './components/ContainerTabContent.vue'
 import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
+import FileSidebar from './components/FileSidebar.vue'
+import MonitorOverviewSidebar from './components/MonitorOverviewSidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
 import SerialConnectDialog from './components/SerialConnectDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
@@ -177,6 +183,7 @@ import { useTabStore } from './stores/tabStore'
 import { usePanelStore } from './stores/panelStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useAIStore } from './stores/aiStore'
+import { useCompanionStore } from './stores/companionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
 import { useTunnelStore } from './stores/tunnelStore'
@@ -241,6 +248,7 @@ const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const aiStore = useAIStore()
+const companionStore = useCompanionStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
 const containerStore = useContainerStore()
@@ -793,9 +801,18 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     if (t.locked) return
     if (t.type === 'workspace' && t.panelIds.length > 1) {
       const panelId = t.activePanelId || t.panelIds[t.panelIds.length - 1]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
       tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
     } else if (t.type === 'workspace' && t.panelIds.length === 1) {
-      tabStore.removePanelFromWorkspaceTab(t.id, t.panelIds[0])
+      const panelId = t.panelIds[0]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
+      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
     } else {
       closeTab(t.id)
     }
@@ -1000,7 +1017,18 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       try { await CloseSession(p.sessionId) } catch (_) {}
     }
   }
+  // Workspace: close each panel session
+  if (tab && tab.type === 'workspace') {
+    for (const pid of tab.panelIds) {
+      const p = panelStore.getPanel(pid)
+      if (p?.sessionId) {
+        try { await CloseSession(p.sessionId) } catch (_) {}
+      }
+    }
+  }
   const panelIds = tabStore.closeTab(tabId)
+  // Dispose SSH companion sidebars (sftp/monitor) bound to these panels
+  companionStore.disposeForPanels(panelIds).catch(() => {})
   panelIds.forEach(pid => panelStore.removePanel(pid))
   nextTick(() => {
     if (tabStore.tabs.length === 0) {
@@ -1860,7 +1888,8 @@ watch(
 }
 /* 边栏毛玻璃 */
 .app-container.has-bg .main-content :deep(.sidebar),
-.app-container.has-bg .main-content :deep(.ai-sidebar) {
+.app-container.has-bg .main-content :deep(.ai-sidebar),
+.app-container.has-bg .main-content :deep(.companion-sidebar) {
   backdrop-filter: blur(8px);
 }
 /* 开始页卡片、按钮毛玻璃 */

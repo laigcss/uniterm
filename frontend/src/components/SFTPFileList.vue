@@ -88,6 +88,7 @@
           <div class="menu-divider" />
           <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
+          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
         </template>
         <template v-else-if="menuType === 'dir'">
@@ -103,6 +104,7 @@
           <div class="menu-divider" />
           <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
+          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
         </template>
         <template v-else-if="menuType === 'batch'">
@@ -116,6 +118,7 @@
           <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.renameDisabled') }}</div>
           <div v-if="mode === 'local'" class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
+          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.chmodDisabled') }}</div>
         </template>
         <template v-else-if="menuType === 'empty'">
@@ -161,6 +164,7 @@ const emit = defineEmits<{
   sendToOther: [items: FileItem[]]
   rename: [item: FileItem]
   delete: [items: FileItem[]]
+  quickDelete: [items: FileItem[]]
   refresh: []
   mkdir: []
   chmod: [item: FileItem]
@@ -368,6 +372,7 @@ function doSendToOther() { emit('sendToOther', [...selectedItems.value]); closeM
 function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); closeMenu() }
 function doRename() { emit('rename', selectedItems.value[0]); closeMenu() }
 function doDelete() { emit('delete', [...selectedItems.value]); closeMenu() }
+function doQuickDelete() { emit('quickDelete', [...selectedItems.value]); closeMenu() }
 function doChmod() { emit('chmod', selectedItems.value[0]); closeMenu() }
 function doEdit() { emit('edit', selectedItems.value[0]); closeMenu() }
 function doNewFile() { emit('newFile'); closeMenu() }
@@ -474,6 +479,12 @@ function onDragStart(event: DragEvent, row: FileItem) {
 .sftp-context-menu .menu-item.disabled {
   color: var(--text-disabled);
   cursor: not-allowed;
+}
+.sftp-context-menu .menu-item.danger {
+  color: var(--error, #f87171);
+}
+.sftp-context-menu .menu-item.danger:hover:not(.disabled) {
+  background: color-mix(in srgb, var(--error, #f87171) 12%, transparent);
 }
 .sftp-context-menu .menu-divider {
   height: 1px;

@@ -3338,6 +3338,24 @@ func (a *App) SftpRemove(sessionID, path string, recursive bool) error {
 	return fs.Remove(path, recursive)
 }
 
+// SftpQuickRemove deletes remote paths using shell `rm -rf` when possible
+// (much faster for large files/directories), with SFTP fallback.
+func (a *App) SftpQuickRemove(sessionID string, paths []string) error {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return err
+	}
+	if q, ok := fs.(interface{ QuickRemove([]string) error }); ok {
+		return q.QuickRemove(paths)
+	}
+	for _, p := range paths {
+		if err := fs.Remove(p, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *App) SftpRename(sessionID, oldPath, newPath string) error {
 	fs, err := a.getSftp(sessionID)
 	if err != nil {
@@ -3460,6 +3478,13 @@ func (a *App) SftpResumeTransfer(sessionID, taskID string) error {
 }
 
 func (a *App) SftpPut(sessionID, localPath, remotePath string, recursive bool) (string, error) {
+	// Auto-detect directories so drag-dropping a folder works even when
+	// the caller passes recursive=false (single-file upload API).
+	if !recursive {
+		if info, err := os.Stat(localPath); err == nil && info.IsDir() {
+			recursive = true
+		}
+	}
 	fs, err := a.getSftp(sessionID)
 	if err != nil {
 		return "", err
@@ -3541,6 +3566,46 @@ func (a *App) WriteTempFile(fileName, contentBase64 string) (string, error) {
 		return "", err
 	}
 	return dst, nil
+}
+
+// CreateTempUpload creates an empty temp file for chunked drag-drop uploads.
+func (a *App) CreateTempUpload(fileName string) (string, error) {
+	dir := filepath.Join(os.TempDir(), "uniterm")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	safe := filepath.Base(fileName)
+	if safe == "" || safe == "." || safe == ".." {
+		safe = "upload.bin"
+	}
+	dst := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), safe))
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return "", err
+	}
+	_ = f.Close()
+	return dst, nil
+}
+
+// AppendTempUpload appends a base64 chunk to a temp upload created by CreateTempUpload.
+func (a *App) AppendTempUpload(path, chunkBase64 string) error {
+	tmpDir := filepath.Clean(filepath.Join(os.TempDir(), "uniterm"))
+	clean := filepath.Clean(path)
+	rel, err := filepath.Rel(tmpDir, clean)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("path not in temp directory")
+	}
+	content, err := base64.StdEncoding.DecodeString(chunkBase64)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(clean, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(content)
+	return err
 }
 
 // RemoveTempFile removes a file created by WriteTempFile.

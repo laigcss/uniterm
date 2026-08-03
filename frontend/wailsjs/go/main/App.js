@@ -14,6 +14,10 @@ export function AppendFileBase64(arg1, arg2, arg3) {
   return window['go']['main']['App']['AppendFileBase64'](arg1, arg2, arg3);
 }
 
+export function AppendTempUpload(arg1, arg2) {
+  return window['go']['main']['App']['AppendTempUpload'](arg1, arg2);
+}
+
 export function CancelChatStream() {
   return window['go']['main']['App']['CancelChatStream']();
 }
@@ -120,6 +124,10 @@ export function CreateSkill(arg1, arg2, arg3) {
 
 export function CreateTable(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateTable'](arg1, arg2, arg3);
+}
+
+export function CreateTempUpload(arg1) {
+  return window['go']['main']['App']['CreateTempUpload'](arg1);
 }
 
 export function DBDefaultTableQuery(arg1, arg2, arg3) {
@@ -820,6 +828,10 @@ export function SftpPut(arg1, arg2, arg3, arg4) {
 
 export function SftpPutContent(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SftpPutContent'](arg1, arg2, arg3, arg4);
+}
+
+export function SftpQuickRemove(arg1, arg2) {
+  return window['go']['main']['App']['SftpQuickRemove'](arg1, arg2);
 }
 
 export function SftpRemove(arg1, arg2, arg3) {

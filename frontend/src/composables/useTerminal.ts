@@ -311,6 +311,80 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
       return { background: '#2d353b', foreground: '#d3c6aa', cursor: '#d3c6aa', selectionBackground: 'rgba(211,198,170,0.2)', black: '#475258', red: '#e67e80', green: '#a7c080', yellow: '#dbbc7f', blue: '#7fbbb3', magenta: '#d699b6', cyan: '#83c092', white: '#d3c6aa', brightBlack: '#475258', brightRed: '#e67e80', brightGreen: '#a7c080', brightYellow: '#dbbc7f', brightBlue: '#7fbbb3', brightMagenta: '#d699b6', brightCyan: '#83c092', brightWhite: '#d3c6aa' }
     case 'everforest-light':
       return { background: '#fdf6e3', foreground: '#5c6a72', cursor: '#5c6a72', selectionBackground: 'rgba(92,106,114,0.2)', black: '#fdf6e3', red: '#f85552', green: '#8da101', yellow: '#dfa000', blue: '#3a94c5', magenta: '#df69ba', cyan: '#35a77c', white: '#5c6a72', brightBlack: '#a6b0a0', brightRed: '#f85552', brightGreen: '#8da101', brightYellow: '#dfa000', brightBlue: '#3a94c5', brightMagenta: '#df69ba', brightCyan: '#35a77c', brightWhite: '#5c6a72' }
+    // Xshell built-in schemes (from ColorScheme Files *.scs)
+    case 'xshell-xterm':
+      return {
+        background: '#000000', foreground: '#e5e5e5', cursor: '#ffffff',
+        selectionBackground: 'rgba(229,229,229,0.25)',
+        black: '#000000', red: '#bb0000', green: '#006400', yellow: '#c8af00',
+        blue: '#1e90f5', magenta: '#bb00bb', cyan: '#00cdcd', white: '#ebebeb',
+        brightBlack: '#555555', brightRed: '#ff5555', brightGreen: '#55ff55',
+        brightYellow: '#fff555', brightBlue: '#50beff', brightMagenta: '#ff55ff',
+        brightCyan: '#55ffff', brightWhite: '#ffffff'
+      }
+    case 'xshell-ansi-black':
+      return {
+        background: '#000000', foreground: '#ffffff', cursor: '#ffffff',
+        selectionBackground: 'rgba(255,255,255,0.2)',
+        black: '#000000', red: '#c00000', green: '#00c000', yellow: '#c0c000',
+        blue: '#0000c0', magenta: '#c000c0', cyan: '#00c0c0', white: '#c0c0c0',
+        brightBlack: '#808080', brightRed: '#ff0000', brightGreen: '#00ff00',
+        brightYellow: '#ffff00', brightBlue: '#0000ff', brightMagenta: '#ff00ff',
+        brightCyan: '#00ffff', brightWhite: '#ffffff'
+      }
+    case 'xshell-new-black':
+      return {
+        background: '#242424', foreground: '#f2f2f2', cursor: '#ffffff',
+        selectionBackground: 'rgba(242,242,242,0.2)',
+        black: '#36342e', red: '#a56434', green: '#008000', yellow: '#999606',
+        blue: '#4646ff', magenta: '#7b5175', cyan: '#00a2c4', white: '#cfd8d3',
+        brightBlack: '#535755', brightRed: '#cf9e72', brightGreen: '#1cc470',
+        brightYellow: '#e2e234', brightBlue: '#6f6ff4', brightMagenta: '#a97ead',
+        brightCyan: '#50ebfc', brightWhite: '#eceeee'
+      }
+    // MobaXterm default ANSI palette (official DefaultColorScheme=0)
+    case 'mobaxterm-default':
+      return {
+        background: '#000000', foreground: '#ececec', cursor: '#b4b4c0',
+        selectionBackground: 'rgba(236,236,236,0.2)',
+        black: '#000000', red: '#ff6060', green: '#60ff60', yellow: '#ffff36',
+        blue: '#6060ff', magenta: '#ff36ff', cyan: '#36ffff', white: '#ececec',
+        brightBlack: '#363636', brightRed: '#ff8080', brightGreen: '#80ff80',
+        brightYellow: '#ffff80', brightBlue: '#8080ff', brightMagenta: '#ff80ff',
+        brightCyan: '#80ffff', brightWhite: '#ffffff'
+      }
+    // MobaXterm / GNOME Ubuntu terminal style (common built-in alternative)
+    case 'mobaxterm-ubuntu':
+      return {
+        background: '#300a24', foreground: '#eeeeec', cursor: '#ffffff',
+        selectionBackground: 'rgba(238,238,236,0.2)',
+        black: '#2e3436', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000',
+        blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf',
+        brightBlack: '#555753', brightRed: '#ef2929', brightGreen: '#8ae234',
+        brightYellow: '#fce94f', brightBlue: '#729fcf', brightMagenta: '#ad7fa8',
+        brightCyan: '#34e2e2', brightWhite: '#eeeeec'
+      }
+    // FinalShell-style defaults (VS Code Dark+/Light aesthetic used by FS default)
+    case 'finalshell-dark':
+      return {
+        background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#aeafad',
+        selectionBackground: 'rgba(38,79,120,0.55)',
+        black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510',
+        blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5',
+        brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b',
+        brightYellow: '#f5f543', brightBlue: '#3b8eea', brightMagenta: '#d670d6',
+        brightCyan: '#29b8db', brightWhite: '#e5e5e5'
+      }
+    case 'finalshell-light':
+      return {
+        background: '#ffffff', foreground: '#1e1e1e', cursor: '#000000',
+        selectionBackground: 'rgba(0,120,212,0.2)',
+        black: '#000000', red: '#cd3131', green: '#00bc00', yellow: '#949800',
+        blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555555',
+        brightBlack: '#666666', brightRed: '#cd3131', brightGreen: '#14ce14',
+        brightYellow: '#b5ba00', brightBlue: '#0451a5', brightMagenta: '#bc05bc',
+        brightCyan: '#0598bc', brightWhite: '#a5a5a5'
+      }
     default:
       return base
   }

@@ -5,7 +5,7 @@ export const SUPPORTED_LOCALES = [
 export type Locale = typeof SUPPORTED_LOCALES[number]
 export type Language = Locale | 'system'
 export type Theme = 'dark' | 'deep-blue' | 'light' | 'system'
-export type TerminalTheme = 'uniterm-dark' | 'uniterm-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light'
+export type TerminalTheme = 'uniterm-dark' | 'uniterm-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light' | 'xshell-xterm' | 'xshell-ansi-black' | 'xshell-new-black' | 'mobaxterm-default' | 'mobaxterm-ubuntu' | 'finalshell-dark' | 'finalshell-light'
 
 // xterm.js's ITheme shape: the 4 base colors plus the 16 ANSI colors, all as hex strings.
 export interface TerminalThemeColors {
@@ -201,7 +201,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultLocalShell: ''
 }
 
-export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }
+export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light'; group?: 'builtin' | 'ssh' }
 export const TERMINAL_THEMES: TerminalThemeEntry[] = [
   { label: 'uniTerm Dark', value: 'uniterm-dark', type: 'dark' },
   { label: 'uniTerm Light', value: 'uniterm-light', type: 'light' },
@@ -229,7 +229,15 @@ export const TERMINAL_THEMES: TerminalThemeEntry[] = [
   { label: 'Rosé Pine', value: 'rose-pine', type: 'dark' },
   { label: 'Rosé Pine Dawn', value: 'rose-pine-dawn', type: 'light' },
   { label: 'Everforest Dark', value: 'everforest-dark', type: 'dark' },
-  { label: 'Everforest Light', value: 'everforest-light', type: 'light' }
+  { label: 'Everforest Light', value: 'everforest-light', type: 'light' },
+  // Popular SSH client defaults
+  { label: 'Xshell XTerm', value: 'xshell-xterm', type: 'dark', group: 'ssh' },
+  { label: 'Xshell ANSI on Black', value: 'xshell-ansi-black', type: 'dark', group: 'ssh' },
+  { label: 'Xshell New Black', value: 'xshell-new-black', type: 'dark', group: 'ssh' },
+  { label: 'MobaXterm Default', value: 'mobaxterm-default', type: 'dark', group: 'ssh' },
+  { label: 'MobaXterm Ubuntu', value: 'mobaxterm-ubuntu', type: 'dark', group: 'ssh' },
+  { label: 'FinalShell Dark', value: 'finalshell-dark', type: 'dark', group: 'ssh' },
+  { label: 'FinalShell Light', value: 'finalshell-light', type: 'light', group: 'ssh' },
 ]
 
 export const FONT_OPTIONS: { label: string; value: string }[] = [

@@ -15,6 +15,8 @@ export function AddIndex(arg1:string,arg2:string,arg3:string,arg4:database.Index
 
 export function AppendFileBase64(arg1:string,arg2:string,arg3:number):Promise<void>;
 
+export function AppendTempUpload(arg1:string,arg2:string):Promise<void>;
+
 export function CancelChatStream():Promise<void>;
 
 export function ChatCompletion(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<string>;
@@ -68,6 +70,8 @@ export function CreateSession(arg1:string,arg2:session.ConnectionConfig):Promise
 export function CreateSkill(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function CreateTempUpload(arg1:string):Promise<string>;
 
 export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string):Promise<string>;
 
@@ -418,6 +422,8 @@ export function SftpPauseTransfer(arg1:string,arg2:string):Promise<void>;
 export function SftpPut(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<string>;
 
 export function SftpPutContent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function SftpQuickRemove(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function SftpRemove(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 

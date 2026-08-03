@@ -23,6 +23,28 @@
       />
     </div>
 
+    <!-- SSH companion: remote files -->
+    <button
+      class="header-btn"
+      :class="{ active: companionStore.filesVisible }"
+      :disabled="!companionStore.canToggle && !companionStore.filesVisible"
+      @click="emit('toggle-files')"
+      :title="t('header.files')"
+    >
+      <el-icon><FolderTree :size="14" /></el-icon>
+    </button>
+
+    <!-- SSH companion: server overview -->
+    <button
+      class="header-btn"
+      :class="{ active: companionStore.monitorVisible }"
+      :disabled="!companionStore.canToggle && !companionStore.monitorVisible"
+      @click="emit('toggle-monitor')"
+      :title="t('header.monitor')"
+    >
+      <el-icon><Activity :size="14" /></el-icon>
+    </button>
+
     <!-- AI button -->
     <button class="header-btn" @click="emit('toggle-ai')" :title="t('header.ai')">
       <el-icon><Bot :size="14" /></el-icon>
@@ -46,7 +68,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
-import { Settings, PanelLeft, Bot } from '@lucide/vue'
+import { Settings, PanelLeft, Bot, FolderTree, Activity } from '@lucide/vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useTabStore } from '../stores/tabStore'
@@ -54,6 +76,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
+import { useCompanionStore } from '../stores/companionStore'
 import WindowControls from './WindowControls.vue'
 import TabsList from './TabsList.vue'
 import {
@@ -78,6 +101,7 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
+const companionStore = useCompanionStore()
 
 const hasActiveConnections = computed(() =>
   tabStore.tabs.some(t => {
@@ -93,6 +117,8 @@ const hasActiveConnections = computed(() =>
 
 const emit = defineEmits<{
   'toggle-ai': []
+  'toggle-files': []
+  'toggle-monitor': []
   'toggle-sidebar': []
   'open-settings': []
   'close-tab': [id: string]
@@ -312,6 +338,21 @@ onUnmounted(() => {
 .header-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.header-btn.active {
+  background: var(--bg-active, var(--bg-hover));
+  color: var(--accent, var(--text-primary));
+}
+
+.header-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.header-btn:disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
 }
 
 .header-btn .el-icon {

@@ -1,0 +1,262 @@
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { CreateSession, CloseSession, ListSessions } from '../../wailsjs/go/main/App'
+import { usePanelStore } from './panelStore'
+import { useSessionStore } from './sessionStore'
+import { useTabStore } from './tabStore'
+import { useConnectionStore } from './connectionStore'
+import type { ConnectionConfig } from '../types/session'
+
+export interface CompanionEntry {
+  sftpSessionId?: string
+  monitorSessionId?: string
+  creatingSftp?: boolean
+  creatingMonitor?: boolean
+}
+
+const DEFAULT_FILES_WIDTH = 300
+const DEFAULT_MONITOR_WIDTH = 320
+
+export const useCompanionStore = defineStore('companion', () => {
+  const filesVisible = ref(false)
+  const monitorVisible = ref(false)
+  const filesWidth = ref(DEFAULT_FILES_WIDTH)
+  const monitorWidth = ref(DEFAULT_MONITOR_WIDTH)
+  const entries = ref<Record<string, CompanionEntry>>({})
+
+  const panelStore = usePanelStore()
+  const sessionStore = useSessionStore()
+  const tabStore = useTabStore()
+
+  function getActiveSshPanelId(): string | null {
+    const pid = tabStore.getActivePanelId()
+    if (!pid) return null
+    const panel = panelStore.getPanel(pid)
+    if (!panel || panel.type !== 'ssh') return null
+    return pid
+  }
+
+  const activeSshPanelId = computed(() => getActiveSshPanelId())
+
+  const sshConnected = computed(() => {
+    const pid = activeSshPanelId.value
+    if (!pid) return false
+    const panel = panelStore.getPanel(pid)
+    if (!panel?.sessionId) return false
+    return sessionStore.getStatus(panel.sessionId) === 'connected'
+  })
+
+  const canToggle = computed(() => sshConnected.value)
+
+  const currentSftpSessionId = computed(() => {
+    const pid = activeSshPanelId.value
+    if (!pid) return null
+    return entries.value[pid]?.sftpSessionId ?? null
+  })
+
+  const currentMonitorSessionId = computed(() => {
+    const pid = activeSshPanelId.value
+    if (!pid) return null
+    return entries.value[pid]?.monitorSessionId ?? null
+  })
+
+  const transferKey = computed(() => {
+    const pid = activeSshPanelId.value
+    return pid ? `${pid}__sftp` : ''
+  })
+
+  function ensureEntry(sshPanelId: string): CompanionEntry {
+    if (!entries.value[sshPanelId]) {
+      entries.value[sshPanelId] = {}
+    }
+    return entries.value[sshPanelId]
+  }
+
+  function cloneConfig(config: ConnectionConfig): ConnectionConfig {
+    // SSH panels keep deferConnect=true so the PTY starts after xterm measures
+    // size. Companion SFTP/monitor sessions must connect immediately — otherwise
+    // CreateSession returns and never launches Connect().
+    return {
+      ...config,
+      deferConnect: false,
+      initialCols: 0,
+      initialRows: 0,
+    }
+  }
+
+  function resolveConfig(sshPanelId: string): ConnectionConfig | null {
+    const panel = panelStore.getPanel(sshPanelId)
+    if (!panel?.config) return null
+    const config = cloneConfig(panel.config)
+    // Prefer password still held on the live SSH panel; fall back to the
+    // connection store (which may have been refreshed from keychain).
+    if (!config.password && config.authType === 'password' && config.id) {
+      const stored = useConnectionStore().connections.find(c => c.id === config.id)
+      if (stored?.password) config.password = stored.password
+    }
+    return config
+  }
+
+  async function sessionAlive(sessionId: string | undefined): Promise<boolean> {
+    if (!sessionId) return false
+    try {
+      const sessions = await ListSessions()
+      const sess = sessions.find(s => s.id === sessionId)
+      return sess?.status === 'connected' || sess?.status === 'connecting'
+    } catch {
+      const st = sessionStore.getStatus(sessionId)
+      return st === 'connected' || st === 'connecting'
+    }
+  }
+
+  async function ensureSftp(sshPanelId: string): Promise<string | null> {
+    const config = resolveConfig(sshPanelId)
+    if (!config) return null
+    const entry = ensureEntry(sshPanelId)
+    if (entry.sftpSessionId && await sessionAlive(entry.sftpSessionId)) {
+      return entry.sftpSessionId
+    }
+    if (entry.sftpSessionId) {
+      try { await CloseSession(entry.sftpSessionId) } catch { /* ignore */ }
+      entry.sftpSessionId = undefined
+    }
+    if (entry.creatingSftp) {
+      for (let i = 0; i < 50; i++) {
+        await new Promise(r => setTimeout(r, 100))
+        if (entry.sftpSessionId) return entry.sftpSessionId
+        if (!entry.creatingSftp) break
+      }
+      return entry.sftpSessionId ?? null
+    }
+    entry.creatingSftp = true
+    try {
+      config.type = 'sftp'
+      const info = await CreateSession('sftp', config)
+      entries.value = {
+        ...entries.value,
+        [sshPanelId]: { ...entries.value[sshPanelId], sftpSessionId: info.id, creatingSftp: false },
+      }
+      sessionStore.initSession(info.id)
+      return info.id
+    } catch (e) {
+      console.error('companion sftp create failed:', e)
+      entries.value = {
+        ...entries.value,
+        [sshPanelId]: { ...entries.value[sshPanelId], creatingSftp: false },
+      }
+      return null
+    }
+  }
+
+  async function ensureMonitor(sshPanelId: string): Promise<string | null> {
+    const config = resolveConfig(sshPanelId)
+    if (!config) return null
+    const entry = ensureEntry(sshPanelId)
+    if (entry.monitorSessionId && await sessionAlive(entry.monitorSessionId)) {
+      return entry.monitorSessionId
+    }
+    if (entry.monitorSessionId) {
+      try { await CloseSession(entry.monitorSessionId) } catch { /* ignore */ }
+      entry.monitorSessionId = undefined
+    }
+    if (entry.creatingMonitor) {
+      for (let i = 0; i < 50; i++) {
+        await new Promise(r => setTimeout(r, 100))
+        if (entry.monitorSessionId) return entry.monitorSessionId
+        if (!entry.creatingMonitor) break
+      }
+      return entry.monitorSessionId ?? null
+    }
+    entry.creatingMonitor = true
+    try {
+      config.type = 'monitor'
+      const info = await CreateSession('monitor', config)
+      entries.value = {
+        ...entries.value,
+        [sshPanelId]: { ...entries.value[sshPanelId], monitorSessionId: info.id, creatingMonitor: false },
+      }
+      sessionStore.initSession(info.id)
+      return info.id
+    } catch (e) {
+      console.error('companion monitor create failed:', e)
+      entries.value = {
+        ...entries.value,
+        [sshPanelId]: { ...entries.value[sshPanelId], creatingMonitor: false },
+      }
+      return null
+    }
+  }
+
+  async function toggleFiles() {
+    if (!canToggle.value && !filesVisible.value) return
+    if (filesVisible.value) {
+      filesVisible.value = false
+      return
+    }
+    const pid = getActiveSshPanelId()
+    if (!pid) return
+    filesVisible.value = true
+    await ensureSftp(pid)
+  }
+
+  async function toggleMonitor() {
+    if (!canToggle.value && !monitorVisible.value) return
+    if (monitorVisible.value) {
+      monitorVisible.value = false
+      return
+    }
+    const pid = getActiveSshPanelId()
+    if (!pid) return
+    monitorVisible.value = true
+    await ensureMonitor(pid)
+  }
+
+  async function disposeForPanel(sshPanelId: string) {
+    const entry = entries.value[sshPanelId]
+    if (!entry) return
+    const sftpId = entry.sftpSessionId
+    const monitorId = entry.monitorSessionId
+    delete entries.value[sshPanelId]
+    if (sftpId) {
+      try { await CloseSession(sftpId) } catch { /* ignore */ }
+    }
+    if (monitorId) {
+      try { await CloseSession(monitorId) } catch { /* ignore */ }
+    }
+  }
+
+  async function disposeForPanels(panelIds: string[]) {
+    await Promise.all(panelIds.map(id => disposeForPanel(id)))
+  }
+
+  function setFilesWidth(w: number) {
+    filesWidth.value = Math.min(Math.max(w, 240), 560)
+  }
+
+  function setMonitorWidth(w: number) {
+    monitorWidth.value = Math.min(Math.max(w, 260), 560)
+  }
+
+  return {
+    filesVisible,
+    monitorVisible,
+    filesWidth,
+    monitorWidth,
+    entries,
+    activeSshPanelId,
+    sshConnected,
+    canToggle,
+    currentSftpSessionId,
+    currentMonitorSessionId,
+    transferKey,
+    ensureSftp,
+    ensureMonitor,
+    toggleFiles,
+    toggleMonitor,
+    disposeForPanel,
+    disposeForPanels,
+    setFilesWidth,
+    setMonitorWidth,
+    getActiveSshPanelId,
+  }
+})

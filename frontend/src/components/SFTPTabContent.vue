@@ -60,6 +60,7 @@
           @send-to-other="onSendToLocal"
           @rename="(item: FileItem) => { dialogMode = 'remote'; onRename(item) }"
           @delete="(items: FileItem[]) => { dialogMode = 'remote'; onDelete(items) }"
+          @quick-delete="(items: FileItem[]) => { dialogMode = 'remote'; onQuickDelete(items) }"
           @refresh="onRefreshRemote"
           @mkdir="() => { dialogMode = 'remote'; onMkdir() }"
           @chmod="(item: FileItem) => { dialogMode = 'remote'; onChmod(item) }"
@@ -87,7 +88,7 @@
       :close-on-click-modal="false"
       @closed="onDialogClosed"
     >
-      <template v-if="dialogType === 'delete'">
+      <template v-if="dialogType === 'delete' || dialogType === 'quickDelete'">
         <p>{{ dialogMessage }}</p>
       </template>
       <template v-else-if="dialogType === 'chmod'">
@@ -228,7 +229,7 @@ import { useI18n } from '../i18n'
 import {
   SftpListRemote, SftpListLocal, SftpListLocalDrives,
   SftpChangeRemoteDir, SftpChangeLocalDir,
-  SftpMakeDir, SftpRemove, SftpRename, SftpChmod,
+  SftpMakeDir, SftpRemove, SftpRename, SftpChmod, SftpQuickRemove,
   SftpLocalRemove, SftpLocalRename, SftpLocalMkdir,
   SftpLocalGetContent, SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
   SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
@@ -386,7 +387,7 @@ function toBase64(str: string): string {
 
 // Dialog state
 const dialogVisible = ref(false)
-const dialogType = ref<'rename' | 'mkdir' | 'chmod' | 'delete'>('rename')
+const dialogType = ref<'rename' | 'mkdir' | 'chmod' | 'delete' | 'quickDelete'>('rename')
 const dialogTitle = ref('')
 const dialogMessage = ref('')
 const dialogInput = ref('')
@@ -1376,7 +1377,7 @@ async function onNewFileCreate() {
 
 // Dialog helpers
 function openDialog(
-  type: 'rename' | 'mkdir' | 'chmod' | 'delete',
+  type: 'rename' | 'mkdir' | 'chmod' | 'delete' | 'quickDelete',
   title: string,
   inputValue: string = '',
   placeholder: string = '',
@@ -1456,6 +1457,22 @@ async function onDialogConfirm() {
         onRefreshRemote()
       }
       break
+    case 'quickDelete': {
+      const paths = dialogItems.value
+        .filter(i => i.name !== '..')
+        .map(i => joinPath(baseDir, i.name))
+      // Optimistic remove from remote list
+      const names = new Set(dialogItems.value.map(i => i.name))
+      remoteFiles.value = remoteFiles.value.filter(f => !names.has(f.name))
+      try {
+        await SftpQuickRemove(sid, paths)
+      } catch (e) {
+        console.error('quick delete:', e)
+        msg.error(String(e))
+      }
+      onRefreshRemote()
+      break
+    }
   }
 }
 
@@ -1481,6 +1498,17 @@ function onDelete(items: FileItem[]) {
     msg = t('sftp.dialog.deleteConfirmFile', { count: items.length })
   }
   openDialog('delete', t('sftp.dialog.deleteTitle'), '', '', msg)
+}
+function onQuickDelete(items: FileItem[]) {
+  dialogItems.value = items.filter(i => i.name !== '..')
+  if (!dialogItems.value.length) return
+  openDialog(
+    'quickDelete',
+    t('sftp.dialog.quickDeleteTitle'),
+    '',
+    '',
+    t('sftp.dialog.quickDeleteConfirm', { count: dialogItems.value.length })
+  )
 }
 function onMkdir() {
   openDialog('mkdir', t('sftp.dialog.mkdirTitle'), '', t('sftp.dialog.mkdirPrompt'))
