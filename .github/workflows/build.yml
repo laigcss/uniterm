@@ -72,7 +72,7 @@ jobs:
 
           UPX_VER="5.2.0"
           curl -sSfL -o /tmp/upx.zip "https://github.com/upx/upx/releases/download/v${UPX_VER}/upx-${UPX_VER}-win64.zip"
-          sha256sum /tmp/upx.
+          sha256sum /tmp/upx.zip
           unzip -o /tmp/upx.zip -d /tmp/upx > /dev/null
           mv -f /tmp/upx/upx-*/upx.exe "$NSIS_BIN/upx.exe"
           upx --version
