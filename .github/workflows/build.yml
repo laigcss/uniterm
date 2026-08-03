@@ -147,29 +147,37 @@ jobs:
         run: |
           $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
+          $ROOT = $env:GITHUB_WORKSPACE
+          $AMD64_BIN = Join-Path $ROOT 'build\bin\uniTerm-amd64.exe'
+          $ARM64_BIN = Join-Path $ROOT 'build\bin\uniTerm-arm64.exe'
+          $NSI = Join-Path $ROOT 'build\windows\installer\project.nsi'
 
           # compress amd64 with upx; arm64 is left uncompressed because
           # UPX 5.2.0 can't pack the PE section structure that Wails'
           # new Go WebView2Loader produces for windows/arm64
-          upx --best --lzma build/bin/uniTerm-amd64.exe
+          upx --best --lzma $AMD64_BIN
 
-          # rebuild NSIS installers so the amd64 installer embeds the
-          # compressed binary; arm64 installer is regenerated too but
-          # with the original uncompressed binary
-          Push-Location build/windows/installer
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=../../bin/uniTerm-amd64.exe" project.nsi
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=../../bin/uniTerm-arm64.exe" project.nsi
-          Pop-Location
+          # rebuild NSIS installers (one per arch) so the amd64 installer
+          # embeds the compressed binary; arm64 installer is regenerated
+          # too but with the original uncompressed binary. Use absolute
+          # paths (mirroring how Wails internally invokes makensis) since
+          # NSIS' `File` command is unreliable with `..` relative paths
+          # on Windows.
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" $NSI
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
+            $srcExe = Join-Path $ROOT "build\bin\uniTerm-$arch.exe"
+            $srcInstaller = Join-Path $ROOT "build\bin\uniTerm-$arch-installer.exe"
+
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
-            Copy-Item "build/bin/uniTerm-$arch.exe" "dist_tmp/uniTerm.exe"
-            Compress-Archive -Path dist_tmp/* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
+            Copy-Item $srcExe "dist_tmp\uniTerm.exe"
+            Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp
 
             # rename NSIS installer
-            Move-Item "build/bin/uniTerm-$arch-installer.exe" "uniterm-windows-$arch-installer-$VERSION.exe"
+            Move-Item $srcInstaller "uniterm-windows-$arch-installer-$VERSION.exe"
           }
 
       - name: Package (Linux)
