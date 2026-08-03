@@ -55,8 +55,11 @@ func (p *sqlserverProvider) PrepareExec(db execer, dbName string) error {
 	return err
 }
 
-func (p *sqlserverProvider) DefaultTableQuery(dbName, tableName string, limit int) string {
-	return fmt.Sprintf("SELECT TOP %d * FROM %s", limit, p.qualifiedTable(tableName))
+func (p *sqlserverProvider) DefaultTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf(
+		"SELECT * FROM %s ORDER BY (SELECT NULL) OFFSET %d ROWS FETCH NEXT %d ROWS ONLY",
+		p.qualifiedTable(tableName), offset, limit,
+	)
 }
 
 func (p *sqlserverProvider) qualifiedTable(tableName string) string {
@@ -176,12 +179,18 @@ func (p *sqlserverProvider) GetDatabases(db *sql.DB) ([]string, error) {
 
 func (p *sqlserverProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, error) {
 	query := `
-		SELECT t.name AS table_name, 'TABLE' AS type_desc
+		SELECT t.name AS table_name, 'TABLE' AS type_desc,
+		       ISNULL(CONVERT(nvarchar(4000), ep.value), '') AS table_comment
 		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep
+		  ON ep.major_id = t.object_id AND ep.minor_id = 0 AND ep.name = N'MS_Description'
 		WHERE t.is_ms_shipped = 0
 		UNION ALL
-		SELECT v.name AS table_name, 'VIEW' AS type_desc
+		SELECT v.name AS table_name, 'VIEW' AS type_desc,
+		       ISNULL(CONVERT(nvarchar(4000), ep.value), '') AS table_comment
 		FROM sys.views v
+		LEFT JOIN sys.extended_properties ep
+		  ON ep.major_id = v.object_id AND ep.minor_id = 0 AND ep.name = N'MS_Description'
 		WHERE v.is_ms_shipped = 0
 		ORDER BY table_name`
 	results, err := queryStrings(db, p.withUse(dbName, query))
@@ -194,7 +203,11 @@ func (p *sqlserverProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, e
 		if row["type_desc"] == "VIEW" {
 			tp = "view"
 		}
-		infos = append(infos, TableInfo{Name: row["table_name"], Type: tp})
+		infos = append(infos, TableInfo{
+			Name:    row["table_name"],
+			Type:    tp,
+			Comment: row["table_comment"],
+		})
 	}
 	return infos, nil
 }

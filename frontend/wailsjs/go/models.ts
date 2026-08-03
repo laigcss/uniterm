@@ -439,6 +439,7 @@ export namespace database {
 	export class TableInfo {
 	    name: string;
 	    type: string;
+	    comment: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TableInfo(source);
@@ -448,6 +449,7 @@ export namespace database {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.type = source["type"];
+	        this.comment = source["comment"];
 	    }
 	}
 

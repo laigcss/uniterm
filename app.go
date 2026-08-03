@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.bug.st/serial"
 	"io"
 	"net"
 	"net/http"
@@ -24,10 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
+	"go.bug.st/serial"
+
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/database"
 	"github.com/ys-ll/uniterm/backend/k8s"
@@ -37,6 +36,8 @@ import (
 	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/ys-ll/uniterm/backend/sync"
 	"github.com/ys-ll/uniterm/backend/update"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 type App struct {
@@ -62,7 +63,7 @@ type App struct {
 	inSizeMove           bool
 	webviewDataPath      string
 	chatCancel           atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
-	moveResizeCh         chan string        // defer EventsEmit from WndProc
+	moveResizeCh         chan string                        // defer EventsEmit from WndProc
 	// F-043: foreground flag — true while the window is visible and the
 	// user is interacting; background goroutines (keepalive, output_log
 	// flush, k8s watches, auto-sync) should consult IsForeground before
@@ -117,7 +118,7 @@ func NewApp(webviewDataPath string) *App {
 		sessionToPanel:     make(map[string]string),
 		panelAutoTriggered: make(map[string]bool),
 		k8sManager:         k8s.NewManager(),
-containerManager:   container.NewManager(),
+		containerManager:   container.NewManager(),
 		errCh:              make(chan error, 16),
 	}
 }
@@ -393,10 +394,10 @@ func (a *App) SetAppVisibility(visible bool) {
 // changed connection (or all connections on first emit) crosses the
 // bridge instead of the full store blob. See F-204.
 type connDelta struct {
-	Kind string                    `json:"kind"`             // "upsert" | "remove" | "replace"
-	ID   string                    `json:"id,omitempty"`     // for upsert/remove
-	Conn *session.ConnectionConfig `json:"connection,omitempty"`
-	All  *session.ConnectionStoreData `json:"all,omitempty"`  // for replace (first emit)
+	Kind string                       `json:"kind"`         // "upsert" | "remove" | "replace"
+	ID   string                       `json:"id,omitempty"` // for upsert/remove
+	Conn *session.ConnectionConfig    `json:"connection,omitempty"`
+	All  *session.ConnectionStoreData `json:"all,omitempty"` // for replace (first emit)
 }
 
 // F-205: typed event shapes + pooled buffer so session:data emits
@@ -507,6 +508,7 @@ func injectCacheControl(reqBody map[string]interface{}) {
 		}
 	}
 }
+
 // which don't fire the JS visibilitychange event (Cmd+H on macOS before
 // the WebView is loaded, OS-level Alt+Tab) still update the foreground
 // flag. Runs every 2s — coarse on purpose, this is a lifecycle hint not
@@ -842,6 +844,7 @@ func (a *App) triggerAutoSync() {
 		runtime.EventsEmit(a.ctx, "sync:completed")
 	}()
 }
+
 // waitSyncReady briefly blocks on the async NewSyncService's Ready()
 // channel so callers that arrive during the ~ms-scale startup window
 // don't fail with "sync service not initialized" (F-407). Returns
@@ -1527,7 +1530,9 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 		// RDP TCP pre-check: fail fast before creating the ActiveX window.
 		if sessionType == "rdp" {
 			port := config.Port
-			if port <= 0 { port = 3389 }
+			if port <= 0 {
+				port = 3389
+			}
 			addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
 			if tcpErr != nil {
@@ -1907,7 +1912,7 @@ type AppInfo struct {
 
 func (a *App) GetAppInfo() AppInfo {
 	return AppInfo{
-		Name:    "uniTerm",
+		Name:    "Carrear's Terminal",
 		Version: Version,
 	}
 }
@@ -2232,8 +2237,8 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 				resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
 				if err == nil {
 					runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-						"message":    json.RawMessage(resultJSON),
-						"usage":      usage,
+						"message":     json.RawMessage(resultJSON),
+						"usage":       usage,
 						"stop_reason": sd.StopReason,
 					})
 				}
@@ -2305,6 +2310,7 @@ var finalMsgPool = stdsync.Pool{
 		return b
 	},
 }
+
 func anthropicToolToOpenAI(t map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "function",
@@ -2543,6 +2549,18 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	flushCurrentTextBlock := func() {
+		if currentBlock == nil {
+			return
+		}
+		if t, _ := currentBlock["type"].(string); t == "text" && currentTextBuf.Len() > 0 {
+			currentBlock["text"] = currentTextBuf.String()
+		}
+		contentBlocks = append(contentBlocks, currentBlock)
+		currentBlock = nil
+		currentTextBuf.Reset()
+	}
+
 	// Emit message_start at the beginning
 	// F-320: typed payload (frontend reads event.message.role).
 	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
@@ -2559,11 +2577,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		if strings.TrimSpace(dataStr) == "[DONE]" {
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
-				contentBlocks = append(contentBlocks, currentBlock)
+				flushCurrentTextBlock()
 				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
-				currentBlock = nil
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
@@ -2607,7 +2624,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if currentBlock == nil || currentBlock["type"] != "text" {
 				// Close previous block if any
 				if currentBlock != nil {
-					contentBlocks = append(contentBlocks, currentBlock)
+					flushCurrentTextBlock()
 					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
@@ -2643,11 +2660,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if _, exists := activeToolCalls[idx]; !exists {
 				// Close current text block if open
 				if currentBlock != nil {
-					contentBlocks = append(contentBlocks, currentBlock)
+					flushCurrentTextBlock()
 					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
-					currentBlock = nil
 				}
 				currentBlockIndex++
 				activeToolCalls[idx] = map[string]interface{}{
@@ -2691,11 +2707,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		if finishReason != "" && finishReason != "null" {
 			// Close any open text block
 			if currentBlock != nil {
-				contentBlocks = append(contentBlocks, currentBlock)
+				flushCurrentTextBlock()
 				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
-				currentBlock = nil
 			}
 			// Close tool_use blocks and parse their input JSON
 			for idx, tc := range activeToolCalls {
@@ -2862,9 +2877,9 @@ func convertAnthropicMessageToResponses(msg map[string]interface{}) []map[string
 // decoded lazily per branch so we skip the ~99% of fields the loop
 // discards.
 type responsesStreamItem struct {
-	Type    string `json:"type"`
-	CallID  string `json:"call_id"`
-	Name    string `json:"name"`
+	Type   string `json:"type"`
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
 }
 
 type responsesStreamEvent struct {
@@ -4525,12 +4540,18 @@ func (a *App) ExecuteStatement(sessionID string, dbName string, sql string) (*da
 	return database.ExecuteStatement(p, ds.DB(), dbName, sql)
 }
 
-func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName string) (string, error) {
+func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {
 	_, p, err := a.dbProvider(sessionID)
 	if err != nil {
 		return "", err
 	}
-	return p.DefaultTableQuery(dbName, tableName, 100), nil
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return p.DefaultTableQuery(dbName, tableName, limit, offset), nil
 }
 
 func (a *App) DBInsertRow(sessionID string, dbName string, tableName string, values map[string]any) error {

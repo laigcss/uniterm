@@ -1801,7 +1801,7 @@ watch(
   opacity: var(--bg-mask-opacity, 0.6);
 }
 .app-container.has-bg .main-content,
-.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *))),
+.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground))),
 .app-container.has-bg .app-header,
 .app-container.has-bg :deep(.app-header *) {
   background-color: transparent !important;
@@ -1833,6 +1833,7 @@ watch(
 .app-container.has-bg .main-content :deep(.start-context-menu),
 .app-container.has-bg .main-content :deep(.tn-context-menu),
 .app-container.has-bg .main-content :deep(.ctx-menu),
+.app-container.has-bg .main-content :deep(.doc-ctx-menu),
 .app-container.has-bg .main-content :deep(.panel-more-menu),
 .app-container.has-bg .main-content :deep(.shell-submenu),
 .app-container.has-bg .main-content :deep(.hash-dropdown),
@@ -1841,6 +1842,19 @@ watch(
 .app-container.has-bg .main-content :deep(.bookmark-dropdown),
 .app-container.has-bg .main-content :deep(.type-filter-menu) {
   background-color: var(--bg-surface) !important;
+}
+/* CodeMirror 选区：覆盖 has-bg 通配透明，保证 SQL/语法编辑器选中可见 */
+.app-container.has-bg .main-content :deep(.cm-selectionBackground),
+.app-container.has-bg .main-content :deep(.cm-focused .cm-selectionBackground) {
+  background-color: rgba(64, 158, 255, 0.45) !important;
+}
+/* Teleport 到 body 的菜单不在 .main-content 内，单独强制不透明 */
+body > .doc-ctx-menu,
+body > .tab-context-menu,
+body > .ctx-menu {
+  background-color: var(--bg-surface) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
 }
 /* 设置左侧选中分类：保留强调色高亮（* 规则会清掉）*/
 .app-container.has-bg .main-content :deep(.settings-category.active) {

@@ -1,5 +1,5 @@
 <template>
-  <div ref="hostRef" class="syntax-editor" />
+  <div ref="hostRef" class="syntax-editor" :class="{ compact }" />
 </template>
 
 <script setup lang="ts">
@@ -27,20 +27,22 @@ import { nginx } from '@codemirror/legacy-modes/mode/nginx'
 const props = defineProps<{
   modelValue: string
   filePath?: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  execute: []
 }>()
 
 const hostRef = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 let applyingExternal = false
+let resizeObserver: ResizeObserver | null = null
 
 function extOf(path: string): string {
   const base = path.replace(/\\/g, '/').split('/').pop() || ''
   const lower = base.toLowerCase()
-  // Common extensionless filenames
   if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) return 'dockerfile'
   if (lower === 'makefile' || lower === 'gnumakefile') return 'makefile'
   if (lower === '.bashrc' || lower === '.zshrc' || lower === '.profile' || lower === '.bash_profile') return 'sh'
@@ -106,7 +108,6 @@ function languageExtension(path: string) {
     case 'nginx':
       return StreamLanguage.define(nginx)
     default:
-      // Heuristic for *.conf-like names containing "conf"
       if (/\.conf(\.|$)/i.test(path || '') || /\/conf\//i.test(path || '')) {
         return StreamLanguage.define(properties)
       }
@@ -126,19 +127,62 @@ function buildExtensions(path: string) {
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     oneDark,
     languageExtension(path),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
+    keymap.of([
+      {
+        key: 'Mod-Enter',
+        run: () => {
+          emit('execute')
+          return true
+        },
+      },
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...foldKeymap,
+      indentWithTab,
+    ]),
     EditorView.updateListener.of((update) => {
       if (!update.docChanged || applyingExternal) return
       emit('update:modelValue', update.state.doc.toString())
     }),
     EditorView.theme({
-      '&': { height: '100%', fontSize: '13px' },
-      '.cm-scroller': { fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)', overflow: 'auto' },
-      '.cm-content': { minHeight: '100%' },
+      '&': {
+        height: '100%',
+        width: '100%',
+        maxWidth: '100%',
+        fontSize: '13px',
+        outline: 'none',
+      },
+      '&.cm-editor': {
+        height: '100%',
+        width: '100%',
+      },
+      '&.cm-editor.cm-focused': { outline: 'none' },
+      '.cm-scroller': {
+        fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)',
+        overflow: 'auto',
+        width: '100%',
+        minWidth: '0',
+      },
+      '.cm-content': { minHeight: '100%', width: '100%', boxSizing: 'border-box' },
       '.cm-gutters': { backgroundColor: 'transparent', border: 'none' },
+      // Strong selection highlight — oneDark default is too subtle, and has-bg
+      // mode can further wash it out via global transparent rules.
+      '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
+      '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
+      '.cm-content ::selection': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
     }),
     EditorView.lineWrapping,
   ]
+}
+
+function requestMeasure() {
+  view?.requestMeasure()
 }
 
 function createEditor() {
@@ -151,6 +195,7 @@ function createEditor() {
       extensions: buildExtensions(props.filePath || ''),
     }),
   })
+  requestMeasure()
 }
 
 function setDoc(text: string) {
@@ -169,7 +214,6 @@ watch(() => props.modelValue, (v) => {
 })
 
 watch(() => props.filePath, async () => {
-  // Recreate editor when language changes with current content
   const text = view?.state.doc.toString() ?? props.modelValue
   await nextTick()
   createEditor()
@@ -178,9 +222,15 @@ watch(() => props.filePath, async () => {
 
 onMounted(() => {
   createEditor()
+  if (hostRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => requestMeasure())
+    resizeObserver.observe(hostRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   view?.destroy()
   view = null
 })
@@ -188,21 +238,51 @@ onBeforeUnmount(() => {
 defineExpose({
   focus: () => view?.focus(),
   getValue: () => view?.state.doc.toString() ?? props.modelValue,
+  getSelectedOrAll: () => {
+    if (!view) return props.modelValue
+    const { from, to } = view.state.selection.main
+    if (from !== to) return view.state.sliceDoc(from, to)
+    return view.state.doc.toString()
+  },
 })
 </script>
 
 <style scoped>
 .syntax-editor {
+  position: relative;
+  width: 100%;
+  min-width: 0;
   height: 55vh;
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   overflow: hidden;
   background: #282c34;
+  box-sizing: border-box;
+}
+.syntax-editor.compact {
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-self: stretch;
+  border-radius: var(--radius-sm);
 }
 .syntax-editor :deep(.cm-editor) {
-  height: 100%;
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+}
+.syntax-editor :deep(.cm-scroller) {
+  min-width: 0 !important;
 }
 .syntax-editor :deep(.cm-focused) {
   outline: none;
+}
+.syntax-editor :deep(.cm-selectionBackground),
+.syntax-editor :deep(.cm-focused .cm-selectionBackground),
+.syntax-editor :deep(.cm-content ::selection) {
+  background-color: rgba(64, 158, 255, 0.45) !important;
 }
 </style>

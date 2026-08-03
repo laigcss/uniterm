@@ -28,6 +28,12 @@
           {{ row.type === 'view' ? t('db.typeView') : t('db.typeTable') }}
         </template>
       </el-table-column>
+      <el-table-column
+        :label="t('db.colComment')"
+        prop="comment"
+        min-width="160"
+        show-overflow-tooltip
+      />
       <el-table-column :label="t('db.actions')" width="110" align="right">
         <template #default="{ row }">
           <button
@@ -102,6 +108,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   open: [dbName: string, tableName: string, isView?: boolean]
   changed: [dbName: string]
+  objectRemoved: [payload: { dbName: string; tableName?: string; kind: 'table' | 'view' | 'database' }]
 }>()
 
 const objects = ref<TableInfo[]>([])
@@ -166,7 +173,10 @@ function askTruncate(row: TableInfo) {
     t('db.truncateTable'),
     t('db.truncateTableConfirm', { name: row.name }),
     row.name,
-    async () => { await TruncateTable(props.sessionId, props.dbName, row.name) }
+    async () => {
+      await TruncateTable(props.sessionId, props.dbName, row.name)
+      emit('changed', props.dbName)
+    }
   )
 }
 
@@ -179,6 +189,7 @@ function askDrop(row: TableInfo) {
       await DropTable(props.sessionId, props.dbName, row.name)
       await load()
       emit('changed', props.dbName)
+      emit('objectRemoved', { dbName: props.dbName, tableName: row.name, kind: 'table' })
     }
   )
 }
@@ -192,6 +203,7 @@ function askDropView(row: TableInfo) {
       await DropView(props.sessionId, props.dbName, row.name)
       await load()
       emit('changed', props.dbName)
+      emit('objectRemoved', { dbName: props.dbName, tableName: row.name, kind: 'view' })
     }
   )
 }

@@ -73,7 +73,7 @@ export function CreateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateTempUpload(arg1:string):Promise<string>;
 
-export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string):Promise<string>;
+export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<string>;
 
 export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 

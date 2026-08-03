@@ -130,8 +130,8 @@ export function CreateTempUpload(arg1) {
   return window['go']['main']['App']['CreateTempUpload'](arg1);
 }
 
-export function DBDefaultTableQuery(arg1, arg2, arg3) {
-  return window['go']['main']['App']['DBDefaultTableQuery'](arg1, arg2, arg3);
+export function DBDefaultTableQuery(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DBDefaultTableQuery'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function DBDeleteRow(arg1, arg2, arg3, arg4) {

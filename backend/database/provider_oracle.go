@@ -54,8 +54,11 @@ func (p *oracleProvider) PrepareExec(db execer, dbName string) error {
 	return err
 }
 
-func (p *oracleProvider) DefaultTableQuery(dbName, tableName string, limit int) string {
-	return fmt.Sprintf("SELECT * FROM %s WHERE ROWNUM <= %d", p.Quote(tableName), limit)
+func (p *oracleProvider) DefaultTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf(
+		"SELECT * FROM %s OFFSET %d ROWS FETCH NEXT %d ROWS ONLY",
+		p.Quote(tableName), offset, limit,
+	)
 }
 
 func (p *oracleProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
@@ -158,12 +161,14 @@ func (p *oracleProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, erro
 		return nil, err
 	}
 	results, err := queryStrings(db, `
-		SELECT object_name, object_type
-		FROM all_objects
-		WHERE owner = :1
-		  AND object_type IN ('TABLE', 'VIEW')
-		  AND object_name NOT LIKE 'BIN$%'
-		ORDER BY object_name`, strings.ToUpper(owner))
+		SELECT o.object_name, o.object_type, NVL(c.comments, '') AS comments
+		FROM all_objects o
+		LEFT JOIN all_tab_comments c
+		  ON c.owner = o.owner AND c.table_name = o.object_name
+		WHERE o.owner = :1
+		  AND o.object_type IN ('TABLE', 'VIEW')
+		  AND o.object_name NOT LIKE 'BIN$%'
+		ORDER BY o.object_name`, strings.ToUpper(owner))
 	if err != nil {
 		return nil, fmt.Errorf("get tables: %w", err)
 	}
@@ -173,7 +178,11 @@ func (p *oracleProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, erro
 		if row["OBJECT_TYPE"] == "VIEW" {
 			tp = "view"
 		}
-		infos = append(infos, TableInfo{Name: row["OBJECT_NAME"], Type: tp})
+		infos = append(infos, TableInfo{
+			Name:    row["OBJECT_NAME"],
+			Type:    tp,
+			Comment: row["COMMENTS"],
+		})
 	}
 	return infos, nil
 }
@@ -187,10 +196,13 @@ func (p *oracleProvider) GetTableSchema(db *sql.DB, dbName, tableName string) (*
 	table := p.dictionaryTableName(tableName)
 
 	colRows, err := queryStrings(db, `
-		SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
-		FROM all_tab_columns
-		WHERE owner = :1 AND table_name = :2
-		ORDER BY column_id`, owner, table)
+		SELECT c.column_name, c.data_type, c.data_length, c.data_precision, c.data_scale, c.nullable, c.data_default,
+		       NVL(cc.comments, '') AS comments
+		FROM all_tab_columns c
+		LEFT JOIN all_col_comments cc
+		  ON cc.owner = c.owner AND cc.table_name = c.table_name AND cc.column_name = c.column_name
+		WHERE c.owner = :1 AND c.table_name = :2
+		ORDER BY c.column_id`, owner, table)
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
 	}
@@ -220,6 +232,7 @@ func (p *oracleProvider) GetTableSchema(db *sql.DB, dbName, tableName string) (*
 			DefaultVal:  defVal,
 			DefaultType: defaultType,
 			IsPrimary:   pkCols[row["COLUMN_NAME"]],
+			Comment:     row["COMMENTS"],
 		})
 	}
 
