@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       preview:
-        description: 'Create a preview release (draft, hidden from public feed)'
+        description: 'Create a snapshot release (fixed tag, prerelease, rolling)'
         type: boolean
         required: false
         default: false
@@ -268,14 +268,12 @@ jobs:
       - name: Determine release mode
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "DRAFT=true" >> $GITHUB_ENV
-          else
-            echo "DRAFT=false" >> $GITHUB_ENV
+            echo "PRERELEASE=true" >> $GITHUB_ENV
           fi
 
       - name: Extract changelog
         run: |
-          if [ "$DRAFT" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             SHA="${{ github.sha }}"
             SHORT=$(echo "$SHA" | cut -c1-7)
             NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
@@ -283,7 +281,7 @@ jobs:
             cat > release_body.md <<EOF
           ## ⚠️ Preview Release / 预览版本
 
-          This is a **preview/draft** build, **not an official release**. Do not distribute.
+          This is a **preview/prerelease** build, **not an official release**. Do not distribute.
           本次为**预览构建，非正式发布版本**，请勿对外分发。
 
           - Commit: \`${SHORT}\`
@@ -296,6 +294,7 @@ jobs:
           fi
 
       - name: Detect prerelease
+        if: github.event_name != 'workflow_dispatch'
         run: |
           if echo "${{ github.ref_name }}" | grep -qiE '\-(rc|beta|alpha|pre|dev)'; then
             echo "PRERELEASE=true" >> $GITHUB_ENV
@@ -306,7 +305,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          draft: ${{ env.DRAFT == 'true' }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && 'main-snapshot' || github.ref_name }}
+          name: ${{ github.event_name == 'workflow_dispatch' && 'Main Snapshot' || github.ref_name }}
           prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: release_body.md
           files: |
