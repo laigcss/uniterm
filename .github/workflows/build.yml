@@ -43,12 +43,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # - name: Free disk space (macOS)
-      #   if: matrix.platform == 'darwin/universal'
-      #   run: |
-      #     sudo rm -rf /Library/Developer/CoreSimulator
-      #     sudo rm -rf /Applications/Xcode_*.app 2>/dev/null || true
-      #     df -h /
+      - name: Free disk space (macOS)
+        if: matrix.platform == 'darwin/universal'
+        run: |
+          sudo rm -rf /Library/Developer/CoreSimulator
+          sudo rm -rf /Applications/Xcode_*.app 2>/dev/null || true
+          df -h /
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -59,6 +59,29 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
+
+      - name: Install dependencies (Windows)
+        if: startsWith(matrix.platform, 'windows')
+        shell: bash
+        run: |
+          choco install nsis -y
+          NSIS_BIN="/c/Program Files (x86)/NSIS/Bin"
+          export PATH="$NSIS_BIN:$PATH"
+          if [ ! -f "$NSIS_BIN/makensis.exe" ]; then echo "ERROR: makensis.exe not found at $NSIS_BIN"; exit 1; fi
+          echo "makensis: $NSIS_BIN/makensis.exe"
+
+          UPX_VER="5.2.0"
+          curl -sSfL -o /tmp/upx.zip "https://github.com/upx/upx/releases/download/v${UPX_VER}/upx-${UPX_VER}-win64.zip"
+          sha256sum /tmp/upx.
+          unzip -o /tmp/upx.zip -d /tmp/upx > /dev/null
+          mv -f /tmp/upx/upx-*/upx.exe "$NSIS_BIN/upx.exe"
+          upx --version
+
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -78,29 +101,6 @@ jobs:
           VITE_VERSION: ${{ env.VERSION }}
         run: cd frontend && npm install && npm run build
 
-      - name: Install Linux dependencies
-        if: startsWith(matrix.platform, 'linux')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx
-
-      - name: Install NSIS and UPX (Windows)
-        if: startsWith(matrix.platform, 'windows')
-        shell: bash
-        run: |
-          choco install nsis -y
-          NSIS_BIN="/c/Program Files (x86)/NSIS/Bin"
-          export PATH="$NSIS_BIN:$PATH"
-          if [ ! -f "$NSIS_BIN/makensis.exe" ]; then echo "ERROR: makensis.exe not found at $NSIS_BIN"; exit 1; fi
-          echo "makensis: $NSIS_BIN/makensis.exe"
-
-          UPX_VER="5.2.0"
-          curl -sSfL -o /tmp/upx.zip "https://github.com/upx/upx/releases/download/v${UPX_VER}/upx-${UPX_VER}-win64.zip"
-          sha256sum /tmp/upx.zip
-          unzip -o /tmp/upx.zip -d /tmp/upx > /dev/null
-          mv -f /tmp/upx/upx-*/upx.exe "$NSIS_BIN/upx.exe"
-          upx --version
-
       - name: Build
         shell: bash
         run: |
@@ -114,7 +114,7 @@ jobs:
           BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
 
           if [[ "$PLATFORM" == windows/* ]]; then
-            BUILD_ARGS="$BUILD_ARGS -nsis -upx -upxflags=\"--best --lzma\""
+            BUILD_ARGS="$BUILD_ARGS"
           fi
 
           if [ "${PLATFORM%/*}" = "linux" ]; then
@@ -145,7 +145,22 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |
+          $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
+
+          # compress amd64 with upx; arm64 is left uncompressed because
+          # UPX 5.2.0 can't pack the PE section structure that Wails'
+          # new Go WebView2Loader produces for windows/arm64
+          upx --best --lzma build/bin/uniTerm-amd64.exe
+
+          # rebuild NSIS installers so the amd64 installer embeds the
+          # compressed binary; arm64 installer is regenerated too but
+          # with the original uncompressed binary
+          Push-Location build/windows/installer
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=../../bin/uniTerm-amd64.exe" project.nsi
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=../../bin/uniTerm-arm64.exe" project.nsi
+          Pop-Location
+
           foreach ($arch in @('amd64', 'arm64')) {
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
