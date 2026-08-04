@@ -872,7 +872,7 @@
   "conn.ftpEncryption": "TLS 암호화",
   "conn.ftpEncryptionNone": "사용 안 함",
   "conn.x11Forwarding": "X11 포워딩",
-  "conn.x11ForwardingDescWin": "VcXsrv 또는 Xming 설치 및 시작",
+  "conn.x11ForwardingDescWin": "VcXsrv 설치 및 시작",
   "conn.x11ForwardingDescMac": "XQuartz 설치 및 시작",
   "conn.x11ForwardingDescLinux": "X 서버(Xorg) 설치 및 시작",
   "conn.ftpEncryptionAuto": "사용 가능한 경우",

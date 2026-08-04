@@ -90,7 +90,7 @@ func bridge(a, b io.ReadWriteCloser) {
 // be read from xauthPath the request is sent in trusted mode with a random
 // cookie and errX11TrustedFallback is returned alongside the forwarder.
 // On Windows an empty display defaults to "localhost:0" (standard
-// VcXsrv / Xming address); on macOS / Linux an empty display returns
+// VcXsrv address); on macOS / Linux an empty display returns
 // errX11DisplayEmpty without touching the client.
 //
 // Note: x11-req is a CHANNEL request (sent on the session channel), not
@@ -106,7 +106,7 @@ func startX11Forward(client *ssh.Client, session *ssh.Session, xauthPath, displa
 		return nil, errX11SessionNil
 	}
 	if display == "" {
-		// Windows convenience: VcXsrv / Xming are standard at localhost:0;
+		// Windows convenience: VcXsrv is standard at localhost:0;
 		// assume that's what the user has and skip the empty-DISPLAY error.
 		// macOS / Linux keep the strict behavior — their DISPLAY is normally
 		// set by the session, and a missing one is usually intentional.
@@ -231,7 +231,7 @@ func displayTargetString(display string) string {
 func xServerHint(goos string) string {
 	switch goos {
 	case "windows":
-		return "Windows: install and start VcXsrv or Xming, then try again."
+		return "Windows: install and start VcXsrv, then try again."
 	case "darwin":
 		return "macOS: install and start XQuartz, then try again."
 	default:

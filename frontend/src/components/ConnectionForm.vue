@@ -76,9 +76,6 @@
                 </template>
               </div>
             </el-form-item>
-            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
-              <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
-            </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh'" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
@@ -93,6 +90,9 @@
                 </div>
               </el-form-item>
             </template>
+            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+              <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
+            </el-form-item>
             <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : ''" />
             </el-form-item>
@@ -120,9 +120,6 @@
             </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
               <el-input v-model="form.dbName" :placeholder="t('db.databases')" />
-            </el-form-item>
-            <el-form-item v-if="form.type === 'database'" :label="t('db.params')">
-              <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
             </el-form-item>
             <el-form-item v-if="form.type === 'local'" :label="t('conn.shell')">
               <el-select v-model="form.shellPath" filterable>
@@ -284,6 +281,9 @@
               <span>{{ t('conn.advanced') }}</span>
             </div>
             <template v-if="showAdvanced">
+            <el-form-item v-if="form.type === 'database'" :label="t('db.params')">
+              <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
+            </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local'" :label="t('conn.postLoginScript')">
               <div class="post-login-config">
                 <el-radio-group v-model="postLoginMode" size="small">
