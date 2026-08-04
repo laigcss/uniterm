@@ -115,7 +115,7 @@ export interface ConnectionConfig {
   backspaceKey?: 'del' | 'bs' | 'vt220'
   // Enable SSH X11 forwarding (ssh -X semantics). Bridges remote X11
   // clients to the local X server at $DISPLAY. Requires a local X server
-  // (XQuartz on macOS, VcXsrv/Xming on Windows). Silent degradation on
+  // (XQuartz on macOS, VcXsrv on Windows). Silent degradation on
   // missing $DISPLAY / xauth — see backend x11_forward.go.
   x11Forwarding?: boolean
   // Enable session output log automatically on first connect. Applies

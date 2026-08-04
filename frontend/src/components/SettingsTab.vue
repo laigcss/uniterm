@@ -274,7 +274,7 @@
               <div class="setting-title">{{ t('settings.wordSeparator') }}</div>
               <div class="setting-desc">{{ t('settings.wordSeparatorDesc') }}</div>
             </div>
-            <div class="setting-control setting-control-wide">
+            <div class="setting-control">
               <el-input
                 v-model="settingsStore.settings.terminal.wordSeparator"
                 :placeholder="defaultWordSeparator"
@@ -362,14 +362,22 @@
               <div class="setting-title">{{ t('settings.sessionLogDir') }}</div>
               <div class="setting-desc">{{ t('settings.sessionLogDirDesc', { path: defaultLogDir }) }}</div>
             </div>
-            <div class="setting-control setting-control-wide">
+            <div class="setting-control">
               <el-input
                 v-model="settingsStore.settings.terminal.sessionLogDir"
                 :placeholder="defaultLogDir"
+                class="dir-input"
                 @change="settingsStore.save()"
                 clearable
-              />
-              <el-button @click="pickLogDir">{{ t('settings.browse') }}</el-button>
+              >
+                <template #append>
+                  <el-tooltip :content="t('settings.browse')" placement="top">
+                    <el-button :aria-label="t('settings.browse')" @click="pickLogDir">
+                      <el-icon><FolderOpen :size="16" /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </template>
+              </el-input>
             </div>
           </div>
 
@@ -702,7 +710,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -1271,15 +1279,10 @@ async function onToggleSystemTitleBar(v: boolean) {
   min-width: 210px;
 }
 
-.setting-control-wide {
-  display: flex;
-  gap: 8px;
-  min-width: 380px;
-  align-items: center;
-}
-
-.setting-control-wide .el-input {
-  flex: 1;
+/* The append button's width adds to the input's, so pin the whole group to
+   the 210px the sibling selects render at instead of letting it overflow. */
+.setting-control .dir-input {
+  width: 210px;
 }
 
 .setting-control .el-select,

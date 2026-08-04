@@ -75,7 +75,7 @@ func DialLocalX(display string) (net.Conn, error) {
 	if host == "" || host == "localhost" || host == "127.0.0.1" {
 		conn, err := dialLocal(runtime.GOOS, display, disp, 5*time.Second)
 		if err != nil && runtime.GOOS == "windows" {
-			// VcXsrv / Xming not running — try to start it.
+			// VcXsrv not running — try to start it.
 			if started := tryStartLocalXServer(); started {
 				conn, err = dialLocal(runtime.GOOS, display, disp, 5*time.Second)
 			}

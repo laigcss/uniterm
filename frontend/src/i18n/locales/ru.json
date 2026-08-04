@@ -872,7 +872,7 @@
   "conn.ftpEncryption": "Шифрование TLS",
   "conn.ftpEncryptionNone": "Нет",
   "conn.x11Forwarding": "Перенаправление X11",
-  "conn.x11ForwardingDescWin": "установите и запустите VcXsrv или Xming",
+  "conn.x11ForwardingDescWin": "установите и запустите VcXsrv",
   "conn.x11ForwardingDescMac": "установите и запустите XQuartz",
   "conn.x11ForwardingDescLinux": "установите и запустите X-сервер (Xorg)",
   "conn.ftpEncryptionAuto": "Если доступно",

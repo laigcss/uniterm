@@ -219,6 +219,20 @@ export const useAIStore = defineStore('ai', () => {
     lastPanelContext.value = { panelId, shellPath }
   }
 
+  // sessions is kept sorted by updatedAt desc, so the recent-sessions dropdown,
+  // the 15-session trim, and the post-delete fallback all read index 0 as
+  // "most recent". Backend Load() returns shards in filename order, so init()
+  // sorts explicitly. Only content changes touch a session — merely opening one
+  // to read it must not reorder the list.
+  function touchSession(s: AISession) {
+    s.updatedAt = Date.now()
+    const idx = sessions.value.findIndex(x => x.id === s.id)
+    if (idx > 0) {
+      sessions.value.splice(idx, 1)
+      sessions.value.unshift(s)
+    }
+  }
+
   function enqueueMessage(content: string, skillName?: string, skillBody?: string, commandBody?: string) {
     const trimmed = content.trim()
     if (!trimmed && !commandBody && !skillName) return
@@ -303,7 +317,7 @@ export const useAIStore = defineStore('ai', () => {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
       if (s) {
         s.messages.push(wrapped)
-        s.updatedAt = Date.now()
+        touchSession(s)
         if (msg.role === 'user' && s.name === t('ai.newSession')) {
           const trimmed = msg.content.trim()
           if (trimmed) {
@@ -330,7 +344,7 @@ export const useAIStore = defineStore('ai', () => {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
       if (s) {
         s.messages.push(r)
-        s.updatedAt = Date.now()
+        touchSession(s)
         debouncedSave()
       }
     }
@@ -350,7 +364,7 @@ export const useAIStore = defineStore('ai', () => {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
       if (s) {
         s.messages.push(r)
-        s.updatedAt = Date.now()
+        touchSession(s)
         debouncedSave()
       }
     }
@@ -363,7 +377,7 @@ export const useAIStore = defineStore('ai', () => {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
       if (s) {
         s.messages = []
-        s.updatedAt = Date.now()
+        touchSession(s)
         debouncedSave()
       }
     }
@@ -373,7 +387,9 @@ export const useAIStore = defineStore('ai', () => {
   async function init() {
     await initConfig()
     const data = await loadSessionsFromBackend()
-    sessions.value = data.sessions.filter(s => s.messages.length > 0)
+    sessions.value = data.sessions
+      .filter(s => s.messages.length > 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
     // Always start with a fresh session after restart
     currentSessionId.value = null
     initialized.value = true

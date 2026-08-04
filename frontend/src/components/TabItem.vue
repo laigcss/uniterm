@@ -77,7 +77,6 @@
         </div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-divider" />
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
           {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
@@ -85,7 +84,6 @@
         <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">{{ t('tab.close') }}</div>
         <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
         <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
-        <div class="menu-item" @click="closeLeft">{{ t('tab.closeLeft') }}</div>
       </div>
     </Teleport>
   </div>
@@ -360,14 +358,6 @@ function closeRight() {
   const allTabs = tabStore.tabs
   const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
   const ids = allTabs.slice(currentIdx + 1).filter(t => !t.locked).map(t => t.id)
-  if (ids.length) emit('closeBatch', ids)
-  closeContextMenu()
-}
-
-function closeLeft() {
-  const allTabs = tabStore.tabs
-  const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
-  const ids = allTabs.slice(0, currentIdx).filter(t => !t.locked).map(t => t.id)
   if (ids.length) emit('closeBatch', ids)
   closeContextMenu()
 }
