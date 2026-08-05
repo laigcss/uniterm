@@ -29,6 +29,8 @@
   "conn.newTitle": "Новое подключение",
   "conn.name": "Имя",
   "conn.namePlaceholder": "например, Мой сервер",
+  "conn.remark": "Примечание",
+  "conn.remarkPlaceholder": "Расположение, назначение и другие заметки",
   "conn.type": "Тип",
   "conn.categoryTerminal": "Терминал",
   "conn.categoryRemote": "Удаленный рабочий стол",

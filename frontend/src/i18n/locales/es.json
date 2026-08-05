@@ -29,6 +29,8 @@
   "conn.newTitle": "Nueva Conexión",
   "conn.name": "Nombre",
   "conn.namePlaceholder": "p. ej. Mi Servidor",
+  "conn.remark": "Nota",
+  "conn.remarkPlaceholder": "Ubicación, propósito u otras notas",
   "conn.type": "Tipo",
   "conn.categoryTerminal": "Terminal",
   "conn.categoryRemote": "Escritorio Remoto",

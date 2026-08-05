@@ -562,6 +562,7 @@ export namespace session {
 	export class ConnectionConfig {
 	    id: string;
 	    name: string;
+	    remark?: string;
 	    type: string;
 	    host: string;
 	    port: number;
@@ -631,6 +632,7 @@ export namespace session {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.remark = source["remark"];
 	        this.type = source["type"];
 	        this.host = source["host"];
 	        this.port = source["port"];

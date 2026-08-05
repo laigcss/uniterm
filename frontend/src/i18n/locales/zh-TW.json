@@ -29,6 +29,8 @@
   "conn.newTitle": "新增連線",
   "conn.name": "名稱",
   "conn.namePlaceholder": "例如 我的伺服器",
+  "conn.remark": "備註",
+  "conn.remarkPlaceholder": "伺服器位置、用途等補充資訊",
   "conn.type": "類型",
   "conn.categoryTerminal": "終端機",
   "conn.categoryRemote": "遠端桌面",

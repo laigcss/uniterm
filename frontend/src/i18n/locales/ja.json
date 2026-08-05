@@ -29,6 +29,8 @@
   "conn.newTitle": "新規接続",
   "conn.name": "名前",
   "conn.namePlaceholder": "例: マイサーバー",
+  "conn.remark": "備考",
+  "conn.remarkPlaceholder": "場所、用途など補足情報",
   "conn.type": "種類",
   "conn.categoryTerminal": "ターミナル",
   "conn.categoryRemote": "リモートデスクトップ",

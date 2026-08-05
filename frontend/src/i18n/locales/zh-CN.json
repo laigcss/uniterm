@@ -29,6 +29,8 @@
   "conn.newTitle": "新建连接",
   "conn.name": "名称",
   "conn.namePlaceholder": "例如 我的服务器",
+  "conn.remark": "备注",
+  "conn.remarkPlaceholder": "服务器位置、用途等补充信息",
   "conn.type": "类型",
   "conn.categoryTerminal": "终端",
   "conn.categoryRemote": "远程桌面",
