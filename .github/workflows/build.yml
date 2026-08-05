@@ -33,8 +33,8 @@ jobs:
             slug: linux-arm64
             artifact: uniTerm
           - os: macos-latest
-            platform: darwin/universal
-            slug: darwin-universal
+            platform: darwin
+            slug: darwin
             artifact: uniTerm.app
 
     runs-on: ${{ matrix.os }}
@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Free disk space (macOS)
-        if: matrix.platform == 'darwin/universal'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
           sudo rm -rf /Library/Developer/CoreSimulator
           sudo rm -rf /Applications/Xcode_*.app 2>/dev/null || true
@@ -111,35 +111,39 @@ jobs:
           fi
           echo "PATH=$PATH"
 
-          BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
+          if [ "$PLATFORM" = "darwin" ]; then
+            for ARCH in amd64 arm64; do
+              echo "Building darwin/$ARCH..."
+              eval wails build -platform "darwin/$ARCH" -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -skipbindings
+              mv build/bin/uniTerm.app "build/bin/uniTerm-${ARCH}.app"
+            done
+          else
+            BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
 
-          if [[ "$PLATFORM" == windows/* ]]; then
-            BUILD_ARGS="$BUILD_ARGS"
+            if [ "${PLATFORM%/*}" = "linux" ]; then
+              BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\" -tags webkit2_41"
+            fi
+
+            echo "BUILD_ARGS=$BUILD_ARGS"
+            eval wails build $BUILD_ARGS
           fi
-
-          if [ "${PLATFORM%/*}" = "linux" ]; then
-            BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\""
-          fi
-
-          if [ "${PLATFORM%/*}" = "linux" ]; then
-            BUILD_ARGS="$BUILD_ARGS -tags webkit2_41"
-          fi
-
-          echo "BUILD_ARGS=$BUILD_ARGS"
-          eval wails build $BUILD_ARGS
 
       - name: Package (macOS)
-        if: matrix.platform == 'darwin/universal'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
-          chmod +x build/bin/uniTerm.app/Contents/MacOS/uniTerm
-          codesign --force --deep --sign - build/bin/uniTerm.app
+          for ARCH in amd64 arm64; do
+            APP="build/bin/uniTerm-${ARCH}.app"
+            chmod +x "$APP/Contents/MacOS/uniTerm"
+            codesign --force --deep --sign - "$APP"
 
-          cd build/bin
-          mkdir -p dmg_staging
-          cp -R uniTerm.app dmg_staging/
-          ln -s /Applications dmg_staging/Applications
-          hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
-          rm -rf dmg_staging
+            cd build/bin
+            mkdir -p dmg_staging
+            cp -R "uniTerm-${ARCH}.app" dmg_staging/uniTerm.app
+            ln -s /Applications dmg_staging/Applications
+            hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO "../../uniterm-darwin-${ARCH}-${VERSION}.dmg"
+            rm -rf dmg_staging
+            cd ../..
+          done
 
       - name: Download VcXsrv (Windows)
         if: startsWith(matrix.platform, 'windows')

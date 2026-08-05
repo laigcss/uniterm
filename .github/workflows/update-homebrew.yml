@@ -26,17 +26,20 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Download macOS DMG and compute hash
+      - name: Download macOS DMGs and compute hashes
         run: |
-          URL="https://github.com/ys-ll/uniterm/releases/download/$TAG/uniterm-darwin-universal-$TAG.dmg"
-          curl -sLo /tmp/uniterm.dmg "$URL"
-          SHA256=$(sha256sum /tmp/uniterm.dmg | cut -d' ' -f1)
-          echo "SHA256=$SHA256" >> $GITHUB_ENV
+          for ARCH in amd64 arm64; do
+            URL="https://github.com/ys-ll/uniterm/releases/download/$TAG/uniterm-darwin-${ARCH}-$TAG.dmg"
+            curl -sLo "/tmp/uniterm-${ARCH}.dmg" "$URL"
+            SHA256=$(sha256sum "/tmp/uniterm-${ARCH}.dmg" | cut -d' ' -f1)
+            echo "SHA256_${ARCH}=$SHA256" >> $GITHUB_ENV
+          done
 
       - name: Update formula
         run: |
           sed -i "s/version \".*\"/version \"$VERSION\"/" Casks/uniterm.rb
-          sed -i "s/sha256 \".*\"/sha256 \"$SHA256\"/" Casks/uniterm.rb
+          sed -i "s/sha256_amd64 \".*\"/sha256_amd64 \"$SHA256_amd64\"/" Casks/uniterm.rb
+          sed -i "s/sha256_arm64 \".*\"/sha256_arm64 \"$SHA256_arm64\"/" Casks/uniterm.rb
 
       - name: Commit and push
         run: |
