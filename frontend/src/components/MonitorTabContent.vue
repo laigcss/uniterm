@@ -682,6 +682,14 @@ function onDetailSectionContextMenu(e: MouseEvent) {
   }
 }
 
+function resolveColor(cssVar: string): string {
+  const match = cssVar.match(/var\((--[\w-]+)\)/)
+  if (match) {
+    return getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim()
+  }
+  return cssVar
+}
+
 function drawChart() {
   const canvas = chartCanvas.value
   if (!canvas) return
@@ -724,6 +732,9 @@ function drawChart() {
     ctx.stroke()
   }
 
+  const mainColor = resolveColor(currentPerf.value.color)
+  const altColor = currentPerf.value.color2 ? resolveColor(currentPerf.value.color2) : null
+
   // Helper to draw a line
   const ctx2 = ctx
   function drawLine(data: number[], color: string, fill?: boolean) {
@@ -758,11 +769,11 @@ function drawChart() {
 
   // Draw second line first (so it appears behind the main line)
   if (history2 && history2.length >= 2) {
-    drawLine(history2, currentPerf.value.color2 || currentPerf.value.color)
+    drawLine(history2, altColor || mainColor)
   }
 
   // Draw main line with fill
-  drawLine(history, currentPerf.value.color, true)
+  drawLine(history, mainColor, true)
 }
 
 let unlisten: (() => void) | null = null

@@ -84,10 +84,10 @@
             </el-form-item>
             <template v-if="form.type === 'rdp' && isWindows">
               <el-form-item :label="t('conn.rdpEnableNLA')">
-                <div class="nla-row">
-                  <el-switch v-model="form.rdpEnableNLA" />
-                  <span class="field-hint">{{ form.rdpEnableNLA ? t('conn.rdpEnableNLAOnHint') : t('conn.rdpEnableNLAOffHint') }}</span>
-                </div>
+                <el-select v-model="form.rdpEnableNLA" style="width: 100%">
+                  <el-option :value="true" :label="t('conn.rdpEnableNLAOn')" />
+                  <el-option :value="false" :label="t('conn.rdpEnableNLAOff')" />
+                </el-select>
               </el-form-item>
             </template>
             <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
@@ -784,7 +784,7 @@ const rdpResolutions = [
   { label: '2560 × 1440 (QHD)', w: 2560, h: 1440 },
 ]
 
-const rdpResolution = ref('1280 × 720 (HD)')
+const rdpResolution = ref(t('rdp.fullscreen'))
 
 const selectedGroupId = ref<string | undefined>(undefined)
 
@@ -987,7 +987,7 @@ function resetForm() {
   k8sContexts.value = []
   k8sContextsLoading.value = false
   k8sContextsError.value = ''
-  rdpResolution.value = '1280 × 720 (HD)'
+  rdpResolution.value = t('rdp.fullscreen')
   selectedGroupId.value = undefined
 }
 
@@ -1332,13 +1332,6 @@ function onConnect() {
 .port-input {
   width: 130px !important;
   flex-shrink: 0;
-}
-
-/* ── NLA toggle row ── */
-.nla-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 /* ── Field hint text ── */
