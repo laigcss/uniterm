@@ -119,7 +119,18 @@ func startX11Forward(client *ssh.Client, session *ssh.Session, xauthPath, displa
 
 	_, _, screen, err := ParseDisplay(display)
 	if err != nil {
-		return nil, fmt.Errorf("x11: %w", err)
+		// Windows: treat unparseable DISPLAY (e.g. placeholder like
+		// "needs-to-be-defined") the same as empty — fall back to
+		// localhost:0. macOS / Linux keep strict validation.
+		if runtime.GOOS == "windows" {
+			display = "localhost:0"
+			_, _, screen, err = ParseDisplay(display)
+			if err != nil {
+				return nil, fmt.Errorf("x11: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("x11: %w", err)
+		}
 	}
 
 	// LookupCookie surfaces every "no usable cookie" case — empty path,
@@ -231,11 +242,11 @@ func displayTargetString(display string) string {
 func xServerHint(goos string) string {
 	switch goos {
 	case "windows":
-		return "Windows: install and start VcXsrv, then try again."
+		return "Windows: VcXsrv is bundled with uniTerm (plugins/vcxsrv). If missing, reinstall uniTerm."
 	case "darwin":
 		return "macOS: install and start XQuartz, then try again."
 	default:
-		return "Linux: install and start an X server (Xorg), then try again."
+		return "Linux: make sure DISPLAY is set and an X server is running (Xorg or XWayland)."
 	}
 }
 

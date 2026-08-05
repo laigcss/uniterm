@@ -380,7 +380,7 @@
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh'" :label="t('conn.x11Forwarding')">
               <el-switch v-model="form.x11Forwarding" />
-              <span class="field-hint" style="margin-left: 12px;">{{ t(x11HintKey) }}</span>
+              <span v-if="x11HintKey" class="field-hint" style="margin-left: 12px;">{{ t(x11HintKey) }}</span>
             </el-form-item>
             <template v-if="form.type === 'ftp'">
               <el-form-item :label="t('conn.ftpEncryption')">
@@ -600,9 +600,8 @@ const isWindows = ref(/windows/i.test(navigator.userAgent))
 const platform = ref<string>('')
 GetPlatform().then(p => { platform.value = p })
 const x11HintKey = computed(() => {
-  if (platform.value === 'windows') return 'conn.x11ForwardingDescWin'
   if (platform.value === 'darwin') return 'conn.x11ForwardingDescMac'
-  return 'conn.x11ForwardingDescLinux'
+  return ''
 })
 const passwordInputKey = ref(0)
 
