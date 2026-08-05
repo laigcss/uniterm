@@ -143,16 +143,16 @@ jobs:
 
       - name: Download VcXsrv (Windows)
         if: startsWith(matrix.platform, 'windows')
-        shell: bash
+        shell: pwsh
         env:
           VCXSRV_VERSION: v1.0.0
         run: |
-          VCXSRV_DIR="build/windows/installer/plugins/vcxsrv"
-          mkdir -p "$VCXSRV_DIR"
-          curl -sSfL -o /tmp/vcxsrv.zip \
-            "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/${VCXSRV_VERSION}/vcxsrv.zip"
-          unzip -o /tmp/vcxsrv.zip -d "$VCXSRV_DIR" > /dev/null
-          echo "VcXsrv files:" && ls -la "$VCXSRV_DIR"
+          $VCXSRV_DIR = Join-Path $env:GITHUB_WORKSPACE 'build\windows\installer\plugins\vcxsrv'
+          New-Item -ItemType Directory -Force -Path $VCXSRV_DIR | Out-Null
+          $zip = Join-Path $env:TEMP 'vcxsrv.zip'
+          Invoke-WebRequest -Uri "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $VCXSRV_DIR -Force
+          Get-ChildItem $VCXSRV_DIR
 
       - name: Package (Windows)
         if: startsWith(matrix.platform, 'windows')

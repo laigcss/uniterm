@@ -4,11 +4,17 @@ package container
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/UserExistsError/conpty"
 )
+
+func setHideWindow(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+}
 
 type localPTY struct {
 	cpty *conpty.ConPty
