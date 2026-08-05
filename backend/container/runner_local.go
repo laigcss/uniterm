@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 type LocalRunner struct{}
@@ -58,6 +59,9 @@ func (r *LocalRunner) command(ctx context.Context, argv []string) (*exec.Cmd, er
 		argv[0] = p
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
 	return cmd, nil
 }
 
