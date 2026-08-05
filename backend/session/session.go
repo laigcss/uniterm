@@ -34,6 +34,7 @@ type ConnectionGroup struct {
 type ConnectionConfig struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
+	Remark   string `json:"remark,omitempty"`
 	Type     string `json:"type"`
 	Host     string `json:"host"`
 	Port     int    `json:"port"`

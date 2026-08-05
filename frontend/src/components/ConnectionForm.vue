@@ -35,10 +35,8 @@
         <div class="conn-fields">
           <el-form :model="form" label-width="90px" @submit.prevent="onSave">
             <el-form-item :label="t('conn.name')">
-              <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
-            </el-form-item>
-            <el-form-item :label="t('conn.group')">
-              <div style="display:flex;gap:6px;width:100%">
+              <div class="name-group-row">
+                <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" class="name-input" />
                 <el-tree-select
                   v-model="selectedGroupId"
                   :data="groupTreeData"
@@ -46,12 +44,15 @@
                   check-strictly
                   clearable
                   :placeholder="t('conn.noGroup')"
-                  style="flex:1;min-width:0"
+                  class="group-select"
                 />
-                <el-button style="flex-shrink:0;width:32px;height:32px;padding:0" @click="onGroupSelect('__new__')" :title="t('conn.newGroup')">
+                <el-button class="new-group-btn" @click="onGroupSelect('__new__')" :title="t('conn.newGroup')">
                   <Plus :size="14" />
                 </el-button>
               </div>
+            </el-form-item>
+            <el-form-item :label="t('conn.remark')">
+              <el-input v-model="form.remark" />
             </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisMode')">
               <el-radio-group v-model="form.redisMode">
@@ -724,6 +725,7 @@ const defaultParamsHint = computed(() => {
 const form = reactive<ConnectionConfig>({
   id: '',
   name: '',
+  remark: '',
   type: 'ssh',
   host: '',
   port: 22,
@@ -934,6 +936,7 @@ watch(rdpResolution, (val) => {
 function resetForm() {
   form.id = ''
   form.name = ''
+  form.remark = ''
   form.type = 'ssh'
   form.host = ''
   form.port = 22
@@ -1310,6 +1313,31 @@ function onConnect() {
 /* ── Form fields ── */
 .conn-fields {
   padding-right: 4px;
+}
+
+/* ── Name + group row ── */
+.name-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-select {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.new-group-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 /* ── Host + port row ── */

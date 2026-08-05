@@ -16,6 +16,7 @@ export interface PostLoginExpectStep {
 export interface ConnectionConfig {
   id: string
   name: string
+  remark?: string
   type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'k8s' | 'container'
   host: string
   port: number

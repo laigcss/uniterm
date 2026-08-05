@@ -29,6 +29,8 @@
   "conn.newTitle": "New Connection",
   "conn.name": "Name",
   "conn.namePlaceholder": "e.g. My Server",
+  "conn.remark": "Remark",
+  "conn.remarkPlaceholder": "Location, purpose, or other notes",
   "conn.type": "Type",
   "conn.categoryTerminal": "Terminal",
   "conn.categoryRemote": "Remote Desktop",

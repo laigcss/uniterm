@@ -29,6 +29,8 @@
   "conn.newTitle": "새 연결",
   "conn.name": "이름",
   "conn.namePlaceholder": "예: 내 서버",
+  "conn.remark": "비고",
+  "conn.remarkPlaceholder": "위치, 용도 등 추가 정보",
   "conn.type": "유형",
   "conn.categoryTerminal": "터미널",
   "conn.categoryRemote": "원격 데스크톱",
