@@ -352,7 +352,7 @@
               </div>
             </el-form-item>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local'"
               :label="t('conn.encoding')"
             >
               <el-select v-model="form.encoding" placeholder="Unicode (UTF-8)">

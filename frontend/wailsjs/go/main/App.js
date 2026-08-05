@@ -34,10 +34,6 @@ export function CloseSession(arg1) {
   return window['go']['main']['App']['CloseSession'](arg1);
 }
 
-export function ConnectSerial(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['ConnectSerial'](arg1, arg2, arg3, arg4, arg5);
-}
-
 export function ContainerAction(arg1, arg2, arg3) {
   return window['go']['main']['App']['ContainerAction'](arg1, arg2, arg3);
 }

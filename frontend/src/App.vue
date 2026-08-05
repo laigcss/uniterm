@@ -96,7 +96,6 @@
               @connect="onConnect"
               @new-connection="onNewConnectionFromStart"
               @local-terminal="createLocalTerminalWithShell"
-              @connect-serial="(keepOpen?: boolean) => { serialKeepOpen = keepOpen; showSerialDialog = true }"
               @close-self="(tabId: string) => closeTab(tabId)"
               @edit-connection="onEditConnection"
               @change-group="onChangeGroupFromStart"
@@ -109,7 +108,7 @@
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
     <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
-    <SerialConnectDialog v-model="showSerialDialog" @connect="(sid: string, portName: string, baudRate: number) => onConnectSerial(sid, portName, baudRate, serialKeepOpen)" />
+
     <CredentialPrompt
       v-model:visible="credentialVisible"
       :title="credentialTitle"
@@ -168,7 +167,6 @@ import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
-import SerialConnectDialog from './components/SerialConnectDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
 import type { CredentialResult } from './components/CredentialPrompt.vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
@@ -337,8 +335,6 @@ function RDPShowForOverlay() {
 
 
 const showConnectionForm = ref(false)
-const showSerialDialog = ref(false)
-const serialKeepOpen = ref(false)
 const sidebarVisible = ref(false)
 const sidebarRef = ref<any>(null)
 const aiSidebarRef = ref<any>(null)
@@ -1211,11 +1207,13 @@ async function createLocalTerminalWithShell(shellPath: string, keepOpen?: boolea
 
 const pendingGroupId = ref<string | undefined>(undefined)
 
-function onNewConnectionFromStart(payload?: { host?: string; groupId?: string }) {
+function onNewConnectionFromStart(payload?: { host?: string; groupId?: string; type?: string }) {
   pendingGroupId.value = payload?.groupId
   if (payload?.host) {
     const parsed = parseQuickConnect(payload.host)
     editConfig.value = (parsed || { host: payload.host }) as ConnectionConfig
+  } else if (payload?.type) {
+    editConfig.value = { type: payload.type } as ConnectionConfig
   } else {
     editConfig.value = null
   }
@@ -1617,27 +1615,6 @@ function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
   RecordRecentConnection(config.id)
 }
 
-async function onConnectSerial(sessionId: string, portName: string, baudRate: number, keepOpen?: boolean) {
-  const config: ConnectionConfig = {
-    id: '',
-    name: `${portName} (${baudRate})`,
-    type: 'serial' as any,
-    host: portName,
-    port: baudRate,
-    user: '',
-    authType: 'password' as any,
-  }
-  const panel = panelStore.createPanel(config, 'serial')
-  panelStore.updateTitle(panel.id, `${portName} (${baudRate})`)
-  panelStore.bindSession(panel.id, sessionId)
-  sessionStore.initSession(sessionId)
-  const prev = tabStore.activeTab
-  const tab = prev?.type === 'start' && !keepOpen
-    ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
-    : tabStore.createTerminalTab(panel.title, panel.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  // Serial connections are temporary — don't record in history
-}
 
 // Show/hide native RDP window on tab switch.
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),
