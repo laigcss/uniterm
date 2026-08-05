@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -98,10 +99,7 @@ func tryStartLocalXServer() bool {
 		c.Close()
 		return false
 	}
-	candidates := []string{
-		`C:\Program Files\VcXsrv\vcxsrv.exe`,
-		`C:\Program Files (x86)\VcXsrv\vcxsrv.exe`,
-	}
+	candidates := vcxsrvCandidates()
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err != nil {
 			continue
@@ -153,4 +151,23 @@ func dialLocal(goos, display string, disp int, timeout time.Duration) (net.Conn,
 		}
 	}
 	return nil, firstErr
+}
+
+// vcxsrvCandidates returns ordered paths where vcxsrv.exe may be found:
+// bundled copy (production + dev), then system-wide installs.
+func vcxsrvCandidates() []string {
+	var paths []string
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		paths = append(paths, filepath.Join(dir, "plugins", "vcxsrv", "vcxsrv.exe"))
+	}
+	// Development convenience: wails dev runs from the project root
+	if wd, err := os.Getwd(); err == nil {
+		paths = append(paths, filepath.Join(wd, "plugins", "vcxsrv", "vcxsrv.exe"))
+	}
+	paths = append(paths,
+		`C:\Program Files\VcXsrv\vcxsrv.exe`,
+		`C:\Program Files (x86)\VcXsrv\vcxsrv.exe`,
+	)
+	return paths
 }

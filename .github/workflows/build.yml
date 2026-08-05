@@ -141,6 +141,19 @@ jobs:
           hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
           rm -rf dmg_staging
 
+      - name: Download VcXsrv (Windows)
+        if: startsWith(matrix.platform, 'windows')
+        shell: bash
+        env:
+          VCXSRV_VERSION: v1.0.0
+        run: |
+          VCXSRV_DIR="build/windows/installer/plugins/vcxsrv"
+          mkdir -p "$VCXSRV_DIR"
+          curl -sSfL -o /tmp/vcxsrv.zip \
+            "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/${VCXSRV_VERSION}/vcxsrv.zip"
+          unzip -o /tmp/vcxsrv.zip -d "$VCXSRV_DIR" > /dev/null
+          echo "VcXsrv files:" && ls -la "$VCXSRV_DIR"
+
       - name: Package (Windows)
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
@@ -157,14 +170,16 @@ jobs:
           # new Go WebView2Loader produces for windows/arm64
           upx --best --lzma $AMD64_BIN
 
+          $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\plugins\vcxsrv'
+
           # rebuild NSIS installers (one per arch) so the amd64 installer
           # embeds the compressed binary; arm64 installer is regenerated
           # too but with the original uncompressed binary. Use absolute
           # paths (mirroring how Wails internally invokes makensis) since
           # NSIS' `File` command is unreliable with `..` relative paths
           # on Windows.
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" $NSI
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" $NSI
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
             $srcExe = Join-Path $ROOT "build\bin\uniTerm-$arch.exe"
@@ -173,6 +188,7 @@ jobs:
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
             Copy-Item $srcExe "dist_tmp\uniTerm.exe"
+            Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\plugins\vcxsrv"
             Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp
 
