@@ -1317,12 +1317,21 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			sz.SetPendingSize(config.InitialCols, config.InitialRows)
 		}
 	}
-	// Apply terminal character encoding (SSH / Telnet). No-op for utf-8/empty.
+	// Apply terminal character encoding. No-op for utf-8/empty.
 	if ssh, ok := s.(*session.SSHSession); ok {
 		ssh.SetEncoding(config.Encoding)
 	}
 	if telnet, ok := s.(*session.TelnetSession); ok {
 		telnet.SetEncoding(config.Encoding)
+	}
+	if serial, ok := s.(*session.SerialSession); ok {
+		serial.SetEncoding(config.Encoding)
+	}
+	if mosh, ok := s.(*session.MoshSession); ok {
+		mosh.SetEncoding(config.Encoding)
+	}
+	if local, ok := s.(*session.LocalSession); ok {
+		local.SetEncoding(config.Encoding)
 	}
 
 	// Apply serial config; connection itself is handled by the async goroutine
@@ -3602,106 +3611,6 @@ func (a *App) GetDefaultShell() string {
 // ListSerialPorts returns available serial port names.
 func (a *App) ListSerialPorts() ([]string, error) {
 	return session.ListSerialPorts()
-}
-
-// ConnectSerial creates a new serial session and connects asynchronously.
-func (a *App) ConnectSerial(portName string, baudRate int, dataBits int, stopBits float64, parity string) (*session.SessionInfo, error) {
-	if a.sessionManager == nil {
-		return nil, fmt.Errorf("session manager not initialized")
-	}
-
-	// Map JS-friendly strings to serial library constants
-	var sb serial.StopBits
-	switch stopBits {
-	case 1.5:
-		sb = serial.OnePointFiveStopBits
-	case 2:
-		sb = serial.TwoStopBits
-	default:
-		sb = serial.OneStopBit
-	}
-
-	parityMap := map[string]serial.Parity{
-		"none":  serial.NoParity,
-		"odd":   serial.OddParity,
-		"even":  serial.EvenParity,
-		"mark":  serial.MarkParity,
-		"space": serial.SpaceParity,
-	}
-	par, ok := parityMap[strings.ToLower(parity)]
-	if !ok {
-		par = serial.NoParity
-	}
-
-	serialCfg := session.SerialConfig{
-		PortName: portName,
-		BaudRate: baudRate,
-		DataBits: dataBits,
-		StopBits: sb,
-		Parity:   par,
-	}
-
-	config := session.ConnectionConfig{
-		Name: fmt.Sprintf("%s (%d)", portName, baudRate),
-		Type: "serial",
-	}
-
-	s, err := a.sessionManager.Create("serial", config)
-	if err != nil {
-		return nil, err
-	}
-
-	serSess, ok := s.(*session.SerialSession)
-	if !ok {
-		_ = a.sessionManager.Close(s.ID())
-		return nil, fmt.Errorf("internal error: session is not SerialSession")
-	}
-	serSess.SetSerialConfig(serialCfg)
-
-	// Wire callbacks (same pattern as CreateSession)
-	s.SetOnDataCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-			"id":   s.ID(),
-			"data": string(data),
-		})
-	})
-	s.SetOnBinaryCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:binary", map[string]interface{}{
-			"id":   s.ID(),
-			"data": base64.StdEncoding.EncodeToString(data),
-		})
-	})
-	s.SetOnStatusChangeCallback(func(status session.SessionStatus) {
-		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
-			"id":     s.ID(),
-			"status": status,
-		})
-	})
-
-	// Connect asynchronously
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Writef("serial session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
-			}
-		}()
-		if err := s.Connect(config); err != nil {
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-					"id":   s.ID(),
-					"data": fmt.Sprintf("\r\n\x1b[31m[Serial connection failed: %v]\x1b[0m\r\n", err),
-				})
-			}
-			_ = a.sessionManager.Close(s.ID())
-		}
-	}()
-
-	return &session.SessionInfo{
-		ID:     s.ID(),
-		Type:   s.Type(),
-		Title:  s.Title(),
-		Status: s.Status(),
-	}, nil
 }
 
 // \u2500\u2500 Session output log \u2500\u2500

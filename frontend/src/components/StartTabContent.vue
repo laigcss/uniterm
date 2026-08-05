@@ -71,10 +71,7 @@
           </template>
         </el-dropdown>
       </div>
-      <button class="start-action-btn" @click="emit('connect-serial', $event.ctrlKey || $event.metaKey)">
-        <el-icon><Cable :size="14" /></el-icon>
-        {{ t('sidebar.connectSerial') }}
-      </button>
+
     </div>
 
     <!-- Breadcrumb for group view -->
@@ -453,9 +450,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   connect: [config: ConnectionConfig, keepOpen?: boolean]
-  'new-connection': [payload?: { host?: string; groupId?: string }]
+  'new-connection': [payload?: { host?: string; groupId?: string; type?: string }]
   'local-terminal': [shellPath: string, keepOpen?: boolean]
-  'connect-serial': [keepOpen?: boolean]
   'close-self': [tabId: string]
   'edit-connection': [config: ConnectionConfig]
   'change-group': [config: ConnectionConfig]
@@ -1199,7 +1195,7 @@ onUnmounted(() => {
 
 // Context menu actions
 function doConnect(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
-function doConnectSerial(_config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect-serial', e.ctrlKey || e.metaKey) }
+function doConnectSerial(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
 function doConnectSftp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: config })) }
 function doConnectMonitor(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: config })) }
 function doConnectRdp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-rdp', { detail: config })) }

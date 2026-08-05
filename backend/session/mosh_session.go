@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
 	mosh "github.com/unixshells/mosh-go"
 )
 
@@ -21,6 +23,14 @@ type MoshSession struct {
 	cancel     context.CancelFunc
 	quit       chan struct{}
 	quitOnce   sync.Once
+
+	mu             sync.RWMutex
+	enc            encoding.Encoding
+	decoder        *encoding.Decoder
+	encoder        *encoding.Encoder
+	decodeLeftover []byte
+	decodeScratch  []byte
+	encScratch     []byte
 }
 
 func NewMoshSession(id string) *MoshSession {
@@ -186,6 +196,75 @@ func startMoshServer(client *ssh.Client) (key string, udpPort int, err error) {
 	return key, udpPort, nil
 }
 
+// SetEncoding configures the character encoding for this session.
+// name: "" / "utf-8" (passthrough) | "gbk" | "gb2312" | "gb18030" |
+// "big5" | "shift-jis" | "euc-jp" | "euc-kr".
+func (s *MoshSession) SetEncoding(name string) {
+	enc := encodingByName(name)
+	s.mu.Lock()
+	s.enc = enc
+	if enc == nil {
+		s.decoder = nil
+		s.encoder = nil
+	} else {
+		s.decoder = enc.NewDecoder()
+		s.encoder = enc.NewEncoder()
+	}
+	s.decodeLeftover = nil
+	s.mu.Unlock()
+}
+
+// decodeOutput converts a chunk of remote bytes to UTF-8 using the configured
+// decoder. Partial trailing multibyte sequences are buffered until the next
+// call. Must only be called from the single readLoop goroutine.
+func (s *MoshSession) decodeOutput(data []byte) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.decoder == nil {
+		return data
+	}
+	s.decodeScratch = s.decodeScratch[:0]
+	s.decodeScratch = append(s.decodeScratch, s.decodeLeftover...)
+	s.decodeScratch = append(s.decodeScratch, data...)
+	src := s.decodeScratch
+
+	var out []byte
+	dst := make([]byte, 8192)
+	for {
+		nDst, nSrc, err := s.decoder.Transform(dst, src, false)
+		out = append(out, dst[:nDst]...)
+		src = src[nSrc:]
+		if err == transform.ErrShortDst {
+			continue
+		}
+		break
+	}
+	if len(src) > 0 {
+		s.decodeLeftover = append(s.decodeLeftover[:0], src...)
+	} else {
+		s.decodeLeftover = src[:0]
+	}
+	return out
+}
+
+// encodeInput converts user keystrokes (UTF-8) to the configured encoding
+// before writing to the remote. Each call handles a complete UTF-8 input.
+func (s *MoshSession) encodeInput(data []byte) []byte {
+	s.mu.RLock()
+	encoder := s.encoder
+	s.mu.RUnlock()
+	if encoder == nil {
+		return data
+	}
+	encoder.Reset()
+	s.encScratch = s.encScratch[:0]
+	nDst, _, err := encoder.Transform(s.encScratch, data, true)
+	if err != nil && err != transform.ErrShortSrc {
+		return data
+	}
+	return s.encScratch[:nDst]
+}
+
 // moshReadInterval is the timeout passed to moshClient.Recv. The previous
 // 100 ms value woke the readLoop 10 times/sec per idle session and was the
 // dominant contributor to the user's reported 900+ idle wakeups (F-009).
@@ -206,7 +285,7 @@ func (s *MoshSession) readLoop(ctx context.Context) {
 		data := s.moshClient.Recv(moshReadInterval)
 		if len(data) > 0 {
 			s.RecordReadActivity()
-			s.emitData(data)
+			s.emitData(s.decodeOutput(data))
 		}
 
 		if s.moshClient == nil {
@@ -219,7 +298,7 @@ func (s *MoshSession) Write(data []byte) error {
 	if s.moshClient == nil {
 		return fmt.Errorf("not connected")
 	}
-	s.moshClient.Send(data)
+	s.moshClient.Send(s.encodeInput(data))
 	return nil
 }
 
