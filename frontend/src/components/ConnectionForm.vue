@@ -373,19 +373,21 @@
                   <el-option :label="t('conn.telnetNegotiationPassive')" value="passive" />
                 </el-select>
               </el-form-item>
-              <el-form-item :label="t('conn.telnetLocalEcho')">
-                <el-switch v-model="form.telnetLocalEcho" />
-              </el-form-item>
               <el-form-item :label="t('conn.telnetSendMode')">
                 <el-select v-model="form.telnetSendMode">
                   <el-option :label="t('conn.telnetSendModeChar')" value="character" />
                   <el-option :label="t('conn.telnetSendModeLine')" value="line" />
                 </el-select>
               </el-form-item>
-              <el-form-item :label="t('conn.telnetNewlineMode')">
-                <el-select v-model="form.telnetNewlineMode">
-                  <el-option :label="t('conn.telnetNewlineCR')" value="cr" />
-                  <el-option :label="t('conn.telnetNewlineCRLF')" value="crlf" />
+            </template>
+            <template v-if="form.type === 'telnet' || form.type === 'serial'">
+              <el-form-item :label="t('conn.localEcho')">
+                <el-switch v-model="form.localEcho" />
+              </el-form-item>
+              <el-form-item :label="t('conn.newlineMode')">
+                <el-select v-model="form.newlineMode">
+                  <el-option label="CR" value="cr" />
+                  <el-option label="CR+LF" value="crlf" />
                 </el-select>
               </el-form-item>
             </template>
@@ -786,6 +788,8 @@ const form = reactive<ConnectionConfig>({
   telnetLocalEcho: false,
   telnetSendMode: 'character' as 'character' | 'line',
   telnetNewlineMode: 'cr' as 'cr' | 'crlf',
+  localEcho: false,
+  newlineMode: 'cr' as 'cr' | 'crlf',
   shellPath: '',
   smbDomain: 'WORKGROUP',
   smbShare: '',
@@ -1001,6 +1005,8 @@ function resetForm() {
   form.telnetLocalEcho = false
   form.telnetSendMode = 'character'
   form.telnetNewlineMode = 'cr'
+  form.localEcho = false
+  form.newlineMode = 'cr'
   form.shellPath = ''
   form.serialPort = ''
   form.serialBaudRate = 115200

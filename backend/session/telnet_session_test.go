@@ -71,16 +71,16 @@ func testTelnetPair(t *testing.T, config ConnectionConfig) (*TelnetSession, *pip
 	s.cancel = context.CancelFunc(func() {})
 	s.setStatus(StatusConnected)
 
-	s.telnetLocalEcho = config.TelnetLocalEcho
+	s.localEcho = config.LocalEcho
 	s.telnetSendMode = config.TelnetSendMode
-	s.telnetNewlineMode = config.TelnetNewlineMode
+	s.newlineMode = config.NewlineMode
 
 	ps := newPipeServer(t, server)
 	return s, ps
 }
 
 func TestTelnetLocalEcho(t *testing.T) {
-	config := ConnectionConfig{TelnetLocalEcho: true}
+	config := ConnectionConfig{LocalEcho: true}
 	s, ps := testTelnetPair(t, config)
 	defer ps.close()
 	defer s.Disconnect()
@@ -106,7 +106,7 @@ func TestTelnetLocalEcho(t *testing.T) {
 }
 
 func TestTelnetLocalEchoOff(t *testing.T) {
-	config := ConnectionConfig{TelnetLocalEcho: false}
+	config := ConnectionConfig{LocalEcho: false}
 	s, ps := testTelnetPair(t, config)
 	defer ps.close()
 	defer s.Disconnect()
@@ -189,7 +189,7 @@ func TestTelnetSendModeLineLF(t *testing.T) {
 }
 
 func TestTelnetNewlineCRLF(t *testing.T) {
-	config := ConnectionConfig{TelnetNewlineMode: "crlf"}
+	config := ConnectionConfig{NewlineMode: "crlf"}
 	s, ps := testTelnetPair(t, config)
 	defer ps.close()
 	defer s.Disconnect()
@@ -203,7 +203,7 @@ func TestTelnetNewlineCRLF(t *testing.T) {
 }
 
 func TestTelnetNewlineCR(t *testing.T) {
-	config := ConnectionConfig{TelnetNewlineMode: "cr"}
+	config := ConnectionConfig{NewlineMode: "cr"}
 	s, ps := testTelnetPair(t, config)
 	defer ps.close()
 	defer s.Disconnect()
@@ -219,7 +219,7 @@ func TestTelnetNewlineCR(t *testing.T) {
 func TestTelnetNewlineCRLFWithLineMode(t *testing.T) {
 	config := ConnectionConfig{
 		TelnetSendMode:    "line",
-		TelnetNewlineMode: "crlf",
+		NewlineMode: "crlf",
 	}
 	s, ps := testTelnetPair(t, config)
 	defer ps.close()
@@ -236,7 +236,7 @@ func TestTelnetNewlineCRLFWithLineMode(t *testing.T) {
 
 func TestTelnetLocalEchoAndLineMode(t *testing.T) {
 	config := ConnectionConfig{
-		TelnetLocalEcho: false,
+		LocalEcho: false,
 		TelnetSendMode:  "line",
 	}
 	s, ps := testTelnetPair(t, config)
