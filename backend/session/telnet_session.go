@@ -48,6 +48,12 @@ type TelnetSession struct {
 	decodeLeftover []byte                // trailing partial multibyte bytes between reads
 	decodeScratch  []byte                // reusable src buffer for decodeOutput
 	encScratch     []byte                // reusable dst buffer for encodeInput
+
+	// Telnet option state (configured in Connect, consumed by Write)
+	telnetLocalEcho   bool
+	telnetSendMode    string // "character" | "line"
+	telnetNewlineMode string // "cr" | "crlf"
+	lineBuf           []byte
 }
 
 func NewTelnetSession(id string) *TelnetSession {
@@ -83,16 +89,23 @@ func (s *TelnetSession) Connect(config ConnectionConfig) error {
 	s.cancel = cancel
 	s.setStatus(StatusConnected)
 
-	// Proactively negotiate binary transmission, character-at-a-time mode,
-	// and terminal type. These are essential for arrow keys, backspace, etc.
-	s.conn.Write([]byte{telnetIAC, telnetWILL, telnetOptBinary})
-	s.conn.Write([]byte{telnetIAC, telnetDO, telnetOptSuppressGoAhead})
-	s.conn.Write([]byte{telnetIAC, telnetWILL, telnetOptTerminalType})
+	// Store telnet option configuration for use by Write()
+	s.telnetLocalEcho = config.TelnetLocalEcho
+	s.telnetSendMode = config.TelnetSendMode
+	s.telnetNewlineMode = config.TelnetNewlineMode
 
-	if cols, rows := s.GetPendingSize(); cols > 0 && rows > 0 {
-		s.sendNAWS(cols, rows)
-	} else {
-		s.sendNAWS(80, 24)
+	// Proactively negotiate binary transmission, character-at-a-time mode,
+	// and terminal type — unless the user opted for passive negotiation.
+	if config.TelnetNegotiationMode != "passive" {
+		s.conn.Write([]byte{telnetIAC, telnetWILL, telnetOptBinary})
+		s.conn.Write([]byte{telnetIAC, telnetDO, telnetOptSuppressGoAhead})
+		s.conn.Write([]byte{telnetIAC, telnetWILL, telnetOptTerminalType})
+
+		if cols, rows := s.GetPendingSize(); cols > 0 && rows > 0 {
+			s.sendNAWS(cols, rows)
+		} else {
+			s.sendNAWS(80, 24)
+		}
 	}
 
 	go s.readLoop(ctx)
@@ -289,7 +302,57 @@ func (s *TelnetSession) Write(data []byte) error {
 	if s.conn == nil {
 		return fmt.Errorf("not connected")
 	}
-	_, err := s.conn.Write(s.encodeInput(data))
+
+	encoded := s.encodeInput(data)
+
+	// Line mode: buffer until \r or \n, then flush
+	if s.telnetSendMode == "line" {
+		for _, b := range encoded {
+			s.lineBuf = append(s.lineBuf, b)
+			if b == '\r' || b == '\n' {
+				flush := s.lineBuf
+				// Apply CRLF translation on the flushed line
+				if s.telnetNewlineMode == "crlf" {
+					var translated []byte
+					for _, fb := range flush {
+						if fb == '\r' {
+							translated = append(translated, '\r', '\n')
+						} else {
+							translated = append(translated, fb)
+						}
+					}
+					flush = translated
+				}
+				_, err := s.conn.Write(flush)
+				s.lineBuf = s.lineBuf[:0]
+				return err
+			}
+		}
+		// Echo each character locally while buffering for visibility
+		s.emitData(data)
+		return nil
+	}
+
+	// Character mode: apply CRLF translation, then send immediately
+	if s.telnetNewlineMode == "crlf" {
+		var translated []byte
+		for _, b := range encoded {
+			if b == '\r' {
+				translated = append(translated, '\r', '\n')
+			} else {
+				translated = append(translated, b)
+			}
+		}
+		encoded = translated
+	}
+
+	_, err := s.conn.Write(encoded)
+
+	// Local echo: show typed characters in terminal (for servers that don't echo)
+	if err == nil && s.telnetLocalEcho {
+		s.emitData(data)
+	}
+
 	return err
 }
 

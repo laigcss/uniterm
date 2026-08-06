@@ -152,6 +152,19 @@ type ConnectionConfig struct {
 	// kept here so the Wails binding reflects the full connection contract.
 	// ""(default) | "del"(0x7F) | "bs"(0x08) | "vt220"(ESC[3~)
 	BackspaceKey string `json:"backspaceKey,omitempty"`
+	// Telnet-specific fields
+	// TelnetNegotiationMode controls who initiates option negotiation.
+	// "active" (default) — client sends WILL/DO after connect.
+	// "passive" — client only responds to server negotiation.
+	TelnetNegotiationMode string `json:"telnetNegotiationMode,omitempty"`
+	// TelnetLocalEcho echoes typed characters locally when the server doesn't.
+	TelnetLocalEcho bool `json:"telnetLocalEcho,omitempty"`
+	// TelnetSendMode: "character" (default) — each keystroke sent immediately.
+	// "line" — buffer until Enter, send the whole line.
+	TelnetSendMode string `json:"telnetSendMode,omitempty"`
+	// TelnetNewlineMode: "cr" (default) — Enter sends \r.
+	// "crlf" — Enter sends \r\n.
+	TelnetNewlineMode string `json:"telnetNewlineMode,omitempty"`
 	// K8s-specific fields
 	K8sConfigPath   string `json:"k8sConfigPath,omitempty"`   // File 模式：kubeconfig 文件路径
 	K8sConfigInline string `json:"k8sConfigInline,omitempty"` // Inline 模式：kubeconfig YAML 全文（明文存储，同其他连接密码策略）

@@ -366,6 +366,29 @@
                 <el-option label="Korean (EUC-KR)" value="euc-kr" />
               </el-select>
             </el-form-item>
+            <template v-if="form.type === 'telnet'">
+              <el-form-item :label="t('conn.telnetNegotiationMode')">
+                <el-select v-model="form.telnetNegotiationMode">
+                  <el-option :label="t('conn.telnetNegotiationActive')" value="active" />
+                  <el-option :label="t('conn.telnetNegotiationPassive')" value="passive" />
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="t('conn.telnetLocalEcho')">
+                <el-switch v-model="form.telnetLocalEcho" />
+              </el-form-item>
+              <el-form-item :label="t('conn.telnetSendMode')">
+                <el-select v-model="form.telnetSendMode">
+                  <el-option :label="t('conn.telnetSendModeChar')" value="character" />
+                  <el-option :label="t('conn.telnetSendModeLine')" value="line" />
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="t('conn.telnetNewlineMode')">
+                <el-select v-model="form.telnetNewlineMode">
+                  <el-option :label="t('conn.telnetNewlineCR')" value="cr" />
+                  <el-option :label="t('conn.telnetNewlineCRLF')" value="crlf" />
+                </el-select>
+              </el-form-item>
+            </template>
             <el-form-item
               v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh'"
               :label="t('conn.backspaceKey')"
@@ -759,6 +782,10 @@ const form = reactive<ConnectionConfig>({
   vncRepeaterID: '',
   encoding: 'utf-8',
   backspaceKey: 'bs',
+  telnetNegotiationMode: 'active' as 'active' | 'passive',
+  telnetLocalEcho: false,
+  telnetSendMode: 'character' as 'character' | 'line',
+  telnetNewlineMode: 'cr' as 'cr' | 'crlf',
   shellPath: '',
   smbDomain: 'WORKGROUP',
   smbShare: '',
@@ -970,6 +997,10 @@ function resetForm() {
   form.vncRepeaterID = ''
   form.encoding = 'utf-8'
   form.backspaceKey = 'bs'
+  form.telnetNegotiationMode = 'active'
+  form.telnetLocalEcho = false
+  form.telnetSendMode = 'character'
+  form.telnetNewlineMode = 'cr'
   form.shellPath = ''
   form.serialPort = ''
   form.serialBaudRate = 115200

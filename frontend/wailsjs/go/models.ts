@@ -614,6 +614,10 @@ export namespace session {
 	    encoding?: string;
 	    x11Forwarding?: boolean;
 	    backspaceKey?: string;
+	    telnetNegotiationMode?: string;
+	    telnetLocalEcho?: boolean;
+	    telnetSendMode?: string;
+	    telnetNewlineMode?: string;
 	    k8sConfigPath?: string;
 	    k8sConfigInline?: string;
 	    k8sContext?: string;
@@ -684,6 +688,10 @@ export namespace session {
 	        this.encoding = source["encoding"];
 	        this.x11Forwarding = source["x11Forwarding"];
 	        this.backspaceKey = source["backspaceKey"];
+	        this.telnetNegotiationMode = source["telnetNegotiationMode"];
+	        this.telnetLocalEcho = source["telnetLocalEcho"];
+	        this.telnetSendMode = source["telnetSendMode"];
+	        this.telnetNewlineMode = source["telnetNewlineMode"];
 	        this.k8sConfigPath = source["k8sConfigPath"];
 	        this.k8sConfigInline = source["k8sConfigInline"];
 	        this.k8sContext = source["k8sContext"];
