@@ -228,6 +228,7 @@ func (ts *TunnelService) dialChain(chain []ConnectionConfig, upstream *SocksProx
 			Auth:            makeSSHAuthMethods(cfg, nil),
 			Timeout:         30 * time.Second,
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Config:          sshAlgorithms(),
 		}
 		sshConn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
 		if err != nil {

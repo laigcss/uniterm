@@ -22,7 +22,7 @@ func DialSSHClient(config ConnectionConfig) (*ssh.Client, error) {
 		Auth:            authMethods,
 		Timeout:         30 * time.Second,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config:          ssh.Config{KeyExchanges: sshKeyExchanges()},
+		Config:          sshAlgorithms(),
 	}
 	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
 	if err != nil {
