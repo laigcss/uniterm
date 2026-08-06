@@ -50,9 +50,9 @@ type TelnetSession struct {
 	encScratch     []byte                // reusable dst buffer for encodeInput
 
 	// Telnet option state (configured in Connect, consumed by Write)
-	telnetLocalEcho   bool
+	localEcho   bool
 	telnetSendMode    string // "character" | "line"
-	telnetNewlineMode string // "cr" | "crlf"
+	newlineMode string // "cr" | "crlf"
 	lineBuf           []byte
 }
 
@@ -90,9 +90,9 @@ func (s *TelnetSession) Connect(config ConnectionConfig) error {
 	s.setStatus(StatusConnected)
 
 	// Store telnet option configuration for use by Write()
-	s.telnetLocalEcho = config.TelnetLocalEcho
+	s.localEcho = config.LocalEcho
 	s.telnetSendMode = config.TelnetSendMode
-	s.telnetNewlineMode = config.TelnetNewlineMode
+	s.newlineMode = config.NewlineMode
 
 	// Proactively negotiate binary transmission, character-at-a-time mode,
 	// and terminal type — unless the user opted for passive negotiation.
@@ -312,7 +312,7 @@ func (s *TelnetSession) Write(data []byte) error {
 			if b == '\r' || b == '\n' {
 				flush := s.lineBuf
 				// Apply CRLF translation on the flushed line
-				if s.telnetNewlineMode == "crlf" {
+				if s.newlineMode == "crlf" {
 					var translated []byte
 					for _, fb := range flush {
 						if fb == '\r' {
@@ -334,7 +334,7 @@ func (s *TelnetSession) Write(data []byte) error {
 	}
 
 	// Character mode: apply CRLF translation, then send immediately
-	if s.telnetNewlineMode == "crlf" {
+	if s.newlineMode == "crlf" {
 		var translated []byte
 		for _, b := range encoded {
 			if b == '\r' {
@@ -349,7 +349,7 @@ func (s *TelnetSession) Write(data []byte) error {
 	_, err := s.conn.Write(encoded)
 
 	// Local echo: show typed characters in terminal (for servers that don't echo)
-	if err == nil && s.telnetLocalEcho {
+	if err == nil && s.localEcho {
 		s.emitData(data)
 	}
 

@@ -157,14 +157,13 @@ type ConnectionConfig struct {
 	// "active" (default) — client sends WILL/DO after connect.
 	// "passive" — client only responds to server negotiation.
 	TelnetNegotiationMode string `json:"telnetNegotiationMode,omitempty"`
-	// TelnetLocalEcho echoes typed characters locally when the server doesn't.
-	TelnetLocalEcho bool `json:"telnetLocalEcho,omitempty"`
+	// LocalEcho echoes typed characters locally when the remote side doesn't.
+	LocalEcho bool `json:"localEcho,omitempty"`
 	// TelnetSendMode: "character" (default) — each keystroke sent immediately.
 	// "line" — buffer until Enter, send the whole line.
 	TelnetSendMode string `json:"telnetSendMode,omitempty"`
-	// TelnetNewlineMode: "cr" (default) — Enter sends \r.
-	// "crlf" — Enter sends \r\n.
-	TelnetNewlineMode string `json:"telnetNewlineMode,omitempty"`
+	// NewlineMode: "cr" (default) — Enter sends \r. "crlf" — Enter sends \r\n.
+	NewlineMode string `json:"newlineMode,omitempty"`
 	// K8s-specific fields
 	K8sConfigPath   string `json:"k8sConfigPath,omitempty"`   // File 模式：kubeconfig 文件路径
 	K8sConfigInline string `json:"k8sConfigInline,omitempty"` // Inline 模式：kubeconfig YAML 全文（明文存储，同其他连接密码策略）

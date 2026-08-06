@@ -33,6 +33,9 @@ type SerialSession struct {
 	decodeLeftover []byte
 	decodeScratch  []byte
 	encScratch     []byte
+
+	localEcho   bool
+	newlineMode string // "cr" | "crlf"
 }
 
 func NewSerialSession(id string) *SerialSession {
@@ -48,6 +51,8 @@ func NewSerialSession(id string) *SerialSession {
 
 func (s *SerialSession) Connect(config ConnectionConfig) error {
 	s.SetLogOnConnect(config.LogOnConnect)
+	s.localEcho = config.LocalEcho
+	s.newlineMode = config.NewlineMode
 	// Serial sessions ignore other ConnectionConfig fields; they receive
 	// their real config via SetSerialConfig before Connect is called.
 	if s.config.PortName == "" || s.config.BaudRate == 0 {
@@ -220,7 +225,29 @@ func (s *SerialSession) Write(data []byte) error {
 	if s.port == nil {
 		return fmt.Errorf("serial port not connected")
 	}
-	_, err := s.port.Write(s.encodeInput(data))
+
+	encoded := s.encodeInput(data)
+
+	// Translate \r to \r\n when newline mode is CRLF
+	if s.newlineMode == "crlf" {
+		var translated []byte
+		for _, b := range encoded {
+			if b == '\r' {
+				translated = append(translated, '\r', '\n')
+			} else {
+				translated = append(translated, b)
+			}
+		}
+		encoded = translated
+	}
+
+	_, err := s.port.Write(encoded)
+
+	// Local echo: show typed characters in terminal when device doesn't echo
+	if err == nil && s.localEcho {
+		s.emitData(data)
+	}
+
 	return err
 }
 
