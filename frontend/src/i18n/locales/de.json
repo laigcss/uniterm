@@ -855,6 +855,8 @@
   "k8s.scaled": "Skaliert",
   "k8s.done": "Fertig",
   "k8s.drainConfirm": "Node {name} drainen? Pods werden verdrängt.",
+  "k8s.cordonConfirm": "Node {name} cordonen? Er wird keine neuen Pods mehr annehmen.",
+  "k8s.uncordonConfirm": "Node {name} uncordonen? Er wird wieder neue Pods annehmen.",
   "k8s.drained": "{evicted} verdrängt, {skipped} übersprungen",
   "k8s.drainErrors": ", Fehler: {count}",
   "k8s.created": "Erstellt",

@@ -855,6 +855,8 @@
   "k8s.scaled": "Масштабировано",
   "k8s.done": "Готово",
   "k8s.drainConfirm": "Drain узла {name}? Pod'ы будут вытеснены.",
+  "k8s.cordonConfirm": "Cordon узла {name}? Он перестанет принимать новые Pod'ы.",
+  "k8s.uncordonConfirm": "Uncordon узла {name}? Он снова будет принимать новые Pod'ы.",
   "k8s.drained": "Вытеснено {evicted}, пропущено {skipped}",
   "k8s.drainErrors": ", ошибок: {count}",
   "k8s.created": "Создано",

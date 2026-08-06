@@ -855,6 +855,8 @@
   "k8s.scaled": "スケールしました",
   "k8s.done": "完了",
   "k8s.drainConfirm": "ノード {name} を Drain しますか？Pod が退避されます。",
+  "k8s.cordonConfirm": "ノード {name} を Cordon しますか？新しい Pod を受け付けなくなります。",
+  "k8s.uncordonConfirm": "ノード {name} を Uncordon しますか？新しい Pod を再び受け付けるようになります。",
   "k8s.drained": "退避 {evicted}、スキップ {skipped}",
   "k8s.drainErrors": "、エラー {count}",
   "k8s.created": "作成しました",

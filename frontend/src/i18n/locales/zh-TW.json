@@ -855,6 +855,8 @@
   "k8s.scaled": "已伸縮",
   "k8s.done": "完成",
   "k8s.drainConfirm": "確定驅逐節點 {name}？其上的 Pod 將被驅逐。",
+  "k8s.cordonConfirm": "確定封禁節點 {name}？它將停止接受新 Pod。",
+  "k8s.uncordonConfirm": "確定解禁節點 {name}？它將恢復接受新 Pod。",
   "k8s.drained": "已驅逐 {evicted}，跳過 {skipped}",
   "k8s.drainErrors": "，錯誤 {count}",
   "k8s.created": "已建立",

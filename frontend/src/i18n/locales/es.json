@@ -855,6 +855,8 @@
   "k8s.scaled": "Escalado",
   "k8s.done": "Hecho",
   "k8s.drainConfirm": "¿Drenar nodo {name}? Los Pods serán desalojados.",
+  "k8s.cordonConfirm": "¿Aislar nodo {name}? Dejará de aceptar nuevos Pods.",
+  "k8s.uncordonConfirm": "¿Desaislar nodo {name}? Volverá a aceptar nuevos Pods.",
   "k8s.drained": "Desalojados {evicted}, omitidos {skipped}",
   "k8s.drainErrors": ", errores: {count}",
   "k8s.created": "Creado",

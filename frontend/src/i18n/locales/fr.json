@@ -855,6 +855,8 @@
   "k8s.scaled": "Mis à l'échelle",
   "k8s.done": "Terminé",
   "k8s.drainConfirm": "Drainer le nœud {name} ? Les Pods seront évincés.",
+  "k8s.cordonConfirm": "Cordonner le nœud {name} ? Il cessera d'accepter de nouveaux Pods.",
+  "k8s.uncordonConfirm": "Décordonner le nœud {name} ? Il acceptera à nouveau de nouveaux Pods.",
   "k8s.drained": "{evicted} évincés, {skipped} ignorés",
   "k8s.drainErrors": ", erreurs : {count}",
   "k8s.created": "Créé",
