@@ -653,6 +653,28 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   // Check global shortcuts first (Ctrl+Shift+/Alt+ combos)
   if (e.type === 'keydown' && !onTerminalKey(e)) return false
 
+  // macOS 26/27 beta: the first letter typed right after toggling Caps Lock
+  // arrives with keyCode 229 (the IME "composing" code) despite no real
+  // composition, so xterm's CompositionHelper swallows it and it only appears
+  // on the next keystroke (upstream xtermjs/xterm.js#5887, issue #483). keyCode
+  // 229 never fires for an ordinary letter key, and we further require Caps Lock
+  // on + an uppercase A–Z so lowercase IME composition (pinyin's first key) is
+  // untouched — re-inject the char through the normal onData pipeline ourselves.
+  if (
+    isMac &&
+    e.type === 'keydown' &&
+    e.keyCode === 229 &&
+    !e.isComposing &&
+    e.getModifierState('CapsLock') &&
+    /^[A-Z]$/.test(e.key) &&
+    !e.ctrlKey && !e.metaKey && !e.altKey &&
+    (props.mode === 'ssh' || props.mode === 'local')
+  ) {
+    e.preventDefault()
+    terminal?.input(e.key)
+    return false
+  }
+
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
   // Bind to the platform's paste shortcut only — Cmd+V on macOS, Ctrl+Shift+V
   // elsewhere. Plain Ctrl+V is never intercepted, so it passes through to the
