@@ -21,6 +21,7 @@ type TerminalSettings struct {
 	RightClickAction string `json:"rightClickAction"`
 	MaxHistoryLines  int    `json:"maxHistoryLines"`
 	SmartCompletion  *bool  `json:"smartCompletion"`
+	AiTranscription  *bool  `json:"aiTranscription"`
 	HighlightEnabled *bool  `json:"highlightEnabled"`
 	// CursorBlink controls xterm.js's cursor blink. Pointer + omitempty so
 	// settings.json written by older builds (which lack this field) still

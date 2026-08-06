@@ -344,6 +344,8 @@
   "settings.maxHistoryDesc": "터미널에 유지할 최대 출력 줄 수",
   "settings.smartCompletion": "스마트 완성",
   "settings.smartCompletionDesc": "입력 중에 기록 및 AI 제안 표시",
+  "settings.aiTranscription": "AI 트랜스크라이빙",
+  "settings.aiTranscriptionDesc": "입력 중 AI 명령어 재작성 제안 표시 (API 키 필요)",
   "settings.fetchModels": "모델 가져오기",
   "settings.fetchModelsSuccess": "{connCount}개의 모델을 가져왔습니다",
   "settings.fetchModelsFailed": "모델을 가져오지 못했습니다",

@@ -344,6 +344,8 @@
   "settings.maxHistoryDesc": "Maximale Anzahl ausgegebener Zeilen im Terminal",
   "settings.smartCompletion": "Intelligente Vervollständigung",
   "settings.smartCompletionDesc": "Verlaufs- und KI-Vorschläge beim Tippen anzeigen",
+  "settings.aiTranscription": "KI-Transkription",
+  "settings.aiTranscriptionDesc": "KI-basierte Befehlsvorschläge beim Tippen (API-Key erforderlich)",
   "settings.fetchModels": "Modelle abrufen",
   "settings.fetchModelsSuccess": "{connCount} Modelle abgerufen",
   "settings.fetchModelsFailed": "Modelle konnten nicht abgerufen werden",

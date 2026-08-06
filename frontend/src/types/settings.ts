@@ -50,6 +50,7 @@ export interface TerminalSettings {
   middleClickAction: 'none' | 'paste'
   maxHistoryLines: number
   smartCompletion: boolean
+  aiTranscription: boolean
   highlightEnabled: boolean
   cursorBlink: boolean
   // Override for the session output log directory. Empty means the
@@ -170,6 +171,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     middleClickAction: 'paste',
     maxHistoryLines: 2500,
     smartCompletion: true,
+    aiTranscription: true,
     highlightEnabled: true,
     cursorBlink: true,
     sessionLogDir: '',

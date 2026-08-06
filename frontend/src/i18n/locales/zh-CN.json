@@ -344,6 +344,8 @@
   "settings.maxHistoryDesc": "终端保留的最大输出行数",
   "settings.smartCompletion": "智能补全",
   "settings.smartCompletionDesc": "输入时显示历史命令和 AI 补全建议",
+  "settings.aiTranscription": "AI 转写",
+  "settings.aiTranscriptionDesc": "输入时通过 AI 提供命令改写建议（需先配置 API Key）",
   "settings.fetchModels": "拉取模型列表",
   "settings.fetchModelsSuccess": "已拉取 {count} 个模型",
   "settings.fetchModelsFailed": "拉取模型列表失败",
