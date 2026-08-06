@@ -339,6 +339,16 @@
 
           <div class="setting-card">
             <div class="setting-info">
+              <div class="setting-title">{{ t('settings.aiTranscription') }}</div>
+              <div class="setting-desc">{{ t('settings.aiTranscriptionDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.aiTranscription ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.aiTranscription = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
               <div class="setting-title">{{ t('settings.highlight') }}</div>
               <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
             </div>

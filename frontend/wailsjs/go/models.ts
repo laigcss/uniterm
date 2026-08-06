@@ -1478,6 +1478,7 @@ export namespace store {
 	    rightClickAction: string;
 	    maxHistoryLines: number;
 	    smartCompletion?: boolean;
+	    aiTranscription?: boolean;
 	    highlightEnabled?: boolean;
 	    cursorBlink?: boolean;
 	    sessionLogDir?: string;
@@ -1496,6 +1497,7 @@ export namespace store {
 	        this.rightClickAction = source["rightClickAction"];
 	        this.maxHistoryLines = source["maxHistoryLines"];
 	        this.smartCompletion = source["smartCompletion"];
+	        this.aiTranscription = source["aiTranscription"];
 	        this.highlightEnabled = source["highlightEnabled"];
 	        this.cursorBlink = source["cursorBlink"];
 	        this.sessionLogDir = source["sessionLogDir"];

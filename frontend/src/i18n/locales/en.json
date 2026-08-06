@@ -344,6 +344,8 @@
   "settings.maxHistoryDesc": "Maximum output lines to keep in terminal",
   "settings.smartCompletion": "Smart Completion",
   "settings.smartCompletionDesc": "Show history and AI suggestions while typing",
+  "settings.aiTranscription": "AI Transcription",
+  "settings.aiTranscriptionDesc": "Suggest command rewrites via AI when typing (requires API key configured)",
   "settings.fetchModels": "Fetch Models",
   "settings.fetchModelsSuccess": "Fetched {count} models",
   "settings.fetchModelsFailed": "Failed to fetch models",

@@ -344,6 +344,8 @@
   "settings.maxHistoryDesc": "Nombre maximum de lignes de sortie conservées dans le terminal",
   "settings.smartCompletion": "Complétion intelligente",
   "settings.smartCompletionDesc": "Afficher les suggestions d'historique et de IA pendant la saisie",
+  "settings.aiTranscription": "Transcription IA",
+  "settings.aiTranscriptionDesc": "Suggérer des réécritures de commandes via IA pendant la saisie (clé API requise)",
   "settings.fetchModels": "Récupérer les modèles",
   "settings.fetchModelsSuccess": "{connCount} modèles récupérés",
   "settings.fetchModelsFailed": "Échec de la récupération des modèles",
