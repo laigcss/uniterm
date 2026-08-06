@@ -855,6 +855,8 @@
   "k8s.scaled": "Scaled",
   "k8s.done": "Done",
   "k8s.drainConfirm": "Drain node {name}? Pods will be evicted.",
+  "k8s.cordonConfirm": "Cordon node {name}? It will stop accepting new pods.",
+  "k8s.uncordonConfirm": "Uncordon node {name}? It will start accepting new pods again.",
   "k8s.drained": "Evicted {evicted}, skipped {skipped}",
   "k8s.drainErrors": ", errors: {count}",
   "k8s.created": "Created",
