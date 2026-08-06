@@ -114,6 +114,11 @@ export interface ConnectionConfig {
   // 'bs'   = ASCII BS  (0x08) — Huawei/H3C/Cisco network gear, Windows convention
   // 'vt220'= VT220 Delete (ESC[3~) — H3C / late Cisco IOS
   backspaceKey?: 'del' | 'bs' | 'vt220'
+  // Telnet-specific options
+  telnetNegotiationMode?: 'active' | 'passive'
+  telnetLocalEcho?: boolean
+  telnetSendMode?: 'character' | 'line'
+  telnetNewlineMode?: 'cr' | 'crlf'
   // Enable SSH X11 forwarding (ssh -X semantics). Bridges remote X11
   // clients to the local X server at $DISPLAY. Requires a local X server
   // (XQuartz on macOS, VcXsrv on Windows). Silent degradation on
