@@ -108,12 +108,17 @@ func startX11Forward(client *ssh.Client, session *ssh.Session, xauthPath, displa
 	if display == "" {
 		// Windows convenience: VcXsrv is standard at localhost:0;
 		// assume that's what the user has and skip the empty-DISPLAY error.
-		// macOS / Linux keep the strict behavior — their DISPLAY is normally
-		// set by the session, and a missing one is usually intentional.
 		if runtime.GOOS == "windows" {
 			display = "localhost:0"
 		} else {
-			return nil, errX11DisplayEmpty
+			// macOS / Linux: a GUI-launched app (esp. a Finder-launched
+			// .app with its env stripped) often has no $DISPLAY even when
+			// XQuartz/Xorg is running. Probe /tmp/.X11-unix for a live
+			// socket before giving up.
+			display = resolveLocalDisplay(display)
+			if display == "" {
+				return nil, errX11DisplayEmpty
+			}
 		}
 	}
 

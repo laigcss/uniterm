@@ -3,6 +3,7 @@ package session
 import (
 	"net"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"testing"
 )
@@ -82,6 +83,33 @@ func TestDialLocalX_DisplayUnset(t *testing.T) {
 	_, err := DialLocalX("")
 	if err == nil {
 		t.Fatal("expected error for empty DISPLAY")
+	}
+}
+
+func TestResolveLocalDisplay(t *testing.T) {
+	// A non-empty value is always used verbatim, regardless of OS.
+	if got := resolveLocalDisplay(":3"); got != ":3" {
+		t.Errorf("non-empty passthrough: got %q, want %q", got, ":3")
+	}
+	if got := resolveLocalDisplay("host:0"); got != "host:0" {
+		t.Errorf("non-empty passthrough: got %q, want %q", got, "host:0")
+	}
+
+	// Empty-value probing is platform-specific.
+	got := resolveLocalDisplay("")
+	switch runtime.GOOS {
+	case "windows":
+		// No socket probing on Windows — empty stays empty.
+		if got != "" {
+			t.Errorf("windows empty: got %q, want \"\"", got)
+		}
+	default:
+		// macOS/Linux: either no live socket ("") or a well-formed ":n"
+		// discovered from /tmp/.X11-unix. Assert the shape, not a fixed
+		// value, so the test doesn't depend on whether an X server runs.
+		if got != "" && !regexp.MustCompile(`^:\d+$`).MatchString(got) {
+			t.Errorf("probed display %q is not empty or \":n\"", got)
+		}
 	}
 }
 

@@ -58,6 +58,40 @@ func ParseDisplay(s string) (host string, display, screen int, err error) {
 	return host, display, screen, nil
 }
 
+// resolveLocalDisplay returns a usable X11 display string. A non-empty raw
+// value (normally $DISPLAY) is used verbatim. When it's empty on macOS/Linux
+// — a GUI-launched app often doesn't inherit $DISPLAY, and a macOS .app opened
+// from Finder/Dock has its environment stripped entirely — it probes the
+// standard socket dir /tmp/.X11-unix/Xn and returns ":n" for the lowest live
+// socket (XQuartz/Xorg both listen there). Returns "" if nothing is found.
+func resolveLocalDisplay(raw string) string {
+	if raw != "" || runtime.GOOS == "windows" {
+		return raw
+	}
+	entries, err := os.ReadDir("/tmp/.X11-unix")
+	if err != nil {
+		return ""
+	}
+	best := -1
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, "X") {
+			continue
+		}
+		n, aerr := strconv.Atoi(name[1:])
+		if aerr != nil || n < 0 {
+			continue
+		}
+		if best == -1 || n < best {
+			best = n
+		}
+	}
+	if best == -1 {
+		return ""
+	}
+	return ":" + strconv.Itoa(best)
+}
+
 // DialLocalX connects to the X server pointed to by `display`.
 //   - ":N" / "unix:N"                         → unix socket /tmp/.X11-unix/XN
 //     on Linux/macOS, with a parallel TCP fallback to 127.0.0.1:6000+N.
