@@ -77,7 +77,7 @@
                 </template>
               </div>
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh'" :label="t('conn.authType')">
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
                 <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
@@ -105,7 +105,7 @@
                 <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
               </el-form-item>
             </template>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPath')">
+            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPath')">
               <el-input v-model="form.keyPath" :placeholder="t('conn.keyPathPlaceholder')">
                 <template #append>
                   <el-tooltip :content="t('conn.selectKeyFile')" placement="top">
@@ -116,7 +116,7 @@
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPassphrase')">
+            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.keyPassphrasePlaceholder')" />
             </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
@@ -275,6 +275,25 @@
             <template v-if="form.type === 'vnc'">
               <el-form-item :label="t('conn.vncEncryptionRequire')">
                 <el-switch v-model="vncRequireTLS" />
+              </el-form-item>
+            </template>
+            <template v-if="form.type === 'x11-desktop'">
+              <el-form-item :label="t('conn.x11DesktopDE')" required>
+                <el-select v-model="form.x11DesktopDesktopType">
+                  <el-option label="GNOME" value="gnome" />
+                  <el-option label="KDE" value="kde" />
+                  <el-option label="XFCE" value="xfce" />
+                  <el-option label="MATE" value="mate" />
+                  <el-option label="Cinnamon" value="cinnamon" />
+                  <el-option label="Openbox" value="openbox" />
+                  <el-option :label="t('conn.x11DesktopDECustom')" value="custom" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="form.x11DesktopDesktopType === 'custom'"
+                            :label="t('conn.x11DesktopCustomCmd')" required>
+                <el-input v-model="form.x11DesktopCustomCmd"
+                          :placeholder="t('conn.x11DesktopCustomCmdPlaceholder')" />
+                <div class="field-hint">{{ t('conn.x11DesktopCustomCmdHint') }}</div>
               </el-form-item>
             </template>
             <div v-if="showAdvancedToggle" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
@@ -511,7 +530,7 @@ import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
 import { ElMessage } from 'element-plus'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 
@@ -554,6 +573,7 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     ...(isWindows.value ? [{ type: 'rdp', label: 'RDP', icon: Monitor }] : []),
     { type: 'vnc', label: 'VNC', icon: MonitorSmartphone },
     { type: 'spice', label: 'SPICE', icon: MonitorCloud },
+    { type: 'x11-desktop', label: 'X11 Desktop', icon: AppWindow },
   ],
   database: [
     { type: 'database', dbType: 'mysql', label: 'MySQL', icon: Database },
@@ -708,7 +728,7 @@ watch(visible, (val) => {
 const isEdit = computed(() => !!props.editConfig?.id)
 
 const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'serial']
-const REMOTE_TYPES = ['rdp', 'vnc', 'spice']
+const REMOTE_TYPES = ['rdp', 'vnc', 'spice', 'x11-desktop']
 const FILETRANSFER_TYPES = ['ftp', 'ssh', 'smb', 'webdav', 's3']
 
 const category = computed(() => {
@@ -804,6 +824,8 @@ const form = reactive<ConnectionConfig>({
   containerTransport: 'ssh',
   containerSSHConnId: undefined,
   containerRuntime: 'docker',
+  x11DesktopDesktopType: 'gnome',
+  x11DesktopCustomCmd: '',
 })
 
 const rdpResolutions = [
@@ -890,6 +912,10 @@ watch(() => props.editConfig, (config) => {
     if (config.type === 'container') {
       form.containerTransport = config.containerTransport ?? 'ssh'
       form.containerRuntime = config.containerRuntime ?? 'docker'
+    }
+    if (config.type === 'x11-desktop') {
+      form.x11DesktopDesktopType = config.x11DesktopDesktopType ?? 'gnome'
+      form.x11DesktopCustomCmd = config.x11DesktopCustomCmd ?? ''
     }
     // Sync resolution dropdown to the config's fixed size
     const match = rdpResolutions.find(r => r.w === config.rdpFixedWidth && r.h === config.rdpFixedHeight)
@@ -1028,6 +1054,8 @@ function resetForm() {
   k8sContextsLoading.value = false
   k8sContextsError.value = ''
   rdpResolution.value = t('rdp.fullscreen')
+  form.x11DesktopDesktopType = 'gnome'
+  form.x11DesktopCustomCmd = ''
   selectedGroupId.value = undefined
 }
 
@@ -1205,8 +1233,18 @@ function validateContainer(): boolean {
   return true
 }
 
+function validateX11Desktop(): boolean {
+  if (form.type !== 'x11-desktop') return true
+  if (form.x11DesktopDesktopType === 'custom' && !form.x11DesktopCustomCmd?.trim()) {
+    ElMessage.error(t('conn.x11DesktopCustomCmdRequired'))
+    return false
+  }
+  return true
+}
+
 function onSave() {
   if (!validateContainer()) return
+  if (!validateX11Desktop()) return
   try {
     const config = normalizeForm()
     emit('save', config)
@@ -1221,6 +1259,7 @@ function onSave() {
 
 function onConnect() {
   if (!validateContainer()) return
+  if (!validateX11Desktop()) return
   try {
     const config = normalizeForm()
     emit('connect', config)

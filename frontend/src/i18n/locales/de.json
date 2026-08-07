@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Zip importieren",
   "settings.skillsImportDir": "Ordner importieren",
   "settings.skillsImportFolderHint": "Unterstützt Ordner-Skills mit references/ und scripts/",
-  "settings.skillsImportOk": "Skill „{name}“ importiert"
+  "settings.skillsImportOk": "Skill „{name}“ importiert",
+  "conn.x11Desktop": "X11-Desktop",
+  "conn.x11DesktopDE": "Desktop-Umgebung",
+  "conn.x11DesktopDECustom": "Eigener Befehl…",
+  "conn.x11DesktopCustomCmd": "Befehl",
+  "conn.x11DesktopCustomCmdPlaceholder": "z.B. gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "Wird remote über /bin/sh -c ausgeführt. Verwenden Sie die gleiche Syntax wie in einer Shell-Befehlszeile.",
+  "conn.x11DesktopCustomCmdRequired": "Bitte geben Sie einen Befehl ein",
+  "x11.tab.connecting": "Starte X11-Desktop…",
+  "x11.tab.connected": "Läuft",
+  "x11.tab.disconnected": "Getrennt",
+  "x11.tab.error": "Fehler beim Starten des X11-Desktops",
+  "x11.tab.retry": "Wiederholen",
+  "x11.tab.reconnect": "Neu verbinden",
+  "x11.tab.disconnect": "Trennen",
+  "x11.tab.desktopEnv": "Desktop-Umgebung",
+  "x11.tab.localXHint": "Der Desktop wird im lokalen X-Server-Fenster angezeigt. Verwenden Sie die Taskleiste oder Alt+Tab zum Wechseln. Das Schließen dieses Tabs beendet die Desktop-Sitzung."
 }

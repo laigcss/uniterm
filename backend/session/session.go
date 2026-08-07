@@ -179,6 +179,19 @@ type ConnectionConfig struct {
 	// a session. It has no effect on later reconnects — a manually
 	// stopped log stays stopped for the life of the panel.
 	LogOnConnect bool `json:"logOnConnect,omitempty"`
+	// X11Desktop fields. Used when Type == "x11-desktop".
+	// This type carries its own SSH credentials (Host, Port, User,
+	// AuthType, Password, KeyPath) and connects directly — it no
+	// longer references a separate SSH connection. X11 forward is
+	// forced on automatically (this type is meaningless without it).
+	//   DesktopType — "gnome" | "kde" | "xfce" | "mate" | "cinnamon" |
+	//                 "openbox" | "custom". Mapped to a built-in command or
+	//                 to CustomCmd verbatim.
+	//   CustomCmd   — only used when DesktopType == "custom". The string is
+	//                 passed to sshd verbatim (so it goes through
+	//                 /bin/sh -c on the remote).
+	X11DesktopDesktopType string `json:"x11DesktopDesktopType,omitempty"`
+	X11DesktopCustomCmd   string `json:"x11DesktopCustomCmd,omitempty"`
 }
 
 // ConnectionStoreData is the top-level structure persisted to connections.json.

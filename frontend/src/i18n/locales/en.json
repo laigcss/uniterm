@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Import Zip",
   "settings.skillsImportDir": "Import Folder",
   "settings.skillsImportFolderHint": "Supports folder skills with references/ and scripts/",
-  "settings.skillsImportOk": "Imported skill \"{name}\""
+  "settings.skillsImportOk": "Imported skill \"{name}\"",
+  "conn.x11Desktop": "X11 Desktop",
+  "conn.x11DesktopDE": "Desktop Environment",
+  "conn.x11DesktopDECustom": "Custom Command…",
+  "conn.x11DesktopCustomCmd": "Command",
+  "conn.x11DesktopCustomCmdPlaceholder": "e.g. gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "Executed on the remote via /bin/sh -c. Use the same syntax as a shell command line.",
+  "conn.x11DesktopCustomCmdRequired": "Please enter a command",
+  "x11.tab.connecting": "Starting X11 desktop…",
+  "x11.tab.connected": "Running",
+  "x11.tab.disconnected": "Disconnected",
+  "x11.tab.error": "Failed to start X11 desktop",
+  "x11.tab.retry": "Retry",
+  "x11.tab.reconnect": "Reconnect",
+  "x11.tab.disconnect": "Disconnect",
+  "x11.tab.desktopEnv": "Desktop Environment",
+  "x11.tab.localXHint": "The desktop is shown in your local X server window. Use the system taskbar or Alt+Tab to focus it. Closing this tab will terminate the desktop session."
 }

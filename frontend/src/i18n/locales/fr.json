@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Importer un Zip",
   "settings.skillsImportDir": "Importer un dossier",
   "settings.skillsImportFolderHint": "Prend en charge les compétences en dossier avec references/ et scripts/",
-  "settings.skillsImportOk": "Compétence « {name} » importée"
+  "settings.skillsImportOk": "Compétence « {name} » importée",
+  "conn.x11Desktop": "Bureau X11",
+  "conn.x11DesktopDE": "Environnement de bureau",
+  "conn.x11DesktopDECustom": "Commande personnalisée…",
+  "conn.x11DesktopCustomCmd": "Commande",
+  "conn.x11DesktopCustomCmdPlaceholder": "ex: gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "Exécuté à distance via /bin/sh -c. Utilisez la même syntaxe qu'une ligne de commande shell.",
+  "conn.x11DesktopCustomCmdRequired": "Veuillez entrer une commande",
+  "x11.tab.connecting": "Démarrage du bureau X11…",
+  "x11.tab.connected": "En cours",
+  "x11.tab.disconnected": "Déconnecté",
+  "x11.tab.error": "Échec du démarrage du bureau X11",
+  "x11.tab.retry": "Réessayer",
+  "x11.tab.reconnect": "Reconnecter",
+  "x11.tab.disconnect": "Déconnecter",
+  "x11.tab.desktopEnv": "Environnement de bureau",
+  "x11.tab.localXHint": "Le bureau s'affiche dans la fenêtre du serveur X local. Utilisez la barre des tâches ou Alt+Tab pour basculer. La fermeture de cet onglet terminera la session de bureau."
 }

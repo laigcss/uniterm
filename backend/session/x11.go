@@ -138,7 +138,15 @@ func tryStartLocalXServer() bool {
 		if _, err := os.Stat(path); err != nil {
 			continue
 		}
-		cmd := exec.Command(path, ":0", "-ac", "-multiwindow", "-clipboard", "-silent-dup-error")
+		// Minimal VcXsrv args per user: ":0 -clipboard". No -screen
+		// (VcXsrv defaults to the primary monitor), no -multiwindow (XWin's
+		// default is "windowed" single-window mode, same as XLaunch's
+		// "One large window"). Dir must be set to a writable path (the user's
+		// home) because VcXsrv writes its XWin.log to the cwd and aborts
+		// with "Cannot open log file XWin.log" if cwd is not writable.
+		cmd := exec.Command(path, ":0", "-clipboard")
+		home, _ := os.UserHomeDir()
+		cmd.Dir = home
 		if err := cmd.Start(); err != nil {
 			return false
 		}

@@ -17,7 +17,7 @@ export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'k8s' | 'container'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
@@ -146,6 +146,14 @@ export interface ConnectionConfig {
   containerExecConnId?: string
   containerExecContainerId?: string
   containerExecShell?: string
+  // X11 Desktop (type: 'x11-desktop') — carries its own SSH credentials
+  // (host, port, user, authType, password, keyPath) for direct connection.
+  // X11 forwarding is forced on automatically. The actual desktop is
+  // rendered by the local X server (VcXsrv/XQuartz/Xorg), not inside uniTerm.
+  x11DesktopDesktopType?: 'gnome' | 'kde' | 'xfce' | 'mate' | 'cinnamon' | 'openbox' | 'custom'
+  // Custom desktop command (only used when desktopType === 'custom').
+  // Passed to sshd verbatim, so it goes through /bin/sh -c on the remote.
+  x11DesktopCustomCmd?: string
 }
 
 export interface SessionInfo {

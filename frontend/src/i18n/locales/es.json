@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Importar Zip",
   "settings.skillsImportDir": "Importar carpeta",
   "settings.skillsImportFolderHint": "Admite skills de carpeta con references/ y scripts/",
-  "settings.skillsImportOk": "Skill \"{name}\" importado"
+  "settings.skillsImportOk": "Skill \"{name}\" importado",
+  "conn.x11Desktop": "Escritorio X11",
+  "conn.x11DesktopDE": "Entorno de escritorio",
+  "conn.x11DesktopDECustom": "Comando personalizado…",
+  "conn.x11DesktopCustomCmd": "Comando",
+  "conn.x11DesktopCustomCmdPlaceholder": "ej: gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "Ejecutado remotamente a través de /bin/sh -c. Use la misma sintaxis que una línea de comandos shell.",
+  "conn.x11DesktopCustomCmdRequired": "Ingrese un comando",
+  "x11.tab.connecting": "Iniciando escritorio X11…",
+  "x11.tab.connected": "En ejecución",
+  "x11.tab.disconnected": "Desconectado",
+  "x11.tab.error": "Error al iniciar escritorio X11",
+  "x11.tab.retry": "Reintentar",
+  "x11.tab.reconnect": "Reconectar",
+  "x11.tab.disconnect": "Desconectar",
+  "x11.tab.desktopEnv": "Entorno de escritorio",
+  "x11.tab.localXHint": "El escritorio se muestra en la ventana del servidor X local. Use la barra de tareas o Alt+Tab para cambiar. Cerrar esta pestaña terminará la sesión de escritorio."
 }

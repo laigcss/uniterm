@@ -55,6 +55,13 @@
               :config="getPanelConfig(activeTab.panelId)"
               :session-id="getPanelSessionId(activeTab.panelId)"
             />
+            <X11DesktopTabContent
+              v-else-if="activeTab.type === 'x11-desktop'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
             <DBTabContent
               v-else-if="activeTab.type === 'database'"
               :key="activeTab.id"
@@ -157,6 +164,7 @@ import SFTPTabContent from './components/SFTPTabContent.vue'
 import RDPTabContent from './components/RDPTabContent.vue'
 import VNCTabContent from './components/VNCTabContent.vue'
 import SPICETabContent from './components/SPICETabContent.vue'
+import X11DesktopTabContent from './components/X11DesktopTabContent.vue'
 import DBTabContent from './components/DBTabContent.vue'
 import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
@@ -711,6 +719,9 @@ onMounted(async () => {
   window.addEventListener('app:connect-spice', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSPICE(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
+  window.addEventListener('app:connect-x11-desktop', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectX11Desktop(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
   window.addEventListener('app:connect-db', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectDB(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
@@ -996,6 +1007,13 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       try { await CloseSession(p.sessionId) } catch (_) {}
     }
   }
+  // X11 desktop session cleanup
+  if (tab && tab.type === 'x11-desktop') {
+    const p = panelStore.getPanel(tab.panelId)
+    if (p?.sessionId) {
+      try { await CloseSession(p.sessionId) } catch (_) {}
+    }
+  }
   const panelIds = tabStore.closeTab(tabId)
   panelIds.forEach(pid => panelStore.removePanel(pid))
   nextTick(() => {
@@ -1120,6 +1138,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   if (config.type === 'rdp') { await onConnectRDP(config, prevStart); return }
   if (config.type === 'vnc') { await onConnectVNC(config, prevStart); return }
   if (config.type === 'spice') { await onConnectSPICE(config, prevStart); return }
+  if (config.type === 'x11-desktop') { await onConnectX11Desktop(config, prevStart); return }
   if (config.type === 'database') { await onConnectDB(config, prevStart); return }
   if (config.type === 'k8s') { await onConnectK8s(config, prevStart); return }
   if (config.type === 'container') { onConnectContainer(config, prevStart); return }
@@ -1514,6 +1533,28 @@ async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
     tabStore.closeTab(tab.id)
     panelStore.removePanel(panel.id)
   }
+}
+
+async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any) {
+  connectionStore.add(config)
+
+  // Ensure the X11 desktop config itself has saved credentials before
+  // handing off to X11DesktopConnect.
+  const resolved = await ensureCredentials(config)
+  if (!resolved) return
+
+  const displayTitle = config.name || config.host || 'X11 Desktop'
+
+  const panel = panelStore.createPanel(config, 'x11-desktop')
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const tab = tabStore.createX11DesktopTab(displayTitle, panel.id)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  RecordRecentConnection(config.id)
+
+  // The X11DesktopTabContent owns CreateSession + X11DesktopConnect.
+  // It runs when the tab mounts and has access to the resolved config.
 }
 
 async function onConnectMonitor(config: ConnectionConfig, prevStart?: any) {

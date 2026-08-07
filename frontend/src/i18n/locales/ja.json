@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Zip をインポート",
   "settings.skillsImportDir": "フォルダーをインポート",
   "settings.skillsImportFolderHint": "references/ と scripts/ を含むフォルダースキルに対応",
-  "settings.skillsImportOk": "スキル「{name}」をインポートしました"
+  "settings.skillsImportOk": "スキル「{name}」をインポートしました",
+  "conn.x11Desktop": "X11 デスクトップ",
+  "conn.x11DesktopDE": "デスクトップ環境",
+  "conn.x11DesktopDECustom": "カスタムコマンド…",
+  "conn.x11DesktopCustomCmd": "コマンド",
+  "conn.x11DesktopCustomCmdPlaceholder": "例: gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "リモートで /bin/sh -c 経由で実行されます。シェルコマンドと同じ構文を使用してください。",
+  "conn.x11DesktopCustomCmdRequired": "コマンドを入力してください",
+  "x11.tab.connecting": "X11 デスクトップを起動中…",
+  "x11.tab.connected": "実行中",
+  "x11.tab.disconnected": "切断されました",
+  "x11.tab.error": "X11 デスクトップの起動に失敗しました",
+  "x11.tab.retry": "再試行",
+  "x11.tab.reconnect": "再接続",
+  "x11.tab.disconnect": "切断",
+  "x11.tab.desktopEnv": "デスクトップ環境",
+  "x11.tab.localXHint": "デスクトップはローカル X Server ウィンドウに表示されます。システムタスクバーまたは Alt+Tab で切り替えてください。このタブを閉じるとデスクトップセッションが終了します。"
 }

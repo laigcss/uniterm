@@ -893,3 +893,7 @@ export function WriteFileBase64(arg1, arg2) {
 export function WriteTempFile(arg1, arg2) {
   return window['go']['main']['App']['WriteTempFile'](arg1, arg2);
 }
+
+export function X11DesktopConnect(arg1, arg2) {
+  return window['go']['main']['App']['X11DesktopConnect'](arg1, arg2);
+}

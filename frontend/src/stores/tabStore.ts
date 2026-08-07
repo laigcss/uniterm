@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
-import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, StartTab, PanelLayout, LayoutNode } from '../types/workspace'
+import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, StartTab, PanelLayout, LayoutNode, X11DesktopTab } from '../types/workspace'
 import type { K8sTab } from '../types/k8s'
 import type { ContainerTab } from '../types/container'
 import { usePanelStore } from './panelStore'
@@ -226,6 +226,18 @@ export const useTabStore = defineStore('tab', () => {
     const tab: SPICETab = {
       type: 'spice',
       id: genId('spice-tab'),
+      panelId,
+      name
+    }
+    tabState.tabs.push(tab)
+    tabState.activeTabId = tab.id
+    return tab
+  }
+
+  function createX11DesktopTab(name: string, panelId: string): X11DesktopTab {
+    const tab: X11DesktopTab = {
+      type: 'x11-desktop',
+      id: genId('x11-tab'),
       panelId,
       name
     }
@@ -711,6 +723,7 @@ export const useTabStore = defineStore('tab', () => {
     createRDPTab,
     createVNCTab,
     createSPICETab,
+    createX11DesktopTab,
     createDBTab,
     createMonitorTab,
     createK8sTab,

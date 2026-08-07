@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "Импорт Zip",
   "settings.skillsImportDir": "Импорт папки",
   "settings.skillsImportFolderHint": "Поддерживает навыки-папки с references/ и scripts/",
-  "settings.skillsImportOk": "Навык \"{name}\" импортирован"
+  "settings.skillsImportOk": "Навык \"{name}\" импортирован",
+  "conn.x11Desktop": "X11 Рабочий стол",
+  "conn.x11DesktopDE": "Окружение рабочего стола",
+  "conn.x11DesktopDECustom": "Своя команда…",
+  "conn.x11DesktopCustomCmd": "Команда",
+  "conn.x11DesktopCustomCmdPlaceholder": "напр. gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "Выполняется удалённо через /bin/sh -c. Используйте синтаксис командной строки.",
+  "conn.x11DesktopCustomCmdRequired": "Введите команду",
+  "x11.tab.connecting": "Запуск X11 рабочего стола…",
+  "x11.tab.connected": "Запущен",
+  "x11.tab.disconnected": "Отключён",
+  "x11.tab.error": "Не удалось запустить X11 рабочий стол",
+  "x11.tab.retry": "Повторить",
+  "x11.tab.reconnect": "Переподключиться",
+  "x11.tab.disconnect": "Отключить",
+  "x11.tab.desktopEnv": "Рабочее окружение",
+  "x11.tab.localXHint": "Рабочий стол отображается в окне локального X-сервера. Используйте панель задач или Alt+Tab для переключения. Закрытие этой вкладки завершит сеанс рабочего стола."
 }

@@ -627,6 +627,8 @@ export namespace session {
 	    containerSSHConnId?: string;
 	    containerRuntime?: string;
 	    logOnConnect?: boolean;
+	    x11DesktopDesktopType?: string;
+	    x11DesktopCustomCmd?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionConfig(source);
@@ -701,6 +703,8 @@ export namespace session {
 	        this.containerSSHConnId = source["containerSSHConnId"];
 	        this.containerRuntime = source["containerRuntime"];
 	        this.logOnConnect = source["logOnConnect"];
+	        this.x11DesktopDesktopType = source["x11DesktopDesktopType"];
+	        this.x11DesktopCustomCmd = source["x11DesktopCustomCmd"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
