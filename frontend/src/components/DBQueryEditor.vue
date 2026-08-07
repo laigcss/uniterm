@@ -92,6 +92,8 @@
           border
           size="small"
           style="width:100%"
+          height="100%"
+          class="result-table"
           :empty-text="t('db.noData')"
           @cell-dblclick="onCellDblClick"
           @sort-change="onSortChange"
@@ -99,12 +101,14 @@
           <el-table-column
             v-if="canEditRows"
             :label="t('db.actions')"
-            width="120"
-            fixed="right"
+            width="88"
+            class-name="db-action-cell"
           >
             <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm" title="Edit" @click="startEditRow(rowIndexOf(row))"><Pencil :size="14" /></button>
-              <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="onDeleteRow(rowIndexOf(row))"><Trash2 :size="14" /></button>
+              <div class="row-actions" @mousedown.stop @click.stop>
+                <button type="button" class="btn btn-ghost btn-icon btn-sm" :title="t('common.edit')" @click.stop.prevent="startEditRowByRow(row)"><Pencil :size="14" /></button>
+                <button type="button" class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click.stop.prevent="onDeleteRowByRow(row)"><Trash2 :size="14" /></button>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
@@ -141,7 +145,13 @@
         <button class="btn btn-primary" @click="startInsertRow">{{ t('db.insertRow') }}</button>
       </div>
 
-      <div v-if="insertingRow" class="insert-row-form">
+      <el-dialog
+        v-model="insertingRow"
+        :title="t('db.insertRow')"
+        width="640px"
+        append-to-body
+        destroy-on-close
+      >
         <div class="insert-row-fields">
           <div v-for="col in insertColumns" :key="col" class="insert-field">
             <div class="field-label-row">
@@ -152,13 +162,19 @@
             <input v-model="insertValues[col]" class="insert-input" :disabled="insertNulls[col] || insertAutoIncrement[col]" :placeholder="getColumnPlaceholder(col)" />
           </div>
         </div>
-        <div class="insert-actions">
-          <button class="btn btn-primary" @click="onInsertConfirm">{{ t('common.confirm') }}</button>
+        <template #footer>
           <button class="btn btn-default" @click="onInsertCancel">{{ t('common.cancel') }}</button>
-        </div>
-      </div>
+          <button class="btn btn-primary" @click="onInsertConfirm">{{ t('common.confirm') }}</button>
+        </template>
+      </el-dialog>
 
-      <div v-if="editingRow" class="insert-row-form">
+      <el-dialog
+        v-model="editingRow"
+        :title="t('common.edit')"
+        width="640px"
+        append-to-body
+        destroy-on-close
+      >
         <div class="insert-row-fields">
           <div v-for="col in editRowColumns" :key="col" class="insert-field">
             <div class="field-label-row">
@@ -168,11 +184,11 @@
             <input v-model="editRowValues[col]" class="insert-input" :disabled="editNulls[col]" />
           </div>
         </div>
-        <div class="insert-actions">
-          <button class="btn btn-primary" @click="onEditRowConfirm">{{ t('common.save') }}</button>
+        <template #footer>
           <button class="btn btn-default" @click="onEditRowCancel">{{ t('common.cancel') }}</button>
-        </div>
-      </div>
+          <button class="btn btn-primary" @click="onEditRowConfirm">{{ t('common.save') }}</button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -509,7 +525,37 @@ function onSortChange(payload: { prop: string; order: 'ascending' | 'descending'
 }
 
 function rowIndexOf(row: Record<string, any>): number {
-  return queryResult.value?.rows.indexOf(row) ?? -1
+  const rows = queryResult.value?.rows
+  if (!rows?.length) return -1
+  const direct = rows.indexOf(row)
+  if (direct >= 0) return direct
+  // Fallback: match by primary keys (row identity may differ after sort/filter/proxy)
+  const pks = props.primaryKeys || []
+  if (pks.length > 0) {
+    const byPk = rows.findIndex(r => pks.every(pk => r?.[pk] === row?.[pk]))
+    if (byPk >= 0) return byPk
+  }
+  // Last resort: match all column values
+  const cols = queryResult.value?.columns?.map(c => c.name) || Object.keys(row)
+  return rows.findIndex(r => cols.every(c => r?.[c] === row?.[c]))
+}
+
+function startEditRowByRow(row: Record<string, any>) {
+  const idx = rowIndexOf(row)
+  if (idx < 0) {
+    error.value = t('db.noPrimaryKey')
+    return
+  }
+  startEditRow(idx)
+}
+
+async function onDeleteRowByRow(row: Record<string, any>) {
+  const idx = rowIndexOf(row)
+  if (idx < 0) {
+    error.value = t('db.noPrimaryKey')
+    return
+  }
+  await onDeleteRow(idx)
 }
 
 // ── Resize splitter ──
@@ -727,10 +773,11 @@ const editNulls = ref<Record<string, boolean>>({})
 const editRowColumns = ref<string[]>([])
 
 function startEditRow(rowIndex: number) {
-  if (rowIndex < 0) return
+  if (rowIndex < 0 || !queryResult.value) return
   editingRowIndex.value = rowIndex
-  const row = queryResult.value!.rows[rowIndex]
-  editRowColumns.value = queryResult.value!.columns.map(c => c.name)
+  const row = queryResult.value.rows[rowIndex]
+  if (!row) return
+  editRowColumns.value = queryResult.value.columns.map(c => c.name)
   editRowValues.value = {}
   editNulls.value = {}
   for (const col of editRowColumns.value) {
@@ -991,7 +1038,28 @@ function onEditRowCancel() {
   gap: 10px;
   min-width: 0;
 }
-.result-grid { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
+.result-grid { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.result-table { width: 100%; }
+.result-table :deep(.db-action-cell .cell) {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+.result-table :deep(.db-action-cell) {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+}
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+.row-actions .btn { pointer-events: auto; }
+.row-actions :deep(svg) { pointer-events: none; }
 .result-count {
   font-family: var(--font-ui);
   font-size: 12px;

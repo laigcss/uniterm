@@ -1,4 +1,4 @@
-﻿{
+{
   "header.connections": "Connexions",
   "header.newConnection": "Nouvelle connexion",
   "header.settings": "Paramètres",
@@ -379,6 +379,8 @@
   "common.cancel": "Annuler",
   "common.confirm": "Confirmer",
   "common.save": "Enregistrer",
+  "common.edit": "Modifier",
+  "common.delete": "Supprimer",
   "settings.sync": "Synchronisation de la config",
   "settings.syncDesc": "Synchroniser les configurations de connexion et d'IA vers un dépôt Git privé",
   "settings.syncRepoUrl": "URL du dépôt",

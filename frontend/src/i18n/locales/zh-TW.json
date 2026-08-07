@@ -1,4 +1,4 @@
-﻿{
+{
   "header.connections": "連線列表",
   "header.newConnection": "新增連線",
   "header.settings": "設定",
@@ -379,6 +379,8 @@
   "common.cancel": "取消",
   "common.confirm": "確認",
   "common.save": "儲存",
+  "common.edit": "編輯",
+  "common.delete": "刪除",
   "settings.sync": "設定同步",
   "settings.syncDesc": "將連線設定和 AI 設定同步到 Git 私有倉庫",
   "settings.syncRepoUrl": "位址",

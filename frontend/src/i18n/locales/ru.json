@@ -1,4 +1,4 @@
-﻿{
+{
   "header.connections": "Подключения",
   "header.newConnection": "Новое подключение",
   "header.settings": "Настройки",
@@ -379,6 +379,8 @@
   "common.cancel": "Отмена",
   "common.confirm": "Подтвердить",
   "common.save": "Сохранить",
+  "common.edit": "Изменить",
+  "common.delete": "Удалить",
   "settings.sync": "Синхронизация конфигурации",
   "settings.syncDesc": "Синхронизировать конфигурации подключений и ИИ с приватным Git-репозиторием",
   "settings.syncRepoUrl": "URL репозитория",

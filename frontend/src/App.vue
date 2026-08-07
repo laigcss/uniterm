@@ -1926,8 +1926,12 @@ body > .ctx-menu {
 .app-container.has-bg .main-content :deep(.el-table__fixed),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
-.app-container.has-bg .main-content :deep(.k8s-action-cell) {
+.app-container.has-bg .main-content :deep(.k8s-action-cell),
+.app-container.has-bg .main-content :deep(.db-action-cell) {
+  background-color: var(--bg-surface) !important;
   backdrop-filter: blur(8px);
+  pointer-events: auto !important;
+  z-index: 3 !important;
 }
 /* 划出面板（K8sDetailDrawer / MonitorTabContent 等）：背景图模式下同样被透明规则抹掉背景，
    加毛玻璃保证内容在背景图上清晰。 */

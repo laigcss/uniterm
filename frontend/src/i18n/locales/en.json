@@ -417,6 +417,8 @@
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
   "common.save": "Save",
+  "common.edit": "Edit",
+  "common.delete": "Delete",
   "settings.sync": "Config Sync",
   "settings.syncDesc": "Sync connection and AI configs to a private Git repository",
   "settings.syncRepoUrl": "URL",

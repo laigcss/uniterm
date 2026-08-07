@@ -417,6 +417,8 @@
   "common.cancel": "取消",
   "common.confirm": "确认",
   "common.save": "保存",
+  "common.edit": "编辑",
+  "common.delete": "删除",
   "settings.sync": "配置同步",
   "settings.syncDesc": "将连接配置和 AI 配置同步到 Git 私有仓库",
   "settings.syncRepoUrl": "地址",

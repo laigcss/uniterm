@@ -1,4 +1,4 @@
-﻿{
+{
   "header.connections": "接続",
   "header.newConnection": "新規接続",
   "header.settings": "設定",
@@ -379,6 +379,8 @@
   "common.cancel": "キャンセル",
   "common.confirm": "確認",
   "common.save": "保存",
+  "common.edit": "編集",
+  "common.delete": "削除",
   "settings.sync": "設定の同期",
   "settings.syncDesc": "接続設定と AI 設定をプライベート Git リポジトリに同期",
   "settings.syncRepoUrl": "リポジトリ URL",

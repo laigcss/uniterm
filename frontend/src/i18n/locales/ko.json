@@ -1,4 +1,4 @@
-﻿{
+{
   "header.connections": "연결",
   "header.newConnection": "새 연결",
   "header.settings": "설정",
@@ -379,6 +379,8 @@
   "common.cancel": "취소",
   "common.confirm": "확인",
   "common.save": "저장",
+  "common.edit": "편집",
+  "common.delete": "삭제",
   "settings.sync": "설정 동기화",
   "settings.syncDesc": "연결 및 AI 설정을 개인 Git 저장소에 동기화",
   "settings.syncRepoUrl": "저장소 URL",
