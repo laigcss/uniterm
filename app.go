@@ -487,26 +487,6 @@ func (a *App) llmHTTPClient() *http.Client {
 	return a.httpClient
 }
 
-// injectCacheControl adds ephemeral cache_control breakpoints on the
-// static system prompt and tools array so Anthropic's prompt caching
-// beta actually caches them across turns. Without this the
-// prompt-caching-2024-07-31 header is sent but the request body has
-// no breakpoints, so every turn re-ships and re-bills the static
-// prefix (~3 KB in typical Claude Code sessions). F-303.
-func injectCacheControl(reqBody map[string]interface{}) {
-	if sys, ok := reqBody["system"].(string); ok && sys != "" {
-		reqBody["system"] = []map[string]interface{}{{
-			"type":          "text",
-			"text":          sys,
-			"cache_control": map[string]string{"type": "ephemeral"},
-		}}
-	}
-	if tools, ok := reqBody["tools"].([]interface{}); ok && len(tools) > 0 {
-		if last, ok := tools[len(tools)-1].(map[string]interface{}); ok {
-			last["cache_control"] = map[string]string{"type": "ephemeral"}
-		}
-	}
-}
 // which don't fire the JS visibilitychange event (Cmd+H on macOS before
 // the WebView is loaded, OS-level Alt+Tab) still update the foreground
 // flag. Runs every 2s — coarse on purpose, this is a lifecycle hint not
@@ -2049,12 +2029,6 @@ type aiDoneEvent struct {
 func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string) (string, error) {
 	reqBody["stream"] = true
 
-	// F-303: insert ephemeral cache_control breakpoints on the static
-	// system + tools prefixes so Anthropic reuses the cached tokens
-	// across turns. Without these the prompt-caching beta header is a
-	// no-op — every turn re-ships and re-bills the static prefix.
-	injectCacheControl(reqBody)
-
 	modifiedJSON, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("marshal modified request: %w", err)
@@ -2073,16 +2047,11 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	// F-308: register our cancel in the App-level pointer and only
-	// clear it on the way out if no one replaced us. The previous code
-	// stored a single context.CancelFunc under a mutex and unconditionally
-	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
-	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	// F-308: atomic pointer swap so overlapping ChatCompletion calls
+	// don't clobber each other's cancel function.
 	myCancel := cancel
 	a.chatCancel.Store(&myCancel)
 	defer func() {
-		// CAS the slot back to nil, but only if it still points at our
-		// own cancel — a newer call may have already taken over the slot.
 		a.chatCancel.CompareAndSwap(&myCancel, nil)
 	}()
 
@@ -2096,7 +2065,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 	req.Header.Set("User-Agent", userAgent)
 
-	client := a.llmHTTPClient()
+	client := &http.Client{Timeout: 0}
 	res, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -2107,9 +2076,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		// F-305: cap the error-body read at 64 KiB so a hostile or
-		// buggy upstream returning a multi-GB error body can't OOM
-		// the Go process.
+		// F-305: cap error-body reads at 64 KiB.
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
 		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
 	}
@@ -2119,12 +2086,6 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	var messageRole string
 	var usage map[string]interface{}
 	currentBlockIndex := -1
-	// F-307: parallel slice of per-block text buffers. Accumulating
-	// text via string + string was O(n²) and paid a fresh alloc per
-	// token; we Write into a *bytes.Buffer instead and flush to a
-	// string once at content_block_stop / message_stop. Empty slots
-	// (non-text blocks) stay nil and are skipped on flush.
-	var blockTextBufs []*bytes.Buffer
 
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -2136,22 +2097,22 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 		}
 		dataStr := line[6:]
 
-		var ev anthropicStreamEvent
-		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
 			continue
 		}
 
-		switch ev.Type {
+		eventType, _ := event["type"].(string)
+
+		switch eventType {
 		case "message_start":
-			var mr anthropicMessageRole
-			if err := json.Unmarshal(ev.Message, &mr); err == nil {
-				messageRole = mr.Role
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				messageRole, _ = msg["role"].(string)
 			}
 
 		case "content_block_start":
 			currentBlockIndex++
-			var block map[string]interface{}
-			if err := json.Unmarshal(ev.ContentBlock, &block); err == nil {
+			if block, ok := event["content_block"].(map[string]interface{}); ok {
 				currentBlock = block
 				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
 					"index":         currentBlockIndex,
@@ -2160,54 +2121,34 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			}
 
 		case "content_block_delta":
-			var delta anthropicDelta
-			if err := json.Unmarshal(ev.Delta, &delta); err != nil {
-				continue
-			}
-			switch delta.Type {
-			case "text_delta":
-				text := delta.Text
+			delta, _ := event["delta"].(map[string]interface{})
+			deltaType, _ := delta["type"].(string)
+
+			if deltaType == "text_delta" {
+				text, _ := delta["text"].(string)
 				if currentBlock != nil {
-					// F-307: append to a per-block *bytes.Buffer
-					// instead of O(n²) string concatenation. The
-					// buffer is flushed to a string exactly once
-					// at content_block_stop; the per-token
-					// String() call is gone.
-					if blockTextBufs[currentBlockIndex] == nil {
-						blockTextBufs = append(blockTextBufs, make([]*bytes.Buffer, currentBlockIndex+1-len(blockTextBufs))...)
-						blockTextBufs[currentBlockIndex] = &bytes.Buffer{}
+					if currentBlock["text"] == nil {
+						currentBlock["text"] = ""
 					}
-					blockTextBufs[currentBlockIndex].WriteString(text)
+					currentBlock["text"] = currentBlock["text"].(string) + text
 				}
-				// F-320: typed struct + dropped unused fields so
-				// the per-token EventsEmit doesn't allocate a
-				// fresh map[string]interface{}. The ai:token payload
-				// carries only text + index.
-				runtime.EventsEmit(a.ctx, "ai:token", aiTokenEvent{
-					Text:  delta.Text,
-					Index: currentBlockIndex,
+				runtime.EventsEmit(a.ctx, "ai:token", map[string]interface{}{
+					"text":  text,
+					"index": currentBlockIndex,
 				})
-			case "input_json_delta":
-				if currentBlock != nil {
-					partial := delta.PartialJSON
-					if currentBlock["input"] == nil || fmt.Sprintf("%T", currentBlock["input"]) != "string" {
-						currentBlock["input"] = ""
-					}
-					if s, ok := currentBlock["input"].(string); ok {
-						currentBlock["input"] = s + partial
-					}
+			}
+			if deltaType == "input_json_delta" && currentBlock != nil {
+				partial, _ := delta["partial_json"].(string)
+				if currentBlock["input"] == nil || fmt.Sprintf("%T", currentBlock["input"]) != "string" {
+					currentBlock["input"] = ""
+				}
+				if s, ok := currentBlock["input"].(string); ok {
+					currentBlock["input"] = s + partial
 				}
 			}
 
 		case "content_block_stop":
 			if currentBlock != nil {
-				// F-307: flush the per-block text buffer exactly
-				// once into currentBlock["text"] so the downstream
-				// contentBlocks / JSON marshal sees a single
-				// string instead of O(n²) per-token copies.
-				if currentBlockIndex >= 0 && currentBlockIndex < len(blockTextBufs) && blockTextBufs[currentBlockIndex] != nil {
-					currentBlock["text"] = blockTextBufs[currentBlockIndex].String()
-				}
 				if blockType, _ := currentBlock["type"].(string); blockType == "tool_use" {
 					if inputStr, ok := currentBlock["input"].(string); ok && inputStr != "" {
 						var inputObj map[string]interface{}
@@ -2221,29 +2162,18 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			}
 
 		case "message_delta":
-			if len(ev.Usage) > 0 {
-				var u map[string]interface{}
-				if err := json.Unmarshal(ev.Usage, &u); err == nil {
-					usage = u
-				}
+			if u, ok := event["usage"].(map[string]interface{}); ok {
+				usage = u
 			}
-			var sd anthropicStopDelta
-			if err := json.Unmarshal(ev.Delta, &sd); err == nil && sd.StopReason != "" {
-				// F-210: marshal the full message once into a pooled
-				// buffer and reuse the bytes for both the ai:done
-				// emit (Wails marshals the args separately) and the
-				// eventual return at message_stop. Previously this
-				// struct was rebuilt + remarshaled twice per turn.
-				fullMessage := map[string]interface{}{
-					"role":    messageRole,
-					"content": contentBlocks,
-				}
-				resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
-				if err == nil {
+			if delta, ok := event["delta"].(map[string]interface{}); ok {
+				if stopReason, ok := delta["stop_reason"].(string); ok {
 					runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-						"message":    json.RawMessage(resultJSON),
-						"usage":      usage,
-						"stop_reason": sd.StopReason,
+						"message": map[string]interface{}{
+							"role":    messageRole,
+							"content": contentBlocks,
+						},
+						"usage":       usage,
+						"stop_reason": stopReason,
 					})
 				}
 			}
@@ -2253,18 +2183,16 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, err := json.Marshal(fullMessage)
 			if err != nil {
 				return "", fmt.Errorf("marshal full message: %w", err)
 			}
 			return string(resultJSON), nil
 
 		case "error":
-			var e struct {
-				Message string `json:"message"`
-			}
-			_ = json.Unmarshal(ev.Error, &e)
-			return "", fmt.Errorf("stream error: %s", e.Message)
+			errData, _ := event["error"].(map[string]interface{})
+			errMsg, _ := errData["message"].(string)
+			return "", fmt.Errorf("stream error: %s", errMsg)
 		}
 	}
 
@@ -2277,42 +2205,11 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			"role":    messageRole,
 			"content": contentBlocks,
 		}
-		resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, _ := json.Marshal(fullMessage)
 		return string(resultJSON), nil
 	}
 
 	return "", fmt.Errorf("stream ended without message_stop")
-}
-
-// anthropicToolToOpenAI converts an Anthropic tool definition to OpenAI format.
-// pooled *bytes.Buffer and returns the resulting JSON string. The
-// pool avoids per-turn allocator churn; in a heavy Claude Code session
-// the buffer grows once to ~3 KiB and stays warm. Returns the buffer
-// to the pool via defer in the caller (no — the string escapes the
-// goroutine, so we keep ownership here; the buffer can be reused when
-// the underlying JSON is no longer referenced by Wails).
-func marshalAnthropicFinalMessage(msg map[string]interface{}) ([]byte, error) {
-	buf := finalMsgPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer finalMsgPool.Put(buf)
-	enc := json.NewEncoder(buf)
-	if err := enc.Encode(msg); err != nil {
-		return nil, err
-	}
-	// json.Encoder always appends a trailing newline; trim it.
-	out := buf.Bytes()
-	if n := len(out); n > 0 && out[n-1] == '\n' {
-		out = out[:n-1]
-	}
-	return out, nil
-}
-
-var finalMsgPool = stdsync.Pool{
-	New: func() any {
-		b := &bytes.Buffer{}
-		b.Grow(4 * 1024)
-		return b
-	},
 }
 func anthropicToolToOpenAI(t map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
@@ -2597,7 +2494,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, _ := json.Marshal(fullMessage)
 			return string(resultJSON), nil
 		}
 
@@ -2755,7 +2652,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, _ := json.Marshal(fullMessage)
 			return string(resultJSON), nil
 		}
 	}
@@ -2772,7 +2669,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			"role":    messageRole,
 			"content": contentBlocks,
 		}
-		resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, _ := json.Marshal(fullMessage)
 		return string(resultJSON), nil
 	}
 
@@ -2997,7 +2894,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			"role":    "assistant",
 			"content": contentBlocks,
 		}
-		resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, err := json.Marshal(fullMessage)
 		if err != nil {
 			return "", fmt.Errorf("marshal final message: %w", err)
 		}

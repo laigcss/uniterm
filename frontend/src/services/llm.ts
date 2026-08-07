@@ -60,35 +60,15 @@ export async function chat(options: ChatOptions): Promise<void> {
 
   if (!apiKey) throw new Error('API key not configured')
 
-  // F-319: the expensive part of building the request is serializing the
-  // ~6 KB tools array, so that is what gets cached — keyed by the array
-  // identity, which makes the agent's module-constant AVAILABLE_TOOLS a hit
-  // on every turn. Everything else goes through a single JSON.stringify.
-  //
-  // The tools array must come from the caller: chat() is also used by the DB
-  // assistant (get_table_schema), the Mongo assistant and command completion.
-  // Hardcoding AVAILABLE_TOOLS here broke the DB tool loop and pushed ten
-  // irrelevant terminal tools at the callers that pass none.
-  //
-  // 16384 keeps long agent turns (tool call + assistant prose + final answer)
-  // from being truncated at 4096 — which used to surface as cut-off tool
-  // inputs. Per-model caps in the backend still apply.
   const requestBody: Record<string, unknown> = {
     model,
     max_tokens: 16384,
     system: options.system,
     messages: options.messages,
+    tools: options.tools,
   }
 
-  // Splice the cached tools JSON in rather than putting the array in
-  // requestBody, so the 6 KB serialization is reused across turns. Slicing
-  // the trailing `}` off a JSON object and appending `,"key":<json>}` is
-  // structurally safe for any content — unlike a sentinel + string replace,
-  // which a message body could collide with.
-  const head = JSON.stringify(requestBody)
-  const requestJSON = options.tools && options.tools.length > 0
-    ? `${head.slice(0, -1)},"tools":${serializeTools(options.tools)}}`
-    : head
+  const requestJSON = JSON.stringify(requestBody)
 
   let responseText: string
   try {
@@ -374,25 +354,3 @@ export const AVAILABLE_TOOLS = [
     }
   }
 ]
-
-// F-319: serializing the tools array is the expensive part of building a
-// request, so cache it keyed by the array's identity. AVAILABLE_TOOLS is a
-// module constant, which makes the agent's per-turn call a cache hit; the DB /
-// Mongo / completion callers pass their own arrays and get serialized on use.
-//
-// The last tool carries an Anthropic cache_control breakpoint (paired with the
-// backend's F-303 injectCacheControl — harmless overlap, it rewrites the same
-// field with the same value).
-const toolsJSONCache = new WeakMap<object, string>()
-
-function serializeTools(tools: NonNullable<ChatOptions['tools']>): string {
-  const cached = toolsJSONCache.get(tools)
-  if (cached !== undefined) return cached
-  const withCacheControl = [
-    ...tools.slice(0, -1),
-    { ...tools[tools.length - 1], cache_control: { type: 'ephemeral' } },
-  ]
-  const json = JSON.stringify(withCacheControl)
-  toolsJSONCache.set(tools, json)
-  return json
-}
