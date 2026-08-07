@@ -454,3 +454,5 @@ export function UnregisterSession(arg1:string):Promise<void>;
 export function WriteFileBase64(arg1:string,arg2:string):Promise<void>;
 
 export function WriteTempFile(arg1:string,arg2:string):Promise<string>;
+
+export function X11DesktopConnect(arg1:string,arg2:string):Promise<void>;

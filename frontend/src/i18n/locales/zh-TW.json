@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "匯入 Zip",
   "settings.skillsImportDir": "匯入目錄",
   "settings.skillsImportFolderHint": "或匯入含 SKILL.md 的目錄",
-  "settings.skillsImportOk": "已匯入技能「{name}」"
+  "settings.skillsImportOk": "已匯入技能「{name}」",
+  "conn.x11Desktop": "X11 桌面",
+  "conn.x11DesktopDE": "桌面環境",
+  "conn.x11DesktopDECustom": "自訂命令…",
+  "conn.x11DesktopCustomCmd": "命令",
+  "conn.x11DesktopCustomCmdPlaceholder": "例如 gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "透過 /bin/sh -c 在遠端執行。使用與 shell 命令列相同的語法。",
+  "conn.x11DesktopCustomCmdRequired": "請輸入命令",
+  "x11.tab.connecting": "正在啟動 X11 桌面…",
+  "x11.tab.connected": "執行中",
+  "x11.tab.disconnected": "已斷開",
+  "x11.tab.error": "啟動 X11 桌面失敗",
+  "x11.tab.retry": "重試",
+  "x11.tab.reconnect": "重新連線",
+  "x11.tab.disconnect": "斷開",
+  "x11.tab.desktopEnv": "桌面環境",
+  "x11.tab.localXHint": "桌面顯示在本機 X Server 視窗中。使用系統工作列或 Alt+Tab 切換。關閉此頁籤將終止桌面工作階段。"
 }

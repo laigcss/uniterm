@@ -1105,5 +1105,21 @@
   "settings.skillsImportZip": "导入 Zip",
   "settings.skillsImportDir": "导入文件夹",
   "settings.skillsImportFolderHint": "支持含 references/、scripts/ 的文件夹型 skill",
-  "settings.skillsImportOk": "已导入技能「{name}」"
+  "settings.skillsImportOk": "已导入技能「{name}」",
+  "conn.x11Desktop": "X11 桌面",
+  "conn.x11DesktopDE": "桌面环境",
+  "conn.x11DesktopDECustom": "自定义命令…",
+  "conn.x11DesktopCustomCmd": "命令",
+  "conn.x11DesktopCustomCmdPlaceholder": "例如 gnome-session --session=foo",
+  "conn.x11DesktopCustomCmdHint": "通过 /bin/sh -c 在远程执行。使用与 shell 命令行相同的语法。",
+  "conn.x11DesktopCustomCmdRequired": "请输入命令",
+  "x11.tab.connecting": "正在启动 X11 桌面…",
+  "x11.tab.connected": "运行中",
+  "x11.tab.disconnected": "已断开",
+  "x11.tab.error": "启动 X11 桌面失败",
+  "x11.tab.retry": "重试",
+  "x11.tab.reconnect": "重新连接",
+  "x11.tab.disconnect": "断开",
+  "x11.tab.desktopEnv": "桌面环境",
+  "x11.tab.localXHint": "桌面显示在本地 X Server 窗口中。使用系统任务栏或 Alt+Tab 切换。关闭此标签页将终止桌面会话。"
 }

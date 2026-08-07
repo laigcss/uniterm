@@ -4606,6 +4606,48 @@ func (a *App) ContainerDisconnect(connectionID string) {
 	}
 }
 
+// X11DesktopConnect starts an x11-desktop session: looks up the saved
+// connection config (which carries its own SSH credentials), opens an
+// SSH connection with X11 forwarding, and runs the chosen desktop
+// command on the remote host. connectionID and sessionID are distinct
+// UUIDs (the connection is the user's saved record; the session is the
+// live runtime object created via CreateSession).
+func (a *App) X11DesktopConnect(connectionID string, sessionID string) error {
+	if a.connectionStore == nil || a.sessionManager == nil {
+		return fmt.Errorf("connection store or session manager not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	var cfg *session.ConnectionConfig
+	for i := range data.Connections {
+		if data.Connections[i].ID == connectionID {
+			cfg = &data.Connections[i]
+			break
+		}
+	}
+	if cfg == nil {
+		return fmt.Errorf("connection not found: %s", connectionID)
+	}
+	if cfg.Type != "x11-desktop" {
+		return fmt.Errorf("connection %s is not an x11-desktop", connectionID)
+	}
+
+	sess, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	x11Sess, ok := sess.(*session.X11DesktopSession)
+	if !ok {
+		return fmt.Errorf("session %s is not x11-desktop", sessionID)
+	}
+	if err := x11Sess.ConnectX11Desktop(*cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *App) ContainerList(connectionID string) ([]container.Container, error) {
 	p, err := a.containerManager.Provider(connectionID)
 	if err != nil {

@@ -452,7 +452,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel, Boxes } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -1662,6 +1662,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'rdp': return Monitor
     case 'vnc': return MonitorSmartphone
     case 'spice': return MonitorCloud
+    case 'x11-desktop': return AppWindow
     case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : Database
     case 'monitor': return Activity
     case 'k8s': return ShipWheel
