@@ -115,7 +115,7 @@ import { msg } from '../services/message'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { waitForTerminalSize } from '../services/terminalManager'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box, Boxes } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Search, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box, Boxes } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -159,10 +159,11 @@ const tabIcon = computed(() => {
   if (t.type === 'rdp') return Monitor
   if (t.type === 'vnc') return MonitorSmartphone
   if (t.type === 'spice') return MonitorCloud
-  if (t.type === 'database' || t.type === 'mongodb') {
+  if (t.type === 'database' || t.type === 'mongodb' || t.type === 'elasticsearch') {
     const panel = panelStore.getPanel(t.panelId)
     if (panel?.config?.dbType === 'redis') return DatabaseZap
     if (panel?.config?.dbType === 'mongodb') return Layers
+    if (panel?.config?.dbType === 'elasticsearch') return Search
     return Database
   }
   if (t.type === 'monitor') return Activity
@@ -236,7 +237,7 @@ const supportsOutputLog = computed(() => {
 // terminals, file transfer, database (incl. mongodb/redis variants), and k8s.
 const canDuplicate = computed(() => {
   const type = props.tab.type
-  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
+  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'elasticsearch' || type === 'k8s'
 })
 
 function onDragStart(e: DragEvent) {
@@ -445,7 +446,7 @@ async function duplicateTab() {
     newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
   } else if (tab.type === 'sftp') {
     newTab = tabStore.createFtpTab(newPanel.title, newPanel.id)
-  } else if (tab.type === 'database' || tab.type === 'mongodb' || tab.type === 'redis') {
+  } else if (tab.type === 'database' || tab.type === 'mongodb' || tab.type === 'redis' || tab.type === 'elasticsearch') {
     newTab = tabStore.createDBTab(newPanel.title, newPanel.id)
     newTab.type = tab.type
   } else {
@@ -455,14 +456,15 @@ async function duplicateTab() {
 }
 
 // The session-type argument to CreateSession isn't always panel.config.type:
-// - database panels split into mysql/postgres/redis/mongodb by dbType;
+// - database panels split into mysql/postgres/redis/mongodb/elasticsearch by dbType;
 // - a file-transfer (sftp) tab shares the SSH connection, so its config.type
 //   is 'ssh' but the session must be created as 'sftp' (ftp/smb/webdav/s3
 //   already carry a matching config.type).
 function resolveSessionType(tabType: string, config: any): string {
-  if (tabType === 'database' || tabType === 'mongodb' || tabType === 'redis') {
+  if (tabType === 'database' || tabType === 'mongodb' || tabType === 'redis' || tabType === 'elasticsearch') {
     if (config?.dbType === 'redis') return 'redis'
     if (config?.dbType === 'mongodb') return 'mongodb'
+    if (config?.dbType === 'elasticsearch') return 'elasticsearch'
     return 'database'
   }
   if (tabType === 'sftp') {

@@ -4116,6 +4116,18 @@ func (a *App) mongoSession(sessionID string) (*session.MongoSession, error) {
 	return ms, nil
 }
 
+func (a *App) esSession(sessionID string) (*session.ElasticsearchSession, error) {
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+	es, ok := s.(*session.ElasticsearchSession)
+	if !ok {
+		return nil, fmt.Errorf("session is not an elasticsearch session: %s (type=%s)", sessionID, s.Type())
+	}
+	return es, nil
+}
+
 // ── Redis methods ──
 
 func (a *App) RedisPing(sessionID string) error {
@@ -4438,6 +4450,144 @@ func (a *App) MongoDropIndex(sessionID string, dbName string, collection string,
 		return err
 	}
 	return ms.DropIndex(dbName, collection, name)
+}
+
+// ── Elasticsearch methods ──
+
+func (a *App) EsPing(sessionID string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.Ping()
+}
+
+func (a *App) EsClusterInfo(sessionID string) (*session.EsClusterInfo, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ClusterInfo()
+}
+
+func (a *App) EsClusterHealth(sessionID string) (*session.EsClusterHealth, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ClusterHealth()
+}
+
+func (a *App) EsNodesStats(sessionID string) ([]session.EsNodeSummary, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.NodesStats()
+}
+
+func (a *App) EsListIndices(sessionID string) ([]session.EsIndexInfo, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ListIndices()
+}
+
+func (a *App) EsGetMapping(sessionID string, index string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetMapping(index)
+}
+
+func (a *App) EsGetSettings(sessionID string, index string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetSettings(index)
+}
+
+func (a *App) EsSearch(sessionID string, index string, bodyJSON string, from int, size int) (*session.EsSearchResult, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.Search(index, bodyJSON, from, size)
+}
+
+func (a *App) EsGetDoc(sessionID string, index string, id string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetDoc(index, id)
+}
+
+func (a *App) EsIndexDoc(sessionID string, index string, id string, docJSON string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.IndexDoc(index, id, docJSON)
+}
+
+func (a *App) EsUpdateDoc(sessionID string, index string, id string, docJSON string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.UpdateDoc(index, id, docJSON)
+}
+
+func (a *App) EsDeleteDoc(sessionID string, index string, id string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.DeleteDoc(index, id)
+}
+
+func (a *App) EsCreateIndex(sessionID string, index string, bodyJSON string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.CreateIndex(index, bodyJSON)
+}
+
+func (a *App) EsDeleteIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.DeleteIndex(index)
+}
+
+func (a *App) EsOpenIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.OpenIndex(index)
+}
+
+func (a *App) EsCloseIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.CloseIndex(index)
+}
+
+func (a *App) EsRest(sessionID string, method string, path string, bodyJSON string) (*session.EsRestResult, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.Rest(method, path, bodyJSON)
 }
 
 func (a *App) GetDatabases(sessionID string) ([]string, error) {

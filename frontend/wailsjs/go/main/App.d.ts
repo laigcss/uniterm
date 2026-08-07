@@ -101,6 +101,40 @@ export function DropView(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function EnableSessionOutputLog(arg1:string,arg2:string):Promise<string>;
 
+export function EsCloseIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsClusterHealth(arg1:string):Promise<session.EsClusterHealth>;
+
+export function EsClusterInfo(arg1:string):Promise<session.EsClusterInfo>;
+
+export function EsCreateIndex(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function EsDeleteDoc(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function EsDeleteIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsGetDoc(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function EsGetMapping(arg1:string,arg2:string):Promise<string>;
+
+export function EsGetSettings(arg1:string,arg2:string):Promise<string>;
+
+export function EsIndexDoc(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function EsListIndices(arg1:string):Promise<Array<session.EsIndexInfo>>;
+
+export function EsNodesStats(arg1:string):Promise<Array<session.EsNodeSummary>>;
+
+export function EsOpenIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsPing(arg1:string):Promise<void>;
+
+export function EsRest(arg1:string,arg2:string,arg3:string,arg4:string):Promise<session.EsRestResult>;
+
+export function EsSearch(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<session.EsSearchResult>;
+
+export function EsUpdateDoc(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function ExecuteQuery(arg1:string,arg2:string,arg3:string):Promise<database.QueryResult>;
 
 export function ExecuteStatement(arg1:string,arg2:string,arg3:string):Promise<database.ExecResult>;

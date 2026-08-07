@@ -75,6 +75,9 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	case "mongodb":
 		s = NewMongoSession(config.ID)
 
+	case "elasticsearch":
+		s = NewElasticsearchSession(config.ID)
+
 	default:
 		return nil, fmt.Errorf("unsupported session type: %s", sessionType)
 	}

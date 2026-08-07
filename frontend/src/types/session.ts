@@ -42,6 +42,12 @@ export interface ConnectionConfig {
   dbType?: string   // database type key
   dbName?: string   // default database name
   dbParams?: string // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
+  // Elasticsearch / OpenSearch
+  esAuthType?: string   // 'basic'(default) | 'apikey'
+  esApiKey?: string
+  esUseSsl?: boolean
+  esPathPrefix?: string
+  esSkipVerify?: boolean
   // Redis Sentinel fields (only used when redisMode === 'sentinel')
   redisMode?: string        // ''/'standalone'(default) | 'sentinel'
   redisMasterName?: string  // Sentinel primary group name, e.g. "mymaster"

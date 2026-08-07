@@ -186,6 +186,74 @@ export function EnableSessionOutputLog(arg1, arg2) {
   return window['go']['main']['App']['EnableSessionOutputLog'](arg1, arg2);
 }
 
+export function EsCloseIndex(arg1, arg2) {
+  return window['go']['main']['App']['EsCloseIndex'](arg1, arg2);
+}
+
+export function EsClusterHealth(arg1) {
+  return window['go']['main']['App']['EsClusterHealth'](arg1);
+}
+
+export function EsClusterInfo(arg1) {
+  return window['go']['main']['App']['EsClusterInfo'](arg1);
+}
+
+export function EsCreateIndex(arg1, arg2, arg3) {
+  return window['go']['main']['App']['EsCreateIndex'](arg1, arg2, arg3);
+}
+
+export function EsDeleteDoc(arg1, arg2, arg3) {
+  return window['go']['main']['App']['EsDeleteDoc'](arg1, arg2, arg3);
+}
+
+export function EsDeleteIndex(arg1, arg2) {
+  return window['go']['main']['App']['EsDeleteIndex'](arg1, arg2);
+}
+
+export function EsGetDoc(arg1, arg2, arg3) {
+  return window['go']['main']['App']['EsGetDoc'](arg1, arg2, arg3);
+}
+
+export function EsGetMapping(arg1, arg2) {
+  return window['go']['main']['App']['EsGetMapping'](arg1, arg2);
+}
+
+export function EsGetSettings(arg1, arg2) {
+  return window['go']['main']['App']['EsGetSettings'](arg1, arg2);
+}
+
+export function EsIndexDoc(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EsIndexDoc'](arg1, arg2, arg3, arg4);
+}
+
+export function EsListIndices(arg1) {
+  return window['go']['main']['App']['EsListIndices'](arg1);
+}
+
+export function EsNodesStats(arg1) {
+  return window['go']['main']['App']['EsNodesStats'](arg1);
+}
+
+export function EsOpenIndex(arg1, arg2) {
+  return window['go']['main']['App']['EsOpenIndex'](arg1, arg2);
+}
+
+export function EsPing(arg1) {
+  return window['go']['main']['App']['EsPing'](arg1);
+}
+
+export function EsRest(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EsRest'](arg1, arg2, arg3, arg4);
+}
+
+export function EsSearch(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['EsSearch'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function EsUpdateDoc(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EsUpdateDoc'](arg1, arg2, arg3, arg4);
+}
+
 export function ExecuteQuery(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteQuery'](arg1, arg2, arg3);
 }

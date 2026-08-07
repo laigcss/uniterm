@@ -75,6 +75,11 @@
               :key="activeTab.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
             />
+            <ElasticsearchTabContent
+              v-else-if="activeTab.type === 'elasticsearch'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
             <MonitorTabContent
               v-else-if="activeTab.type === 'monitor'"
               :key="activeTab.id"
@@ -165,6 +170,7 @@ import SPICETabContent from './components/SPICETabContent.vue'
 import DBTabContent from './components/DBTabContent.vue'
 import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
+import ElasticsearchTabContent from './components/ElasticsearchTabContent.vue'
 import MonitorTabContent from './components/MonitorTabContent.vue'
 import K8sTabContent from './components/K8sTabContent.vue'
 import ContainerTabContent from './components/ContainerTabContent.vue'
@@ -992,7 +998,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
     }
   }
   // Close redis session
-  if (tab && (tab.type === 'redis' || tab.type === 'mongodb')) {
+  if (tab && (tab.type === 'redis' || tab.type === 'mongodb' || tab.type === 'elasticsearch')) {
     const p = panelStore.getPanel(tab.panelId)
     if (p?.sessionId) {
       try { await CloseSession(p.sessionId) } catch (_) {}
@@ -1594,6 +1600,8 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
     tab.type = 'redis'
   } else if (config.dbType === 'mongodb') {
     tab.type = 'mongodb'
+  } else if (config.dbType === 'elasticsearch') {
+    tab.type = 'elasticsearch'
   }
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
@@ -1604,6 +1612,8 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
       sessionType = 'redis'
     } else if (config.dbType === 'mongodb') {
       sessionType = 'mongodb'
+    } else if (config.dbType === 'elasticsearch') {
+      sessionType = 'elasticsearch'
     } else {
       sessionType = 'database'
     }
