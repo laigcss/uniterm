@@ -825,11 +825,8 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     )
     panelStore.updateTitle(newPanel.id, panel.title)
     try {
-      // Same D1 deferred-start pattern as onConnect — see that helper
-      // for the rationale.
       const dupConfig: ConnectionConfig = {
         ...panel.config,
-        deferConnect: true,
         initialCols: 0,
         initialRows: 0,
       }
@@ -1158,11 +1155,12 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   // default 80x24 and Claude Code draws its first batch of tables at that
   // width, drifting relative to later output that wraps at the real cols.
   let sessionId = ''
-  config.deferConnect = true
-  config.initialCols = 0
-  config.initialRows = 0
   try {
-    const info = await CreateSession(config.type, config)
+    const info = await CreateSession(config.type, {
+      ...config,
+      initialCols: 0,
+      initialRows: 0,
+    })
     sessionId = info.id
   } catch (e) {
     console.error('Failed to create session:', e)
@@ -1289,10 +1287,6 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       user: '',
       authType: 'password' as any,
       shellPath: shellPath || undefined,
-      // Defer Connect until BaseTerminal has measured the real cols/rows;
-      // same D1 fix as onConnect — without it Claude Code's first batch
-      // of tables wraps at the 80x24 default.
-      deferConnect: true,
       initialCols: 0,
       initialRows: 0,
     }

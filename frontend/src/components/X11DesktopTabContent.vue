@@ -104,7 +104,7 @@ async function start() {
     console.warn('X11 desktop: GetPlatform failed', e)
   }
   try {
-    const info = await CreateSession('x11-desktop', { ...props.config, deferConnect: true })
+    const info = await CreateSession('x11-desktop', { ...props.config })
     currentSessionId.value = info.id
     panelStore.bindSession(props.panelId, info.id)
     sessionStore.initSession(info.id)

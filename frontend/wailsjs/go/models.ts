@@ -598,7 +598,6 @@ export namespace session {
 	    sftpMaxConcurrency?: number;
 	    initialCols?: number;
 	    initialRows?: number;
-	    deferConnect?: boolean;
 	    ftpEncryption?: string;
 	    ftpPassive: boolean;
 	    ftpEncoding?: string;
@@ -674,7 +673,6 @@ export namespace session {
 	        this.sftpMaxConcurrency = source["sftpMaxConcurrency"];
 	        this.initialCols = source["initialCols"];
 	        this.initialRows = source["initialRows"];
-	        this.deferConnect = source["deferConnect"];
 	        this.ftpEncryption = source["ftpEncryption"];
 	        this.ftpPassive = source["ftpPassive"];
 	        this.ftpEncoding = source["ftpEncoding"];

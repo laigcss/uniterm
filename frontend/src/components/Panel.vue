@@ -312,7 +312,6 @@ async function retryConnection() {
         ...props.panel.config,
         type: 'local',
         shellPath,
-        deferConnect: true,
         initialCols: 0,
         initialRows: 0,
       }
@@ -391,7 +390,6 @@ async function retryConnection() {
   try {
     const config: ConnectionConfig = {
       ...props.panel.config,
-      deferConnect: true,
       initialCols: 0,
       initialRows: 0,
     }

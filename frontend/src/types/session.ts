@@ -63,12 +63,6 @@ export interface ConnectionConfig {
   // and passes them in CreateSession.
   initialCols?: number
   initialRows?: number
-  // When true, CreateSession returns immediately without connecting.
-  // The frontend calls SessionStart after it has mounted the xterm
-  // terminal and written initialCols/Rows via SetPendingSize — so the
-  // PTY starts at the real xterm size, not the 80x24 default that
-  // would otherwise wrap Claude Code tables at the wrong column count.
-  deferConnect?: boolean
   tunnelSSHUser?: string
   tunnelSSHPassword?: string
   // SFTP max concurrent transfers (0 = unlimited)
