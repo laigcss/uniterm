@@ -87,58 +87,23 @@
       </div>
 
       <div v-if="queryResult" class="result-grid">
-        <el-table
-          :data="displayRows"
-          border
-          size="small"
-          style="width:100%"
-          height="100%"
-          class="result-table"
+        <DBResultGrid
+          ref="resultGridRef"
+          :key="`grid-${canEditRows ? 1 : 0}-${queryResult.columns.map(c => c.name).join('|')}`"
+          :rows="displayRows"
+          :columns="queryResult.columns"
+          :can-edit="canEditRows"
+          :primary-keys="resolvedPrimaryKeys"
+          :table-columns="tableColumns"
           :empty-text="t('db.noData')"
-          @cell-dblclick="onCellDblClick"
-          @sort-change="onSortChange"
-        >
-          <el-table-column
-            v-if="canEditRows"
-            :label="t('db.actions')"
-            width="88"
-            class-name="db-action-cell"
-          >
-            <template #default="{ row }">
-              <div class="row-actions" @mousedown.stop @click.stop>
-                <button type="button" class="btn btn-ghost btn-icon btn-sm" :title="t('common.edit')" @click.stop.prevent="startEditRowByRow(row)"><Pencil :size="14" /></button>
-                <button type="button" class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click.stop.prevent="onDeleteRowByRow(row)"><Trash2 :size="14" /></button>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-for="col in queryResult.columns"
-            :key="col.name"
-            :prop="col.name"
-            :label="col.name"
-            min-width="100"
-            sortable="custom"
-            show-overflow-tooltip
-          >
-            <template #default="{ row, column }">
-              <div
-                v-if="editingCell && editingCell.rowIndex === rowIndexOf(row) && editingCell.colName === column.property"
-                class="cell-edit-wrap"
-              >
-                <input
-                  ref="cellInputEl"
-                  v-model="editingCell.value"
-                  class="cell-edit-input"
-                  @keydown.enter="onCellEditConfirm"
-                  @keydown.escape="onCellEditCancel"
-                  @blur="onCellEditConfirm"
-                />
-              </div>
-              <span v-else-if="row[column.property] === null" class="cell-null">NULL</span>
-              <span v-else class="cell-value">{{ row[column.property] }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
+          :actions-label="t('db.actions')"
+          :edit-label="t('common.edit')"
+          :delete-label="t('common.delete')"
+          @cell-commit="onCellCommit"
+          @edit-row="startEditRowByRow"
+          @delete-row="onDeleteRowByRow"
+          @sort-change="onVxeSortChange"
+        />
       </div>
 
       <div v-if="queryResult && tableName && !isView" class="insert-row-bar">
@@ -195,10 +160,11 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
-import { Pencil, Trash2, Sparkles, History } from '@lucide/vue'
+import { Sparkles, History } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import SyntaxEditor from './SyntaxEditor.vue'
+import DBResultGrid from './DBResultGrid.vue'
 import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow } from '../../wailsjs/go/main/App'
 import { chat } from '../services/llm'
 import { msg } from '../services/message'
@@ -246,11 +212,19 @@ const sortOrder = ref<'ascending' | 'descending' | null>(null)
 const historyOpen = ref(false)
 const history = ref<HistoryEntry[]>([])
 
-const canEditRows = computed(() => {
-  if (!props.tableName || !props.primaryKeys?.length || !queryResult.value) return false
-  const resultCols = new Set(queryResult.value.columns.map(c => c.name))
-  return props.primaryKeys.every(pk => resultCols.has(pk))
+const resolvedPrimaryKeys = computed(() => {
+  if (!props.tableName || props.isView || !props.primaryKeys?.length || !queryResult.value) return [] as string[]
+  const colMap = new Map(queryResult.value.columns.map(c => [c.name.toLowerCase(), c.name]))
+  const resolved: string[] = []
+  for (const pk of props.primaryKeys) {
+    const actual = colMap.get(pk.toLowerCase())
+    if (!actual) return []
+    resolved.push(actual)
+  }
+  return resolved
 })
+
+const canEditRows = computed(() => resolvedPrimaryKeys.value.length > 0)
 
 const displayRows = computed(() => {
   let rows = queryResult.value?.rows || []
@@ -519,9 +493,46 @@ async function onPageSizeChange(size: number) {
   await onExecute()
 }
 
-function onSortChange(payload: { prop: string; order: 'ascending' | 'descending' | null }) {
-  sortProp.value = payload.prop || ''
-  sortOrder.value = payload.order
+function onVxeSortChange(payload: { field: string; order: 'asc' | 'desc' | null }) {
+  sortProp.value = payload.field || ''
+  sortOrder.value = payload.order === 'asc' ? 'ascending' : payload.order === 'desc' ? 'descending' : null
+}
+
+const resultGridRef = ref<InstanceType<typeof DBResultGrid> | null>(null)
+
+async function onCellCommit(payload: {
+  row: Record<string, any>
+  field: string
+  newValue: any
+  oldValue: any
+}) {
+  const pks = resolvedPrimaryKeys.value
+  if (!props.tableName || !pks.length) {
+    resultGridRef.value?.revertCell(payload.row, payload.field, payload.oldValue)
+    error.value = t('db.noPrimaryKey')
+    return
+  }
+
+  const where: Record<string, any> = {}
+  for (const pk of pks) {
+    where[pk] = pk === payload.field ? payload.oldValue : (payload.row[pk] ?? null)
+  }
+
+  try {
+    await DBUpdateRow(
+      props.sessionId,
+      props.dbName || '',
+      props.tableName,
+      { [payload.field]: payload.newValue },
+      where,
+    )
+    payload.row[payload.field] = payload.newValue
+    error.value = ''
+    emit('cellUpdated')
+  } catch (e: any) {
+    resultGridRef.value?.revertCell(payload.row, payload.field, payload.oldValue)
+    error.value = e?.message || String(e)
+  }
 }
 
 function rowIndexOf(row: Record<string, any>): number {
@@ -529,13 +540,11 @@ function rowIndexOf(row: Record<string, any>): number {
   if (!rows?.length) return -1
   const direct = rows.indexOf(row)
   if (direct >= 0) return direct
-  // Fallback: match by primary keys (row identity may differ after sort/filter/proxy)
-  const pks = props.primaryKeys || []
+  const pks = resolvedPrimaryKeys.value
   if (pks.length > 0) {
     const byPk = rows.findIndex(r => pks.every(pk => r?.[pk] === row?.[pk]))
     if (byPk >= 0) return byPk
   }
-  // Last resort: match all column values
   const cols = queryResult.value?.columns?.map(c => c.name) || Object.keys(row)
   return rows.findIndex(r => cols.every(c => r?.[c] === row?.[c]))
 }
@@ -583,76 +592,9 @@ function onResizeEnd() {
   document.removeEventListener('mouseup', onResizeEnd)
 }
 
-// ── Inline cell editing ──
-
-interface EditingCell {
-  rowIndex: number
-  colName: string
-  originalValue: any
-  value: string
-}
-
-const editingCell = ref<EditingCell | null>(null)
-const cellInputEl = ref<HTMLInputElement | null>(null)
-let cellConfirming = false
-
-function onCellDblClick(row: any, column: any) {
-  if (!canEditRows.value) return
-  const colName = column.property
-  const originalValue = row[colName]
-  editingCell.value = {
-    rowIndex: rowIndexOf(row),
-    colName,
-    originalValue,
-    value: originalValue ?? ''
-  }
-  nextTick(() => {
-    const el = Array.isArray(cellInputEl.value) ? cellInputEl.value[0] : cellInputEl.value
-    el?.focus()
-    el?.select()
-  })
-}
-
-async function onCellEditConfirm() {
-  if (cellConfirming) return
-  if (!editingCell.value || !props.tableName || !props.primaryKeys) return
-  cellConfirming = true
-
-  const { rowIndex, colName, originalValue, value } = editingCell.value
-  if (value === String(originalValue ?? '')) {
-    editingCell.value = null
-    cellConfirming = false
-    return
-  }
-
-  const row = queryResult.value!.rows[rowIndex]
-  const where: Record<string, any> = {}
-  for (const pk of props.primaryKeys) {
-    where[pk] = row[pk] ?? null
-  }
-
-  try {
-    await DBUpdateRow(props.sessionId, props.dbName || '', props.tableName, { [colName]: value }, where)
-    const updatedRow = { ...queryResult.value!.rows[rowIndex], [colName]: value }
-    queryResult.value = {
-      ...queryResult.value!,
-      rows: queryResult.value!.rows.map((r, i) => i === rowIndex ? updatedRow : r)
-    }
-    error.value = ''
-    emit('cellUpdated')
-  } catch (e: any) {
-    error.value = e?.message || String(e)
-  }
-  editingCell.value = null
-  cellConfirming = false
-}
-
-function onCellEditCancel() {
-  editingCell.value = null
-}
-
 async function onDeleteRow(rowIndex: number) {
-  if (rowIndex < 0 || !props.tableName || !props.primaryKeys || props.primaryKeys.length === 0) return
+  const pks = resolvedPrimaryKeys.value
+  if (rowIndex < 0 || !props.tableName || !pks.length) return
 
   try {
     await ElMessageBox.confirm(t('db.deleteRowConfirm'), t('common.confirm'), {
@@ -666,7 +608,7 @@ async function onDeleteRow(rowIndex: number) {
 
   const row = queryResult.value!.rows[rowIndex]
   const where: Record<string, any> = {}
-  for (const pk of props.primaryKeys) {
+  for (const pk of pks) {
     where[pk] = row[pk] ?? null
   }
 
@@ -795,7 +737,8 @@ function startEditRow(rowIndex: number) {
 
 async function onEditRowConfirm() {
   if (!props.tableName) return
-  if (!props.primaryKeys || props.primaryKeys.length === 0) {
+  const pks = resolvedPrimaryKeys.value
+  if (!pks.length) {
     error.value = t('db.noPrimaryKey')
     return
   }
@@ -818,7 +761,7 @@ async function onEditRowConfirm() {
   }
 
   const where: Record<string, any> = {}
-  for (const pk of props.primaryKeys) {
+  for (const pk of pks) {
     where[pk] = row[pk] ?? null
   }
 
@@ -1039,47 +982,11 @@ function onEditRowCancel() {
   min-width: 0;
 }
 .result-grid { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-.result-table { width: 100%; }
-.result-table :deep(.db-action-cell .cell) {
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-}
-.result-table :deep(.db-action-cell) {
-  pointer-events: auto !important;
-  position: relative;
-  z-index: 2;
-}
-.row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  pointer-events: auto;
-  position: relative;
-  z-index: 2;
-}
-.row-actions .btn { pointer-events: auto; }
-.row-actions :deep(svg) { pointer-events: none; }
 .result-count {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
-}
-.cell-value { cursor: default; }
-.cell-null {
-  color: var(--text-muted);
-  font-style: italic;
-}
-.cell-edit-wrap { margin: -8px -12px; }
-.cell-edit-input {
-  width: 100%;
-  padding: 4px 8px;
-  border: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
 }
 .insert-row-bar { padding: 4px 0; flex-shrink: 0; }
 .insert-row-form {

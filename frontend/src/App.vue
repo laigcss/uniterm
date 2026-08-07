@@ -1927,7 +1927,11 @@ body > .ctx-menu {
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
 .app-container.has-bg .main-content :deep(.k8s-action-cell),
-.app-container.has-bg .main-content :deep(.db-action-cell) {
+.app-container.has-bg .main-content :deep(.db-action-cell),
+.app-container.has-bg .main-content :deep(.vxe-table--fixed-left-wrapper),
+.app-container.has-bg .main-content :deep(.vxe-table--fixed-right-wrapper),
+.app-container.has-bg .main-content :deep(.vxe-body--column.col--fixed),
+.app-container.has-bg .main-content :deep(.vxe-header--column.col--fixed) {
   background-color: var(--bg-surface) !important;
   backdrop-filter: blur(8px);
   pointer-events: auto !important;

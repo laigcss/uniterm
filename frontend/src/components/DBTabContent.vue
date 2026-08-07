@@ -330,6 +330,7 @@ async function onSelectTable(dbName: string, tableName: string, isView = false) 
   const existing = findTableDoc(dbName, tableName)
   if (existing) {
     existing.subTab = 'data'
+    if (!existing.primaryKeys.length) await loadSchema(existing)
     activateDoc(existing.id)
     return
   }
@@ -344,9 +345,10 @@ async function onSelectTable(dbName: string, tableName: string, isView = false) 
     tableColumns: [],
     structureLoadTrigger: 0,
   }
+  // Load schema first so the result grid opens with canEdit already true
+  await loadSchema(doc)
   docs.value.push(doc)
   activateDoc(doc.id)
-  await loadSchema(doc)
 }
 
 async function onViewStructure(dbName: string, tableName: string) {
