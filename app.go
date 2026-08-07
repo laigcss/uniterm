@@ -1471,24 +1471,28 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		runtime.EventsEmit(a.ctx, "session:status", payload)
 	})
 
-	// Database and Redis sessions connect synchronously so errors are returned to the frontend.
+	// Database and Redis sessions connect synchronously so errors are
+	// returned to the frontend.
 	if sessionType == "database" || sessionType == "redis" {
-		log.Writef("[CreateSession] connecting database session synchronously...")
+		log.Writef("[CreateSession] connecting %s session synchronously...", sessionType)
 		if err := s.Connect(config); err != nil {
-			log.Writef("[CreateSession] database connect failed: %v", err)
+			log.Writef("[CreateSession] %s connect failed: %v", sessionType, err)
 			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("database connect failed: %w", err)
+			return nil, fmt.Errorf("%s connect failed: %w", sessionType, err)
 		}
-		log.Writef("[CreateSession] database session connected successfully, id=%s", s.ID())
-	} else if !config.DeferConnect {
-		// Non-database sessions (SSH, Local, Mosh, Telnet, SFTP, FTP, SMB,
-		// WebDAV, S3, Serial, K8s, Mongo, Spice) auto-connect UNLESS the
-		// frontend set DeferConnect — which it does so it can mount the
-		// xterm terminal, fitAddon-measure the real cols/rows, write them
-		// into config.InitialCols/InitialRows and only THEN call
-		// SessionStart. Without that gap Claude Code draws tables at the
-		// 80x24 default before SessionResize propagates the real width,
-		// and the borders drift across output batches.
+		log.Writef("[CreateSession] %s session connected successfully, id=%s", sessionType, s.ID())
+	} else if sessionType == "x11-desktop" {
+		// x11-desktop uses its own X11DesktopConnect entry point; the
+		// generic Connect goroutine must never call s.Connect() here.
+	} else if sessionType == "ssh" || sessionType == "local" || sessionType == "telnet" || sessionType == "mosh" || sessionType == "serial" {
+		// Terminal session types that mount xterm: defer Connect until
+		// SessionStart is called after the frontend measures real cols/rows.
+		// Without this gap Claude Code draws tables at the 80x24 default
+		// before SessionResize propagates the real width, and the borders
+		// drift across output batches.
+	} else {
+		// Non-terminal sessions (sftp, monitor, ftp, smb, webdav, s3,
+		// rdp, vnc, spice, mongodb) connect immediately.
 		a.launchConnectGoroutine(s, sessionType, config)
 	}
 
@@ -1501,10 +1505,10 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	return info, nil
 }
 
-// launchConnectGoroutine starts the async Connect path that used to live
-// inline in CreateSession. Extracted so CreateSession can skip it when
-// the frontend opts into a deferred-start flow (DeferConnect=true) and
-// instead drives the connection via SessionStart after measuring cols/rows.
+// launchConnectGoroutine starts the async Connect path. CreateSession
+// skips it for terminal session types (ssh, local, telnet, mosh, serial,
+// x11-desktop) — those instead drive the connection via SessionStart after
+// the frontend measures cols/rows.
 func (a *App) launchConnectGoroutine(s session.Session, sessionType string, config session.ConnectionConfig) {
 	go func() {
 		defer func() {
@@ -1552,12 +1556,12 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 	}()
 }
 
-// SessionStart triggers the actual Connect() for a session that was
-// created with config.DeferConnect=true. The frontend calls this AFTER
-// mounting the xterm terminal and writing the measured InitialCols/InitialRows
-// into the deferred config, so the PTY is created at the correct
-// dimensions from the first byte — no 80x24 default phase where Claude
-// Code can draw tables at the wrong column count.
+// SessionStart triggers the actual Connect() for terminal sessions
+// (ssh, local, telnet, mosh, serial) whose Connect was deferred by
+// CreateSession. The frontend calls this AFTER mounting the xterm
+// terminal and measuring the real cols/rows, so the PTY is created at
+// the correct dimensions from the first byte — no 80x24 default phase
+// where Claude Code can draw tables at the wrong column count.
 func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) error {
 	if a.sessionManager == nil {
 		return fmt.Errorf("session manager not initialized")

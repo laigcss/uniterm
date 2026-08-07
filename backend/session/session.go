@@ -91,13 +91,6 @@ type ConnectionConfig struct {
 	// SetPendingSize before Connect so getInitialSize picks them up.
 	InitialCols int `json:"initialCols,omitempty"`
 	InitialRows int `json:"initialRows,omitempty"`
-	// DeferConnect tells the App layer to skip the auto-Connect goroutine
-	// when CreateSession is called. The frontend then calls SessionStart
-	// after mounting the xterm terminal and writing InitialCols/InitialRows
-	// via SetPendingSize — guarantees the PTY starts at the real xterm
-	// size, not the 80x24 default that would otherwise wrap Claude Code
-	// tables at the wrong column count.
-	DeferConnect bool `json:"deferConnect,omitempty"`
 	// FTP-specific fields
 	FtpEncryption string `json:"ftpEncryption,omitempty"` // "none"(default) | "auto" | "required"
 	FtpPassive    bool   `json:"ftpPassive"`              // passive mode (default true)
