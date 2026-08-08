@@ -22,6 +22,7 @@
 - Refined the built-in uniTerm Dark and uniTerm Light terminal theme colors.
 - macOS DMG now split into separate amd64 and arm64 packages instead of a universal binary, avoiding compatibility warnings on macOS 26+.
 - Connection remark field for adding free-form notes to any connection.
+- Redesigned database and MongoDB natural-language query layout: the NL input now sits to the left of the SQL/filter editor at matching height, with the generate button styled like the Execute button for better discoverability.
 
 **Bug Fixes**
 - Fixed cursor blink setting not persisting across restarts. (@wangxufeng)
@@ -37,6 +38,10 @@
 - Fixed legacy SSH servers failing to connect due to missing CBC/3DES ciphers and hmac-sha1-96 MAC algorithms.
 - Fixed terminal history recording reliability: restored bottom-up prompt scanning for compatibility with diverse shell prompts. Added independent AI transcription toggle so users can keep history suggestions while turning off AI-powered command rewrites.
 - Fixed X11 forwarding failure on macOS when DISPLAY is empty (e.g. app launched from Finder/Dock) by probing /tmp/.X11-unix. (@surenwuyuwuqiu)
+- Fixed SSH jump-host tunnel not working for terminal sessions. (@wangxufeng)
+- Fixed AI sidebar allowing messages to be sent without an active terminal session, causing failed messages to persist in conversation history and later be sent to the LLM as valid context. The input box and send button are now disabled when no terminal panel is associated.
+- Fixed NL-to-SQL prompt not including the currently selected table name, so the AI had no context about which table the user was viewing.
+
 **Notes**
 - As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
 
@@ -63,6 +68,7 @@ Thanks to @coderstory, @wangxufeng, and @surenwuyuwuqiu for their contributions 
 - 优化内置 uniTerm Dark 和 uniTerm Light 终端主题配色。
 - macOS DMG 拆分为独立的 amd64 和 arm64 安装包，避免通用二进制在 macOS 26+ 上的兼容性警告。
 - 连接备注字段，可为任意连接添加自由文本备注。
+- 重新设计数据库和 MongoDB 自然语言查询布局：NL 输入框移至 SQL/过滤编辑器左侧，高度一致，生成按钮样式与执行按钮对齐，更易发现和使用。
 
 **Bug 修复**
 - 修复光标闪烁设置在重启后丢失的问题。（@wangxufeng）
@@ -78,6 +84,9 @@ Thanks to @coderstory, @wangxufeng, and @surenwuyuwuqiu for their contributions 
 - 修复旧版 SSH 服务器因缺少 CBC/3DES 加密算法和 hmac-sha1-96 MAC 算法导致连接失败的问题。
 - 修复终端历史记录可靠性：恢复从底部向上扫描提示符的命令提取逻辑，兼容更多类型的 shell 提示符。新增独立的 AI 转录开关，用户可在保留历史补全建议的同时关闭 AI 命令改写。
 - 修复 macOS 上从 Finder/Dock 启动应用时 DISPLAY 为空导致 X11 转发失败的问题，自动探测 /tmp/.X11-unix。（@surenwuyuwuqiu）
+- 修复 SSH 跳板隧道对终端会话不生效的问题。（@wangxufeng）
+- 修复 AI 侧边栏在无终端关联时仍可发送消息的问题，导致失败消息残留在对话历史中并被后续发送给 LLM 作为有效上下文。现在无终端面板关联时输入框和发送按钮自动禁用。
+- 修复 NL-to-SQL 提示词不含当前选中表名，AI 无法感知用户正在操作哪张表的问题。
 
 **说明**
 - 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。

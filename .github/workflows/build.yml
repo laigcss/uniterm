@@ -322,6 +322,14 @@ jobs:
             echo "PRERELEASE=false" >> $GITHUB_ENV
           fi
 
+      - name: Update snapshot tag
+        if: github.event_name == 'workflow_dispatch' && inputs.preview == true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f main-snapshot
+          git push -f origin main-snapshot
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
