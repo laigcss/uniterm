@@ -1355,60 +1355,6 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		})
 	}
 
-	// ── SSH Tunnel ──────────────────────────────────────────────
-	if config.TunnelSSHConnID != "" && a.tunnelService != nil {
-		if a.connectionStore == nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("connection store not initialized")
-		}
-		data, err := a.connectionStore.Load()
-		if err != nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("load connections for tunnel: %w", err)
-		}
-		var tunnelSSHConfig *session.ConnectionConfig
-		for _, c := range data.Connections {
-			if c.ID == config.TunnelSSHConnID {
-				tunnelSSHConfig = &c
-				break
-			}
-		}
-		if tunnelSSHConfig == nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
-		}
-
-		// Apply inline tunnel credentials if the frontend provided them
-		// (e.g. credential prompt "connect" without saving to store).
-		if config.TunnelSSHUser != "" {
-			tunnelSSHConfig.User = config.TunnelSSHUser
-		}
-		if config.TunnelSSHPassword != "" {
-			tunnelSSHConfig.Password = config.TunnelSSHPassword
-		}
-
-		// Resolve actual target port. VNC/SPICE use libvirt display
-		// numbers (port < 100 means display :N → port 5900+N).
-		targetPort := config.Port
-		if sessionType == "vnc" || sessionType == "spice" {
-			if targetPort <= 0 {
-				targetPort = 5900
-			} else if targetPort < 100 {
-				targetPort += 5900
-			}
-		}
-		localPort, err := a.tunnelService.Start(s.ID(), *tunnelSSHConfig, config.Host, targetPort)
-		if err != nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("tunnel start: %w", err)
-		}
-		log.Writef("[CreateSession] tunnel established for session=%s via ssh=%s, localPort=%d",
-			s.ID(), config.TunnelSSHConnID, localPort)
-		config.Host = "127.0.0.1"
-		config.Port = localPort
-	}
-	// ── End SSH Tunnel ──────────────────────────────────────────
-
 	// SFTP concurrency limit
 	if sessionType == "sftp" {
 		if sftp, ok := s.(*session.SFTPSession); ok {
@@ -1517,6 +1463,67 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 			}
 		}()
 
+		// ── SSH Tunnel (jump host) ──────────────────────────────
+		// Set up the local-port-forward through the jump host BEFORE
+		// any dial / pre-check, then point config at the local listener
+		// so the subsequent s.Connect() (and the RDP pre-check below)
+		// ride the tunnel. This block lives here — not in CreateSession —
+		// because terminal session types defer their Connect until
+		// SessionStart, by which point any config rewrite from
+		// CreateSession would be discarded along with the local config
+		// copy.
+		if config.TunnelSSHConnID != "" {
+			if a.tunnelService == nil || a.connectionStore == nil {
+				a.failSessionConnect(s, fmt.Errorf("tunnel prerequisites not initialized"))
+				return
+			}
+			data, err := a.connectionStore.Load()
+			if err != nil {
+				a.failSessionConnect(s, fmt.Errorf("load connections for tunnel: %w", err))
+				return
+			}
+			var tunnelSSHConfig *session.ConnectionConfig
+			for _, c := range data.Connections {
+				if c.ID == config.TunnelSSHConnID {
+					tunnelSSHConfig = &c
+					break
+				}
+			}
+			if tunnelSSHConfig == nil {
+				a.failSessionConnect(s, fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID))
+				return
+			}
+
+			// Apply inline tunnel credentials if the frontend provided
+			// them (e.g. credential prompt "connect" without saving).
+			if config.TunnelSSHUser != "" {
+				tunnelSSHConfig.User = config.TunnelSSHUser
+			}
+			if config.TunnelSSHPassword != "" {
+				tunnelSSHConfig.Password = config.TunnelSSHPassword
+			}
+
+			// VNC/SPICE use libvirt display numbers (port < 100 → 5900+N).
+			targetPort := config.Port
+			if sessionType == "vnc" || sessionType == "spice" {
+				if targetPort <= 0 {
+					targetPort = 5900
+				} else if targetPort < 100 {
+					targetPort += 5900
+				}
+			}
+			localPort, err := a.tunnelService.Start(s.ID(), *tunnelSSHConfig, config.Host, targetPort)
+			if err != nil {
+				a.failSessionConnect(s, fmt.Errorf("tunnel start: %w", err))
+				return
+			}
+			log.Writef("[launchConnect] tunnel established for session=%s via ssh=%s, localPort=%d",
+				s.ID(), config.TunnelSSHConnID, localPort)
+			config.Host = "127.0.0.1"
+			config.Port = localPort
+		}
+		// ── End SSH Tunnel ──────────────────────────────────────
+
 		// RDP TCP pre-check: fail fast before creating the ActiveX window.
 		if sessionType == "rdp" {
 			port := config.Port
@@ -1554,6 +1561,31 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 			}
 		}
 	}()
+}
+
+// failSessionConnect is the shared error path inside launchConnectGoroutine
+// for pre-Connect failures (tunnel setup, RDP pre-check). It surfaces the
+// error to both terminal (session:data) and non-terminal (session:status)
+// listeners and tears down any half-started tunnel + the session itself.
+func (a *App) failSessionConnect(s session.Session, err error) {
+	log.Writef("session %s connect error: %v", s.ID(), err)
+	if a.tunnelService != nil {
+		a.tunnelService.Stop(s.ID())
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+			"id":           s.ID(),
+			"status":       "error",
+			"errorMessage": err.Error(),
+		})
+		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+			"id":   s.ID(),
+			"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
+		})
+	}
+	if a.sessionManager != nil {
+		_ = a.sessionManager.Close(s.ID())
+	}
 }
 
 // SessionStart triggers the actual Connect() for terminal sessions
