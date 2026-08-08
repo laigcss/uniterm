@@ -509,6 +509,7 @@
   "sidebar.connectRDP": "連線 RDP",
   "sidebar.connectVNC": "連線 VNC",
   "sidebar.connectSPICE": "連線 SPICE",
+  "sidebar.connectX11Desktop": "連線 X11 Desktop",
   "rdp.connecting": "正在連線到 {host}...",
   "rdp.connected": "已連線",
   "rdp.disconnected": "已斷線",
@@ -1121,5 +1122,5 @@
   "x11.tab.reconnect": "重新連線",
   "x11.tab.disconnect": "斷開",
   "x11.tab.desktopEnv": "桌面環境",
-  "x11.tab.localXHint": "桌面顯示在本機 X Server 視窗中。使用系統工作列或 Alt+Tab 切換。關閉此頁籤將終止桌面工作階段。"
+  "x11.tab.localXHint": "桌面顯示在本機 X Server 視窗中。使用系統工作列或 Alt+Tab 切換。關閉此頁籤將終止桌面工作階段。請勿調整 X Server 視窗大小，否則可能導致桌面工作階段崩潰。"
 }

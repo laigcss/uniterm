@@ -146,3 +146,178 @@ func TestStartX11Forward_NilSession(t *testing.T) {
 		t.Fatalf("err = %v, want errX11SessionNil", err)
 	}
 }
+
+// makeX11ConnReq builds an X11 connection-request packet with the given
+// byte order, auth proto name, and auth data. 'B' for big-endian, 'l'
+// for little-endian.
+func makeX11ConnReq(t *testing.T, byteOrder byte, authProto string, authData []byte) []byte {
+	t.Helper()
+	var order binary.ByteOrder = binary.BigEndian
+	if byteOrder == 'l' {
+		order = binary.LittleEndian
+	}
+
+	var buf bytes.Buffer
+	// byte-order
+	buf.WriteByte(byteOrder)
+	// unused
+	buf.WriteByte(0)
+	// protocol-major-version (11)
+	b := make([]byte, 2)
+	order.PutUint16(b, 11)
+	buf.Write(b)
+	// protocol-minor-version (0)
+	order.PutUint16(b, 0)
+	buf.Write(b)
+	// auth-protocol-name-length
+	order.PutUint16(b, uint16(len(authProto)))
+	buf.Write(b)
+	// auth-protocol-data-length
+	order.PutUint16(b, uint16(len(authData)))
+	buf.Write(b)
+	// unused
+	buf.Write([]byte{0, 0})
+	// auth-protocol-name
+	buf.WriteString(authProto)
+	// auth-protocol-data
+	buf.Write(authData)
+	// padding
+	padLen := (4 - ((len(authProto) + len(authData)) % 4)) % 4
+	buf.Write(make([]byte, padLen))
+
+	return buf.Bytes()
+}
+
+func TestForwardX11Setup_ReplacesAuth(t *testing.T) {
+	origProto := "MIT-MAGIC-COOKIE-1"
+	origCookie := []byte("fakefakefakefake") // 16 bytes
+	req := makeX11ConnReq(t, 'B', origProto, origCookie)
+
+	reader := bytes.NewReader(req)
+	var writer bytes.Buffer
+
+	realProto := "MIT-MAGIC-COOKIE-1"
+	realCookie := []byte("realrealrealreal") // 16 bytes
+
+	err := forwardX11Setup(&writer, reader, realProto, realCookie)
+	if err != nil {
+		t.Fatalf("forwardX11Setup: %v", err)
+	}
+
+	// Verify output contains real cookie, not fake.
+	got := writer.Bytes()
+	if bytes.Contains(got, origCookie) {
+		t.Error("output still contains original fake cookie")
+	}
+	if !bytes.Contains(got, realCookie) {
+		t.Error("output does not contain real cookie")
+	}
+	if !bytes.Contains(got, []byte(realProto)) {
+		t.Error("output does not contain real proto")
+	}
+
+	// Verify the header byte order is preserved (big-endian).
+	if got[0] != 'B' {
+		t.Errorf("byte-order = %c, want 'B'", got[0])
+	}
+
+	// Verify the auth length fields in the header were updated.
+	n := int(binary.BigEndian.Uint16(got[6:8]))
+	m := int(binary.BigEndian.Uint16(got[8:10]))
+	if n != len(realProto) {
+		t.Errorf("auth proto len = %d, want %d", n, len(realProto))
+	}
+	if m != len(realCookie) {
+		t.Errorf("auth data len = %d, want %d", m, len(realCookie))
+	}
+}
+
+func TestForwardX11Setup_LittleEndian(t *testing.T) {
+	origProto := "MIT-MAGIC-COOKIE-1"
+	origCookie := []byte("fakefakefakefake")
+	req := makeX11ConnReq(t, 'l', origProto, origCookie)
+
+	reader := bytes.NewReader(req)
+	var writer bytes.Buffer
+
+	realProto := "MIT-MAGIC-COOKIE-1"
+	realCookie := []byte("realrealrealreal")
+
+	err := forwardX11Setup(&writer, reader, realProto, realCookie)
+	if err != nil {
+		t.Fatalf("forwardX11Setup: %v", err)
+	}
+
+	got := writer.Bytes()
+	if got[0] != 'l' {
+		t.Errorf("byte-order = %c, want 'l'", got[0])
+	}
+	if !bytes.Contains(got, realCookie) {
+		t.Error("output does not contain real cookie")
+	}
+
+	// Verify length fields are little-endian.
+	n := int(binary.LittleEndian.Uint16(got[6:8]))
+	m := int(binary.LittleEndian.Uint16(got[8:10]))
+	if n != len(realProto) {
+		t.Errorf("auth proto len = %d, want %d", n, len(realProto))
+	}
+	if m != len(realCookie) {
+		t.Errorf("auth data len = %d, want %d", m, len(realCookie))
+	}
+}
+
+func TestForwardX11Setup_NoRealCookie_Passthrough(t *testing.T) {
+	origProto := "MIT-MAGIC-COOKIE-1"
+	origCookie := []byte("fakefakefakefake")
+	req := makeX11ConnReq(t, 'B', origProto, origCookie)
+
+	reader := bytes.NewReader(req)
+	var writer bytes.Buffer
+
+	// Empty real cookie → should passthrough unchanged.
+	err := forwardX11Setup(&writer, reader, "", nil)
+	if err != nil {
+		t.Fatalf("forwardX11Setup: %v", err)
+	}
+
+	got := writer.Bytes()
+	if !bytes.Equal(got, req) {
+		t.Errorf("passthrough output differs from input:\n  got: %x\n want: %x", got, req)
+	}
+}
+
+func TestForwardX11Setup_NoAuthInOrig(t *testing.T) {
+	// X11 connection with no auth (n=0, m=0).
+	req := makeX11ConnReq(t, 'B', "", nil)
+
+	reader := bytes.NewReader(req)
+	var writer bytes.Buffer
+
+	realProto := "MIT-MAGIC-COOKIE-1"
+	realCookie := []byte("realrealrealreal")
+
+	err := forwardX11Setup(&writer, reader, realProto, realCookie)
+	if err != nil {
+		t.Fatalf("forwardX11Setup: %v", err)
+	}
+
+	got := writer.Bytes()
+	if !bytes.Contains(got, realCookie) {
+		t.Error("output does not contain real cookie (should add auth)")
+	}
+	if !bytes.Contains(got, []byte(realProto)) {
+		t.Error("output does not contain real proto (should add auth)")
+	}
+}
+
+func TestForwardX11Setup_ShortRead(t *testing.T) {
+	// Incomplete header — should return error.
+	reader := bytes.NewReader([]byte{0x42, 0x00, 0x00})
+	var writer bytes.Buffer
+
+	err := forwardX11Setup(&writer, reader, "MIT-MAGIC-COOKIE-1", []byte("cccccccccccccccc"))
+	if err == nil {
+		t.Fatal("expected error for truncated header, got nil")
+	}
+}

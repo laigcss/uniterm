@@ -509,6 +509,7 @@
   "sidebar.connectRDP": "Connect RDP",
   "sidebar.connectVNC": "Connect VNC",
   "sidebar.connectSPICE": "Connect SPICE",
+  "sidebar.connectX11Desktop": "Connect X11 Desktop",
   "rdp.connecting": "Connecting to {host}...",
   "rdp.connected": "Connected",
   "rdp.disconnected": "Disconnected",
@@ -1121,5 +1122,5 @@
   "x11.tab.reconnect": "Reconnect",
   "x11.tab.disconnect": "Disconnect",
   "x11.tab.desktopEnv": "Desktop Environment",
-  "x11.tab.localXHint": "The desktop is shown in your local X server window. Use the system taskbar or Alt+Tab to focus it. Closing this tab will terminate the desktop session."
+  "x11.tab.localXHint": "The desktop is shown in your local X server window. Use the system taskbar or Alt+Tab to focus it. Closing this tab will terminate the desktop session. Do not resize the X server window — it may crash the desktop session."
 }

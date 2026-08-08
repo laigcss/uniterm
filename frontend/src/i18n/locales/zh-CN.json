@@ -509,6 +509,7 @@
   "sidebar.connectRDP": "连接 RDP",
   "sidebar.connectVNC": "连接 VNC",
   "sidebar.connectSPICE": "连接 SPICE",
+  "sidebar.connectX11Desktop": "连接 X11 Desktop",
   "rdp.connecting": "正在连接到 {host}...",
   "rdp.connected": "已连接",
   "rdp.disconnected": "已断开",
@@ -1121,5 +1122,5 @@
   "x11.tab.reconnect": "重新连接",
   "x11.tab.disconnect": "断开",
   "x11.tab.desktopEnv": "桌面环境",
-  "x11.tab.localXHint": "桌面显示在本地 X Server 窗口中。使用系统任务栏或 Alt+Tab 切换。关闭此标签页将终止桌面会话。"
+  "x11.tab.localXHint": "桌面显示在本地 X Server 窗口中。使用系统任务栏或 Alt+Tab 切换。关闭此标签页将终止桌面会话。请勿调整 X Server 窗口大小，否则可能导致桌面会话崩溃。"
 }
