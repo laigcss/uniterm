@@ -79,32 +79,37 @@
         <!-- Query sub-tab -->
         <div v-if="activeSubTab === 'query' && activeCollection" class="query-section">
           <div class="editor-top" :style="{ height: topHeight + 'px' }">
-            <!-- AI natural language input -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input
-                v-model="nlInput"
-                class="nl-input"
-                :placeholder="t('mongodb.aiPlaceholder')"
-                @keydown.enter="generateFilter"
-              />
-              <button class="btn btn-default btn-sm" @click="generateFilter" :disabled="aiGenerating || !nlInput.trim()">
-                <Sparkles :size="14" :class="{ 'ai-pulse': aiGenerating }" />
-                {{ aiGenerating ? '...' : 'AI' }}
-              </button>
-            </div>
-            <div class="query-editor-wrap">
-              <textarea
-                ref="queryTextareaRef"
-                v-model="filterText"
-                class="query-textarea"
-                :placeholder="t('mongodb.filter')"
-                @keydown="onQueryKeydown"
-              />
-              <div class="exec-btn-wrapper">
-                <button class="btn btn-primary exec-btn-overlay" @click="executeQuery">
-                  {{ t('mongodb.executeQuery') }}
-                </button>
-                <span class="shortcut-hint">Ctrl+Enter</span>
+            <div class="editor-row">
+              <div class="nl-panel">
+                <textarea
+                  v-model="nlInput"
+                  class="nl-textarea"
+                  :placeholder="t('mongodb.aiPlaceholder')"
+                  @keydown="onNLKeydown"
+                />
+                <div class="nl-btn-wrapper">
+                  <button class="btn btn-primary nl-generate-btn" @click="generateFilter" :disabled="aiGenerating || !nlInput.trim()">
+                    <Sparkles :size="14" :class="{ 'ai-pulse': aiGenerating }" />
+                    {{ aiGenerating ? '...' : t('mongodb.generateQuery') }}
+                  </button>
+                </div>
+              </div>
+              <div class="query-panel">
+                <div class="query-editor-wrap">
+                  <textarea
+                    ref="queryTextareaRef"
+                    v-model="filterText"
+                    class="query-textarea"
+                    :placeholder="t('mongodb.filter')"
+                    @keydown="onQueryKeydown"
+                  />
+                  <div class="exec-btn-wrapper">
+                    <button class="btn btn-primary exec-btn-overlay" @click="executeQuery">
+                      {{ t('mongodb.executeQuery') }}
+                    </button>
+                    <span class="shortcut-hint">Ctrl+Enter</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
@@ -799,6 +804,13 @@ function onQueryKeydown(e: KeyboardEvent) {
   }
 }
 
+function onNLKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault()
+    generateFilter()
+  }
+}
+
 async function generateFilter() {
   const input = nlInput.value.trim()
   if (!input || !activeDb.value || !activeCollection.value) return
@@ -1242,20 +1254,6 @@ watch(() => props.sessionId, () => {
 }
 
 /* ── NL input ── */
-.nl-input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.nl-input:focus { border-color: var(--accent); }
-.nl-input::placeholder { color: var(--text-muted); }
 .ai-pulse { animation: fade-pulse 1.2s ease-in-out infinite; }
 @keyframes fade-pulse {
   0%, 100% { opacity: 1; }
@@ -1275,6 +1273,57 @@ watch(() => props.sessionId, () => {
   display: flex;
   flex-direction: column;
   padding: 8px 8px 0;
+}
+.editor-row {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+.nl-panel {
+  position: relative;
+  flex: 0 0 30%;
+  display: flex;
+  min-width: 0;
+}
+.nl-textarea {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 8px 38px 8px;
+  resize: none;
+  transition: border-color 0.15s ease;
+}
+.nl-textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.nl-textarea::placeholder {
+  color: var(--text-muted);
+}
+.nl-btn-wrapper {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+.nl-generate-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.query-panel {
+  flex: 1;
+  display: flex;
+  min-width: 0;
 }
 .query-editor-wrap {
   position: relative;
