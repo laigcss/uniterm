@@ -230,7 +230,8 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 				xauthPath = home + "/.Xauthority"
 			}
 		}
-		fwd, ferr := startX11Forward(client, session, xauthPath, ResolveSSHX11Display())
+		resolvedDisplay := ResolveSSHX11Display()
+		fwd, ferr := startX11Forward(client, session, xauthPath, resolvedDisplay)
 		switch {
 		case ferr == nil, errors.Is(ferr, errX11TrustedFallback):
 			s.x11Forwarder = fwd

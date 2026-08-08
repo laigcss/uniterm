@@ -40,6 +40,7 @@ func LookupCookie(xauthPath, display string) (proto string, cookie []byte, err e
 
 	var bestCookie []byte
 	var bestProto string
+	entryIdx := 0
 	for {
 		family, addr, num, name, data, err := readXauthEntry(f)
 		if errors.Is(err, io.EOF) {
@@ -48,16 +49,15 @@ func LookupCookie(xauthPath, display string) (proto string, cookie []byte, err e
 		if err != nil {
 			return "", nil, fmt.Errorf("xauth parse: %w", err)
 		}
-		if !xauthEntryMatches(family, addr, num, display, dispStr) {
+		matches := xauthEntryMatches(family, addr, num, display, dispStr)
+		if !matches {
+			entryIdx++
 			continue
 		}
 		if name != xauthProtocolMIT {
-			// Keep scanning — another entry for this display might be MIT.
+			entryIdx++
 			continue
 		}
-		// First match wins. xauth(1) returns the most-recently-added matching
-		// entry; this simple reader returns them in file order, which is
-		// how nlist and most tools also handle it.
 		bestCookie = data
 		bestProto = name
 		break
@@ -82,7 +82,10 @@ func displayNumberString(display string) string {
 }
 
 func xauthEntryMatches(family uint16, addr, num, display, dispStr string) bool {
-	if num != dispStr {
+	// An empty display number in the xauth entry is a wildcard: it matches
+	// any display. XWayland (mutter/GDM) writes entries with an empty
+	// display number, relying on libXau to treat "" as match-all.
+	if num != "" && num != dispStr {
 		return false
 	}
 	switch family {
