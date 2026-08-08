@@ -372,18 +372,7 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
   const store = useAIStore()
 
   if (!hasActiveSession()) {
-    if (userInput) {
-      store.addMessage({
-        id: `msg-${Date.now()}`,
-        role: 'user',
-        content: userInput
-      })
-    }
-    store.addMessage({
-      id: `msg-${Date.now()}`,
-      role: 'tool',
-      content: '请先在主窗口中打开一个终端会话，这样我才能执行命令。'
-    })
+    // 输入框已禁用，正常流程不会走到这里；兜底直接返回，不写入任何消息
     return
   }
 
@@ -1022,11 +1011,6 @@ export async function approveTool(_messageId: string) {
 
   if (!hasActiveSession()) {
     store.clearPendingCommand()
-    store.addMessage({
-      id: `msg-${Date.now()}`,
-      role: 'tool',
-      content: '请先打开一个终端会话，再执行此命令。'
-    })
     return
   }
 
