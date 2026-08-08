@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -79,6 +81,26 @@ var (
 	errX11DisplayEmpty    = errors.New("x11: $DISPLAY is empty")
 	errX11TrustedFallback = errors.New("x11: trusted mode (no MIT-MAGIC-COOKIE-1 in xauth)")
 )
+
+// readWriterPair wraps separate io.Reader and io.Writer as an io.ReadWriteCloser.
+// Used when the X server response has already been read from the connection
+// and must be prepended via io.MultiReader before handing to bridge().
+type readWriterPair struct {
+	r io.Reader
+	w io.Writer
+}
+
+func (p *readWriterPair) Read(buf []byte) (int, error)  { return p.r.Read(buf) }
+func (p *readWriterPair) Write(buf []byte) (int, error) { return p.w.Write(buf) }
+func (p *readWriterPair) Close() error {
+	if c, ok := p.r.(io.Closer); ok {
+		c.Close()
+	}
+	if c, ok := p.w.(io.Closer); ok {
+		c.Close()
+	}
+	return nil
+}
 
 // bridge copies bytes between a and b bidirectionally, closing both when
 // either side returns EOF. Same shape as tunnel_forward.go's pipe() but
@@ -238,8 +260,6 @@ func (f *x11Forwarder) handleX11(ch ssh.NewChannel, display string) {
 	}
 	defer ch2.Close()
 	go ssh.DiscardRequests(requests)
-	// Drop the originator address from the channel-open packet on the
-	// floor — only the channel data stream carries X11 protocol bytes.
 	_ = ch.ExtraData()
 
 	local, err := DialLocalX(display)
@@ -253,8 +273,91 @@ func (f *x11Forwarder) handleX11(ch ssh.NewChannel, display string) {
 	// before bridging. If the setup read/write fails the channel is
 	// dropped — the X application will see a connection error and may
 	// retry or exit, just as it would if the X server were unreachable.
-	forwardX11Setup(local, ch2, f.realProto, f.realCookie)
-	bridge(local, ch2)
+	if err := forwardX11Setup(local, ch2, f.realProto, f.realCookie); err != nil {
+		return
+	}
+
+	// Read the X server's connection-setup response (8-byte fixed header).
+	// The X11 response uses the SAME byte order as the connection request.
+	local.SetReadDeadline(time.Now().Add(3 * time.Second))
+	respHeader := make([]byte, 8)
+	if _, err := io.ReadFull(local, respHeader); err != nil {
+		return
+	}
+
+	// Determine byte order by computing protocol-major-version in both
+	// orders. The correct interpretation gives protoMajor == 11.
+	var respOrder binary.ByteOrder = binary.BigEndian
+	if v := binary.LittleEndian.Uint16(respHeader[2:4]); v == 11 {
+		respOrder = binary.LittleEndian
+	}
+
+	status := respHeader[0]
+	reasonLen := int(respHeader[1])
+	addDataLen := respOrder.Uint16(respHeader[6:8])
+
+	// The X11 failure response format:
+	//   1  CARD8   status (0=fail, 1=success, 2=authenticate)
+	//   1  CARD8   reason-length (n); unused (0) for success
+	//   2  CARD16  protocol-major-version
+	//   2  CARD16  protocol-minor-version
+	//   2  CARD16  length (m) — additional data in bytes
+	//   n  STRING  reason (padded to 4-byte boundary)
+	//   m  STRING  additional data (padded to 4-byte boundary)
+	//
+	// Log the reason before reading addData — if the X server rejected us
+	// and closes the connection early we still see the error message.
+	reason := make([]byte, reasonLen)
+	if reasonLen > 0 {
+		if _, err := io.ReadFull(local, reason); err != nil {
+			return
+		}
+	}
+
+	// Reason is padded to a 4-byte boundary (X11 spec §4).
+	reasonPad := (4 - (reasonLen % 4)) % 4
+	if reasonPad > 0 {
+		if _, err := io.ReadFull(local, make([]byte, reasonPad)); err != nil {
+		}
+	}
+
+	// The X server may close the connection immediately after sending a
+	// rejection response, so addData might come up short. Read what we
+	// can — don't fail the whole forwarding over a short read here.
+	addData := make([]byte, addDataLen)
+	if addDataLen > 0 {
+		n, err := io.ReadFull(local, addData)
+		if err != nil {
+			addData = addData[:n]
+		}
+	}
+	addDataPad := int((4 - (addDataLen % 4)) % 4)
+		if addDataPad > 0 {
+			if _, err := io.ReadFull(local, make([]byte, addDataPad)); err != nil {
+			}
+		}
+
+	if status == 0 {
+	} else {
+	}
+
+	local.SetReadDeadline(time.Time{})
+
+	// Prepend the response we already read so bridge can forward it to the
+	// remote X client. Include reason/addData even on rejection so the
+	// remote X application sees a proper error instead of a broken pipe.
+	respBuf := make([]byte, 0, 8+reasonLen+reasonPad+len(addData)+addDataPad)
+	respBuf = append(respBuf, respHeader...)
+	respBuf = append(respBuf, reason...)
+	if reasonPad > 0 {
+		respBuf = append(respBuf, make([]byte, reasonPad)...)
+	}
+	respBuf = append(respBuf, addData...)
+	if addDataPad > 0 {
+		respBuf = append(respBuf, make([]byte, addDataPad)...)
+	}
+	localReader := io.MultiReader(bytes.NewReader(respBuf), local)
+	bridge(&readWriterPair{w: local, r: localReader}, ch2)
 }
 
 // forwardX11Setup reads the initial X11 connection-request packet from
@@ -271,8 +374,14 @@ func (f *x11Forwarder) handleX11(ch ssh.NewChannel, display string) {
 //	2        CARD16  auth-protocol-data-length (m)
 //	2               unused
 //	n        STRING  auth-protocol-name
+//	p1       pad(n)  zero-fill to 4-byte boundary
 //	m        STRING  auth-protocol-data
-//	p               padding, p = pad(n+m)
+//	p2       pad(m)  zero-fill to 4-byte boundary
+//
+// Each variable-length field is individually padded to a 4-byte boundary
+// (X11 Protocol spec §4). Do NOT combine their lengths before padding
+// — that was the root cause of a 2-byte offset bug that broke cookie
+// replacement for "MIT-MAGIC-COOKIE-1" (18-byte name → pad=2).
 func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCookie []byte) error {
 	// Read the 12-byte fixed header.
 	header := make([]byte, 12)
@@ -289,24 +398,33 @@ func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCo
 	n := int(order.Uint16(header[6:8]))  // auth-protocol-name length
 	m := int(order.Uint16(header[8:10])) // auth-protocol-data length
 
-	// Read the variable-length auth fields.
+	// pad4(n) = (4 - (n % 4)) % 4
+	pad4 := func(x int) int { return (4 - (x%4)) % 4 }
+
+	// Read auth protocol name, then skip its padding.
 	authName := make([]byte, n)
-	authData := make([]byte, m)
 	if n > 0 {
 		if _, err := io.ReadFull(remote, authName); err != nil {
 			return err
 		}
 	}
+	namePad := pad4(n)
+	if namePad > 0 {
+		if _, err := io.ReadFull(remote, make([]byte, namePad)); err != nil {
+			return err
+		}
+	}
+
+	// Read auth protocol data, then skip its padding.
+	authData := make([]byte, m)
 	if m > 0 {
 		if _, err := io.ReadFull(remote, authData); err != nil {
 			return err
 		}
 	}
-
-	// Skip padding: pad(x) = (4 - (x % 4)) % 4
-	padLen := (4 - ((n + m) % 4)) % 4
-	if padLen > 0 {
-		if _, err := io.ReadFull(remote, make([]byte, padLen)); err != nil {
+	dataPad := pad4(m)
+	if dataPad > 0 {
+		if _, err := io.ReadFull(remote, make([]byte, dataPad)); err != nil {
 			return err
 		}
 	}
@@ -320,7 +438,9 @@ func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCo
 		copy(newHeader, header) // preserves byte-order and protocol version
 		order.PutUint16(newHeader[6:8], newN)
 		order.PutUint16(newHeader[8:10], newM)
-		// bytes 10-11 (unused) already copied
+
+		newNamePad := pad4(int(newN))
+		newDataPad := pad4(int(newM))
 
 		if _, err := local.Write(newHeader); err != nil {
 			return err
@@ -328,8 +448,20 @@ func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCo
 		if _, err := local.Write([]byte(realProto)); err != nil {
 			return err
 		}
+		// Pad after auth name.
+		if newNamePad > 0 {
+			if _, err := local.Write(make([]byte, newNamePad)); err != nil {
+				return err
+			}
+		}
 		if _, err := local.Write(realCookie); err != nil {
 			return err
+		}
+		// Pad after auth data.
+		if newDataPad > 0 {
+			if _, err := local.Write(make([]byte, newDataPad)); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -343,14 +475,18 @@ func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCo
 			return err
 		}
 	}
+	if namePad > 0 {
+		if _, err := local.Write(make([]byte, namePad)); err != nil {
+			return err
+		}
+	}
 	if m > 0 {
 		if _, err := local.Write(authData); err != nil {
 			return err
 		}
 	}
-	if padLen > 0 {
-		// Pad bytes are zero-filled per the X11 spec.
-		if _, err := local.Write(make([]byte, padLen)); err != nil {
+	if dataPad > 0 {
+		if _, err := local.Write(make([]byte, dataPad)); err != nil {
 			return err
 		}
 	}
