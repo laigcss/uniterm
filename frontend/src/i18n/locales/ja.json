@@ -509,6 +509,7 @@
   "sidebar.connectRDP": "RDP で接続",
   "sidebar.connectVNC": "VNC で接続",
   "sidebar.connectSPICE": "SPICE で接続",
+  "sidebar.connectX11Desktop": "X11 Desktop で接続",
   "rdp.connecting": "{host} に接続中...",
   "rdp.connected": "接続しました",
   "rdp.disconnected": "切断しました",
@@ -1121,5 +1122,5 @@
   "x11.tab.reconnect": "再接続",
   "x11.tab.disconnect": "切断",
   "x11.tab.desktopEnv": "デスクトップ環境",
-  "x11.tab.localXHint": "デスクトップはローカル X Server ウィンドウに表示されます。システムタスクバーまたは Alt+Tab で切り替えてください。このタブを閉じるとデスクトップセッションが終了します。"
+  "x11.tab.localXHint": "デスクトップはローカル X Server ウィンドウに表示されます。システムタスクバーまたは Alt+Tab で切り替えてください。このタブを閉じるとデスクトップセッションが終了します。X Server ウィンドウのサイズを変更しないでください。デスクトップセッションがクラッシュする可能性があります。"
 }

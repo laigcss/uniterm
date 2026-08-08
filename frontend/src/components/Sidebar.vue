@@ -303,6 +303,7 @@
       <div v-if="selectedConn && selectedConn.type === 'rdp'" class="menu-item" @click="doConnectRDP">{{ t('sidebar.connectRDP') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'vnc'" class="menu-item" @click="doConnectVNC">{{ t('sidebar.connectVNC') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'spice'" class="menu-item" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</div>
+      <div v-if="selectedConn && selectedConn.type === 'x11-desktop'" class="menu-item" @click="doConnectX11Desktop">{{ t('sidebar.connectX11Desktop') }}</div>
       <!-- Database & Monitor -->
       <div v-if="selectedConn && selectedConn.type === 'database'" class="menu-item" @click="doConnectDB">{{ t('db.connectDB') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
@@ -476,7 +477,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
+const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
@@ -874,6 +875,10 @@ function onListKeydown(e: KeyboardEvent) {
             emit('connectRdp', c)
           } else if (c.type === 'vnc') {
             emit('connectVnc', c)
+          } else if (c.type === 'spice') {
+            emit('connectSpice', c)
+          } else if (c.type === 'x11-desktop') {
+            emit('connectX11Desktop', c)
           } else {
             emit('connect', c)
           }
@@ -1086,6 +1091,8 @@ function onItemDblClick(conn: ConnectionConfig) {
     emit('connectVnc', conn)
   } else if (conn.type === 'spice') {
     emit('connectSpice', conn)
+  } else if (conn.type === 'x11-desktop') {
+    emit('connectX11Desktop', conn)
   } else {
     emit('connect', conn)
   }
@@ -1256,6 +1263,16 @@ function doConnectSPICE() {
   closeMenu()
   for (const c of conns) {
     emit('connectSpice', c)
+  }
+}
+
+function doConnectX11Desktop() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  selectedIds.value = new Set()
+  closeMenu()
+  for (const c of conns) {
+    emit('connectX11Desktop', c)
   }
 }
 
@@ -1725,6 +1742,8 @@ function onConnectFromForm(config: ConnectionConfig) {
     emit('connectRdp', config)
   } else if (config.type === 'vnc') {
     emit('connectVnc', config)
+  } else if (config.type === 'x11-desktop') {
+    emit('connectX11Desktop', config)
   } else {
     emit('connect', config)
   }

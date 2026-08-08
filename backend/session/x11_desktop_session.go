@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -61,6 +63,11 @@ type X11DesktopSession struct {
 	x11Fwd     *x11Forwarder
 	quit       chan struct{}
 	quitOnce   sync.Once
+	// vcxsrv holds the Windows VcXsrv process spawned exclusively for this
+	// session. It is killed on Disconnect to prevent the desktop environment's
+	// X server state (root window, screen resolution, WM) from leaking into
+	// other sessions.
+	vcxsrv *exec.Cmd
 }
 
 func NewX11DesktopSession(id string) *X11DesktopSession {
@@ -94,33 +101,51 @@ func (s *X11DesktopSession) ConnectX11Desktop(cfg ConnectionConfig) error {
 	// X11 forward is mandatory for this type.
 	cfg.X11Forwarding = true
 
-	// Make sure a local X server is running. On Windows $DISPLAY is normally
-	// unset or set to a placeholder like "needs-to-be-defined"; VcXsrv/Xming
-	// listen at localhost:0 by convention, so fall back to that. macOS/Linux
-	// keep strict validation.
-	display := os.Getenv("DISPLAY")
+	// On Windows, X11 Desktop spawns a dedicated VcXsrv instance on
+	// a dynamically chosen free display. The scan starts after the
+	// SSH X11 forwarding display (typically :0) to avoid port
+	// conflicts. This isolates the desktop environment's X server
+	// state (root window, screen resolution, window manager) from
+	// SSH X11 forwarding sessions which share their own X server.
+	// The VcXsrv process is killed on Disconnect so the next X11
+	// Desktop starts fresh.
+	//
+	// On macOS/Linux the standard $DISPLAY X server is used as-is.
+	var display string
 	if runtime.GOOS == "windows" {
-		if _, _, _, perr := ParseDisplay(display); perr != nil {
-			display = "localhost:0"
+		startFrom := sshX11DisplayNumber() + 1
+		if startFrom < 1 {
+			startFrom = 1
 		}
-	} else if display == "" {
-		display = resolveLocalDisplay(display)
+		d := findFreeDisplay(startFrom)
+		if d < 0 {
+			s.setStatus(StatusError)
+			return fmt.Errorf("x11-desktop: no free X11 display found")
+		}
+		display = "localhost:" + strconv.Itoa(d)
+		cmd := launchVcXsrv(d)
+		if cmd == nil {
+			s.setStatus(StatusError)
+			return fmt.Errorf("x11-desktop: failed to start VcXsrv on :%d", d)
+		}
+		s.vcxsrv = cmd
+	} else {
+		display = os.Getenv("DISPLAY")
+		if display == "" {
+			display = resolveLocalDisplay(display)
+		}
+		if display == "" {
+			s.setStatus(StatusError)
+			return fmt.Errorf("x11-desktop: $DISPLAY is empty")
+		}
 	}
 	if _, derr := DialLocalX(display); derr != nil {
-		if !tryStartLocalXServer() {
-			s.setStatus(StatusError)
-			return fmt.Errorf("x11-desktop: local X server unreachable: %w", derr)
+		if s.vcxsrv != nil {
+			s.vcxsrv.Process.Kill()
+			s.vcxsrv = nil
 		}
-		// After starting VcXsrv, try localhost:0 (not the original
-		// possibly-broken DISPLAY).
-		retryDisplay := display
-		if runtime.GOOS == "windows" {
-			retryDisplay = "localhost:0"
-		}
-		if _, derr2 := DialLocalX(retryDisplay); derr2 != nil {
-			s.setStatus(StatusError)
-			return fmt.Errorf("x11-desktop: local X server unreachable after start: %w", derr2)
-		}
+		s.setStatus(StatusError)
+		return fmt.Errorf("x11-desktop: local X server unreachable: %w", derr)
 	}
 
 	client, err := DialSSHClient(cfg)
@@ -144,7 +169,7 @@ func (s *X11DesktopSession) ConnectX11Desktop(cfg ConnectionConfig) error {
 			xauthPath = home + "/.Xauthority"
 		}
 	}
-	fwd, ferr := startX11Forward(client, sess, xauthPath, os.Getenv("DISPLAY"))
+	fwd, ferr := startX11Forward(client, sess, xauthPath, display)
 	switch {
 	case ferr == nil, errors.Is(ferr, errX11TrustedFallback):
 		s.x11Fwd = fwd
@@ -168,10 +193,10 @@ func (s *X11DesktopSession) ConnectX11Desktop(cfg ConnectionConfig) error {
 	return nil
 }
 
-// Disconnect tears down the X11 forwarder, SSH session, and SSH client.
-// Idempotent: sync.Once guarantees the cleanup runs once even if the
-// underlying resources are nil (e.g. Disconnect called before Connect,
-// or after a partial failure).
+// Disconnect tears down the X11 forwarder, SSH session, SSH client, and
+// the dedicated VcXsrv process (if any). Idempotent: sync.Once guarantees
+// the cleanup runs once even if the underlying resources are nil (e.g.
+// Disconnect called before Connect, or after a partial failure).
 func (s *X11DesktopSession) Disconnect() error {
 	s.quitOnce.Do(func() {
 		if s.x11Fwd != nil {
@@ -183,6 +208,10 @@ func (s *X11DesktopSession) Disconnect() error {
 		}
 		if s.sshClient != nil {
 			s.sshClient.Close()
+		}
+		if s.vcxsrv != nil {
+			s.vcxsrv.Process.Kill()
+			s.vcxsrv = nil
 		}
 		s.setStatus(StatusDisconnected)
 	})

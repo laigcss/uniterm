@@ -509,6 +509,7 @@
   "sidebar.connectRDP": "Conectar RDP",
   "sidebar.connectVNC": "Conectar VNC",
   "sidebar.connectSPICE": "Conectar SPICE",
+  "sidebar.connectX11Desktop": "Conectar X11 Desktop",
   "rdp.connecting": "Conectando a {host}...",
   "rdp.connected": "Conectado",
   "rdp.disconnected": "Desconectado",
@@ -1121,5 +1122,5 @@
   "x11.tab.reconnect": "Reconectar",
   "x11.tab.disconnect": "Desconectar",
   "x11.tab.desktopEnv": "Entorno de escritorio",
-  "x11.tab.localXHint": "El escritorio se muestra en la ventana del servidor X local. Use la barra de tareas o Alt+Tab para cambiar. Cerrar esta pestaña terminará la sesión de escritorio."
+  "x11.tab.localXHint": "El escritorio se muestra en la ventana del servidor X local. Use la barra de tareas o Alt+Tab para cambiar. Cerrar esta pestaña terminará la sesión de escritorio. No redimensione la ventana del servidor X — puede bloquear la sesión de escritorio."
 }

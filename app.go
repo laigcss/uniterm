@@ -518,6 +518,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.sessionManager != nil {
 		a.sessionManager.CloseAll()
 	}
+	session.CleanupSSHX11Server()
 	if a.terminalHistoryStore != nil {
 		_ = a.terminalHistoryStore.Close()
 	}

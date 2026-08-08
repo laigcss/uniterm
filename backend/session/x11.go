@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -111,7 +112,7 @@ func DialLocalX(display string) (net.Conn, error) {
 		conn, err := dialLocal(runtime.GOOS, display, disp, 5*time.Second)
 		if err != nil && runtime.GOOS == "windows" {
 			// VcXsrv not running — try to start it.
-			if started := tryStartLocalXServer(); started {
+			if started := tryStartLocalXServer(disp); started {
 				conn, err = dialLocal(runtime.GOOS, display, disp, 5*time.Second)
 			}
 		}
@@ -120,44 +121,76 @@ func DialLocalX(display string) (net.Conn, error) {
 	return net.DialTimeout("tcp", net.JoinHostPort(host, "600"+strconv.Itoa(disp)), 5*time.Second)
 }
 
-// tryStartLocalXServer attempts to launch VcXsrv on Windows if it's not
-// already running. Returns true if it spawned a process (caller should
-// retry the dial). No-op on macOS / Linux — XQuartz is a user-level .app
-// that needs a different launcher, and Xorg is expected to already be
-// running in a graphical session.
-func tryStartLocalXServer() bool {
-	if runtime.GOOS != "windows" {
-		return false
-	}
-	if c, err := net.DialTimeout("tcp", "127.0.0.1:6000", 200*time.Millisecond); err == nil {
+// findFreeDisplay scans display numbers starting from startFrom, returning
+// the first one where no X server is listening. Returns -1 if no free
+// display is found in the range [startFrom, 99].
+func findFreeDisplay(startFrom int) int {
+	for d := startFrom; d < 100; d++ {
+		port := fmt.Sprintf("127.0.0.1:%d", 6000+d)
+		c, err := net.DialTimeout("tcp", port, 200*time.Millisecond)
+		if err != nil {
+			return d // port not reachable → display is free
+		}
 		c.Close()
-		return false
 	}
-	candidates := vcxsrvCandidates()
-	for _, path := range candidates {
+	return -1
+}
+
+// launchVcXsrv starts a new VcXsrv instance on the given display number
+// and waits up to 5 s for it to become ready. Returns the exec.Cmd so the
+// caller can manage the process lifetime (e.g. kill it when done). Returns
+// nil if VcXsrv is already running on this display, the binary cannot be
+// found, or the process fails to become ready within the timeout.
+// Extra args (e.g. "-multiwindow") are appended after "-clipboard".
+// No-op on non-Windows platforms.
+func launchVcXsrv(disp int, extraArgs ...string) *exec.Cmd {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	port := fmt.Sprintf("127.0.0.1:%d", 6000+disp)
+	if c, err := net.DialTimeout("tcp", port, 200*time.Millisecond); err == nil {
+		c.Close()
+		return nil // already running
+	}
+	dispStr := strconv.Itoa(disp)
+	for _, path := range vcxsrvCandidates() {
 		if _, err := os.Stat(path); err != nil {
 			continue
 		}
-		// Minimal VcXsrv args per user: ":0 -clipboard". No -screen
-		// (VcXsrv defaults to the primary monitor), no -multiwindow (XWin's
-		// default is "windowed" single-window mode, same as XLaunch's
-		// "One large window"). Dir must be set to a writable path (the user's
-		// home) because VcXsrv writes its XWin.log to the cwd and aborts
-		// with "Cannot open log file XWin.log" if cwd is not writable.
-		cmd := exec.Command(path, ":0", "-clipboard")
+		args := append([]string{":" + dispStr, "-clipboard"}, extraArgs...)
+		cmd := exec.Command(path, args...)
 		home, _ := os.UserHomeDir()
 		cmd.Dir = home
 		if err := cmd.Start(); err != nil {
-			return false
+			return nil
 		}
+		// Wait for VcXsrv to open its TCP socket (up to 5 s).
 		for i := 0; i < 50; i++ {
 			time.Sleep(100 * time.Millisecond)
-			if c, err := net.DialTimeout("tcp", "127.0.0.1:6000", 200*time.Millisecond); err == nil {
+			if c, err := net.DialTimeout("tcp", port, 200*time.Millisecond); err == nil {
 				c.Close()
-				return true
+				return cmd
 			}
 		}
-		return false
+		// Timed out — kill the partial process so we don't leak zombies.
+		cmd.Process.Kill()
+		return nil
+	}
+	return nil
+}
+
+// tryStartLocalXServer is the fire-and-forget version of launchVcXsrv.
+// It starts VcXsrv on the given display in multiwindow mode and releases
+// the process handle so VcXsrv outlives the current session. Used by SSH
+// X11 forwarding where the X server should stay running across multiple
+// connections and each X client gets its own window.
+// Returns true if it spawned a new process (caller should retry the dial).
+func tryStartLocalXServer(disp int) bool {
+	cmd := launchVcXsrv(disp, "-multiwindow")
+	if cmd != nil {
+		// Release the process handle — VcXsrv keeps running independently.
+		cmd.Process.Release()
+		return true
 	}
 	return false
 }
@@ -212,4 +245,78 @@ func vcxsrvCandidates() []string {
 		`C:\Program Files (x86)\VcXsrv\vcxsrv.exe`,
 	)
 	return paths
+}
+
+// --- SSH X11 forwarding shared VcXsrv ---
+//
+// SSH X11 forwarding sessions share a single dedicated VcXsrv instance.
+// This isolates uniTerm's X11 forwarding from external X servers (e.g.
+// MobaXterm on :0) and keeps the X server running across multiple SSH
+// sessions. The process is killed on application shutdown.
+
+var (
+	sshX11Mu      sync.Mutex
+	sshX11Display string   // e.g. "localhost:0"
+	sshX11Vcxsrv  *exec.Cmd // nil on non-Windows or if launch failed
+)
+
+// ResolveSSHX11Display returns the X11 display for SSH X11 forwarding sessions.
+// On Windows it starts a dedicated VcXsrv instance on a free display; on other
+// platforms it returns $DISPLAY (or probes /tmp/.X11-unix). Idempotent —
+// subsequent calls return the same display without side effects.
+func ResolveSSHX11Display() string {
+	sshX11Mu.Lock()
+	defer sshX11Mu.Unlock()
+
+	if sshX11Display != "" {
+		return sshX11Display
+	}
+
+	if runtime.GOOS == "windows" {
+		d := findFreeDisplay(0)
+		if d < 0 {
+			return ""
+		}
+		sshX11Display = "localhost:" + strconv.Itoa(d)
+		// -multiwindow: each X client gets its own Windows window
+		// (the opposite of X11 Desktop which uses single-window mode).
+		sshX11Vcxsrv = launchVcXsrv(d, "-multiwindow")
+	} else {
+		display := os.Getenv("DISPLAY")
+		if display == "" {
+			display = resolveLocalDisplay("")
+		}
+		sshX11Display = display
+	}
+	return sshX11Display
+}
+
+// CleanupSSHX11Server kills the shared VcXsrv process started for SSH X11
+// forwarding. Call on application shutdown. Safe to call multiple times;
+// no-op on non-Windows platforms.
+func CleanupSSHX11Server() {
+	sshX11Mu.Lock()
+	defer sshX11Mu.Unlock()
+
+	if sshX11Vcxsrv != nil {
+		sshX11Vcxsrv.Process.Kill()
+		sshX11Vcxsrv = nil
+	}
+	sshX11Display = ""
+}
+
+// sshX11DisplayNumber returns the display number of the cached SSH X11
+// display, or -1 if it has not been resolved yet.
+func sshX11DisplayNumber() int {
+	sshX11Mu.Lock()
+	defer sshX11Mu.Unlock()
+
+	if sshX11Display == "" {
+		return -1
+	}
+	_, disp, _, err := ParseDisplay(sshX11Display)
+	if err != nil {
+		return -1
+	}
+	return disp
 }
