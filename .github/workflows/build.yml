@@ -114,7 +114,7 @@ jobs:
           if [ "$PLATFORM" = "darwin" ]; then
             for ARCH in amd64 arm64; do
               echo "Building darwin/$ARCH..."
-              eval wails build -platform "darwin/$ARCH" -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -skipbindings
+              wails build -platform "darwin/$ARCH" -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -skipbindings
               mv build/bin/uniTerm.app "build/bin/uniTerm-${ARCH}.app"
             done
           else
