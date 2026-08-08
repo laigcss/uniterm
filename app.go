@@ -1418,12 +1418,22 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		runtime.EventsEmit(a.ctx, "session:status", payload)
 	})
 
-	// Database and Redis sessions connect synchronously so errors are
-	// returned to the frontend.
-	if sessionType == "database" || sessionType == "redis" {
+	// Database, Redis, and MongoDB sessions connect synchronously so
+	// errors are returned to the frontend try/catch.
+	if sessionType == "database" || sessionType == "redis" || sessionType == "mongodb" {
+		// Set up jump-host tunnel before connecting, so database/redis/mongo
+		// sessions ride the tunnel just like other session types.
+		if err := a.setupJumpHostTunnel(s.ID(), sessionType, &config); err != nil {
+			_ = a.sessionManager.Close(s.ID())
+			return nil, err
+		}
 		log.Writef("[CreateSession] connecting %s session synchronously...", sessionType)
 		if err := s.Connect(config); err != nil {
 			log.Writef("[CreateSession] %s connect failed: %v", sessionType, err)
+			// Clean up any tunnel that was set up for this session.
+			if a.tunnelService != nil {
+				a.tunnelService.Stop(s.ID())
+			}
 			_ = a.sessionManager.Close(s.ID())
 			return nil, fmt.Errorf("%s connect failed: %w", sessionType, err)
 		}
@@ -1439,7 +1449,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		// drift across output batches.
 	} else {
 		// Non-terminal sessions (sftp, monitor, ftp, smb, webdav, s3,
-		// rdp, vnc, spice, mongodb) connect immediately.
+		// rdp, vnc, spice) connect immediately.
 		a.launchConnectGoroutine(s, sessionType, config)
 	}
 
@@ -1473,55 +1483,9 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 		// SessionStart, by which point any config rewrite from
 		// CreateSession would be discarded along with the local config
 		// copy.
-		if config.TunnelSSHConnID != "" {
-			if a.tunnelService == nil || a.connectionStore == nil {
-				a.failSessionConnect(s, fmt.Errorf("tunnel prerequisites not initialized"))
-				return
-			}
-			data, err := a.connectionStore.Load()
-			if err != nil {
-				a.failSessionConnect(s, fmt.Errorf("load connections for tunnel: %w", err))
-				return
-			}
-			var tunnelSSHConfig *session.ConnectionConfig
-			for _, c := range data.Connections {
-				if c.ID == config.TunnelSSHConnID {
-					tunnelSSHConfig = &c
-					break
-				}
-			}
-			if tunnelSSHConfig == nil {
-				a.failSessionConnect(s, fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID))
-				return
-			}
-
-			// Apply inline tunnel credentials if the frontend provided
-			// them (e.g. credential prompt "connect" without saving).
-			if config.TunnelSSHUser != "" {
-				tunnelSSHConfig.User = config.TunnelSSHUser
-			}
-			if config.TunnelSSHPassword != "" {
-				tunnelSSHConfig.Password = config.TunnelSSHPassword
-			}
-
-			// VNC/SPICE use libvirt display numbers (port < 100 → 5900+N).
-			targetPort := config.Port
-			if sessionType == "vnc" || sessionType == "spice" {
-				if targetPort <= 0 {
-					targetPort = 5900
-				} else if targetPort < 100 {
-					targetPort += 5900
-				}
-			}
-			localPort, err := a.tunnelService.Start(s.ID(), *tunnelSSHConfig, config.Host, targetPort)
-			if err != nil {
-				a.failSessionConnect(s, fmt.Errorf("tunnel start: %w", err))
-				return
-			}
-			log.Writef("[launchConnect] tunnel established for session=%s via ssh=%s, localPort=%d",
-				s.ID(), config.TunnelSSHConnID, localPort)
-			config.Host = "127.0.0.1"
-			config.Port = localPort
+		if err := a.setupJumpHostTunnel(s.ID(), sessionType, &config); err != nil {
+			a.failSessionConnect(s, err)
+			return
 		}
 		// ── End SSH Tunnel ──────────────────────────────────────
 
@@ -1532,40 +1496,22 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 			addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
 			if tcpErr != nil {
-				log.Writef("[CreateSession] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
-				if a.ctx != nil {
-					runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
-						"id":           s.ID(),
-						"status":       "error",
-						"errorMessage": fmt.Sprintf("Cannot reach %s: %v", addr, tcpErr),
-					})
-				}
-				if a.sessionManager != nil {
-					_ = a.sessionManager.Close(s.ID())
-				}
+				log.Writef("[launchConnect] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
+				a.failSessionConnect(s, fmt.Errorf("Cannot reach %s: %v", addr, tcpErr))
 				return
 			}
 			tcpConn.Close()
-			log.Writef("[CreateSession] RDP TCP pre-check to %s succeeded", addr)
+			log.Writef("[launchConnect] RDP TCP pre-check to %s succeeded", addr)
 		}
 
 		if err := s.Connect(config); err != nil {
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-					"id":   s.ID(),
-					"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
-				})
-			}
-			log.Writef("session %s connect error: %v", s.ID(), err)
-			if a.sessionManager != nil {
-				_ = a.sessionManager.Close(s.ID())
-			}
+			a.failSessionConnect(s, err)
 		}
 	}()
 }
 
 // failSessionConnect is the shared error path inside launchConnectGoroutine
-// for pre-Connect failures (tunnel setup, RDP pre-check). It surfaces the
+// for tunnel setup, RDP pre-check, and s.Connect failures. It surfaces the
 // error to both terminal (session:data) and non-terminal (session:status)
 // listeners and tears down any half-started tunnel + the session itself.
 func (a *App) failSessionConnect(s session.Session, err error) {
@@ -1587,6 +1533,63 @@ func (a *App) failSessionConnect(s session.Session, err error) {
 	if a.sessionManager != nil {
 		_ = a.sessionManager.Close(s.ID())
 	}
+}
+
+// setupJumpHostTunnel establishes an SSH jump-host tunnel for the given
+// session config. When config.TunnelSSHConnID is set, it opens a local
+// port-forward through the referenced SSH connection and rewrites
+// config.Host/Port to point at the local listener so the subsequent
+// Connect call rides the tunnel.
+// Returns nil when no tunnel is configured or when setup succeeds.
+func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *session.ConnectionConfig) error {
+	if config.TunnelSSHConnID == "" {
+		return nil
+	}
+	if a.tunnelService == nil || a.connectionStore == nil {
+		return fmt.Errorf("tunnel prerequisites not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return fmt.Errorf("load connections for tunnel: %w", err)
+	}
+	var tunnelSSHConfig *session.ConnectionConfig
+	for _, c := range data.Connections {
+		if c.ID == config.TunnelSSHConnID {
+			tunnelSSHConfig = &c
+			break
+		}
+	}
+	if tunnelSSHConfig == nil {
+		return fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
+	}
+
+	// Apply inline tunnel credentials if the frontend provided them
+	// (e.g. credential prompt "connect" without saving).
+	if config.TunnelSSHUser != "" {
+		tunnelSSHConfig.User = config.TunnelSSHUser
+	}
+	if config.TunnelSSHPassword != "" {
+		tunnelSSHConfig.Password = config.TunnelSSHPassword
+	}
+
+	// VNC/SPICE use libvirt display numbers (port < 100 → 5900+N).
+	targetPort := config.Port
+	if sessionType == "vnc" || sessionType == "spice" {
+		if targetPort <= 0 {
+			targetPort = 5900
+		} else if targetPort < 100 {
+			targetPort += 5900
+		}
+	}
+	localPort, err := a.tunnelService.Start(sessionID, *tunnelSSHConfig, config.Host, targetPort)
+	if err != nil {
+		return fmt.Errorf("tunnel start: %w", err)
+	}
+	log.Writef("[tunnel] established for session=%s via ssh=%s, localPort=%d",
+		sessionID, config.TunnelSSHConnID, localPort)
+	config.Host = "127.0.0.1"
+	config.Port = localPort
+	return nil
 }
 
 // SessionStart triggers the actual Connect() for terminal sessions
