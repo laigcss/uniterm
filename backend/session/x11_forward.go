@@ -269,6 +269,14 @@ func (f *x11Forwarder) handleX11(ch ssh.NewChannel, display string) {
 	}
 	defer local.Close()
 
+	// Skip auth replacement when no real local cookie is available
+	// (e.g. Windows VcXsrv with access control disabled). Bridge
+	// directly to avoid unnecessary X11 handshake interception.
+	if f.realProto == "" || len(f.realCookie) == 0 {
+		bridge(local, ch2)
+		return
+	}
+
 	// Replace the X11 connection setup's auth with the real local cookie
 	// before bridging. If the setup read/write fails the channel is
 	// dropped — the X application will see a connection error and may
