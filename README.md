@@ -149,7 +149,7 @@ Oracle Database support is implemented with a pure Go driver. uniTerm does not b
 Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-ll/uniterm/releases) or [Gitee Releases](https://gitee.com/ys-l/uniterm/releases):
 
 - **Windows** (amd64 / arm64): installer `uniterm-windows-*-installer-*.exe`, or portable `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-universal-*.dmg`
+- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-*-*.dmg`
 - **Linux** (amd64 / arm64): Download `uniterm-linux-*-*.tar.gz`, `.deb`, or `.rpm`
 
 > **About Windows antivirus false positives**: As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
