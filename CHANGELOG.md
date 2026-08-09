@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.7.0-alpha
+## v1.7.0
 
 ### What's Changed
 

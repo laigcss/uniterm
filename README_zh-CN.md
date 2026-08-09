@@ -43,7 +43,7 @@
 - **远程终端** — SSH / Telnet / Mosh，密码/私钥认证；含 SSH 隧道端口转发（任意连接可经 SSH 跳板访问）
 - **本地 & 串口终端** — PowerShell / CMD / Git Bash / WSL，以及串口连接（波特率等参数、本地回显）
 - **文件传输** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`
-- **远程桌面** — RDP（Windows 远程桌面）、VNC（Linux 远程控制）、SPICE（KVM/QEMU 虚拟机）
+- **远程桌面** — RDP（Windows 远程桌面）、VNC（Linux 远程控制）、SPICE（KVM/QEMU 虚拟机）、X11（X Window 图形界面转发）
 - **数据库客户端** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB
 - **容器** — Kubernetes / Docker / Podman / nerdctl
 - **服务器监控** — CPU/内存/磁盘/网络、进程、端口、网卡实时监控
@@ -90,6 +90,7 @@
 | 远程桌面 | RDP | Windows 服务器远程桌面管理（仅 Windows） |
 | 远程桌面 | VNC | Linux 服务器远程控制 |
 | 远程桌面 | SPICE | KVM/QEMU 虚拟机管理 |
+| 远程桌面 | X11 | X Window 图形界面转发 |
 | 数据库 | MySQL | 兼容 MySQL 协议：MySQL、MariaDB、TiDB 等 |
 | 数据库 | PostgreSQL | 兼容 PostgreSQL 协议：PostgreSQL、CockroachDB 等 |
 | 数据库 | Oracle Database | 通过纯 Go 驱动连接 Oracle Database |
@@ -149,7 +150,7 @@ Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 
 前往 [GitHub Releases](https://github.com/ys-ll/uniterm/releases) 或 [Gitee Releases](https://gitee.com/ys-l/uniterm/releases) 下载最新版本：
 
 - **Windows** (amd64 / arm64): 安装包 `uniterm-windows-*-installer-*.exe`，或便携版 `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): 下载 `uniterm-darwin-universal-*.dmg`
+- **macOS** (Intel / Apple Silicon): 下载 `uniterm-darwin-*-*.dmg`
 - **Linux** (amd64 / arm64): 下载 `uniterm-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
 
 > **关于 Windows 杀软误报**：由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
