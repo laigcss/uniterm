@@ -35,7 +35,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | RDP (client on Windows) | ✅ | v2026.05.22-alpha | Windows Remote Desktop |  |
 | VNC | ✅ | v2026.05.23-alpha | VNC remote control |  |
 | SPICE | ✅ | v2026.06.08-alpha | KVM / QEMU VM console |  |
-| X11 Forwarding | 🚧 | — | Forward remote X applications over SSH |  |
+| X11 Forwarding | ✅ | v1.7.0 | Forward remote X applications over SSH |  |
 | RDP (client on macOS / Linux) | 🚧 | — | Windows Remote Desktop on macOS / Linux |  |
 
 ### Database
