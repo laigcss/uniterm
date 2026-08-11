@@ -30,6 +30,8 @@
 | 19 | `skills.webp` | `skills_light.webp` | AI skills & commands management |
 | 20 | `use_skills.webp` | `use_skills_light.webp` | Using skills & commands in terminal |
 | 21 | `background_image.webp` | — | Terminal background image showcase |
+| 22 | `x11_forward.webp` | `x11_forward_light.webp` | X11 forwarding — remote Linux GUI app displayed locally |
+| 23 | `x11_desktop.webp` | `x11_desktop_light.webp` | X11 desktop — full Linux desktop environment over SSH |
 
 ## Static assets
 

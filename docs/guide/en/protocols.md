@@ -25,6 +25,7 @@ uniTerm supports 20+ connection protocols, covering remote terminals, remote des
 | RDP | 3389 | Windows Remote Desktop |
 | VNC | 5900 | Linux remote control |
 | SPICE | 5900 | KVM/QEMU virtual machine desktop |
+| X11 | 22 (SSH) | Remote Linux GUI applications and desktop environments |
 
 ## File Transfer
 

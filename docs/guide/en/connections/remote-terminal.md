@@ -17,8 +17,12 @@ SSH (Secure Shell) is the most commonly used protocol for remote server manageme
 | Password | Required for password authentication |
 | Key Path | Select private key file for key authentication |
 | Character Encoding | Terminal charset, default UTF-8. Also supports GBK, GB2312, Big5, Shift-JIS, etc. |
+| Backspace Key | Byte sequence sent for backspace, default BS (0x08). Also supports DEL (0x7F) and VT220 Delete (ESC[3~) |
 | SSH Tunnel | Select an existing SSH connection as a jump host to forward traffic to the target host |
 | Startup Script | Commands automatically executed after the connection is established, one per line, executed sequentially |
+| SFTP Max Concurrent Transfers | Maximum number of simultaneous SFTP file transfers, 0 for unlimited |
+| X11 Forwarding | When enabled, remote X11 applications can display on the local X Server (macOS requires XQuartz; Windows has VcXsrv built-in) |
+| Start Recording Log on Connect | Automatically start recording the session log when the connection is established |
 
 ### Authentication Methods
 
@@ -45,6 +49,14 @@ In an SSH terminal, you can directly use the `rz` (receive files) and `sz` (send
 
 ![Zmodem](/imgs/zmodem_light.webp)
 
+### X11 Forwarding
+
+With SSH X11 forwarding, graphical application windows from a remote Linux server can be displayed directly on the local desktop.
+
+![X11 Forward](/imgs/x11_forward_light.webp)
+
+> Windows version includes VcXsrv X Server built-in, ready to use out of the box. macOS users need to install XQuartz (`brew install --cask xquartz`).
+
 ### SSH Terminal Tab Operations
 
 Tabs support drag-to-reorder and drag-to-split into panels. Right-click a tab to open a context menu:
@@ -70,7 +82,15 @@ Telnet is a simple plain-text remote terminal protocol, commonly used for connec
 | Port | Default 23 |
 | Username | Login username (optional, automatically sent after connection) |
 | Password | Login password (optional, automatically sent after username) |
+| Character Encoding | Terminal charset, default UTF-8. Also supports GBK, GB2312, Big5, Shift-JIS, etc. |
+| Backspace Key | Byte sequence sent for backspace, default BS (0x08). Also supports DEL (0x7F) and VT220 Delete (ESC[3~) |
+| Negotiation Mode | Active (default) or passive; affects which side initiates Telnet option negotiation |
+| Send Mode | Character-at-a-time (default) or line-at-a-time |
+| Local Echo | When enabled, input characters are echoed locally; when disabled, echo is handled by the server |
+| Newline Mode | CR (default) or CR+LF |
+| SSH Tunnel | Select an existing SSH connection as a jump host to forward traffic to the target host |
 | Startup Script | Commands automatically executed after the connection is established |
+| Start Recording Log on Connect | Automatically start recording the session log when the connection is established |
 
 > Warning: Telnet transmits data without encryption. Use only on trusted networks.
 
@@ -88,6 +108,10 @@ Same as SSH. uniTerm first connects to the server via SSH, then automatically st
 | Port | SSH port, default 22 |
 | Username | Login username |
 | Authentication | Password or key |
+| Character Encoding | Terminal charset, default UTF-8. Also supports GBK, GB2312, Big5, Shift-JIS, etc. |
+| Backspace Key | Byte sequence sent for backspace, default BS (0x08). Also supports DEL (0x7F) and VT220 Delete (ESC[3~) |
+| Startup Script | Commands automatically executed after the connection is established |
+| Start Recording Log on Connect | Automatically start recording the session log when the connection is established |
 
 > Note: The server must have `mosh-server` installed before using Mosh. Mosh does not support SSH tunnels or the Expect/Send pattern.
 

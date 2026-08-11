@@ -25,6 +25,7 @@ uniTerm 支持 20+ 种连接协议，覆盖远程终端、远程桌面、文件�
 | RDP | 3389 | Windows 远程桌面 |
 | VNC | 5900 | Linux 远程控制 |
 | SPICE | 5900 | KVM/QEMU 虚拟机桌面 |
+| X11 | 22 (SSH) | 远程 Linux GUI 应用与桌面环境 |
 
 ## 文件传输
 

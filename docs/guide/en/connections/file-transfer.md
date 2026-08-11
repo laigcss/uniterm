@@ -49,8 +49,9 @@ Amazon S3 API-compatible object storage. Also supports MinIO, Alibaba Cloud OSS,
 | Endpoint | Service endpoint address |
 | Access Key | Access key ID |
 | Secret Key | Secret access key |
-| Bucket | Bucket name |
-| Region | Region (optional) |
+| Bucket | Bucket name (optional; leave empty to list all buckets) |
+| Region | Region |
+| URL Style | Virtual-hosted (default) for Alibaba Cloud OSS / Tencent COS / Huawei OBS; Path for AWS S3 / MinIO |
 
 
 ## File Browser
