@@ -141,7 +141,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	// correct one.
 	var kbAutoAnswered int32
 	kbCallback := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-		if config.Password != "" && atomic.CompareAndSwapInt32(&kbAutoAnswered, 0, 1) {
+		if isSavedPasswordChallenge(config, questions, echos) && atomic.CompareAndSwapInt32(&kbAutoAnswered, 0, 1) {
 			answers := make([]string, len(questions))
 			for i := range questions {
 				answers[i] = config.Password
@@ -197,26 +197,15 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		Auth:            authMethods,
 		Timeout:         30 * time.Second,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config: sshAlgorithms(),
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
+	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, clientConfig.Timeout)
+	})
 	if err != nil {
 		s.setStatus(StatusError)
-		return fmt.Errorf("tcp dial: %w", err)
+		return err
 	}
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(sshKeepAliveInterval)
-	}
-
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
-	if err != nil {
-		conn.Close()
-		s.setStatus(StatusError)
-		return fmt.Errorf("ssh handshake: %w", err)
-	}
-	client := ssh.NewClient(sshConn, chans, reqs)
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -325,6 +314,14 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	go s.runPostLoginAutomation(config)
 
 	return nil
+}
+
+// isSavedPasswordChallenge limits automatic answers to an unambiguous
+// password-only prompt. Key passphrases and password+OTP challenges remain
+// interactive so credentials are never sent to the wrong question.
+func isSavedPasswordChallenge(config ConnectionConfig, questions []string, echos []bool) bool {
+	return (config.AuthType == "" || config.AuthType == "password") &&
+		config.Password != "" && len(questions) == 1 && len(echos) == 1 && !echos[0]
 }
 
 func (s *SSHSession) readStderr() {

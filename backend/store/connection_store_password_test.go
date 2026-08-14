@@ -122,6 +122,55 @@ func TestConnectionStore_LoadUsesCache(t *testing.T) {
 	}
 }
 
+func TestConnectionStore_SaveUpdatesAndClearsPasswordCache(t *testing.T) {
+	dir := t.TempDir()
+	s := &ConnectionStore{configDir: dir}
+	ps := fakePasswordStore{store: map[string]string{"c1": "old"}}
+	s.SetPasswordStore(ps)
+
+	data := session.ConnectionStoreData{Groups: []session.ConnectionGroup{}, Connections: []session.ConnectionConfig{{ID: "c1", AuthType: "password", Password: "new"}}}
+	if err := s.Save(data); err != nil {
+		t.Fatalf("Save new password: %v", err)
+	}
+	if got, _ := s.EnsurePassword("c1"); got != "new" {
+		t.Fatalf("cached password after update = %q, want new", got)
+	}
+
+	data.Connections[0].Password = ""
+	if err := s.Save(data); err != nil {
+		t.Fatalf("Save cleared password: %v", err)
+	}
+	if got, _ := s.EnsurePassword("c1"); got != "" {
+		t.Fatalf("cached password after clear = %q, want empty", got)
+	}
+}
+
+func TestConnectionStore_MigrationDoesNotPersistPlaintext(t *testing.T) {
+	dir := t.TempDir()
+	s := &ConnectionStore{configDir: dir}
+	if err := s.writeJSONLocked(session.ConnectionStoreData{
+		Groups:      []session.ConnectionGroup{},
+		Connections: []session.ConnectionConfig{{ID: "c1", AuthType: "password", Password: "secret"}},
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	s.SetPasswordStore(fakePasswordStore{store: map[string]string{}})
+	data, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load migration: %v", err)
+	}
+	if data.Connections[0].Password != "secret" {
+		t.Fatalf("Load password = %q, want secret", data.Connections[0].Password)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, storeFileName))
+	if err != nil {
+		t.Fatalf("read migrated file: %v", err)
+	}
+	if string(raw) == "" || string(raw) == "secret" || contains(string(raw), "secret") {
+		t.Fatalf("migrated connections file contains plaintext password: %s", raw)
+	}
+}
+
 // countingPasswordStore wraps fakePasswordStore and counts GetPassword calls.
 type countingPasswordStore struct {
 	fakePasswordStore

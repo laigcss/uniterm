@@ -76,6 +76,9 @@ func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
 			if s.passwordStore != nil {
 				_ = s.passwordStore.DeletePassword(conn.ID)
 			}
+			s.pwdMu.Lock()
+			delete(s.pwdCache, conn.ID)
+			s.pwdMu.Unlock()
 			continue
 		}
 		if s.passwordStore == nil {
@@ -86,6 +89,12 @@ func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
 		if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
 			return err
 		}
+		s.pwdMu.Lock()
+		if s.pwdCache == nil {
+			s.pwdCache = map[string]string{}
+		}
+		s.pwdCache[conn.ID] = conn.Password
+		s.pwdMu.Unlock()
 		conn.Password = ""
 	}
 
@@ -179,11 +188,18 @@ func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) e
 		if s.passwordStore != nil {
 			// One-time migration: plaintext JSON password → keychain.
 			if conn.Password != "" {
-				if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
+				pw := conn.Password
+				if err := s.passwordStore.SetPassword(conn.ID, pw); err != nil {
 					return err
 				}
 				conn.Password = ""
 				needsSave = true
+				s.pwdMu.Lock()
+				if s.pwdCache == nil {
+					s.pwdCache = map[string]string{}
+				}
+				s.pwdCache[conn.ID] = pw
+				s.pwdMu.Unlock()
 			}
 		}
 
@@ -219,7 +235,15 @@ func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) e
 		// Save cleaned JSON (passwords migrated out)
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		return s.writeJSONLocked(*data)
+		clean := *data
+		clean.Connections = make([]session.ConnectionConfig, len(data.Connections))
+		copy(clean.Connections, data.Connections)
+		for i := range clean.Connections {
+			if clean.Connections[i].AuthType == "password" {
+				clean.Connections[i].Password = ""
+			}
+		}
+		return s.writeJSONLocked(clean)
 	}
 	return nil
 }
