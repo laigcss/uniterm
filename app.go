@@ -1275,6 +1275,17 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	}
 	log.Writef("[CreateSession] type=%s, dbType=%s, host=%s, port=%d, user=%s, dbName=%s, name=%s",
 		sessionType, config.DBType, config.Host, config.Port, config.User, config.DBName, config.Name)
+	// Defensive credential fallback: the frontend may hold a connection
+	// snapshot taken before passwords were filled (or a stale copy from an
+	// older session). If the password is stored in the OS keychain, resolve
+	// it synchronously so the session never prompts for a password it
+	// already has. No-op when Password is already set, no store is wired,
+	// the keychain has no entry, or the config carries no connection ID.
+	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
+		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
+			config.Password = pw
+		}
+	}
 	s, err := a.sessionManager.Create(sessionType, config)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
@@ -1563,6 +1574,15 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 		return fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
 	}
 
+	// Defensive credential fallback for the jump host: the freshly loaded
+	// config already has passwords filled synchronously (populatePasswords),
+	// but resolve from the keychain anyway if it is somehow still empty.
+	if tunnelSSHConfig.Password == "" && tunnelSSHConfig.ID != "" {
+		if pw, err := a.connectionStore.EnsurePassword(tunnelSSHConfig.ID); err == nil && pw != "" {
+			tunnelSSHConfig.Password = pw
+		}
+	}
+
 	// Apply inline tunnel credentials if the frontend provided them
 	// (e.g. credential prompt "connect" without saving).
 	if config.TunnelSSHUser != "" {
@@ -1610,6 +1630,16 @@ func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) er
 	// carries the real cols/rows the frontend discovered after mount.
 	if config.InitialCols > 0 && config.InitialRows > 0 {
 		s.SetPendingSize(config.InitialCols, config.InitialRows)
+	}
+	// Terminal session types defer Connect() until SessionStart, and the
+	// frontend passes a fresh config here. If that fresh config still has
+	// an empty password (e.g. the Pinia store holds a snapshot from before
+	// keychain passwords were filled), resolve it from the OS keychain now
+	// so the user is not prompted for a password that is already stored.
+	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
+		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
+			config.Password = pw
+		}
 	}
 	a.launchConnectGoroutine(s, config.Type, config)
 	return nil
