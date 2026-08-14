@@ -131,7 +131,23 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		config.Password = answer
 	}
 
+	// Auto-answer keyboard-interactive challenges with the saved password on
+	// the FIRST challenge. Many servers (e.g. SuSE/NetIQ) advertise only
+	// keyboard-interactive (no "password" method), so the ssh.Password method
+	// above is rejected and the callback gets invoked with a "Password: "
+	// prompt. Without this, the user would be prompted for a password that is
+	// already saved. If the saved password is wrong, the server re-challenges
+	// and we fall through to interactive prompting so the user can type the
+	// correct one.
+	var kbAutoAnswered int32
 	kbCallback := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		if config.Password != "" && atomic.CompareAndSwapInt32(&kbAutoAnswered, 0, 1) {
+			answers := make([]string, len(questions))
+			for i := range questions {
+				answers[i] = config.Password
+			}
+			return answers, nil
+		}
 		answers := make([]string, len(questions))
 		for i, q := range questions {
 			s.emitData([]byte("\r\n" + q + " "))
