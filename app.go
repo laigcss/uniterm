@@ -4358,6 +4358,30 @@ func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName str
 	return p.DefaultTableQuery(dbName, tableName, 100), nil
 }
 
+func (a *App) DBPagedTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {
+	_, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return p.PagedTableQuery(dbName, tableName, limit, offset), nil
+}
+
+func (a *App) ExecuteSQLScript(sessionID string, dbName string, script string) (*database.ScriptResult, error) {
+	ds, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return database.ExecuteScript(p, ds.DB(), dbName, script)
+}
+
+func (a *App) DumpTable(sessionID string, dbName string, tableName string, withStructure bool, withData bool) (string, error) {
+	ds, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return p.DumpTable(ds.DB(), dbName, tableName, database.DumpOptions{Structure: withStructure, Data: withData})
+}
+
 func (a *App) DBInsertRow(sessionID string, dbName string, tableName string, values map[string]any) error {
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {

@@ -32,6 +32,7 @@
               @keydown="onKeydown"
             />
             <div class="exec-btn-wrapper">
+              <button class="btn btn-ghost btn-icon btn-sm file-open-btn" :title="t('db.runSqlFile')" @click="onOpenScriptFile"><FolderOpen :size="14" /></button>
               <button class="btn btn-primary exec-btn-overlay" @click="onExecute">{{ t('db.execute') }}</button>
               <span class="shortcut-hint">Ctrl+Enter</span>
             </div>
@@ -42,6 +43,17 @@
     <div class="editor-resizer" @mousedown="onResizeStart" />
     <div class="editor-bottom">
       <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="scriptResult" class="script-result" :class="{ 'has-error': scriptResult.failedLine }">
+        <template v-if="scriptResult.failedLine">
+          <div class="script-error-head">{{ t('db.scriptFailedLine', { line: scriptResult.failedLine }) }}</div>
+          <div class="script-error-detail">{{ scriptResult.error }}</div>
+          <pre class="script-error-sql">{{ scriptResult.failedSql }}</pre>
+        </template>
+        <template v-else>
+          <span class="script-ok">{{ t('db.scriptExecuted', { n: scriptResult.executed }) }}</span>
+          <span class="script-affected">{{ t('db.affectedRowsTotal') }}: {{ scriptResult.affectedTotal }}</span>
+        </template>
+      </div>
       <div v-if="execResult" class="result-info">
         {{ t('db.affectedRows') }}: {{ execResult.affected }}
       </div>
@@ -95,6 +107,16 @@
         <div class="result-count">{{ queryResult.rows.length }} {{ t('db.rows') }}</div>
       </div>
 
+      <div v-if="isTableData" class="pagination-bar">
+        <span class="page-size-label">{{ t('db.pageSize') }}</span>
+        <select v-model="pageSize" class="page-size-select" @change="onPageSizeChange">
+          <option v-for="s in pageSizes" :key="s" :value="s">{{ s }}</option>
+        </select>
+        <button class="btn btn-ghost btn-sm page-btn" :disabled="page <= 1" @click="onPrevPage">{{ t('db.pagePrev') }}</button>
+        <span class="page-info">{{ t('db.pageOf', { n: page }) }}</span>
+        <button class="btn btn-ghost btn-sm page-btn" :disabled="!queryResult || queryResult.rows.length < pageSize" @click="onNextPage">{{ t('db.pageNext') }}</button>
+      </div>
+
       <div v-if="queryResult && tableName && !isView" class="insert-row-bar">
         <button class="btn btn-primary" @click="startInsertRow">{{ t('db.insertRow') }}</button>
       </div>
@@ -137,12 +159,13 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
-import { Pencil, Trash2, Sparkles } from '@lucide/vue'
+import { Pencil, Trash2, Sparkles, FolderOpen } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
-import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow } from '../../wailsjs/go/main/App'
+import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBPagedTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64 } from '../../wailsjs/go/main/App'
 import { chat } from '../services/llm'
 import type { QueryResult, ExecResult, ColumnInfo } from '../types/database'
+import { database as dbModels } from '../../wailsjs/go/models'
 
 const { t } = useI18n()
 
@@ -176,10 +199,42 @@ const canEditRows = computed(() => {
   return props.primaryKeys.every(pk => resultCols.has(pk))
 })
 
+// ── Pagination (table data only) ──
+
+const page = ref(1)
+const pageSize = ref(100)
+const pageSizes = [100, 500, 1000]
+
+const isTableData = computed(() => !!props.tableName)
+
+async function loadPage() {
+  if (!props.tableName) return
+  const offset = (page.value - 1) * pageSize.value
+  sql.value = await DBPagedTableQuery(props.sessionId, props.dbName || '', props.tableName, pageSize.value, offset)
+  await onExecute()
+}
+
+function onPrevPage() {
+  if (page.value <= 1) return
+  page.value--
+  loadPage()
+}
+
+function onNextPage() {
+  page.value++
+  loadPage()
+}
+
+function onPageSizeChange() {
+  page.value = 1
+  loadPage()
+}
+
 watch(() => props.tableName, async (name) => {
   insertingRow.value = false
   editingRow.value = false
   if (!name) return
+  page.value = 1
   sql.value = await DBDefaultTableQuery(props.sessionId, props.dbName || '', name)
   await onExecute()
 })
@@ -302,6 +357,7 @@ async function onExecute() {
   error.value = ''
   queryResult.value = null
   execResult.value = null
+  scriptResult.value = null
   loading.value = true
   cancelled = false
 
@@ -330,6 +386,45 @@ async function onExecute() {
 function onCancelQuery() {
   cancelled = true
   loading.value = false
+}
+
+// ── Run .sql script file ──
+
+const scriptResult = shallowRef<dbModels.ScriptResult | null>(null)
+
+async function onOpenScriptFile() {
+  try {
+    const path = await OpenFileDialogFiltered(t('db.runSqlFile'), 'SQL File', '*.sql')
+    if (!path) return
+    const b64 = await ReadFileBase64(path)
+    const text = decodeBase64(b64)
+    error.value = ''
+    queryResult.value = null
+    execResult.value = null
+    scriptResult.value = null
+    loading.value = true
+    cancelled = false
+    const result = await ExecuteSQLScript(props.sessionId, props.dbName || '', text)
+    if (!cancelled) {
+      scriptResult.value = result
+      if (result?.failedLine) emit('cellUpdated')
+    }
+  } catch (e: any) {
+    if (!cancelled) error.value = e?.message || String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+function decodeBase64(b64: string): string {
+  try {
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return new TextDecoder('utf-8').decode(bytes)
+  } catch {
+    return ''
+  }
 }
 
 // ── Resize splitter ──
@@ -755,6 +850,10 @@ function onEditRowCancel() {
   gap: 6px;
   z-index: 1;
 }
+.file-open-btn {
+  padding: 4px 8px;
+  font-size: 13px;
+}
 .exec-btn-overlay {
   padding: 4px 14px;
   font-size: 12px;
@@ -808,9 +907,76 @@ function onEditRowCancel() {
   color: var(--text-secondary);
   flex-shrink: 0;
 }
+.script-result {
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.script-result.has-error {
+  background: var(--error-subtle);
+  color: var(--error);
+}
+.script-ok { color: var(--text-primary); }
+.script-affected { margin-left: 12px; }
+.script-error-head { font-weight: 600; }
+.script-error-detail { margin-top: 4px; font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
+.script-error-sql {
+  margin: 4px 0 0;
+  padding: 6px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
 .result-grid { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
 .result-count {
   padding: 4px 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.page-size-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.page-size-select {
+  padding: 2px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+.page-size-select:focus {
+  border-color: var(--accent);
+}
+.page-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+.page-info {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-secondary);

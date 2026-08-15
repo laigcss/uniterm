@@ -1126,5 +1126,18 @@
   "x11.tab.reconnect": "重新連線",
   "x11.tab.disconnect": "斷開",
   "x11.tab.desktopEnv": "桌面環境",
-  "x11.tab.localXHint": "桌面顯示在本機 X Server 視窗中。使用系統工作列或 Alt+Tab 切換。關閉此頁籤將終止桌面工作階段。請勿調整 X Server 視窗大小，否則可能導致桌面工作階段崩潰。"
+  "x11.tab.localXHint": "桌面顯示在本機 X Server 視窗中。使用系統工作列或 Alt+Tab 切換。關閉此頁籤將終止桌面工作階段。請勿調整 X Server 視窗大小，否則可能導致桌面工作階段崩潰。",
+  "db.tabClose": "關閉分頁",
+  "db.pageSize": "每頁",
+  "db.pagePrev": "上一頁",
+  "db.pageNext": "下一頁",
+  "db.pageOf": "第 {n} 頁",
+  "db.runSqlFile": "執行 SQL 檔案",
+  "db.scriptExecuted": "已執行 {n} 個敘述",
+  "db.scriptFailedLine": "第 {line} 行執行失敗",
+  "db.affectedRowsTotal": "累計影響行數",
+  "db.exportSQL": "匯出 SQL",
+  "db.exportStructure": "匯出（僅結構）",
+  "db.exportStructureData": "匯出（結構+資料）",
+  "db.exportDone": "已匯出 {name}"
 }

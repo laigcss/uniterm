@@ -70,6 +70,9 @@
         <div class="ctx-sep" />
         <div class="ctx-item" @click="onCtxCopyName">{{ t('db.copyName') }}</div>
         <div class="ctx-sep" />
+        <div class="ctx-item" @click="onCtxExportStructure">{{ t('db.exportStructure') }}</div>
+        <div v-if="ctxTableType !== 'view'" class="ctx-item" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</div>
+        <div class="ctx-sep" />
         <template v-if="ctxTableType === 'view'">
           <div class="ctx-item danger" @click="onCtxDropView">{{ t('db.dropView') }}</div>
         </template>
@@ -139,7 +142,7 @@
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { Database, Table2, Eye, ChevronRight, ChevronDown } from '@lucide/vue'
 import { useI18n } from '../i18n'
-import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, GetDBCapabilities } from '../../wailsjs/go/main/App'
+import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import type { TableInfo } from '../types/database'
 
@@ -396,6 +399,38 @@ function onCtxViewStructure() {
 function onCtxCopyName() {
   navigator.clipboard.writeText(ctxTableName.value).catch(() => {})
   ctxVisible.value = false
+}
+
+// ── Export table as .sql ──
+
+async function exportTable(withStructure: boolean, withData: boolean) {
+  ctxVisible.value = false
+  const dbName = ctxDbName.value
+  const tableName = ctxTableName.value
+  try {
+    const sql = await DumpTable(props.sessionId, dbName, tableName, withStructure, withData)
+    const path = await SaveFileDialogFiltered(t('db.exportSQL'), tableName + '.sql', 'SQL File', '*.sql')
+    if (!path) return
+    await WriteFileBase64(path, encodeBase64(sql))
+    msg.success(t('db.exportDone', { name: tableName }))
+  } catch (e: any) {
+    msg.error(e?.message || String(e))
+  }
+}
+
+function onCtxExportStructure() {
+  exportTable(true, false)
+}
+
+function onCtxExportStructureData() {
+  exportTable(true, true)
+}
+
+function encodeBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let bin = ''
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin)
 }
 
 // ── Confirm dialog ──

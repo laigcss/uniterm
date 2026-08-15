@@ -1126,5 +1126,18 @@
   "x11.tab.reconnect": "Neu verbinden",
   "x11.tab.disconnect": "Trennen",
   "x11.tab.desktopEnv": "Desktop-Umgebung",
-  "x11.tab.localXHint": "Der Desktop wird im lokalen X-Server-Fenster angezeigt. Verwenden Sie die Taskleiste oder Alt+Tab zum Wechseln. Das Schließen dieses Tabs beendet die Desktop-Sitzung. Bitte die Größe des X-Server-Fensters nicht ändern — dies kann die Desktop-Sitzung beenden."
+  "x11.tab.localXHint": "Der Desktop wird im lokalen X-Server-Fenster angezeigt. Verwenden Sie die Taskleiste oder Alt+Tab zum Wechseln. Das Schließen dieses Tabs beendet die Desktop-Sitzung. Bitte die Größe des X-Server-Fensters nicht ändern — dies kann die Desktop-Sitzung beenden.",
+  "db.tabClose": "Tab schließen",
+  "db.pageSize": "Zeilen",
+  "db.pagePrev": "Vorherige",
+  "db.pageNext": "Weiter",
+  "db.pageOf": "Seite {n}",
+  "db.runSqlFile": "SQL-Datei ausführen",
+  "db.scriptExecuted": "{n} Anweisungen ausgeführt",
+  "db.scriptFailedLine": "Fehler in Zeile {line}",
+  "db.affectedRowsTotal": "Betroffene Zeilen gesamt",
+  "db.exportSQL": "SQL exportieren",
+  "db.exportStructure": "Nur Struktur exportieren",
+  "db.exportStructureData": "Struktur und Daten exportieren",
+  "db.exportDone": "{name} exportiert"
 }

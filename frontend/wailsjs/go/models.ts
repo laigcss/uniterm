@@ -436,6 +436,26 @@ export namespace database {
 		    return a;
 		}
 	}
+	export class ScriptResult {
+	    executed: number;
+	    failedLine: number;
+	    failedSql: string;
+	    error: string;
+	    affectedTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.executed = source["executed"];
+	        this.failedLine = source["failedLine"];
+	        this.failedSql = source["failedSql"];
+	        this.error = source["error"];
+	        this.affectedTotal = source["affectedTotal"];
+	    }
+	}
 	export class TableInfo {
 	    name: string;
 	    type: string;

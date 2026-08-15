@@ -1126,5 +1126,18 @@
   "x11.tab.reconnect": "重新连接",
   "x11.tab.disconnect": "断开",
   "x11.tab.desktopEnv": "桌面环境",
-  "x11.tab.localXHint": "桌面显示在本地 X Server 窗口中。使用系统任务栏或 Alt+Tab 切换。关闭此标签页将终止桌面会话。请勿调整 X Server 窗口大小，否则可能导致桌面会话崩溃。"
+  "x11.tab.localXHint": "桌面显示在本地 X Server 窗口中。使用系统任务栏或 Alt+Tab 切换。关闭此标签页将终止桌面会话。请勿调整 X Server 窗口大小，否则可能导致桌面会话崩溃。",
+  "db.tabClose": "关闭标签页",
+  "db.pageSize": "每页",
+  "db.pagePrev": "上一页",
+  "db.pageNext": "下一页",
+  "db.pageOf": "第 {n} 页",
+  "db.runSqlFile": "运行 SQL 文件",
+  "db.scriptExecuted": "已执行 {n} 条语句",
+  "db.scriptFailedLine": "第 {line} 行执行失败",
+  "db.affectedRowsTotal": "累计影响行数",
+  "db.exportSQL": "导出 SQL",
+  "db.exportStructure": "导出（仅结构）",
+  "db.exportStructureData": "导出（结构+数据）",
+  "db.exportDone": "已导出 {name}"
 }

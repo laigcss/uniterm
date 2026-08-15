@@ -64,6 +64,10 @@ func (p *mysqlProvider) DefaultTableQuery(dbName, tableName string, limit int) s
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
 }
 
+func (p *mysqlProvider) PagedTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
+}
+
 func (p *mysqlProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
 	cols := sortedKeys(values)
 	quotedCols := make([]string, len(cols))
@@ -552,4 +556,154 @@ var mysqlTypes = []string{
 
 var mysqlIntTypes = []string{
 	"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT",
+}
+
+// binaryColumnTypes are MySQL types whose values should be emitted as hex
+// _binary literals rather than quoted strings.
+var mysqlBinaryTypes = map[string]bool{
+	"BLOB": true, "TINYBLOB": true, "MEDIUMBLOB": true, "LONGBLOB": true,
+	"BINARY": true, "VARBINARY": true,
+}
+
+func (p *mysqlProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	if err := p.PrepareExec(conn, dbName); err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	quotedTable := p.Quote(tableName)
+
+	if opts.Structure {
+		createStmt, kind, derr := showCreateStatement(conn, tableName, quotedTable)
+		if derr != nil {
+			return "", derr
+		}
+		b.WriteString("--\n-- Structure for ")
+		b.WriteString(tableName)
+		b.WriteString("\n--\nDROP " + kind + " IF EXISTS " + quotedTable + ";\n")
+		b.WriteString(createStmt)
+		b.WriteString(";\n\n")
+	}
+
+	if opts.Data {
+		cols, colTypes, derr := tableColumns(conn, tableName, quotedTable)
+		if derr != nil {
+			return "", derr
+		}
+		if len(cols) > 0 {
+			b.WriteString("--\n-- Data for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\n")
+			colList := make([]string, len(cols))
+			for i, c := range cols {
+				colList[i] = p.Quote(c)
+			}
+			prefix := "INSERT INTO " + quotedTable + " (" + strings.Join(colList, ", ") + ") VALUES "
+
+			rows, err := conn.QueryContext(ctx, "SELECT "+strings.Join(colList, ", ")+" FROM "+quotedTable)
+			if err != nil {
+				return "", err
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				vals := make([]any, len(cols))
+				ptrs := make([]any, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				if err := rows.Scan(ptrs...); err != nil {
+					return "", err
+				}
+				b.WriteString(prefix)
+				b.WriteByte('(')
+				for i, v := range vals {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(dumpMysqlValue(v, colTypes[i]))
+				}
+				b.WriteString(");\n")
+			}
+			if err := rows.Err(); err != nil {
+				return "", err
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String(), nil
+}
+
+// tableKind returns "TABLE" or "VIEW" for the given name by querying
+// information_schema; defaults to TABLE on error.
+func tableKind(conn *sql.Conn, tableName string) string {
+	var t string
+	err := conn.QueryRowContext(context.Background(),
+		"SELECT TABLE_TYPE FROM information_schema.tables WHERE TABLE_NAME = ? LIMIT 1", tableName).Scan(&t)
+	if err == nil && strings.HasPrefix(t, "VIEW") {
+		return "VIEW"
+	}
+	return "TABLE"
+}
+
+// showCreateStatement returns the CREATE TABLE/VIEW statement (without trailing ;)
+// and the object kind ("TABLE" or "VIEW").
+func showCreateStatement(conn *sql.Conn, tableName, quotedTable string) (string, string, error) {
+	kind := tableKind(conn, tableName)
+	row := conn.QueryRowContext(context.Background(), "SHOW CREATE "+kind+" "+quotedTable)
+	if kind == "VIEW" {
+		var name, createSQL, charset, collation string
+		if err := row.Scan(&name, &createSQL, &charset, &collation); err != nil {
+			return "", kind, err
+		}
+		return createSQL, kind, nil
+	}
+	var name, createSQL string
+	if err := row.Scan(&name, &createSQL); err != nil {
+		return "", kind, err
+	}
+	return createSQL, kind, nil
+}
+
+// tableColumns returns column names and their uppercased type tokens.
+func tableColumns(conn *sql.Conn, tableName, quotedTable string) ([]string, []string, error) {
+	rows, err := conn.QueryContext(context.Background(),
+		"SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var names, types []string
+	for rows.Next() {
+		var n, ty string
+		if err := rows.Scan(&n, &ty); err != nil {
+			return nil, nil, err
+		}
+		names = append(names, n)
+		types = append(types, strings.ToUpper(ty))
+	}
+	return names, types, rows.Err()
+}
+
+// dumpMysqlValue renders a scanned cell value into a SQL literal. Binary-typed
+// columns are emitted as _binary 0x.. literals; everything else goes through
+// quoteSQLValue.
+func dumpMysqlValue(v any, typeToken string) string {
+	if v == nil {
+		return "NULL"
+	}
+	if mysqlBinaryTypes[typeToken] {
+		if b, ok := v.([]byte); ok {
+			return quoteSQLValue(b)
+		}
+	}
+	return quoteSQLValue(v)
 }

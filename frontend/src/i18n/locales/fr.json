@@ -1126,5 +1126,18 @@
   "x11.tab.reconnect": "Reconnecter",
   "x11.tab.disconnect": "Déconnecter",
   "x11.tab.desktopEnv": "Environnement de bureau",
-  "x11.tab.localXHint": "Le bureau s'affiche dans la fenêtre du serveur X local. Utilisez la barre des tâches ou Alt+Tab pour basculer. La fermeture de cet onglet terminera la session de bureau. Ne redimensionnez pas la fenêtre du serveur X — cela peut faire planter la session de bureau."
+  "x11.tab.localXHint": "Le bureau s'affiche dans la fenêtre du serveur X local. Utilisez la barre des tâches ou Alt+Tab pour basculer. La fermeture de cet onglet terminera la session de bureau. Ne redimensionnez pas la fenêtre du serveur X — cela peut faire planter la session de bureau.",
+  "db.tabClose": "Fermer l'onglet",
+  "db.pageSize": "Lignes",
+  "db.pagePrev": "Précédent",
+  "db.pageNext": "Suivant",
+  "db.pageOf": "Page {n}",
+  "db.runSqlFile": "Exécuter un fichier SQL",
+  "db.scriptExecuted": "{n} instructions exécutées",
+  "db.scriptFailedLine": "Erreur à la ligne {line}",
+  "db.affectedRowsTotal": "Total lignes affectées",
+  "db.exportSQL": "Exporter SQL",
+  "db.exportStructure": "Exporter la structure uniquement",
+  "db.exportStructureData": "Exporter structure et données",
+  "db.exportDone": "{name} exporté"
 }

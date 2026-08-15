@@ -73,6 +73,8 @@ export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<stri
 
 export function DBInsertRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 
+export function DBPagedTableQuery(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<string>;
+
 export function DBUpdateRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>,arg5:Record<string, any>):Promise<void>;
 
 export function DeleteCommand(arg1:string):Promise<void>;
@@ -93,9 +95,13 @@ export function DropTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DropView(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function DumpTable(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<string>;
+
 export function EnableSessionOutputLog(arg1:string,arg2:string):Promise<string>;
 
 export function ExecuteQuery(arg1:string,arg2:string,arg3:string):Promise<database.QueryResult>;
+
+export function ExecuteSQLScript(arg1:string,arg2:string,arg3:string):Promise<database.ScriptResult>;
 
 export function ExecuteStatement(arg1:string,arg2:string,arg3:string):Promise<database.ExecResult>;
 

@@ -51,6 +51,10 @@ func (p *rqliteProvider) DefaultTableQuery(dbName, tableName string, limit int) 
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
 }
 
+func (p *rqliteProvider) PagedTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
+}
+
 func (p *rqliteProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
 	cols := sortedKeys(values)
 	quotedCols := make([]string, len(cols))
@@ -339,4 +343,8 @@ var rqliteTypes = []string{
 
 var rqliteIntTypes = []string{
 	"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
+}
+
+func (p *rqliteProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	return "", &errDumpUnsupported{"rqlite"}
 }
