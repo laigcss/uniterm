@@ -677,6 +677,26 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
     return false
   }
 
+  // A bare modifier key (Shift/Ctrl/Alt/Meta held alone) produces no input, yet
+  // xterm's _keyDown still runs and, with scrollOnUserInput=true, fires
+  // scrollToBottom() — yanking the viewport back to the bottom when the user
+  // has scrolled up to read history (issue #538). Short-circuit bare modifiers
+  // before they reach xterm's scroll logic; they shouldn't be PTY input anyway.
+  if (e.type === 'keydown' && (e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta')) {
+    return false
+  }
+
+  // macOS 26 WKWebView: xterm's modifier handling for Shift+Delete is
+  // unreliable and may emit no sequence, so the key silently fails to delete
+  // (issue #538). Inject the standard CSI delete sequence ESC[3~ directly for
+  // all plain Delete presses. Ctrl/Meta/Cmd combos are left to xterm so future
+  // Delete-chord shortcuts can still hook in.
+  if (e.type === 'keydown' && e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault()
+    terminal?.input('\x1b[3~')
+    return false
+  }
+
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
   // macOS Cmd+V stays hardcoded — it is not one of the configurable shortcuts.
   // On Windows/Linux, Ctrl+Shift+V is handled by the configurable shortcut
