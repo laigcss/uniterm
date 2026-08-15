@@ -42,6 +42,9 @@ type Provider interface {
 	// DefaultTableQuery returns the default SELECT statement used when opening a table.
 	DefaultTableQuery(dbName, tableName string, limit int) string
 
+	// PagedTableQuery returns a SELECT with LIMIT/OFFSET for paginated browsing.
+	PagedTableQuery(dbName, tableName string, limit, offset int) string
+
 	// Row-level CRUD helpers for the result-grid inline actions.
 	InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error
 	UpdateRow(db *sql.DB, dbName, tableName string, set, where map[string]any) error

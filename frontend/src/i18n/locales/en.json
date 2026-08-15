@@ -1124,5 +1124,10 @@
   "x11.tab.reconnect": "Reconnect",
   "x11.tab.disconnect": "Disconnect",
   "x11.tab.desktopEnv": "Desktop Environment",
-  "x11.tab.localXHint": "The desktop is shown in your local X server window. Use the system taskbar or Alt+Tab to focus it. Closing this tab will terminate the desktop session. Do not resize the X server window — it may crash the desktop session."
+  "x11.tab.localXHint": "The desktop is shown in your local X server window. Use the system taskbar or Alt+Tab to focus it. Closing this tab will terminate the desktop session. Do not resize the X server window — it may crash the desktop session.",
+  "db.tabClose": "Close tab",
+  "db.pageSize": "Rows",
+  "db.pagePrev": "Previous",
+  "db.pageNext": "Next",
+  "db.pageOf": "Page {n}"
 }

@@ -4314,6 +4314,14 @@ func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName str
 	return p.DefaultTableQuery(dbName, tableName, 100), nil
 }
 
+func (a *App) DBPagedTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {
+	_, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return p.PagedTableQuery(dbName, tableName, limit, offset), nil
+}
+
 func (a *App) DBInsertRow(sessionID string, dbName string, tableName string, values map[string]any) error {
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {

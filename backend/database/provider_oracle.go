@@ -58,6 +58,11 @@ func (p *oracleProvider) DefaultTableQuery(dbName, tableName string, limit int) 
 	return fmt.Sprintf("SELECT * FROM %s WHERE ROWNUM <= %d", p.Quote(tableName), limit)
 }
 
+func (p *oracleProvider) PagedTableQuery(dbName, tableName string, limit, offset int) string {
+	last := offset + limit
+	return fmt.Sprintf("SELECT * FROM (SELECT t.*, ROWNUM rn FROM %s t WHERE ROWNUM <= %d) WHERE rn > %d", p.Quote(tableName), last, offset)
+}
+
 func (p *oracleProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
 	cols := sortedKeys(values)
 	quotedCols := make([]string, len(cols))

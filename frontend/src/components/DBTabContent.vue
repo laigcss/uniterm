@@ -6,8 +6,8 @@
           ref="treeRef"
           :session-id="sessionId"
           :default-db-name="defaultDbName"
-          :active-db="selectedDb"
-          :active-table="selectedTable"
+          :active-db="activeTab?.dbName"
+          :active-table="activeTab?.kind === 'table' ? activeTab.tableName : ''"
           @select-table="onSelectTable"
           @open-database="onOpenDatabase"
           @view-structure="onViewStructure"
@@ -15,97 +15,100 @@
       </div>
       <div class="db-resizer" @mousedown="onResizeStart" />
       <div class="db-right">
-        <div v-if="!selectedTable && !dbQueryMode" class="db-placeholder">
+        <div v-if="!tabs.length" class="db-placeholder">
           <span>{{ t('db.selectTableHint') }}</span>
         </div>
-        <!-- Database-level: query + object list -->
-        <template v-else-if="dbQueryMode">
-          <div class="db-breadcrumb">
-            <span class="crumb crumb-static">{{ hostName }}</span>
-            <span class="crumb-sep">/</span>
-            <span class="crumb current">{{ selectedDb }}</span>
-          </div>
-          <div class="db-right-top">
-            <div class="db-tabs">
-              <button
-                class="db-tab"
-                :class="{ active: dbActiveTab === 'query' }"
-                @click="dbActiveTab = 'query'"
-              >
-                {{ t('db.dataQuery') }}
-              </button>
-              <button
-                class="db-tab"
-                :class="{ active: dbActiveTab === 'objects' }"
-                @click="dbActiveTab = 'objects'"
-              >
-                {{ t('db.tableList') }}
-              </button>
-            </div>
-            <div class="db-right-top-content">
-              <DBQueryEditor
-                v-show="dbActiveTab === 'query'"
-                :key="'dbquery-' + selectedDb"
-                :session-id="sessionId"
-                :db-name="selectedDb"
-                :db-type="dbType"
-              />
-              <DBObjectList
-                v-if="dbActiveTab === 'objects'"
-                :session-id="sessionId"
-                :db-name="selectedDb"
-                @open="onSelectTable"
-                @changed="onObjectsChanged"
-              />
-            </div>
-          </div>
-        </template>
-        <!-- Table-level: data query + structure -->
         <template v-else>
-          <div class="db-breadcrumb">
-            <span class="crumb crumb-static">{{ hostName }}</span>
-            <span class="crumb-sep">/</span>
-            <span class="crumb clickable" @click="onOpenDatabase(selectedDb)">{{ selectedDb }}</span>
-            <span class="crumb-sep">/</span>
-            <span class="crumb current">{{ selectedTable }}</span>
-          </div>
-          <div class="db-right-top">
-            <div class="db-tabs">
-              <button
-                class="db-tab"
-                :class="{ active: activeTab === 'query' }"
-                @click="activeTab = 'query'"
+          <div class="db-tab-bar">
+            <div class="db-tab-scroll">
+              <div
+                v-for="tab in tabs"
+                :key="tab.id"
+                class="db-tab-item"
+                :class="{ active: tab.id === activeTabId }"
+                @click="activateTab(tab.id)"
+                @middleclick.prevent="closeTab(tab.id)"
               >
-                {{ t('db.dataQuery') }}
-              </button>
-              <button
-                v-if="!selectedIsView"
-                class="db-tab"
-                :class="{ active: activeTab === 'structure' }"
-                @click="onStructureTabClick"
-              >
-                {{ t('db.tableStructure') }}
-              </button>
+                <component :is="tab.kind === 'table' ? (tab.isView ? Eye : Table2) : Database" :size="12" class="tab-icon" />
+                <span class="tab-title">{{ tabTitle(tab) }}</span>
+                <button class="tab-close" :title="t('db.tabClose')" @click.stop="closeTab(tab.id)">×</button>
+              </div>
             </div>
-            <div class="db-right-top-content">
-              <DBQueryEditor
-                v-if="activeTab === 'query'"
-                :session-id="sessionId"
-                :table-name="selectedTable"
-                :db-name="selectedDb"
-                :db-type="dbType"
-                :primary-keys="primaryKeys"
-                :table-columns="tableColumns"
-                :is-view="selectedIsView"
-              />
-              <DBTableStructure
-                v-else
-                :session-id="sessionId"
-                :db-name="selectedDb"
-                :table-name="selectedTable"
-                :load-trigger="structureLoadTrigger"
-                @schema-loaded="onSchemaLoaded"
-              />
+          </div>
+          <div class="db-tab-panels">
+            <div
+              v-for="tab in tabs"
+              :key="tab.id"
+              v-show="tab.id === activeTabId"
+              class="db-tab-panel"
+            >
+              <!-- Table tab: data query + structure -->
+              <template v-if="tab.kind === 'table'">
+                <div class="db-breadcrumb">
+                  <span class="crumb crumb-static">{{ hostName }}</span>
+                  <span class="crumb-sep">/</span>
+                  <span class="crumb clickable" @click="onOpenDatabase(tab.dbName)">{{ tab.dbName }}</span>
+                  <span class="crumb-sep">/</span>
+                  <span class="crumb current">{{ tab.tableName }}</span>
+                </div>
+                <div class="db-right-top">
+                  <div class="db-tabs">
+                    <button class="db-tab" :class="{ active: tab.subView === 'query' }" @click="setSubView(tab.id, 'query')">{{ t('db.dataQuery') }}</button>
+                    <button v-if="!tab.isView" class="db-tab" :class="{ active: tab.subView === 'structure' }" @click="onStructureTabClick(tab.id)">{{ t('db.tableStructure') }}</button>
+                  </div>
+                  <div class="db-right-top-content">
+                    <DBQueryEditor
+                      v-show="tab.subView === 'query'"
+                      :key="'q-' + tab.id"
+                      :session-id="sessionId"
+                      :table-name="tab.tableName"
+                      :db-name="tab.dbName"
+                      :db-type="dbType"
+                      :primary-keys="tab.primaryKeys"
+                      :table-columns="tab.tableColumns"
+                      :is-view="tab.isView"
+                    />
+                    <DBTableStructure
+                      v-show="tab.subView === 'structure'"
+                      :session-id="sessionId"
+                      :db-name="tab.dbName"
+                      :table-name="tab.tableName || ''"
+                      :load-trigger="tab.structureLoadTrigger"
+                      @schema-loaded="(pks: string[]) => onSchemaLoaded(tab.id, pks)"
+                    />
+                  </div>
+                </div>
+              </template>
+              <!-- Database tab: query + object list -->
+              <template v-else>
+                <div class="db-breadcrumb">
+                  <span class="crumb crumb-static">{{ hostName }}</span>
+                  <span class="crumb-sep">/</span>
+                  <span class="crumb current">{{ tab.dbName }}</span>
+                </div>
+                <div class="db-right-top">
+                  <div class="db-tabs">
+                    <button class="db-tab" :class="{ active: tab.subView === 'query' }" @click="setSubView(tab.id, 'query')">{{ t('db.dataQuery') }}</button>
+                    <button class="db-tab" :class="{ active: tab.subView === 'objects' }" @click="setSubView(tab.id, 'objects')">{{ t('db.tableList') }}</button>
+                  </div>
+                  <div class="db-right-top-content">
+                    <DBQueryEditor
+                      v-show="tab.subView === 'query'"
+                      :key="'dbq-' + tab.id"
+                      :session-id="sessionId"
+                      :db-name="tab.dbName"
+                      :db-type="dbType"
+                    />
+                    <DBObjectList
+                      v-show="tab.subView === 'objects'"
+                      :session-id="sessionId"
+                      :db-name="tab.dbName"
+                      @open="onSelectTable"
+                      @changed="onObjectsChanged"
+                    />
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </template>
@@ -115,7 +118,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
+import { Table2, Eye, Database } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import DBTreePanel from './DBTreePanel.vue'
 import DBTableStructure from './DBTableStructure.vue'
@@ -135,74 +139,161 @@ const props = defineProps<{
   dbType?: string
 }>()
 
-const activeTab = ref<'structure' | 'query'>('query')
-const dbActiveTab = ref<'query' | 'objects'>('query')
-const treeRef = ref<InstanceType<typeof DBTreePanel> | null>(null)
-const selectedDb = ref('')
-const selectedTable = ref('')
-const selectedIsView = ref(false)
-const dbQueryMode = ref(false)
-const primaryKeys = ref<string[]>([])
-const tableColumns = ref<ColumnInfo[]>([])
-const structureLoadTrigger = ref(0)
+interface DbTab {
+  id: number
+  kind: 'table' | 'query'
+  dbName: string
+  tableName?: string
+  isView?: boolean
+  subView: 'query' | 'structure' | 'objects'
+  primaryKeys: string[]
+  tableColumns: ColumnInfo[]
+  structureLoadTrigger: number
+}
 
-const leftWidth = ref(220)
-let resizeStartX = 0
-let resizeStartWidth = 0
-let resizing = false
+const tabs = ref<DbTab[]>([])
+const activeTabId = ref<number | null>(null)
+let nextTabId = 1
+
+const activeTab = computed(() => tabs.value.find(t => t.id === activeTabId.value) || null)
+
+const treeRef = ref<InstanceType<typeof DBTreePanel> | null>(null)
+
+function tabTitle(tab: DbTab): string {
+  return tab.kind === 'table' ? (tab.tableName || '') : tab.dbName
+}
+
+function activateTab(id: number) {
+  activeTabId.value = id
+}
+
+function loadSchema(tab: DbTab) {
+  if (!tab.tableName) return
+  GetTableSchema(props.sessionId, tab.dbName, tab.tableName)
+    .then(schema => {
+      tab.tableColumns = schema.columns
+      tab.primaryKeys = schema.columns.filter(c => c.isPrimary).map(c => c.name)
+    })
+    .catch(() => { /* ignore */ })
+}
+
+function openTableTab(dbName: string, tableName: string, isView: boolean) {
+  const existing = tabs.value.find(t => t.kind === 'table' && t.dbName === dbName && t.tableName === tableName)
+  if (existing) {
+    existing.subView = 'query'
+    activeTabId.value = existing.id
+    return
+  }
+  const tab: DbTab = {
+    id: nextTabId++,
+    kind: 'table',
+    dbName,
+    tableName,
+    isView,
+    subView: 'query',
+    primaryKeys: [],
+    tableColumns: [],
+    structureLoadTrigger: 0,
+  }
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+  loadSchema(tab)
+}
+
+function openQueryTab(dbName: string, subView: 'query' | 'objects' = 'query') {
+  const existing = tabs.value.find(t => t.kind === 'query' && t.dbName === dbName)
+  if (existing) {
+    existing.subView = subView
+    activeTabId.value = existing.id
+    return
+  }
+  const tab: DbTab = {
+    id: nextTabId++,
+    kind: 'query',
+    dbName,
+    subView,
+    primaryKeys: [],
+    tableColumns: [],
+    structureLoadTrigger: 0,
+  }
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+}
+
+function onSelectTable(dbName: string, tableName: string, isView = false) {
+  openTableTab(dbName, tableName, isView)
+}
 
 function onOpenDatabase(dbName: string, tab: 'query' | 'objects' = 'query') {
-  selectedDb.value = dbName
-  selectedTable.value = ''
-  dbQueryMode.value = true
-  dbActiveTab.value = tab
-  primaryKeys.value = []
-  tableColumns.value = []
+  openQueryTab(dbName, tab)
 }
 
-async function onSelectTable(dbName: string, tableName: string, isView = false) {
-  selectedDb.value = dbName
-  selectedTable.value = tableName
-  selectedIsView.value = isView
-  dbQueryMode.value = false
-  primaryKeys.value = []
-  tableColumns.value = []
-  activeTab.value = 'query'
-  try {
-    const schema = await GetTableSchema(props.sessionId, dbName, tableName)
-    tableColumns.value = schema.columns
-    primaryKeys.value = schema.columns.filter(c => c.isPrimary).map(c => c.name)
-  } catch { /* ignore */ }
+function onViewStructure(dbName: string, tableName: string) {
+  let tab = tabs.value.find(t => t.kind === 'table' && t.dbName === dbName && t.tableName === tableName)
+  if (!tab) {
+    tab = {
+      id: nextTabId++,
+      kind: 'table',
+      dbName,
+      tableName,
+      isView: false,
+      subView: 'structure',
+      primaryKeys: [],
+      tableColumns: [],
+      structureLoadTrigger: 1,
+    }
+    tabs.value.push(tab)
+    activeTabId.value = tab.id
+    loadSchema(tab)
+    return
+  }
+  tab.subView = 'structure'
+  tab.structureLoadTrigger++
+  activeTabId.value = tab.id
 }
 
-async function onViewStructure(dbName: string, tableName: string) {
-  selectedDb.value = dbName
-  selectedTable.value = tableName
-  selectedIsView.value = false
-  dbQueryMode.value = false
-  primaryKeys.value = []
-  tableColumns.value = []
-  activeTab.value = 'structure'
-  structureLoadTrigger.value++
-  try {
-    const schema = await GetTableSchema(props.sessionId, dbName, tableName)
-    tableColumns.value = schema.columns
-    primaryKeys.value = schema.columns.filter(c => c.isPrimary).map(c => c.name)
-  } catch { /* ignore */ }
+function onStructureTabClick(tabId: number) {
+  const tab = tabs.value.find(t => t.id === tabId)
+  if (!tab) return
+  tab.subView = 'structure'
+  tab.structureLoadTrigger++
 }
 
-function onStructureTabClick() {
-  activeTab.value = 'structure'
-  structureLoadTrigger.value++
+function setSubView(tabId: number, view: DbTab['subView']) {
+  const tab = tabs.value.find(t => t.id === tabId)
+  if (!tab) return
+  tab.subView = view
 }
 
-function onSchemaLoaded(pks: string[]) {
-  primaryKeys.value = pks
+function onSchemaLoaded(tabId: number, pks: string[]) {
+  const tab = tabs.value.find(t => t.id === tabId)
+  if (tab) tab.primaryKeys = pks
+}
+
+function closeTab(tabId: number) {
+  const idx = tabs.value.findIndex(t => t.id === tabId)
+  if (idx < 0) return
+  tabs.value.splice(idx, 1)
+  if (activeTabId.value === tabId) {
+    if (!tabs.value.length) {
+      activeTabId.value = null
+    } else {
+      const next = tabs.value[Math.min(idx, tabs.value.length - 1)]
+      activeTabId.value = next.id
+    }
+  }
 }
 
 function onObjectsChanged(dbName: string) {
   treeRef.value?.refreshDb(dbName)
 }
+
+// ── Resize splitter ──
+
+const leftWidth = ref(220)
+let resizeStartX = 0
+let resizeStartWidth = 0
+let resizing = false
 
 function onResizeStart(e: MouseEvent) {
   resizeStartX = e.clientX
@@ -264,6 +355,73 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
 }
+.db-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+  min-height: 30px;
+}
+.db-tab-scroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+}
+.db-tab-scroll::-webkit-scrollbar { height: 4px; }
+.db-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px 5px 10px;
+  border-right: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.1s ease;
+}
+.db-tab-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.db-tab-item.active {
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border-bottom: 2px solid var(--accent);
+}
+.tab-icon { flex-shrink: 0; color: var(--text-muted); }
+.tab-title { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.tab-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.tab-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.db-tab-panels {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+.db-tab-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
 .db-right-top {
   flex: 1;
   display: flex;
@@ -294,10 +452,6 @@ onUnmounted(() => {
 .db-tab.active {
   color: var(--text-primary);
   border-bottom-color: var(--accent);
-}
-.db-tab:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 .db-right-top-content {
   flex: 1;
@@ -345,12 +499,6 @@ onUnmounted(() => {
 .crumb-sep {
   color: var(--text-disabled);
   margin: 0 2px;
-  flex-shrink: 0;
-}
-.db-right-bottom {
-  height: 180px;
-  border-top: 1px solid var(--border-subtle);
-  overflow: auto;
   flex-shrink: 0;
 }
 </style>

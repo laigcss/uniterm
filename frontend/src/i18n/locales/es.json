@@ -1124,5 +1124,10 @@
   "x11.tab.reconnect": "Reconectar",
   "x11.tab.disconnect": "Desconectar",
   "x11.tab.desktopEnv": "Entorno de escritorio",
-  "x11.tab.localXHint": "El escritorio se muestra en la ventana del servidor X local. Use la barra de tareas o Alt+Tab para cambiar. Cerrar esta pestaña terminará la sesión de escritorio. No redimensione la ventana del servidor X — puede bloquear la sesión de escritorio."
+  "x11.tab.localXHint": "El escritorio se muestra en la ventana del servidor X local. Use la barra de tareas o Alt+Tab para cambiar. Cerrar esta pestaña terminará la sesión de escritorio. No redimensione la ventana del servidor X — puede bloquear la sesión de escritorio.",
+  "db.tabClose": "Cerrar pestaña",
+  "db.pageSize": "Filas",
+  "db.pagePrev": "Anterior",
+  "db.pageNext": "Siguiente",
+  "db.pageOf": "Página {n}"
 }

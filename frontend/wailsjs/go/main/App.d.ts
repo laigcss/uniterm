@@ -73,6 +73,8 @@ export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<stri
 
 export function DBInsertRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 
+export function DBPagedTableQuery(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<string>;
+
 export function DBUpdateRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>,arg5:Record<string, any>):Promise<void>;
 
 export function DeleteCommand(arg1:string):Promise<void>;

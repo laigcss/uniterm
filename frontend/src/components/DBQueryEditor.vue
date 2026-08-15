@@ -95,6 +95,16 @@
         <div class="result-count">{{ queryResult.rows.length }} {{ t('db.rows') }}</div>
       </div>
 
+      <div v-if="isTableData" class="pagination-bar">
+        <span class="page-size-label">{{ t('db.pageSize') }}</span>
+        <select v-model="pageSize" class="page-size-select" @change="onPageSizeChange">
+          <option v-for="s in pageSizes" :key="s" :value="s">{{ s }}</option>
+        </select>
+        <button class="btn btn-ghost btn-sm page-btn" :disabled="page <= 1" @click="onPrevPage">{{ t('db.pagePrev') }}</button>
+        <span class="page-info">{{ t('db.pageOf', { n: page }) }}</span>
+        <button class="btn btn-ghost btn-sm page-btn" :disabled="!queryResult || queryResult.rows.length < pageSize" @click="onNextPage">{{ t('db.pageNext') }}</button>
+      </div>
+
       <div v-if="queryResult && tableName && !isView" class="insert-row-bar">
         <button class="btn btn-primary" @click="startInsertRow">{{ t('db.insertRow') }}</button>
       </div>
@@ -140,7 +150,7 @@ import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
 import { Pencil, Trash2, Sparkles } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
-import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow } from '../../wailsjs/go/main/App'
+import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBPagedTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow } from '../../wailsjs/go/main/App'
 import { chat } from '../services/llm'
 import type { QueryResult, ExecResult, ColumnInfo } from '../types/database'
 
@@ -176,10 +186,42 @@ const canEditRows = computed(() => {
   return props.primaryKeys.every(pk => resultCols.has(pk))
 })
 
+// ── Pagination (table data only) ──
+
+const page = ref(1)
+const pageSize = ref(100)
+const pageSizes = [100, 500, 1000]
+
+const isTableData = computed(() => !!props.tableName)
+
+async function loadPage() {
+  if (!props.tableName) return
+  const offset = (page.value - 1) * pageSize.value
+  sql.value = await DBPagedTableQuery(props.sessionId, props.dbName || '', props.tableName, pageSize.value, offset)
+  await onExecute()
+}
+
+function onPrevPage() {
+  if (page.value <= 1) return
+  page.value--
+  loadPage()
+}
+
+function onNextPage() {
+  page.value++
+  loadPage()
+}
+
+function onPageSizeChange() {
+  page.value = 1
+  loadPage()
+}
+
 watch(() => props.tableName, async (name) => {
   insertingRow.value = false
   editingRow.value = false
   if (!name) return
+  page.value = 1
   sql.value = await DBDefaultTableQuery(props.sessionId, props.dbName || '', name)
   await onExecute()
 })
@@ -811,6 +853,42 @@ function onEditRowCancel() {
 .result-grid { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
 .result-count {
   padding: 4px 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.page-size-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.page-size-select {
+  padding: 2px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+.page-size-select:focus {
+  border-color: var(--accent);
+}
+.page-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+.page-info {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-secondary);

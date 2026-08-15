@@ -130,6 +130,10 @@ export function DBInsertRow(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['DBInsertRow'](arg1, arg2, arg3, arg4);
 }
 
+export function DBPagedTableQuery(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DBPagedTableQuery'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function DBUpdateRow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['DBUpdateRow'](arg1, arg2, arg3, arg4, arg5);
 }
