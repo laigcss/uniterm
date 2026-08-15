@@ -227,10 +227,16 @@ wails build                 # Production build
 uniTerm/
 ├── main.go                       # Entry point
 ├── app.go                        # Wails bindings, LLM API proxy, SFTP API
+├── app_*.go                      # Platform-specific implementations
 ├── backend/
-│   ├── session/                  # SSH/SFTP/database session management
+│   ├── session/                  # SSH/Telnet/Serial/SFTP/database session management
 │   ├── database/                 # SQL execution, schema introspection, DSN builders
+│   ├── container/                # Docker/Podman/nerdctl container management
+│   ├── k8s/                      # Kubernetes cluster management
 │   ├── store/                    # Persistent config (connections, AI, settings)
+│   ├── sync/                     # Cloud sync (GitHub/GitLab/Gitee)
+│   ├── update/                   # Auto-update
+│   ├── platform/                 # Platform abstraction layer
 │   └── log/                      # File-based logging
 ├── frontend/
 │   └── src/
@@ -239,7 +245,11 @@ uniTerm/
 │       ├── stores/               # Pinia stores
 │       ├── services/             # AI agent loop, LLM client
 │       ├── i18n/                 # Translations
-│       └── types/                # TypeScript type definitions
+│       ├── types/                # TypeScript type definitions
+│       ├── utils/                # Utility functions
+│       └── vendor/               # Third-party libraries
+├── plugins/                      # Plugin directory
+├── docs/                         # Documentation
 └── wails.json
 ```
 
@@ -258,7 +268,7 @@ If uniTerm is helpful to you, please consider giving it a ⭐ Star — it's the 
 
 This is a personal hobby project maintained in the author's spare time, with no commercialization or sponsorship plans — anyone who shares the same interest is warmly welcome to join, discuss, and build together.
 
-Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome.
+Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome. Due to the wide variety of terminal environments and usage scenarios, the author cannot cover every possible case in testing — if you run into any issues, feel free to fork the project and contribute directly. This project welcomes vibe coding.
 
 Thanks to the following people for contributing code and improvements, and to everyone who reported issues and shared suggestions — you help make uniTerm better ❤️
 
@@ -266,6 +276,7 @@ Thanks to the following people for contributing code and improvements, and to ev
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
 - [@wangxufeng](https://github.com/wangxufeng)
 - [@coderstory](https://github.com/coderstory)
+- [@jiayunora](https://github.com/jiayunora)
 
 ## License
 

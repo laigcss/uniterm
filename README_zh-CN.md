@@ -227,10 +227,16 @@ wails build                 # 构建生产版本
 uniTerm/
 ├── main.go                       # 入口文件
 ├── app.go                        # Wails 绑定、LLM API 代理、SFTP API
+├── app_*.go                      # 平台相关实现
 ├── backend/
-│   ├── session/                  # SSH/SFTP/数据库 会话管理
+│   ├── session/                  # SSH/Telnet/Serial/SFTP/数据库 会话管理
 │   ├── database/                 # SQL 执行、表结构查询、DSN 构建
+│   ├── container/                # Docker/Podman/nerdctl 容器管理
+│   ├── k8s/                      # Kubernetes 集群管理
 │   ├── store/                    # 持久化配置（连接、AI、设置）
+│   ├── sync/                     # 云端同步（GitHub/GitLab/Gitee）
+│   ├── update/                   # 自动更新
+│   ├── platform/                 # 平台抽象层
 │   └── log/                      # 文件日志
 ├── frontend/
 │   └── src/
@@ -239,7 +245,11 @@ uniTerm/
 │       ├── stores/               # Pinia 状态管理
 │       ├── services/             # AI 代理循环、LLM 客户端
 │       ├── i18n/                 # 国际化翻译
-│       └── types/                # TypeScript 类型定义
+│       ├── types/                # TypeScript 类型定义
+│       ├── utils/                # 工具函数
+│       └── vendor/               # 第三方库
+├── plugins/                      # 插件目录
+├── docs/                         # 文档
 └── wails.json
 ```
 
@@ -258,7 +268,7 @@ uniTerm/
 
 本项目为纯个人业余兴趣项目，无商业化及接收赞助计划，欢迎志同道合的朋友一起交流，参与共建。
 
-欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 贡献代码。
+欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 贡献代码。由于终端访问场景与环境各异，作者难以覆盖所有场景的验证，如遇到相关问题，欢迎 fork 项目代码参与共建。本项目欢迎 vibe coding。
 
 感谢以下朋友为 uniTerm 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 uniTerm 变得更好 ❤️
 
@@ -266,6 +276,7 @@ uniTerm/
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
 - [@wangxufeng](https://github.com/wangxufeng)
 - [@coderstory](https://github.com/coderstory)
+- [@jiayunora](https://github.com/jiayunora)
 
 ## 开源协议
 
