@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "複製",
   "shortcut.terminalSearch": "端末検索",
   "shortcut.openSettings": "設定を開く",
+  "shortcut.copy": "ターミナル内コピー",
+  "shortcut.paste": "ターミナル内貼り付け",
   "shortcut.title": "ショートカット",
   "shortcut.colFunction": "機能",
   "shortcut.colBinding": "キー",

@@ -72,7 +72,7 @@ import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import type { ConnectionConfig } from '../types/session'
 import { CreateSession, CloseSession } from '../../wailsjs/go/main/App'
-import { EventsOn, ClipboardSetText, ClipboardGetText } from '../../wailsjs/runtime'
+import { EventsOn, ClipboardSetText } from '../../wailsjs/runtime'
 
 const { t } = useI18n()
 const panelStore = usePanelStore()
@@ -269,18 +269,6 @@ function onPaste(e: ClipboardEvent) {
   }
 }
 
-function handleKeyDown(e: KeyboardEvent) {
-  if (!rfb || status.value !== 'connected') return
-  if (e.ctrlKey && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
-    e.preventDefault()
-    ClipboardGetText().then(text => {
-      if (text && rfb) {
-        rfb.clipboardPasteFrom(text)
-      }
-    }).catch(() => {})
-  }
-}
-
 onMounted(() => {
   if (props.sessionId) {
     currentSessionId.value = props.sessionId
@@ -294,7 +282,6 @@ onMounted(() => {
     panelStore.removeVNCCache(props.panelId)
     status.value = 'connected'
     applyRFBOptions()
-    document.addEventListener('keydown', handleKeyDown)
     watchThemeBackground()
     return
   }
@@ -308,8 +295,6 @@ onMounted(() => {
   } else {
     connect()
   }
-
-  document.addEventListener('keydown', handleKeyDown)
 
   watchThemeBackground()
 
@@ -347,7 +332,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeyDown)
   themeObserver?.disconnect()
   themeObserver = null
   unsubStatus?.()

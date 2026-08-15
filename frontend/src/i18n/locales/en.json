@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "Duplicate",
   "shortcut.terminalSearch": "Terminal Search",
   "shortcut.openSettings": "Open Settings",
+  "shortcut.copy": "Terminal Copy",
+  "shortcut.paste": "Terminal Paste",
   "shortcut.title": "Shortcuts",
   "shortcut.colFunction": "Function",
   "shortcut.colBinding": "Binding",

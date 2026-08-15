@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "複製連接",
   "shortcut.terminalSearch": "終端搜尋",
   "shortcut.openSettings": "開啟設定",
+  "shortcut.copy": "終端內複製",
+  "shortcut.paste": "終端內貼上",
   "shortcut.title": "快捷鍵",
   "shortcut.colFunction": "功能",
   "shortcut.colBinding": "快捷鍵",

@@ -811,6 +811,14 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     const pid = tabStore.getActivePanelId()
     if (pid) window.dispatchEvent(new CustomEvent('terminal:open-search', { detail: { panelId: pid } }))
   },
+  copy: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:copy', { detail: { panelId: pid } }))
+  },
+  paste: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
+  },
   navigatePrev: () => navigatePanel(-1),
   navigateNext: () => navigatePanel(1),
   openSettings: () => openSettings(),
