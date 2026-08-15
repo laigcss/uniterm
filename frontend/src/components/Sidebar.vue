@@ -314,7 +314,7 @@
       <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" @click="doChangeGroup">{{ t('conn.moveTo') }}</div>
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
       <div class="menu-divider" />
       <div class="menu-item danger" @click="doDelete">{{ t('sidebar.delete') }}</div>
     </div>
@@ -327,7 +327,7 @@
       :style="groupMenuStyle"
       @click.stop
     >
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
       <div class="menu-item" @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</div>
       <template v-if="selectedGroup && selectedGroup.id !== '__ungrouped__'">
         <div class="menu-divider" />
@@ -346,7 +346,7 @@
       :style="emptyAreaMenuStyle"
       @click.stop
     >
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup()">{{ t('conn.newGroupTitle') }}</div>
     </div>
 
     <!-- Delete group dialog -->
@@ -1395,14 +1395,20 @@ function doNewConnInGroup() {
   showForm.value = true
 }
 
-function doNewGroup() {
+function doNewGroup(parentGroupId?: string) {
   closeMenu()
   closeGroupMenu()
   closeEmptyAreaMenu()
   newGroupName.value = ''
-  // Default parent to selected group if triggered from group context menu
-  newGroupParentId.value = (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') ? selectedGroup.value.id : undefined
+  // Clear the parent first, then render the explicitly-passed group. Callers
+  // decide what to pass; empty-area creation passes nothing, so it defaults
+  // to "None" instead of carrying over a previously-selected group.
+  newGroupParentId.value = parentGroupId
   showNewGroupDialog.value = true
+}
+
+function selectedGroupParentId(): string | undefined {
+  return (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') ? selectedGroup.value.id : undefined
 }
 
 async function confirmNewGroup() {
