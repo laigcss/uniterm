@@ -1129,5 +1129,13 @@
   "db.pageSize": "Zeilen",
   "db.pagePrev": "Vorherige",
   "db.pageNext": "Weiter",
-  "db.pageOf": "Seite {n}"
+  "db.pageOf": "Seite {n}",
+  "db.runSqlFile": "SQL-Datei ausführen",
+  "db.scriptExecuted": "{n} Anweisungen ausgeführt",
+  "db.scriptFailedLine": "Fehler in Zeile {line}",
+  "db.affectedRowsTotal": "Betroffene Zeilen gesamt",
+  "db.exportSQL": "SQL exportieren",
+  "db.exportStructure": "Nur Struktur exportieren",
+  "db.exportStructureData": "Struktur und Daten exportieren",
+  "db.exportDone": "{name} exportiert"
 }

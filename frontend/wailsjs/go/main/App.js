@@ -174,12 +174,20 @@ export function DropView(arg1, arg2, arg3) {
   return window['go']['main']['App']['DropView'](arg1, arg2, arg3);
 }
 
+export function DumpTable(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DumpTable'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function EnableSessionOutputLog(arg1, arg2) {
   return window['go']['main']['App']['EnableSessionOutputLog'](arg1, arg2);
 }
 
 export function ExecuteQuery(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteQuery'](arg1, arg2, arg3);
+}
+
+export function ExecuteSQLScript(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExecuteSQLScript'](arg1, arg2, arg3);
 }
 
 export function ExecuteStatement(arg1, arg2, arg3) {

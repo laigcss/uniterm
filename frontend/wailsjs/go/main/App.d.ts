@@ -95,9 +95,13 @@ export function DropTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DropView(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function DumpTable(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<string>;
+
 export function EnableSessionOutputLog(arg1:string,arg2:string):Promise<string>;
 
 export function ExecuteQuery(arg1:string,arg2:string,arg3:string):Promise<database.QueryResult>;
+
+export function ExecuteSQLScript(arg1:string,arg2:string,arg3:string):Promise<database.ScriptResult>;
 
 export function ExecuteStatement(arg1:string,arg2:string,arg3:string):Promise<database.ExecResult>;
 

@@ -23,6 +23,17 @@ type execer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+// DumpOptions controls what a DumpTable export includes.
+type DumpOptions struct {
+	Structure bool // include CREATE TABLE/VIEW statement
+	Data      bool // include INSERT statements for rows
+}
+
+// errDumpUnsupported is returned by providers that do not implement export yet.
+type errDumpUnsupported struct{ dbType string }
+
+func (e *errDumpUnsupported) Error() string { return "export not supported for " + e.dbType }
+
 // Provider encapsulates all database-type-specific behavior.
 type Provider interface {
 	// DSN generates a driver-specific connection string from connection fields.
@@ -44,6 +55,10 @@ type Provider interface {
 
 	// PagedTableQuery returns a SELECT with LIMIT/OFFSET for paginated browsing.
 	PagedTableQuery(dbName, tableName string, limit, offset int) string
+
+	// DumpTable produces SQL text for a table: its CREATE statement and/or
+	// INSERT statements for all rows. Used for the "export as .sql" feature.
+	DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error)
 
 	// Row-level CRUD helpers for the result-grid inline actions.
 	InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error

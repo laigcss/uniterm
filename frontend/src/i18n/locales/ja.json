@@ -1129,5 +1129,13 @@
   "db.pageSize": "行数",
   "db.pagePrev": "前へ",
   "db.pageNext": "次へ",
-  "db.pageOf": "{n} ページ"
+  "db.pageOf": "{n} ページ",
+  "db.runSqlFile": "SQLファイルを実行",
+  "db.scriptExecuted": "{n} 件の文を実行しました",
+  "db.scriptFailedLine": "{line} 行目でエラー",
+  "db.affectedRowsTotal": "影響行数（合計）",
+  "db.exportSQL": "SQLエクスポート",
+  "db.exportStructure": "構造のみエクスポート",
+  "db.exportStructureData": "構造とデータをエクスポート",
+  "db.exportDone": "{name} をエクスポートしました"
 }

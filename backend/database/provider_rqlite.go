@@ -344,3 +344,7 @@ var rqliteTypes = []string{
 var rqliteIntTypes = []string{
 	"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
 }
+
+func (p *rqliteProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	return "", &errDumpUnsupported{"rqlite"}
+}

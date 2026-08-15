@@ -1129,5 +1129,13 @@
   "db.pageSize": "행 수",
   "db.pagePrev": "이전",
   "db.pageNext": "다음",
-  "db.pageOf": "{n} 페이지"
+  "db.pageOf": "{n} 페이지",
+  "db.runSqlFile": "SQL 파일 실행",
+  "db.scriptExecuted": "{n}개 문 실행됨",
+  "db.scriptFailedLine": "{line}번째 줄 오류",
+  "db.affectedRowsTotal": "영향 받은 행(합계)",
+  "db.exportSQL": "SQL 내보내기",
+  "db.exportStructure": "구조만 내보내기",
+  "db.exportStructureData": "구조와 데이터 내보내기",
+  "db.exportDone": "{name} 내보냄"
 }

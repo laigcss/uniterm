@@ -475,3 +475,7 @@ var postgresTypes = []string{
 var postgresIntTypes = []string{
 	"SMALLINT", "INTEGER", "BIGINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL",
 }
+
+func (p *postgresProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	return "", &errDumpUnsupported{"postgres"}
+}

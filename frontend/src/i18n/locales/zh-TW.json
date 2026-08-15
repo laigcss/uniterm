@@ -1129,5 +1129,13 @@
   "db.pageSize": "每頁",
   "db.pagePrev": "上一頁",
   "db.pageNext": "下一頁",
-  "db.pageOf": "第 {n} 頁"
+  "db.pageOf": "第 {n} 頁",
+  "db.runSqlFile": "執行 SQL 檔案",
+  "db.scriptExecuted": "已執行 {n} 個敘述",
+  "db.scriptFailedLine": "第 {line} 行執行失敗",
+  "db.affectedRowsTotal": "累計影響行數",
+  "db.exportSQL": "匯出 SQL",
+  "db.exportStructure": "匯出（僅結構）",
+  "db.exportStructureData": "匯出（結構+資料）",
+  "db.exportDone": "已匯出 {name}"
 }

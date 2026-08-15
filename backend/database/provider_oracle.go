@@ -505,3 +505,7 @@ var oracleTypes = []string{
 var oracleIntTypes = []string{
 	"NUMBER",
 }
+
+func (p *oracleProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	return "", &errDumpUnsupported{"oracle"}
+}

@@ -503,3 +503,7 @@ var sqlserverTypes = []string{
 var sqlserverIntTypes = []string{
 	"TINYINT", "SMALLINT", "INT", "BIGINT",
 }
+
+func (p *sqlserverProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	return "", &errDumpUnsupported{"sqlserver"}
+}
