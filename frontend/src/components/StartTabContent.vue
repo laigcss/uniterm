@@ -591,6 +591,13 @@ async function loadRecent() {
 }
 loadRecent()
 
+// Refresh the recent list when connections are added/removed, so a newly
+// created connection shows up in "Recent" without requiring a reload.
+watch(
+  () => connectionStore.connections.map(c => c.id),
+  () => loadRecent()
+)
+
 const recentConfigs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return recentConnectionIds.value

@@ -1,5 +1,5 @@
 <template>
-  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="680px" class="conn-dialog">
+  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="680px" class="conn-dialog" @opened="onDialogOpened">
     <div class="conn-layout">
       <!-- Left sidebar: category icons -->
       <div class="conn-categories">
@@ -51,9 +51,6 @@
                 </el-button>
               </div>
             </el-form-item>
-            <el-form-item :label="t('conn.remark')">
-              <el-input v-model="form.remark" />
-            </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType === 'redis'" :label="t('conn.redisMode')">
               <el-radio-group v-model="form.redisMode">
                 <el-radio-button label="standalone">{{ t('conn.redisModeStandalone') }}</el-radio-button>
@@ -70,7 +67,7 @@
             </template>
             <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
               <div class="host-port-row">
-                <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
+                <el-input ref="hostInputRef" v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
                   <span class="host-port-sep">:</span>
                   <el-input-number v-model="form.port" :min="0" :max="65535" class="port-input" />
@@ -296,6 +293,9 @@
                 <div class="field-hint">{{ t('conn.x11DesktopCustomCmdHint') }}</div>
               </el-form-item>
             </template>
+            <el-form-item :label="t('conn.remark')">
+              <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="t('conn.remarkPlaceholder')" />
+            </el-form-item>
             <div v-if="showAdvancedToggle" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
               <el-icon class="advanced-arrow" :class="{ expanded: showAdvanced }"><ChevronRight :size="14" /></el-icon>
               <span>{{ t('conn.advanced') }}</span>
@@ -529,7 +529,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElInput } from 'element-plus'
 import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
@@ -712,6 +712,8 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v)
 })
 
+const hostInputRef = ref<InstanceType<typeof ElInput> | null>(null)
+
 watch(visible, (val) => {
   if (val) {
     passwordInputKey.value++
@@ -724,6 +726,14 @@ watch(visible, (val) => {
     }
   }
 })
+
+function onDialogOpened() {
+  // New connections: focus the host field by default. The dialog's @opened
+  // event fires after the open transition, so the host input is mounted.
+  if (!isEdit.value) {
+    nextTick(() => hostInputRef.value?.focus())
+  }
+}
 
 const isEdit = computed(() => !!props.editConfig?.id)
 
@@ -885,12 +895,10 @@ const hydrating = ref(false)
 
 watch(() => props.editConfig, (config) => {
   if (config) {
-    // If editing an existing connection (has id), merge its full config.
-    // Otherwise (sparse config from quick-new), reset first to avoid stale
-    // data from a previously edited connection leaking in.
-    if (!config.id) {
-      resetForm()
-    }
+    // Always reset first so fields absent from the config (e.g. an empty
+    // password) don't leak values from a previously edited connection. Then
+    // merge the config over the clean defaults.
+    resetForm()
     hydrating.value = true
     Object.assign(form, { ...config, postLoginExpectSteps: cloneExpectSteps(config.postLoginExpectSteps || []) })
     // Existing connections without the field default to NLA off (old behavior).
@@ -946,6 +954,7 @@ watch(() => form.type, (newType) => {
   if (newType === 'ssh') form.port = 22
   else if (newType === 'telnet') form.port = 23
   else if (newType === 'mosh') form.port = 22
+  else if (newType === 'x11-desktop') form.port = 22
   else if (newType === 'rdp') form.port = 3389
   else if (newType === 'vnc') form.port = 5900
   else if (newType === 'spice') form.port = 5900
