@@ -24,6 +24,10 @@ func sshKeyExchanges() []string {
 
 // sshCiphers returns the cipher list, including legacy CBC/3DES ciphers
 // for compatibility with old servers (issue #497).
+//
+// The default order prefers AEAD ciphers. Some old SSH servers advertise GCM
+// but close the connection when it is negotiated; callers retry those EOF
+// handshakes once with sshAlgorithmsCTRFirst.
 func sshCiphers() []string {
 	return []string{
 		ssh.CipherAES128GCM,
@@ -33,6 +37,19 @@ func sshCiphers() []string {
 		ssh.CipherAES192CTR,
 		ssh.CipherAES256CTR,
 		// Legacy CBC/3DES ciphers for old servers (issue #497)
+		ssh.InsecureCipherAES128CBC,
+		ssh.InsecureCipherTripleDESCBC,
+	}
+}
+
+func sshCiphersCTRFirst() []string {
+	return []string{
+		ssh.CipherAES128CTR,
+		ssh.CipherAES192CTR,
+		ssh.CipherAES256CTR,
+		ssh.CipherChaCha20Poly1305,
+		ssh.CipherAES128GCM,
+		ssh.CipherAES256GCM,
 		ssh.InsecureCipherAES128CBC,
 		ssh.InsecureCipherTripleDESCBC,
 	}
@@ -58,4 +75,10 @@ func sshAlgorithms() ssh.Config {
 		Ciphers:      sshCiphers(),
 		MACs:         sshMACs(),
 	}
+}
+
+func sshAlgorithmsCTRFirst() ssh.Config {
+	cfg := sshAlgorithms()
+	cfg.Ciphers = sshCiphersCTRFirst()
+	return cfg
 }

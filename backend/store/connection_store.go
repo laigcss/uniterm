@@ -76,6 +76,9 @@ func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
 			if s.passwordStore != nil {
 				_ = s.passwordStore.DeletePassword(conn.ID)
 			}
+			s.pwdMu.Lock()
+			delete(s.pwdCache, conn.ID)
+			s.pwdMu.Unlock()
 			continue
 		}
 		if s.passwordStore == nil {
@@ -86,6 +89,12 @@ func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
 		if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
 			return err
 		}
+		s.pwdMu.Lock()
+		if s.pwdCache == nil {
+			s.pwdCache = map[string]string{}
+		}
+		s.pwdCache[conn.ID] = conn.Password
+		s.pwdMu.Unlock()
 		conn.Password = ""
 	}
 
@@ -169,7 +178,6 @@ func (s *ConnectionStore) Load() (session.ConnectionStoreData, error) {
 
 func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) error {
 	needsSave := false
-	var toFetch []string
 
 	for i := range data.Connections {
 		conn := &data.Connections[i]
@@ -180,16 +188,28 @@ func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) e
 		if s.passwordStore != nil {
 			// One-time migration: plaintext JSON password → keychain.
 			if conn.Password != "" {
-				if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
+				pw := conn.Password
+				if err := s.passwordStore.SetPassword(conn.ID, pw); err != nil {
 					return err
 				}
 				conn.Password = ""
 				needsSave = true
+				s.pwdMu.Lock()
+				if s.pwdCache == nil {
+					s.pwdCache = map[string]string{}
+				}
+				s.pwdCache[conn.ID] = pw
+				s.pwdMu.Unlock()
 			}
 		}
 
-		// F-110: serve from cache when available, otherwise schedule an
-		// async keychain fill so Load() does not block on per-connection IPC.
+		// Serve from cache when available; otherwise fill synchronously so
+		// Load() ALWAYS returns complete credentials. The previous F-110
+		// async-only fill left conn.Password empty on the first Load after
+		// process start — the frontend then held a snapshot with empty
+		// passwords and prompted the user for a password that was already
+		// in the keychain. Keychain IPC is cached per connection, so the
+		// cost is paid once and later Loads hit pwdCache.
 		s.pwdMu.RLock()
 		pw, cached := s.pwdCache[conn.ID]
 		s.pwdMu.RUnlock()
@@ -198,45 +218,41 @@ func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) e
 			continue
 		}
 		if s.passwordStore != nil {
-			toFetch = append(toFetch, conn.ID)
+			pw, err := s.passwordStore.GetPassword(conn.ID)
+			if err == nil && pw != "" {
+				conn.Password = pw
+				s.pwdMu.Lock()
+				if s.pwdCache == nil {
+					s.pwdCache = map[string]string{}
+				}
+				s.pwdCache[conn.ID] = pw
+				s.pwdMu.Unlock()
+			}
 		}
-	}
-
-	if len(toFetch) > 0 {
-		go s.asyncFillPasswords(toFetch)
 	}
 
 	if needsSave {
 		// Save cleaned JSON (passwords migrated out)
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		return s.writeJSONLocked(*data)
+		clean := *data
+		clean.Connections = make([]session.ConnectionConfig, len(data.Connections))
+		copy(clean.Connections, data.Connections)
+		for i := range clean.Connections {
+			if clean.Connections[i].AuthType == "password" {
+				clean.Connections[i].Password = ""
+			}
+		}
+		return s.writeJSONLocked(clean)
 	}
 	return nil
 }
 
-// asyncFillPasswords runs after Load() returns; it fetches each requested
-// password from the keychain and writes the result into pwdCache. A cache
-// hit on the next Load avoids the per-connection IPC entirely.
-func (s *ConnectionStore) asyncFillPasswords(ids []string) {
-	for _, id := range ids {
-		pw, err := s.passwordStore.GetPassword(id)
-		if err != nil || pw == "" {
-			continue
-		}
-		s.pwdMu.Lock()
-		if s.pwdCache == nil {
-			s.pwdCache = map[string]string{}
-		}
-		s.pwdCache[id] = pw
-		s.pwdMu.Unlock()
-	}
-}
-
 // EnsurePassword returns the password for a connection ID, populating from
-// the keychain on cache miss. Callers needing synchronous access (e.g.
-// SSH Connect right after Load) should call this instead of relying on
-// conn.Password, which may be empty for the first Load after process start.
+// the keychain on cache miss. Load() already fills passwords synchronously
+// (see populatePasswords), so this is a defensive fallback for callers that
+// construct configs without going through Load — e.g. the session connect
+// path, which should never prompt for a password that exists in the keychain.
 // Returns "" if no password store is set or the keychain has no entry.
 func (s *ConnectionStore) EnsurePassword(connID string) (string, error) {
 	s.pwdMu.RLock()
