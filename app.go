@@ -1971,6 +1971,20 @@ func (a *App) GetAppInfo() AppInfo {
 	}
 }
 
+// RelaunchApp spawns a fresh instance, then quits the current one so settings
+// that are fixed at startup (e.g. the window title bar) can take effect. The
+// new process is started first; a short delay lets it finish spawning before
+// this instance exits, keeping the overlap window minimal.
+func (a *App) RelaunchApp() {
+	if err := a.relaunchProcess(); err != nil {
+		log.Writef("relaunch failed: %v", err)
+	}
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		runtime.Quit(a.ctx)
+	}()
+}
+
 func (a *App) CheckForUpdate(source string) (*update.UpdateInfo, error) {
 	return update.Check(Version, source)
 }
