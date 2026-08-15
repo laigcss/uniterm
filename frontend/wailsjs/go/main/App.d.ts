@@ -311,6 +311,8 @@ export function RedisZSetRemove(arg1:string,arg2:string,arg3:Array<string>):Prom
 
 export function RegisterSessionForPanel(arg1:string,arg2:string):Promise<void>;
 
+export function RelaunchApp():Promise<void>;
+
 export function RemoveTempFile(arg1:string):Promise<void>;
 
 export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;

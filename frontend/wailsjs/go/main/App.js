@@ -606,6 +606,10 @@ export function RegisterSessionForPanel(arg1, arg2) {
   return window['go']['main']['App']['RegisterSessionForPanel'](arg1, arg2);
 }
 
+export function RelaunchApp() {
+  return window['go']['main']['App']['RelaunchApp']();
+}
+
 export function RemoveTempFile(arg1) {
   return window['go']['main']['App']['RemoveTempFile'](arg1);
 }
