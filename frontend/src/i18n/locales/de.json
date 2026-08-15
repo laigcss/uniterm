@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "Duplizieren",
   "shortcut.terminalSearch": "Terminal durchsuchen",
   "shortcut.openSettings": "Einstellungen öffnen",
+  "shortcut.copy": "Im Terminal kopieren",
+  "shortcut.paste": "Im Terminal einfügen",
   "shortcut.title": "Tastenkombinationen",
   "shortcut.colFunction": "Funktion",
   "shortcut.colBinding": "Tastenkombination",

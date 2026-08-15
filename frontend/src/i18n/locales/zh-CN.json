@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "复制连接",
   "shortcut.terminalSearch": "终端搜索",
   "shortcut.openSettings": "打开设置",
+  "shortcut.copy": "终端内复制",
+  "shortcut.paste": "终端内粘贴",
   "shortcut.title": "快捷键",
   "shortcut.colFunction": "功能",
   "shortcut.colBinding": "快捷键",

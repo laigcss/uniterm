@@ -25,6 +25,7 @@
       ref="spiceContainer"
       class="spice-area"
       tabindex="0"
+      @paste="onPaste"
     />
 
     <!-- Status bar -->
@@ -51,7 +52,7 @@ import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import type { ConnectionConfig } from '../types/session'
 import { CreateSession, CloseSession } from '../../wailsjs/go/main/App'
-import { EventsOn, ClipboardSetText, ClipboardGetText } from '../../wailsjs/runtime'
+import { EventsOn, ClipboardSetText } from '../../wailsjs/runtime'
 
 const { t } = useI18n()
 const panelStore = usePanelStore()
@@ -134,17 +135,14 @@ async function initSpice(proxyAddr: string, password: string) {
   isIniting = false
 }
 
-function handleKeyDown(e: KeyboardEvent) {
+// Paste into the SPICE remote via the native paste event (Ctrl+V / context menu).
+// SPICE handles clipboard through the agent channel.
+function onPaste(e: ClipboardEvent) {
+  e.preventDefault()
   if (!sc || status.value !== 'connected') return
-  // Ctrl+Shift+V: paste from local clipboard to SPICE
-  if (e.ctrlKey && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
-    e.preventDefault()
-    ClipboardGetText().then(text => {
-      if (text && sc) {
-        // SPICE handles clipboard through agent channel
-        try { sc.sendClipboard(text) } catch (_) {}
-      }
-    }).catch(() => {})
+  const text = e.clipboardData?.getData('text')
+  if (text && sc) {
+    try { sc.sendClipboard(text) } catch (_) {}
   }
 }
 
@@ -196,7 +194,6 @@ onMounted(() => {
     sc = cached.sc
     panelStore.removeSPICECache(props.panelId)
     status.value = 'connected'
-    document.addEventListener('keydown', handleKeyDown)
     return
   }
 
@@ -210,8 +207,6 @@ onMounted(() => {
   } else {
     connect()
   }
-
-  document.addEventListener('keydown', handleKeyDown)
 
   unsubStatus = EventsOn('session:status', (data: any) => {
     if (data.id !== currentSessionId.value) return
@@ -250,7 +245,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeyDown)
   unsubStatus?.()
 
   if (spiceContainer.value) {

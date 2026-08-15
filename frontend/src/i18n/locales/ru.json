@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "Дублировать",
   "shortcut.terminalSearch": "Поиск в терминале",
   "shortcut.openSettings": "Открыть настройки",
+  "shortcut.copy": "Копировать в терминале",
+  "shortcut.paste": "Вставить в терминале",
   "shortcut.title": "Горячие клавиши",
   "shortcut.colFunction": "Функция",
   "shortcut.colBinding": "Сочетание",

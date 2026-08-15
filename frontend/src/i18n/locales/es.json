@@ -941,6 +941,8 @@
   "shortcut.duplicateSession": "Duplicar",
   "shortcut.terminalSearch": "Buscar en terminal",
   "shortcut.openSettings": "Abrir configuración",
+  "shortcut.copy": "Copiar en terminal",
+  "shortcut.paste": "Pegar en terminal",
   "shortcut.title": "Atajos",
   "shortcut.colFunction": "Función",
   "shortcut.colBinding": "Atajo",

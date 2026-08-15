@@ -178,6 +178,8 @@ let onTerminalAuxClick: ((e: MouseEvent) => void) | null = null
 let onOpenSearch: ((e: Event) => void) | null = null
 let onExport: ((e: Event) => void) | null = null
 let onSendRz: ((e: Event) => void) | null = null
+let onTerminalCopy: ((e: Event) => void) | null = null
+let onTerminalPaste: ((e: Event) => void) | null = null
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let isResizing = false
@@ -676,13 +678,12 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   }
 
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
-  // Bind to the platform's paste shortcut only — Cmd+V on macOS, Ctrl+Shift+V
-  // elsewhere. Plain Ctrl+V is never intercepted, so it passes through to the
-  // terminal app (vim visual block, bash literal-next…) on every platform.
-  const pasteCombo = isMac
-    ? (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey)
-    : (e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey)
-  if (pasteCombo && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+  // macOS Cmd+V stays hardcoded — it is not one of the configurable shortcuts.
+  // On Windows/Linux, Ctrl+Shift+V is handled by the configurable shortcut
+  // system (see the terminal:paste event below). Plain Ctrl+V is never
+  // intercepted, so it passes through to the terminal app (vim visual block,
+  // bash literal-next…) on every platform.
+  if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
     e.preventDefault()
     if (props.mode === 'ssh' || props.mode === 'local') {
       ClipboardGetText().then(text => {
@@ -702,15 +703,6 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
       return false
     }
     return true
-  }
-
-  // Ctrl+Shift+C: copy terminal selection to clipboard
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-    const sel = terminal?.getSelection()
-    if (sel) {
-      navigator.clipboard.writeText(sel).catch(() => {})
-    }
-    return false
   }
 
   // macOS-style cursor word/line jumping via Option/Cmd + arrow keys
@@ -1286,6 +1278,31 @@ onMounted(() => {
   }
   window.addEventListener('terminal:send-rz', onSendRz)
 
+  // Configurable copy/paste shortcuts (Ctrl+Shift+C/V on Windows/Linux).
+  // The App-level shortcut handler dispatches these events to the active panel.
+  onTerminalCopy = (e: Event) => {
+    if (!isActive.value) return
+    const detail = (e as CustomEvent).detail
+    if (detail?.panelId && detail.panelId !== props.panelId) return
+    const sel = terminal?.getSelection()
+    if (sel) {
+      navigator.clipboard.writeText(sel).catch(() => {})
+    }
+  }
+  window.addEventListener('terminal:copy', onTerminalCopy)
+
+  onTerminalPaste = (e: Event) => {
+    if (!isActive.value) return
+    const detail = (e as CustomEvent).detail
+    if (detail?.panelId && detail.panelId !== props.panelId) return
+    if (props.mode === 'ssh' || props.mode === 'local') {
+      ClipboardGetText().then(text => {
+        if (text) pasteToSession(text)
+      }).catch(() => {})
+    }
+  }
+  window.addEventListener('terminal:paste', onTerminalPaste)
+
   bindListeners()
 
   resizeObserver = new ResizeObserver(() => {
@@ -1590,6 +1607,8 @@ onUnmounted(() => {
   if (onOpenSearch) window.removeEventListener('terminal:open-search', onOpenSearch)
   if (onExport) window.removeEventListener('terminal:export', onExport)
   if (onSendRz) window.removeEventListener('terminal:send-rz', onSendRz)
+  if (onTerminalCopy) window.removeEventListener('terminal:copy', onTerminalCopy)
+  if (onTerminalPaste) window.removeEventListener('terminal:paste', onTerminalPaste)
   suggestions.close()
   if (!zmodemStore.getActiveTransfer(props.sessionId || '')) {
     disposeZmodemService(props.sessionId || '')
