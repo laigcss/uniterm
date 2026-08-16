@@ -261,8 +261,10 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	// connection + settings stores).
 	a.initCredentials(dataDir, upgrade)
 
-	// Sync service (uses its own system dir; independent of dataDir).
-	syncSvc, err := sync.NewSyncService()
+	// Sync service: sync metadata (sync-config.json + local repo clone) lives
+	// in the system user-config dir; the config files it encrypts/decrypts are
+	// read from dataDir.
+	syncSvc, err := sync.NewSyncService(dataDir)
 	if err != nil {
 		log.Writef("Failed to create sync service: %v", err)
 		a.sendStartupErr(fmt.Errorf("sync service: %w", err))
