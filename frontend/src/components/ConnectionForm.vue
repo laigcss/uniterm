@@ -78,7 +78,16 @@
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
                 <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
+                <el-radio-button label="identity">{{ t('conn.identity') }}</el-radio-button>
               </el-radio-group>
+            </el-form-item>
+            <el-form-item
+              v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')"
+              :label="t('conn.identity')"
+            >
+              <el-select v-model="form.identityId" filterable style="width: 100%">
+                <el-option v-for="id in identityStore.identities" :key="id.id" :label="`${id.name} (${id.username})`" :value="id.id" />
+              </el-select>
             </el-form-item>
             <template v-if="form.type === 'rdp' && isWindows">
               <el-form-item :label="t('conn.rdpEnableNLA')">
@@ -88,7 +97,7 @@
                 </el-select>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container'" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
             <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
@@ -523,9 +532,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, nextTick } from 'vue'
+import { reactive, computed, watch, ref, nextTick, onMounted } from 'vue'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useIdentityStore } from '../stores/identityStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
@@ -537,6 +547,11 @@ import type { K8sContextInfo } from '../types/k8s'
 const { t } = useI18n()
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
+const identityStore = useIdentityStore()
+
+onMounted(() => {
+  identityStore.load()
+})
 
 // ── Categories & sub-types ──
 interface SubTypeInfo {
@@ -999,6 +1014,11 @@ watch(rdpResolution, (val) => {
   }
 })
 
+// Clear the identity reference when switching away from the identity auth type.
+watch(() => form.authType, (val) => {
+  if (val !== 'identity') form.identityId = ''
+})
+
 function resetForm() {
   form.id = ''
   form.name = ''
@@ -1010,6 +1030,7 @@ function resetForm() {
   form.authType = 'password'
   form.password = ''
   form.keyPath = ''
+  form.identityId = ''
   form.groupId = undefined
   form.rdpFixedWidth = undefined
   form.rdpFixedHeight = undefined

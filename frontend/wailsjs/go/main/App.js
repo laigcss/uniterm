@@ -398,6 +398,10 @@ export function LoadConnections() {
   return window['go']['main']['App']['LoadConnections']();
 }
 
+export function LoadIdentities() {
+  return window['go']['main']['App']['LoadIdentities']();
+}
+
 export function LoadLocalState() {
   return window['go']['main']['App']['LoadLocalState']();
 }
@@ -676,6 +680,10 @@ export function SaveFileDialog(arg1) {
 
 export function SaveFileDialogFiltered(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SaveFileDialogFiltered'](arg1, arg2, arg3, arg4);
+}
+
+export function SaveIdentities(arg1) {
+  return window['go']['main']['App']['SaveIdentities'](arg1);
 }
 
 export function SaveLocalState(arg1) {

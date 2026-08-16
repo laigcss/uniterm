@@ -40,6 +40,10 @@ type ConnectionConfig struct {
 	Port     int    `json:"port"`
 	User     string `json:"user"`
 	AuthType string `json:"authType"`
+	// IdentityId references a saved Identity (see identity.go). When set with
+	// AuthType "identity", MaterializeIdentity resolves and injects the
+	// credentials at connect time.
+	IdentityId string `json:"identityId,omitempty"`
 	// Password is stored in plaintext JSON. Will be migrated to OS keychain in a future iteration.
 	Password string  `json:"password,omitempty"`
 	KeyPath  string  `json:"keyPath,omitempty"`

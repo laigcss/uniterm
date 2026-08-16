@@ -49,6 +49,7 @@ type App struct {
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
+	identityStore        *store.IdentityStore
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
 	skillsStore          *store.SkillsStore
@@ -221,6 +222,14 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		}
 	}
 
+	is, err := store.NewIdentityStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init identity store: %v", err)
+		a.sendStartupErr(fmt.Errorf("identity store: %w", err))
+	} else {
+		a.identityStore = is
+	}
+
 	a.terminalHistoryStore = store.NewTerminalHistoryStore(dataDir)
 	a.quickCommandsStore = store.NewQuickCommandsStore(dataDir)
 	a.skillsStore = store.NewSkillsStore(dataDir)
@@ -317,6 +326,9 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	}
 	if a.settingsStore != nil {
 		a.settingsStore.SetPasswordStore(cred)
+	}
+	if a.identityStore != nil {
+		a.identityStore.SetPasswordStore(cred)
 	}
 }
 
@@ -609,6 +621,20 @@ func (a *App) LoadConnections() (session.ConnectionStoreData, error) {
 	return a.connectionStore.Load()
 }
 
+func (a *App) LoadIdentities() (session.IdentityStoreData, error) {
+	if a.identityStore == nil {
+		return session.IdentityStoreData{Identities: []session.Identity{}}, nil
+	}
+	return a.identityStore.Load()
+}
+
+func (a *App) SaveIdentities(data session.IdentityStoreData) error {
+	if a.identityStore == nil {
+		return fmt.Errorf("identity store not initialized")
+	}
+	return a.identityStore.Save(data)
+}
+
 // ExportConnections writes the full store to destPath as a .utm file. When
 // password is non-empty, password fields are encrypted; otherwise cleared.
 func (a *App) ExportConnections(destPath, password string) error {
@@ -678,10 +704,56 @@ func (a *App) connResolver() (session.ConnResolver, error) {
 	for _, c := range conns.Connections {
 		index[c.ID] = c
 	}
+	idResolve, err := a.identityResolver()
+	if err != nil {
+		return nil, err
+	}
 	return func(id string) (session.ConnectionConfig, bool) {
 		c, ok := index[id]
-		return c, ok
+		if !ok {
+			return session.ConnectionConfig{}, false
+		}
+		if c.AuthType == "identity" {
+			m, err := session.MaterializeIdentity(c, idResolve)
+			if err != nil {
+				return session.ConnectionConfig{}, false
+			}
+			return m, true
+		}
+		return c, true
 	}, nil
+}
+
+// identityResolver 返回基于当前身份库的解密 resolver（镜像 connResolver）。
+func (a *App) identityResolver() (session.IdentityResolver, error) {
+	if a.identityStore == nil {
+		return func(string) (session.Identity, bool) { return session.Identity{}, false }, nil
+	}
+	data, err := a.identityStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]session.Identity, len(data.Identities))
+	for _, id := range data.Identities {
+		index[id.ID] = id
+	}
+	return func(id string) (session.Identity, bool) {
+		ident, ok := index[id]
+		return ident, ok
+	}, nil
+}
+
+// materializeIdentity resolves an identity-reference config into a concrete
+// password/key config. No-op for non-identity configs.
+func (a *App) materializeIdentity(config session.ConnectionConfig) (session.ConnectionConfig, error) {
+	if config.AuthType != "identity" {
+		return config, nil
+	}
+	resolve, err := a.identityResolver()
+	if err != nil {
+		return config, err
+	}
+	return session.MaterializeIdentity(config, resolve)
 }
 
 // StartTunnel brings the tunnel with the given ID up and returns its state.
@@ -1387,6 +1459,15 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			config.Password = pw
 		}
 	}
+	// Resolve an identity reference into a concrete password/key config
+	// before the session manager dials.
+	if config.AuthType == "identity" {
+		mc, err := a.materializeIdentity(config)
+		if err != nil {
+			return nil, err
+		}
+		config = mc
+	}
 	s, err := a.sessionManager.Create(sessionType, config)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
@@ -1675,6 +1756,16 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 		return fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
 	}
 
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the jump host to the tunnel service.
+	if tunnelSSHConfig.AuthType == "identity" {
+		m, err := a.materializeIdentity(*tunnelSSHConfig)
+		if err != nil {
+			return err
+		}
+		tunnelSSHConfig = &m
+	}
+
 	// Defensive credential fallback for the jump host: the freshly loaded
 	// config already has passwords filled synchronously (populatePasswords),
 	// but resolve from the keychain anyway if it is somehow still empty.
@@ -1741,6 +1832,15 @@ func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) er
 		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
 			config.Password = pw
 		}
+	}
+	// Resolve an identity reference into a concrete password/key config
+	// before launching the connect goroutine.
+	if config.AuthType == "identity" {
+		mc, err := a.materializeIdentity(config)
+		if err != nil {
+			return err
+		}
+		config = mc
 	}
 	a.launchConnectGoroutine(s, config.Type, config)
 	return nil
@@ -4605,6 +4705,17 @@ func (a *App) K8sConnect(source string, sourceIsPath bool, contextName string,
 	if tunnelSSHConfig == nil {
 		return "", fmt.Errorf("tunnel SSH connection not found: %s", tunnelSSHConnID)
 	}
+
+	// Resolve an identity reference into a concrete password/key config
+	// before the user/password overrides below so those still take precedence.
+	if tunnelSSHConfig.AuthType == "identity" {
+		m, err := a.materializeIdentity(*tunnelSSHConfig)
+		if err != nil {
+			return "", err
+		}
+		tunnelSSHConfig = &m
+	}
+
 	if tunnelSSHUser != "" {
 		tunnelSSHConfig.User = tunnelSSHUser
 	}
@@ -4781,6 +4892,16 @@ func (a *App) ContainerConnect(connectionID string) error {
 		return fmt.Errorf("referenced SSH connection missing: %s", cfg.ContainerSSHConnID)
 	}
 
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the SSH runner its connection config.
+	if sshCfg.AuthType == "identity" {
+		m, err := a.materializeIdentity(*sshCfg)
+		if err != nil {
+			return err
+		}
+		sshCfg = &m
+	}
+
 	// 跳板机：被引用连接自身的 tunnel 配置
 	if sshCfg.TunnelSSHConnID != "" && a.tunnelService != nil {
 		var tunnelCfg *session.ConnectionConfig
@@ -4792,6 +4913,13 @@ func (a *App) ContainerConnect(connectionID string) error {
 		}
 		if tunnelCfg == nil {
 			return fmt.Errorf("tunnel SSH connection not found: %s", sshCfg.TunnelSSHConnID)
+		}
+		if tunnelCfg.AuthType == "identity" {
+			m, err := a.materializeIdentity(*tunnelCfg)
+			if err != nil {
+				return err
+			}
+			tunnelCfg = &m
 		}
 		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port)
 		if err != nil {
@@ -4841,6 +4969,16 @@ func (a *App) X11DesktopConnect(connectionID string, sessionID string) error {
 	}
 	if cfg.Type != "x11-desktop" {
 		return fmt.Errorf("connection %s is not an x11-desktop", connectionID)
+	}
+
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the connection to the X11 dialer.
+	if cfg.AuthType == "identity" {
+		m, err := a.materializeIdentity(*cfg)
+		if err != nil {
+			return err
+		}
+		cfg = &m
 	}
 
 	sess, ok := a.sessionManager.Get(sessionID)

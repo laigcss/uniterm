@@ -53,6 +53,14 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		return fmt.Errorf("encrypt quick commands: %w", err)
 	}
 
+	if err := encryptGenericFile(
+		filepath.Join(srcDir, "identities.json"),
+		filepath.Join(destDir, "identities.json"),
+		key,
+	); err != nil {
+		return fmt.Errorf("encrypt identities: %w", err)
+	}
+
 	return nil
 }
 
@@ -159,6 +167,14 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		key,
 	); err != nil {
 		return fmt.Errorf("decrypt quick commands: %w", err)
+	}
+
+	if err := decryptGenericFile(
+		filepath.Join(srcDir, "identities.json"),
+		filepath.Join(destDir, "identities.json"),
+		key,
+	); err != nil {
+		return fmt.Errorf("decrypt identities: %w", err)
 	}
 
 	return nil
