@@ -17,6 +17,8 @@ export function AppendFileBase64(arg1:string,arg2:string,arg3:number):Promise<vo
 
 export function CancelChatStream():Promise<void>;
 
+export function ChangeMasterPassword(arg1:string,arg2:string):Promise<void>;
+
 export function ChatCompletion(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<string>;
 
 export function CheckForUpdate(arg1:string):Promise<update.UpdateInfo>;
@@ -119,7 +121,11 @@ export function GetBackgroundImage(arg1:string):Promise<string>;
 
 export function GetCommandBody(arg1:string):Promise<string>;
 
+export function GetCredentialStatus():Promise<main.CredentialStatus>;
+
 export function GetDBCapabilities(arg1:string):Promise<database.DBCapabilities>;
+
+export function GetDataDirInfo():Promise<main.DataDirInfo>;
 
 export function GetDatabases(arg1:string):Promise<Array<string>>;
 
@@ -321,6 +327,8 @@ export function RelaunchApp():Promise<void>;
 
 export function RemoveTempFile(arg1:string):Promise<void>;
 
+export function ResetCredentials():Promise<void>;
+
 export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
 export function SaveAISessions(arg1:store.AISessionData):Promise<void>;
@@ -369,6 +377,8 @@ export function SetCommandLocked(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetCommandSortOrder(arg1:string,arg2:number):Promise<void>;
 
+export function SetDataDir(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
 export function SetDefaultSessionLogDir(arg1:string):Promise<void>;
 
 export function SetMonitorActiveTab(arg1:string,arg2:string):Promise<void>;
@@ -380,6 +390,8 @@ export function SetSkillEnabled(arg1:string,arg2:boolean):Promise<void>;
 export function SetSkillLocked(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetSkillSortOrder(arg1:string,arg2:number):Promise<void>;
+
+export function SetupCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SftpCancelTransfer(arg1:string,arg2:string):Promise<void>;
 
@@ -437,6 +449,8 @@ export function StartupError():Promise<string>;
 
 export function StopTunnel(arg1:string):Promise<void>;
 
+export function SwitchCredentialMode(arg1:string,arg2:string):Promise<void>;
+
 export function SyncChangePassword(arg1:string,arg2:string):Promise<void>;
 
 export function SyncConfigureRepo(arg1:string,arg2:string,arg3:string,arg4:string):Promise<sync.SyncResult>;
@@ -456,6 +470,8 @@ export function SyncTestConnection():Promise<void>;
 export function SyncVerifyPassword(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function TruncateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function UnlockCredentials(arg1:string):Promise<void>;
 
 export function UnregisterSession(arg1:string):Promise<void>;
 

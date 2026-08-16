@@ -1,8 +1,10 @@
 package store
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -163,7 +165,7 @@ func TestConnectionStore_SaveRefusesPlaintextWithoutKeychain(t *testing.T) {
 func TestConnectionStore_SaveStripsPasswordWhenKeychainWired(t *testing.T) {
 	dir := t.TempDir()
 	s := &ConnectionStore{configDir: dir}
-	s.SetPasswordStore(fakePasswordStore{store: map[string]string{}})
+	s.SetPasswordStore(fakeCipherStore{})
 
 	data := session.ConnectionStoreData{
 		Connections: []session.ConnectionConfig{
@@ -282,30 +284,25 @@ func TestSettingsStore_LoadQuarantinesCorrupt(t *testing.T) {
 
 // ---- helpers ----
 
-// fakePasswordStore is a minimal in-memory PasswordStore for the
-// fail-closed test. Records whether SetPassword was actually called.
-type fakePasswordStore struct {
-	store map[string]string
-}
+// fakeCipherStore is a deterministic in-memory PasswordStore for tests.
+// Encrypt wraps plaintext as "enc:v1:<base64>" — the "enc:v1:" prefix makes
+// credentials.IsEncrypted recognize it, and base64 hides the plaintext so
+// tests can assert no plaintext leaks to disk without real crypto.
+type fakeCipherStore struct{}
 
-func (f fakePasswordStore) GetPassword(connID string) (string, error) {
-	return f.store[connID], nil
+func (fakeCipherStore) Encrypt(plaintext string) (string, error) {
+	return "enc:v1:" + base64.StdEncoding.EncodeToString([]byte(plaintext)), nil
 }
-func (f fakePasswordStore) SetPassword(connID, password string) error {
-	f.store[connID] = password
-	return nil
+func (fakeCipherStore) Decrypt(encoded string) (string, error) {
+	if !strings.HasPrefix(encoded, "enc:v1:") {
+		return encoded, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(encoded, "enc:v1:"))
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
-func (f fakePasswordStore) DeletePassword(connID string) error {
-	delete(f.store, connID)
-	return nil
-}
-func (f fakePasswordStore) GetModelAPIKey(modelID string) (string, error) {
-	return "", nil
-}
-func (f fakePasswordStore) SetModelAPIKey(modelID, apiKey string) error {
-	return nil
-}
-func (f fakePasswordStore) DeleteModelAPIKey(modelID string) error { return nil }
 
 func contains(haystack, needle string) bool {
 	if len(needle) == 0 {

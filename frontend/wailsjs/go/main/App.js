@@ -18,6 +18,10 @@ export function CancelChatStream() {
   return window['go']['main']['App']['CancelChatStream']();
 }
 
+export function ChangeMasterPassword(arg1, arg2) {
+  return window['go']['main']['App']['ChangeMasterPassword'](arg1, arg2);
+}
+
 export function ChatCompletion(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['ChatCompletion'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -222,8 +226,16 @@ export function GetCommandBody(arg1) {
   return window['go']['main']['App']['GetCommandBody'](arg1);
 }
 
+export function GetCredentialStatus() {
+  return window['go']['main']['App']['GetCredentialStatus']();
+}
+
 export function GetDBCapabilities(arg1) {
   return window['go']['main']['App']['GetDBCapabilities'](arg1);
+}
+
+export function GetDataDirInfo() {
+  return window['go']['main']['App']['GetDataDirInfo']();
 }
 
 export function GetDatabases(arg1) {
@@ -626,6 +638,10 @@ export function RemoveTempFile(arg1) {
   return window['go']['main']['App']['RemoveTempFile'](arg1);
 }
 
+export function ResetCredentials() {
+  return window['go']['main']['App']['ResetCredentials']();
+}
+
 export function SaveAIConfig(arg1) {
   return window['go']['main']['App']['SaveAIConfig'](arg1);
 }
@@ -722,6 +738,10 @@ export function SetCommandSortOrder(arg1, arg2) {
   return window['go']['main']['App']['SetCommandSortOrder'](arg1, arg2);
 }
 
+export function SetDataDir(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetDataDir'](arg1, arg2, arg3);
+}
+
 export function SetDefaultSessionLogDir(arg1) {
   return window['go']['main']['App']['SetDefaultSessionLogDir'](arg1);
 }
@@ -744,6 +764,10 @@ export function SetSkillLocked(arg1, arg2) {
 
 export function SetSkillSortOrder(arg1, arg2) {
   return window['go']['main']['App']['SetSkillSortOrder'](arg1, arg2);
+}
+
+export function SetupCredentials(arg1, arg2) {
+  return window['go']['main']['App']['SetupCredentials'](arg1, arg2);
 }
 
 export function SftpCancelTransfer(arg1, arg2) {
@@ -858,6 +882,10 @@ export function StopTunnel(arg1) {
   return window['go']['main']['App']['StopTunnel'](arg1);
 }
 
+export function SwitchCredentialMode(arg1, arg2) {
+  return window['go']['main']['App']['SwitchCredentialMode'](arg1, arg2);
+}
+
 export function SyncChangePassword(arg1, arg2) {
   return window['go']['main']['App']['SyncChangePassword'](arg1, arg2);
 }
@@ -896,6 +924,10 @@ export function SyncVerifyPassword(arg1, arg2, arg3) {
 
 export function TruncateTable(arg1, arg2, arg3) {
   return window['go']['main']['App']['TruncateTable'](arg1, arg2, arg3);
+}
+
+export function UnlockCredentials(arg1) {
+  return window['go']['main']['App']['UnlockCredentials'](arg1);
 }
 
 export function UnregisterSession(arg1) {

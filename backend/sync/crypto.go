@@ -11,7 +11,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+const encFieldPrefix = "enc:v1:"
+
+// isEncryptedField reports whether a secret field value is already in-place
+// encrypted (opaque to sync). Sync must carry it through without backfilling
+// from keychain or stripping it.
+func isEncryptedField(s string) bool { return strings.HasPrefix(s, encFieldPrefix) }
 
 // EncryptConfigFiles encrypts entire config files from srcDir into destDir.
 // kc is used to backfill passwords from keychain before encryption.
@@ -179,7 +187,7 @@ func decryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 			return fmt.Errorf("parse connections: %w", err)
 		}
 		for _, cm := range wrapper.Connections {
-			if pw, ok := cm["password"].(string); ok && pw != "" {
+			if pw, ok := cm["password"].(string); ok && pw != "" && !isEncryptedField(pw) {
 				if id, ok := cm["id"].(string); ok {
 					_ = kc.SetPassword(id, pw)
 				}
@@ -214,7 +222,7 @@ func decryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
 				if models, ok := ai["models"].([]interface{}); ok {
 					for _, m := range models {
 						if mm, ok := m.(map[string]interface{}); ok {
-							if ak, ok := mm["apiKey"].(string); ok && ak != "" {
+							if ak, ok := mm["apiKey"].(string); ok && ak != "" && !isEncryptedField(ak) {
 								if id, ok := mm["id"].(string); ok {
 									_ = kc.SetModelAPIKey(id, ak)
 								}

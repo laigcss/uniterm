@@ -63,6 +63,24 @@ export const useSettingsStore = defineStore('settings', () => {
     setLocale(settings.value.language)
   }
 
+  // Reload settings after the credential store is unlocked (e.g. after a
+  // data-dir migration in master-password mode). Model apiKeys can only be
+  // decrypted once the store is unlocked; re-running LoadSettings re-fetches
+  // them instead of leaving the initial load's empty fallback in place.
+  async function reload() {
+    try {
+      const loadedSettings = await LoadSettings()
+      if (loadedSettings) {
+        settings.value = mergeSettings(loadedSettings)
+        loaded.value = true
+      }
+    } catch {
+      // use defaults
+    }
+    applyTheme()
+    setLocale(settings.value.language)
+  }
+
   async function save() {
     try {
       await SaveSettings(settings.value)
@@ -204,6 +222,7 @@ export const useSettingsStore = defineStore('settings', () => {
     activeCategory,
     openCategory,
     init,
+    reload,
     save,
     applyTheme,
     updateTheme,
