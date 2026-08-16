@@ -14,6 +14,10 @@ export function AppendFileBase64(arg1, arg2, arg3) {
   return window['go']['main']['App']['AppendFileBase64'](arg1, arg2, arg3);
 }
 
+export function ApplyImport(arg1) {
+  return window['go']['main']['App']['ApplyImport'](arg1);
+}
+
 export function CancelChatStream() {
   return window['go']['main']['App']['CancelChatStream']();
 }
@@ -196,6 +200,10 @@ export function ExecuteSQLScript(arg1, arg2, arg3) {
 
 export function ExecuteStatement(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteStatement'](arg1, arg2, arg3);
+}
+
+export function ExportConnections(arg1, arg2) {
+  return window['go']['main']['App']['ExportConnections'](arg1, arg2);
 }
 
 export function FetchModels(arg1, arg2, arg3) {
@@ -492,6 +500,10 @@ export function OpenMultipleFilesDialog() {
 
 export function OpenPathInExplorer(arg1) {
   return window['go']['main']['App']['OpenPathInExplorer'](arg1);
+}
+
+export function ParseImportFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ParseImportFile'](arg1, arg2, arg3);
 }
 
 export function RDPHide(arg1) {

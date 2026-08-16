@@ -31,6 +31,7 @@ import (
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/database"
+	"github.com/ys-ll/uniterm/backend/importer"
 	"github.com/ys-ll/uniterm/backend/k8s"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/platform"
@@ -606,6 +607,44 @@ func (a *App) LoadConnections() (session.ConnectionStoreData, error) {
 		return session.ConnectionStoreData{}, fmt.Errorf("connection store not initialized")
 	}
 	return a.connectionStore.Load()
+}
+
+// ExportConnections writes the full store to destPath as a .utm file. When
+// password is non-empty, password fields are encrypted; otherwise cleared.
+func (a *App) ExportConnections(destPath, password string) error {
+	if a.connectionStore == nil {
+		return fmt.Errorf("connection store not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	out, err := importer.ExportUniterm(data, password)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(destPath, out, 0600)
+}
+
+// ParseImportFile parses a third-party or own-format file into an ImportResult
+// with regenerated ids. It does not write to the store.
+func (a *App) ParseImportFile(format, srcPath, password string) (*importer.ImportResult, error) {
+	return importer.Parse(format, srcPath, importer.ParseOptions{Password: password})
+}
+
+// ApplyImport merges parsed connections into the existing store and saves,
+// reusing existing groups by path. The saved result is broadcast via the
+// existing store:connections:changed event.
+func (a *App) ApplyImport(data session.ConnectionStoreData) error {
+	if a.connectionStore == nil {
+		return fmt.Errorf("connection store not initialized")
+	}
+	existing, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	merged := importer.MergeImported(existing, data)
+	return a.SaveConnections(merged)
 }
 
 // TunnelStore methods
