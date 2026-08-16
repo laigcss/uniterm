@@ -34,7 +34,6 @@ VNC (Virtual Network Computing) is widely used for remote control of Linux syste
 | Host | VNC server IP or domain name |
 | Port | Default 5900. Values less than 100 are treated as libvirt display numbers (5900 is automatically added) |
 | Password | VNC authentication password |
-| Require TLS | When enabled, only accept VeNCrypt (TLS) encrypted connections; when disabled, accept whatever security type the server offers |
 | Shared Session | When enabled, allow multiple clients to connect to the same VNC server simultaneously; when disabled, take exclusive connection |
 | VNC Repeater ID | Set when connecting through an UltraVNC-compatible repeater; leave empty for direct connection to the VNC server |
 | SSH Tunnel | Select an existing SSH connection as a jump host |

@@ -278,11 +278,6 @@
                 <el-switch v-model="form.rdpSmartSizing" />
               </el-form-item>
             </template>
-            <template v-if="form.type === 'vnc'">
-              <el-form-item :label="t('conn.vncEncryptionRequire')">
-                <el-switch v-model="vncRequireTLS" />
-              </el-form-item>
-            </template>
             <template v-if="form.type === 'x11-desktop'">
               <el-form-item :label="t('conn.x11DesktopDE')" required>
                 <el-select v-model="form.x11DesktopDesktopType">
@@ -679,13 +674,6 @@ const x11HintKey = computed(() => {
 })
 const passwordInputKey = ref(0)
 
-// vncEncryption is stored as 'auto' | 'require' in ConnectionConfig (matches
-// the Go side) but exposed in the form as a simple boolean switch: on means
-// "require TLS", off means "auto / whatever the server offers".
-const vncRequireTLS = computed({
-  get: () => form.vncEncryption === 'require',
-  set: (val) => { form.vncEncryption = val ? 'require' : 'auto' },
-})
 const postLoginMode = ref<'script' | 'expect'>('script')
 const showAdvanced = ref(false)
 
@@ -838,7 +826,6 @@ const form = reactive<ConnectionConfig>({
   ftpPassive: true,
   ftpEncoding: 'utf-8',
   ftpSkipVerify: false,
-  vncEncryption: 'auto',
   vncShared: true,
   vncRepeaterID: '',
   encoding: 'utf-8',
@@ -1067,7 +1054,6 @@ function resetForm() {
   form.ftpPassive = true
   form.ftpEncoding = 'utf-8'
   form.ftpSkipVerify = false
-  form.vncEncryption = 'auto'
   form.vncShared = true
   form.vncRepeaterID = ''
   form.encoding = 'utf-8'
