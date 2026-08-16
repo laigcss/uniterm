@@ -50,6 +50,7 @@ type App struct {
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
 	identityStore        *store.IdentityStore
+	proxyStore           *store.ProxyStore
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
 	skillsStore          *store.SkillsStore
@@ -230,6 +231,14 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		a.identityStore = is
 	}
 
+	ps, err := store.NewProxyStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init proxy store: %v", err)
+		a.sendStartupErr(fmt.Errorf("proxy store: %w", err))
+	} else {
+		a.proxyStore = ps
+	}
+
 	a.terminalHistoryStore = store.NewTerminalHistoryStore(dataDir)
 	a.quickCommandsStore = store.NewQuickCommandsStore(dataDir)
 	a.skillsStore = store.NewSkillsStore(dataDir)
@@ -329,6 +338,9 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	}
 	if a.identityStore != nil {
 		a.identityStore.SetPasswordStore(cred)
+	}
+	if a.proxyStore != nil {
+		a.proxyStore.SetPasswordStore(cred)
 	}
 }
 
@@ -635,6 +647,20 @@ func (a *App) SaveIdentities(data session.IdentityStoreData) error {
 	return a.identityStore.Save(data)
 }
 
+func (a *App) LoadProxies() (session.ProxyStoreData, error) {
+	if a.proxyStore == nil {
+		return session.ProxyStoreData{Proxies: []session.Proxy{}}, nil
+	}
+	return a.proxyStore.Load()
+}
+
+func (a *App) SaveProxies(data session.ProxyStoreData) error {
+	if a.proxyStore == nil {
+		return fmt.Errorf("proxy store not initialized")
+	}
+	return a.proxyStore.Save(data)
+}
+
 // ExportConnections writes the full store to destPath as a .utm file. When
 // password is non-empty, password fields are encrypted; otherwise cleared.
 func (a *App) ExportConnections(destPath, password string) error {
@@ -754,6 +780,46 @@ func (a *App) materializeIdentity(config session.ConnectionConfig) (session.Conn
 		return config, err
 	}
 	return session.MaterializeIdentity(config, resolve)
+}
+
+// proxyResolver returns a resolver over the saved proxies (mirrors identityResolver).
+func (a *App) proxyResolver() (session.ProxyResolver, error) {
+	if a.proxyStore == nil {
+		return func(string) (session.SocksProxy, bool) { return session.SocksProxy{}, false }, nil
+	}
+	data, err := a.proxyStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]session.Proxy, len(data.Proxies))
+	for _, p := range data.Proxies {
+		index[p.ID] = p
+	}
+	return func(id string) (session.SocksProxy, bool) {
+		p, ok := index[id]
+		if !ok {
+			return session.SocksProxy{}, false
+		}
+		return session.SocksProxy{Kind: p.Kind, Host: p.Host, Port: p.Port, User: p.User, Pass: p.Pass}, true
+	}, nil
+}
+
+// materializeProxy resolves config.ProxyId into config.Proxy. No-op when no
+// proxy is set. Mirrors materializeIdentity.
+func (a *App) materializeProxy(config session.ConnectionConfig) (session.ConnectionConfig, error) {
+	if config.ProxyId == "" {
+		return config, nil
+	}
+	resolve, err := a.proxyResolver()
+	if err != nil {
+		return config, err
+	}
+	p, ok := resolve(config.ProxyId)
+	if !ok {
+		return config, fmt.Errorf("referenced proxy not found: %s", config.ProxyId)
+	}
+	config.Proxy = &p
+	return config, nil
 }
 
 // StartTunnel brings the tunnel with the given ID up and returns its state.
@@ -1468,6 +1534,13 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		}
 		config = mc
 	}
+	// Resolve a proxy reference into a concrete proxy config so SSH-family
+	// first-hop dials route through it.
+	mc, err := a.materializeProxy(config)
+	if err != nil {
+		return nil, err
+	}
+	config = mc
 	s, err := a.sessionManager.Create(sessionType, config)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
@@ -1793,7 +1866,7 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 			targetPort += 5900
 		}
 	}
-	localPort, err := a.tunnelService.Start(sessionID, *tunnelSSHConfig, config.Host, targetPort)
+	localPort, err := a.tunnelService.Start(sessionID, *tunnelSSHConfig, config.Host, targetPort, config.Proxy)
 	if err != nil {
 		return fmt.Errorf("tunnel start: %w", err)
 	}
@@ -1801,6 +1874,7 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 		sessionID, config.TunnelSSHConnID, localPort)
 	config.Host = "127.0.0.1"
 	config.Port = localPort
+	config.Proxy = nil // proxy was consumed by the jump-host dial; local dial is direct
 	return nil
 }
 
@@ -1842,6 +1916,13 @@ func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) er
 		}
 		config = mc
 	}
+	// Resolve a proxy reference into a concrete proxy config so SSH-family
+	// first-hop dials route through it.
+	mc, err := a.materializeProxy(config)
+	if err != nil {
+		return err
+	}
+	config = mc
 	a.launchConnectGoroutine(s, config.Type, config)
 	return nil
 }
@@ -4748,7 +4829,7 @@ func (a *App) K8sConnect(source string, sourceIsPath bool, contextName string,
 	// 用同一个 key 既做 K8s connID 也做 TunnelService 的 sessionID，
 	// 方便 Disconnect 时的 onClose 回调直接 Stop 同名隧道。
 	tunnelKey := uuid.New().String()
-	localPort, err := a.tunnelService.Start(tunnelKey, *tunnelSSHConfig, targetHost, targetPort)
+	localPort, err := a.tunnelService.Start(tunnelKey, *tunnelSSHConfig, targetHost, targetPort, nil)
 	if err != nil {
 		return "", fmt.Errorf("tunnel start: %w", err)
 	}
@@ -4921,7 +5002,7 @@ func (a *App) ContainerConnect(connectionID string) error {
 			}
 			tunnelCfg = &m
 		}
-		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port)
+		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port, nil)
 		if err != nil {
 			return fmt.Errorf("tunnel start: %w", err)
 		}

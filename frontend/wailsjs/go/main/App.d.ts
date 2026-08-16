@@ -212,6 +212,8 @@ export function LoadIdentities():Promise<session.IdentityStoreData>;
 
 export function LoadLocalState():Promise<store.LocalState>;
 
+export function LoadProxies():Promise<session.ProxyStoreData>;
+
 export function LoadQuickCommands():Promise<store.QuickCommandData>;
 
 export function LoadSettings():Promise<store.AppSettings>;
@@ -353,6 +355,8 @@ export function SaveFileDialogFiltered(arg1:string,arg2:string,arg3:string,arg4:
 export function SaveIdentities(arg1:session.IdentityStoreData):Promise<void>;
 
 export function SaveLocalState(arg1:store.LocalState):Promise<void>;
+
+export function SaveProxies(arg1:session.ProxyStoreData):Promise<void>;
 
 export function SaveQuickCommands(arg1:store.QuickCommandData):Promise<void>;
 

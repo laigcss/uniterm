@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	osUser "os/user"
 	"path"
@@ -84,7 +85,8 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		Config: sshAlgorithms(),
 	}
 
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port), clientConfig)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	client, err := dialSSHTCP(addr, clientConfig, config.Proxy)
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("ssh dial: %w", err)

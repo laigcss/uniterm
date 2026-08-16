@@ -406,6 +406,10 @@ export function LoadLocalState() {
   return window['go']['main']['App']['LoadLocalState']();
 }
 
+export function LoadProxies() {
+  return window['go']['main']['App']['LoadProxies']();
+}
+
 export function LoadQuickCommands() {
   return window['go']['main']['App']['LoadQuickCommands']();
 }
@@ -688,6 +692,10 @@ export function SaveIdentities(arg1) {
 
 export function SaveLocalState(arg1) {
   return window['go']['main']['App']['SaveLocalState'](arg1);
+}
+
+export function SaveProxies(arg1) {
+  return window['go']['main']['App']['SaveProxies'](arg1);
 }
 
 export function SaveQuickCommands(arg1) {

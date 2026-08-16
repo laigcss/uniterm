@@ -52,7 +52,7 @@ type ConnectionConfig struct {
 	RdpFixedWidth  int  `json:"rdpFixedWidth,omitempty"`
 	RdpFixedHeight int  `json:"rdpFixedHeight,omitempty"`
 	RdpSmartSizing bool `json:"rdpSmartSizing"`
-	RdpEnableNLA  bool `json:"rdpEnableNLA"`
+	RdpEnableNLA   bool `json:"rdpEnableNLA"`
 	// Local terminal shell path
 	ShellPath string `json:"shellPath,omitempty"`
 	// Working directory for local terminal (defaults to user home directory if empty)
@@ -80,9 +80,16 @@ type ConnectionConfig struct {
 	// SSH tunnel: reference to an existing SSH connection used as a jump host.
 	// When set, the connection goes through local port forwarding:
 	//   127.0.0.1:auto-port → tunnel SSH → target Host:Port
-	TunnelSSHConnID   string `json:"tunnelSSHConnId,omitempty"`
-	TunnelSSHUser     string `json:"tunnelSSHUser,omitempty"`
-	TunnelSSHPassword string `json:"tunnelSSHPassword,omitempty"`
+	TunnelSSHConnID string `json:"tunnelSSHConnId,omitempty"`
+	// Proxy: reference to a saved Proxy (see proxy.go). When set, the
+	// first-hop TCP dial goes through this SOCKS5/HTTP proxy instead of
+	// connecting directly.
+	ProxyId string `json:"proxyId,omitempty"`
+	// Proxy is the resolved runtime proxy for this connect attempt. Populated
+	// by materializeProxy at connect time; never persisted.
+	Proxy             *SocksProxy `json:"-"`
+	TunnelSSHUser     string      `json:"tunnelSSHUser,omitempty"`
+	TunnelSSHPassword string      `json:"tunnelSSHPassword,omitempty"`
 	// SFTP max concurrent transfers (0 = unlimited)
 	SftpMaxConcurrency int `json:"sftpMaxConcurrency,omitempty"`
 	// Initial terminal size reported by the frontend BEFORE the

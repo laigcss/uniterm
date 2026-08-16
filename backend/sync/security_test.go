@@ -146,6 +146,7 @@ func TestChangePassword_RewritesSaltAndReencryptsFiles(t *testing.T) {
 		"settings.json":      `{"theme":"dark"}`,
 		"quickCommands.json": `[{"name":"q1","cmd":"ls"}]`,
 		"identities.json":    `{"identities":[{"id":"i1","name":"prod"}]}`,
+		"proxies.json":       `{"proxies":[{"id":"p1","name":"vpn"}]}`,
 	}
 	for name, body := range seed {
 		if err := os.WriteFile(filepath.Join(srcDir, name), []byte(body), 0600); err != nil {

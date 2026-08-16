@@ -44,7 +44,7 @@ func NewTunnelService() *TunnelService {
 // TCP listener on an auto-assigned port, and forwards every accepted connection
 // to targetHost:targetPort through the SSH tunnel.
 // Returns the local port number that was assigned.
-func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, targetHost string, targetPort int) (int, error) {
+func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, targetHost string, targetPort int, upstream *SocksProxy) (int, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -63,7 +63,7 @@ func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, tar
 		Config: sshAlgorithms(),
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
+	conn, err := dialFirstHop(addr, upstream)
 	if err != nil {
 		return 0, fmt.Errorf("tunnel ssh dial: %w", err)
 	}
