@@ -140,6 +140,10 @@
     </div>
 
     <SyncConflictDialog />
+    <DataDirDialog v-model:visible="dataDirVisible" :first-run="credStore.firstRun || credStore.dataDirInfo.firstRun" @done="onDataDirDone" />
+    <EncryptionModeDialog v-model:visible="encryptVisible" :existing-secrets="credStore.status.existingSecrets" @done="onEncryptDone" />
+    <CredentialUnlockDialog v-model:visible="unlockVisible" @done="onUnlockDone" @reset="onReset" />
+    <KeychainLostDialog v-model:visible="keychainLostVisible" @done="onKeychainLostDone" />
   </div>
   </el-config-provider>
 </template>
@@ -175,6 +179,10 @@ import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
+import DataDirDialog from './components/DataDirDialog.vue'
+import EncryptionModeDialog from './components/EncryptionModeDialog.vue'
+import CredentialUnlockDialog from './components/CredentialUnlockDialog.vue'
+import KeychainLostDialog from './components/KeychainLostDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
 import type { CredentialResult } from './components/CredentialPrompt.vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
@@ -189,13 +197,14 @@ import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
 import { useContainerStore } from './stores/containerStore'
 import { useSyncStore } from './stores/syncStore'
+import { useCredentialStore } from './stores/credentialStore'
 import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../wailsjs/go/main/App'
 import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
@@ -263,6 +272,68 @@ const EL_LOCALE_MAP: Record<string, typeof enUs> = {
   'zh-CN': zhCn, 'zh-TW': zhTw, en: enUs, ja, ko, de, es, fr, ru,
 }
 const elLocale = computed(() => EL_LOCALE_MAP[locale.value] || enUs)
+
+// ── Credential / first-run flow ─────────────────────────────────
+const credStore = useCredentialStore()
+const dataDirVisible = ref(false)
+const encryptVisible = ref(false)
+const unlockVisible = ref(false)
+const keychainLostVisible = ref(false)
+
+// Determine which credential dialog (keychain-lost / setup / unlock) to show
+// based on the current store status. Shared by startup and by the first-run
+// data-dir selection path so that pointing at a directory that already holds
+// master-password config correctly prompts for the password.
+function resolveCredentialDialog() {
+  if (credStore.status.keychainLost) { keychainLostVisible.value = true; return }
+  if (credStore.status.needsSetup) { encryptVisible.value = true; return }
+  if (!credStore.status.unlocked && credStore.status.mode === 'master-password') {
+    unlockVisible.value = true
+  }
+}
+
+function onDataDirDone(restart: boolean) {
+  if (restart) {
+    ElMessageBox.confirm(t('dataDir.restartMsg'), t('dataDir.restartTitle'),
+      { confirmButtonText: t('settings.restartNow'), cancelButtonText: t('conn.cancel'), type: 'warning' })
+      .then(() => RelaunchApp()).catch(() => {})
+    return
+  }
+  // Backend just initialized the stores for the newly selected data dir. Reload
+  // so the frontend reflects existing connections/settings/quick-commands/tunnels.
+  // When credentials are still locked the loads come back empty and onUnlockDone
+  // re-loads after unlock.
+  connectionStore.load()
+  settingsStore.reload()
+  useQuickCommandStore().load()
+  tunnelStore.load()
+  resolveCredentialDialog()
+}
+function onEncryptDone() { connectionStore.load() }
+function onUnlockDone() {
+  connectionStore.load()
+  settingsStore.reload()
+}
+function onKeychainLostDone() { credStore.reset().then(() => { encryptVisible.value = true }) }
+async function onReset() {
+  try {
+    await ElMessageBox.confirm(t('unlock.resetConfirm'), t('unlock.reset'), { type: 'warning' })
+    await credStore.reset()
+    encryptVisible.value = true
+    unlockVisible.value = false
+  } catch { /* cancelled */ }
+}
+
+async function checkCredentials() {
+  credStore.watchEvents()
+  await credStore.loadDataDir()
+  await credStore.loadStatus()
+  if (credStore.firstRun || credStore.dataDirInfo.firstRun) {
+    dataDirVisible.value = true
+    return
+  }
+  resolveCredentialDialog()
+}
 // ── RDP position sync ──
 // Called explicitly on tab switch and overlay restore; no polling needed.
 
@@ -741,6 +812,7 @@ onMounted(async () => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectS3(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
 
+  await checkCredentials()
 })
 
 function navigatePanel(dir: number) {
@@ -888,6 +960,7 @@ onUnmounted(() => {
   syncStore.dispose?.()
   tunnelStore.dispose?.()
   disposeSessionStore?.()
+  credStore.dispose()
 })
 
 function openSettings() {

@@ -56,6 +56,25 @@ func TestEncryptBytesWithAAD_AADMismatchRejected(t *testing.T) {
 	}
 }
 
+func TestIsEncryptedField(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"plaintext", false},
+		{"enc:v1:AAAA:BBBB", true},
+		{"enc:v1:", true},        // malformed prefix — still treated as opaque by design
+		{"ENC:v1:AAAA", false},   // case-sensitive
+		{"xenc:v1:AAAA", false},  // prefix must be at the start
+	}
+	for _, c := range cases {
+		if got := isEncryptedField(c.in); got != c.want {
+			t.Errorf("isEncryptedField(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // TestEncryptBytes_NilAADStillWorks ensures backward compat: existing
 // callers using encryptBytes (which pass nil AAD internally) continue to
 // round-trip unchanged.

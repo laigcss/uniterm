@@ -40,16 +40,11 @@ type AISessionStore struct {
 	configDir string
 }
 
-func NewAISessionStore() (*AISessionStore, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
+func NewAISessionStore(configDir string) (*AISessionStore, error) {
+	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, err
 	}
-	appDir := filepath.Join(configDir, "uniTerm")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return nil, err
-	}
-	return &AISessionStore{configDir: appDir}, nil
+	return &AISessionStore{configDir: configDir}, nil
 }
 
 func (s *AISessionStore) filePath() string {

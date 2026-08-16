@@ -514,6 +514,42 @@ export namespace main {
 	        this.version = source["version"];
 	    }
 	}
+	export class CredentialStatus {
+	    mode: string;
+	    unlocked: boolean;
+	    needsSetup: boolean;
+	    keychainLost: boolean;
+	    existingSecrets: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CredentialStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.unlocked = source["unlocked"];
+	        this.needsSetup = source["needsSetup"];
+	        this.keychainLost = source["keychainLost"];
+	        this.existingSecrets = source["existingSecrets"];
+	    }
+	}
+	export class DataDirInfo {
+	    dataDir: string;
+	    type: string;
+	    firstRun: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataDirInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dataDir = source["dataDir"];
+	        this.type = source["type"];
+	        this.firstRun = source["firstRun"];
+	    }
+	}
 	export class K8sResponse {
 	    status: number;
 	    body: string;

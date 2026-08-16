@@ -966,6 +966,30 @@ body.drag-active .zone {
   background: var(--border-subtle);
 }
 
+/* --- Encryption-mode select options (two-line: title + hint) ---
+   The popper is teleported to body, so these live in global CSS. */
+.mode-select-popper .el-select-dropdown__item {
+  height: auto;
+  line-height: normal;
+  padding: 8px 12px;
+  white-space: normal;
+}
+.mode-select-popper .mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mode-select-popper .mode-option-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.mode-select-popper .mode-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  white-space: normal;
+}
+
 /* ============================================================
    Autocomplete suggestion dropdown
    Target every possible selector so the item font matches

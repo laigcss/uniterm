@@ -29,6 +29,7 @@ import (
 	"golang.org/x/text/transform"
 	"github.com/google/uuid"
 	"github.com/ys-ll/uniterm/backend/container"
+	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/database"
 	"github.com/ys-ll/uniterm/backend/k8s"
 	"github.com/ys-ll/uniterm/backend/log"
@@ -61,7 +62,12 @@ type App struct {
 	wndProcCb            uintptr // keep alive to prevent GC
 	inSizeMove           bool
 	webviewDataPath      string
-	chatCancel           atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
+	// dataDir is the resolved config data directory, passed to store
+	// constructors. Resolved at startup; finalized by bootstrap in a later task.
+	dataDir         string
+	credentialStore *credentials.Store
+	storesReady     bool
+	chatCancel      atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
 	moveResizeCh         chan string        // defer EventsEmit from WndProc
 	// F-043: foreground flag — true while the window is visible and the
 	// user is interacting; background goroutines (keepalive, output_log
@@ -159,7 +165,32 @@ func (a *App) startup(ctx context.Context) {
 	a.mainHwnd = a.findMainWindow()
 	a.subclassMainWindow()
 
-	cs, err := store.NewConnectionStore()
+	// Resolve data directory. First run (no bootstrap, no existing config)
+	// defers all store init until the frontend calls SetDataDir.
+	dd, err := store.ResolveDataDir()
+	if err != nil {
+		log.Writef("Failed to resolve data dir: %v", err)
+		a.sendStartupErr(fmt.Errorf("data dir: %w", err))
+		a.drainStartupErr()
+		return
+	}
+	if dd.FirstRun {
+		a.dataDir = ""
+		runtime.EventsEmit(a.ctx, "app:firstRun", nil)
+		a.drainStartupErr()
+		return
+	}
+	a.dataDir = dd.Path
+
+	a.initStores(dd.Path, dd.Upgrade)
+}
+
+// initStores initializes every config store under dataDir and brings up the
+// credential store + sync service. Extracted from startup so first-run defers
+// it until SetDataDir picks a directory; on the normal path it runs once at
+// startup. Runs exactly once either way.
+func (a *App) initStores(dataDir string, upgrade bool) {
+	cs, err := store.NewConnectionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init connection store: %v", err)
 		a.sendStartupErr(fmt.Errorf("connection store: %w", err))
@@ -167,7 +198,7 @@ func (a *App) startup(ctx context.Context) {
 		a.connectionStore = cs
 	}
 
-	ass, err := store.NewAISessionStore()
+	ass, err := store.NewAISessionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init AI session store: %v", err)
 		a.sendStartupErr(fmt.Errorf("ai session store: %w", err))
@@ -175,7 +206,7 @@ func (a *App) startup(ctx context.Context) {
 		a.aiSessionStore = ass
 	}
 
-	ss, err := store.NewSettingsStore()
+	ss, err := store.NewSettingsStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init settings store: %v", err)
 		a.sendStartupErr(fmt.Errorf("settings store: %w", err))
@@ -189,16 +220,13 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
-	// Init terminal history store (same config dir as other stores)
-	configDir, _ := os.UserConfigDir()
-	appDir := filepath.Join(configDir, "uniTerm")
-	a.terminalHistoryStore = store.NewTerminalHistoryStore(appDir)
-	a.quickCommandsStore = store.NewQuickCommandsStore(appDir)
-	a.skillsStore = store.NewSkillsStore(appDir)
-	a.commandsStore = store.NewCommandsStore(appDir)
-	a.tunnelStore = store.NewTunnelStore(appDir)
-	a.localStateStore = store.NewLocalStateStore(appDir)
-	a.recentStore = store.NewRecentStore(appDir)
+	a.terminalHistoryStore = store.NewTerminalHistoryStore(dataDir)
+	a.quickCommandsStore = store.NewQuickCommandsStore(dataDir)
+	a.skillsStore = store.NewSkillsStore(dataDir)
+	a.commandsStore = store.NewCommandsStore(dataDir)
+	a.tunnelStore = store.NewTunnelStore(dataDir)
+	a.localStateStore = store.NewLocalStateStore(dataDir)
+	a.recentStore = store.NewRecentStore(dataDir)
 	if _, err := a.recentStore.Load(); err != nil {
 		log.Writef("recentStore.Load: %v", err)
 	}
@@ -208,26 +236,19 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(a.ctx, "tunnel:state", st)
 	})
 	go a.autoStartTunnels()
+	go a.watchForeground(a.ctx)
 
-	// F-043: poll WindowIsMinimised as a fallback for the visibility
-	// change the JS side doesn't get to fire (Cmd+H before any document
-	// is loaded, OS-level Alt+Tab). The SetAppVisibility hook is the
-	// primary entry point — this is belt-and-suspenders.
-	go a.watchForeground(ctx)
+	// Credential store + auto-unlock / upgrade (wires PasswordStore into
+	// connection + settings stores).
+	a.initCredentials(dataDir, upgrade)
 
+	// Sync service (uses its own system dir; independent of dataDir).
 	syncSvc, err := sync.NewSyncService()
 	if err != nil {
 		log.Writef("Failed to create sync service: %v", err)
 		a.sendStartupErr(fmt.Errorf("sync service: %w", err))
 	} else {
 		a.syncService = syncSvc
-		// Wire keychain into stores for password/API key migration
-		if a.connectionStore != nil {
-			a.connectionStore.SetPasswordStore(syncSvc.PasswordStore())
-		}
-		if a.settingsStore != nil {
-			a.settingsStore.SetPasswordStore(syncSvc.PasswordStore())
-		}
 		// Auto-sync on startup if enabled
 		if syncSvc.IsAutoSyncEnabled() {
 			go func() {
@@ -244,8 +265,9 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
+	a.storesReady = true
 	// Restore window position and size from last session
-	a.restoreWindow(ctx)
+	a.restoreWindow(a.ctx)
 
 	// Drain any non-fatal init failures and surface them to the frontend so
 	// the user sees a banner instead of getting an NPE on the first store
@@ -253,7 +275,47 @@ func (a *App) startup(ctx context.Context) {
 	// guarded as before; the app still launches.
 	a.drainStartupErr()
 	if a.startupErr != nil {
-		runtime.EventsEmit(ctx, "app:startup-error", a.startupErr.Error())
+		runtime.EventsEmit(a.ctx, "app:startup-error", a.startupErr.Error())
+	}
+}
+
+// initCredentials wires the credential store as the PasswordStore for the
+// connection + settings stores, silently auto-upgrading existing users
+// (bootstrap + keychain mode + legacy migration) or auto-unlocking on the
+// normal path.
+func (a *App) initCredentials(dataDir string, upgrade bool) {
+	cred := credentials.New(dataDir, sync.NewKeychain())
+
+	if upgrade {
+		// Existing user: silently auto-upgrade to default + keychain mode.
+		_ = store.WriteBootstrap("default", "")
+		// Idempotency (review Critical #1): Setup generates a NEW random key and
+		// overwrites the keychain entry. If a prior upgrade already ran but
+		// bootstrap.json was lost (deleted / <exe>/data unwritable / portable zip
+		// extracted to a new folder), credentials.meta still exists and the fields
+		// are already encrypted under the persisted key — running Setup again would
+		// orphan them. Recover the existing key instead.
+		if meta, _ := credentials.ReadMeta(dataDir); meta == nil {
+			if err := cred.Setup(credentials.ModeKeychain, ""); err != nil {
+				log.Writef("credential auto-upgrade setup failed: %v", err)
+			} else {
+				if _, err := store.MigrateLegacyKeychainToInPlace(dataDir, sync.NewKeychain(), cred); err != nil {
+					log.Writef("legacy migration failed: %v", err)
+				}
+			}
+		} else if err := cred.AutoUnlock(); err != nil {
+			log.Writef("credential auto-unlock failed: %v", err)
+		}
+	} else if err := cred.AutoUnlock(); err != nil {
+		log.Writef("credential auto-unlock failed: %v", err)
+	}
+
+	a.credentialStore = cred
+	if a.connectionStore != nil {
+		a.connectionStore.SetPasswordStore(cred)
+	}
+	if a.settingsStore != nil {
+		a.settingsStore.SetPasswordStore(cred)
 	}
 }
 
