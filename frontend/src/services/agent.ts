@@ -4,6 +4,7 @@ import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { useSkillStore } from '../stores/skillStore'
 import { GetSkillFile, ListSkillFiles } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime'
@@ -260,7 +261,10 @@ function getShellName(path?: string): string {
  * Shell-specific suffix: appended to system rules dynamically (NOT cached).
  * Lightweight enough that it doesn't significantly impact cache efficiency.
  */
-function getShellGuidance(shellPath?: string, isWindowsShell?: boolean): string {
+function getShellGuidance(shellPath?: string, isWindowsShell?: boolean, isWindowsOpenSSH?: boolean): string {
+  if (isWindowsOpenSSH) {
+    return '\n\nThe active terminal is a Windows OpenSSH remote. Its shell could be CMD or PowerShell — determine which first (e.g. run `echo %COMSPEC%` / `ver` for CMD, or `$PSVersionTable` for PowerShell), then use the matching syntax: CMD (dir, type, cd, wmic) or PowerShell (Get-ChildItem, Get-Content, Set-Location).'
+  }
   if (isWindowsShell) {
     const isCmd = shellPath?.toLowerCase().includes('cmd')
     return isCmd
@@ -268,6 +272,16 @@ function getShellGuidance(shellPath?: string, isWindowsShell?: boolean): string 
       : '\n\nThe active terminal is Windows PowerShell. Use cmdlets like Get-ChildItem, Set-Location, Get-Content, etc.'
   }
   return '\n\nThe active terminal is a Unix-like shell. Use standard Unix syntax (ls, cat, grep, find, etc.).'
+}
+
+/**
+ * Whether the given panel is a Windows OpenSSH remote, as detected by the
+ * backend from the SSH server identification string and reported via the
+ * session:status event. Only meaningful once the connection is established.
+ */
+function isWindowsOpenSSHPanel(p: { sessionId: string | null } | undefined): boolean {
+  if (!p?.sessionId) return false
+  return useSessionStore().getRemoteOS(p.sessionId) === 'windows-openssh'
 }
 
 /**
@@ -308,7 +322,7 @@ function buildDynamicContext(): string {
     const shellPath = p.config?.shellPath
     const shellName = shellPath
       ? getShellName(shellPath)
-      : (p.type === 'ssh' ? 'SSH (Unix-like)' : 'Unknown')
+      : (p.type === 'ssh' ? (isWindowsOpenSSHPanel(p) ? 'SSH (Windows OpenSSH)' : 'SSH (Unix-like)') : 'Unknown')
 
     const displayName = titleCounts.get(p.title)! > 1
       ? `${p.title} (id: ${p.id})`
@@ -353,7 +367,8 @@ function buildSystemPrompt(): string {
     shellPath.toLowerCase().includes('pwsh') ||
     shellPath.toLowerCase().includes('cmd')
   )
-  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell) + buildSkillIndex()
+  const isWindowsOpenSSH = isWindowsOpenSSHPanel(activePanel)
+  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell, isWindowsOpenSSH) + buildSkillIndex()
 }
 
 /**

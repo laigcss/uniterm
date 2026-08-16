@@ -6,6 +6,9 @@ import type { SessionStatus } from '../types/session'
 interface SessionData {
   id: string
   status: SessionStatus
+  // Detected remote OS (e.g. "windows-openssh") reported by the backend on
+  // connect. Empty when unknown or not applicable.
+  remoteOS?: string
   data: string[]
   // Monotonically increasing count of chunks ever appended to this session.
   // Unlike data.length, it is NOT reset when `data` is trimmed from the front,
@@ -71,13 +74,16 @@ let unsubSessionStatus: (() => void) | null = null
 let unsubSessionData: (() => void) | null = null
 
 // Register event listeners once at module level
-unsubSessionStatus = EventsOn('session:status', (payload: { id: string; status: SessionStatus }) => {
+unsubSessionStatus = EventsOn('session:status', (payload: { id: string; status: SessionStatus; remoteOS?: string }) => {
   let s = sessionState.sessions.get(payload.id)
   if (!s) {
     s = { id: payload.id, status: 'connecting', data: [], seq: 0, bytes: 0 }
     sessionState.sessions.set(payload.id, s)
   }
   s.status = payload.status
+  if (payload.remoteOS !== undefined) {
+    s.remoteOS = payload.remoteOS
+  }
 })
 
 unsubSessionData = EventsOn('session:data', (payload: { id: string; data: string }) => {
@@ -119,6 +125,11 @@ export const useSessionStore = defineStore('session', () => {
   function getStatus(id: string): SessionStatus {
     const s = sessionState.sessions.get(id)
     return s ? s.status : 'disconnected'
+  }
+
+  function getRemoteOS(id: string): string | undefined {
+    const s = sessionState.sessions.get(id)
+    return s ? s.remoteOS : undefined
   }
 
   function appendData(id: string, chunk: string) {
@@ -195,6 +206,7 @@ export const useSessionStore = defineStore('session', () => {
     initSession,
     updateStatus,
     getStatus,
+    getRemoteOS,
     appendData,
     getData,
     getChunkCount,
