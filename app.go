@@ -1679,6 +1679,14 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			if spice, ok := s.(*session.SPICESession); ok {
 				payload["proxyAddr"] = spice.ProxyAddr()
 			}
+			// Attach remoteOS for SSH sessions so the AI agent can distinguish
+			// Windows OpenSSH (cmd/PowerShell) from Unix-like shells. Empty for
+			// non-Windows or undetermined servers.
+			if sshSess, ok := s.(*session.SSHSession); ok {
+				if remoteOS := sshSess.RemoteOS(); remoteOS != "" {
+					payload["remoteOS"] = remoteOS
+				}
+			}
 		}
 
 		runtime.EventsEmit(a.ctx, "session:status", payload)

@@ -62,6 +62,13 @@ vi.mock('../stores/tabStore', () => ({
 vi.mock('../stores/panelStore', () => ({
   usePanelStore: vi.fn(() => mockPanelStore),
 }))
+const mockGetRemoteOS = vi.fn().mockReturnValue(undefined)
+const mockSessionStore = {
+  getRemoteOS: mockGetRemoteOS,
+}
+vi.mock('../stores/sessionStore', () => ({
+  useSessionStore: vi.fn(() => mockSessionStore),
+}))
 
 // ---- import after mocks ----
 import { watchOutput, executeCommand, truncateOutput } from './terminalAgent'
@@ -315,6 +322,7 @@ describe('executeCommand', () => {
     vi.mocked(mockGetPanel).mockReturnValue(mockPanel)
     vi.mocked(mockGetAILockedPanel).mockReturnValue(null)
     vi.mocked(mockGetAILockedPanels).mockReturnValue([])
+    vi.mocked(mockGetRemoteOS).mockReturnValue(undefined)
     mockActiveTab.type = 'terminal'
     mockActiveTab.panelId = 'panel-1'
   })
@@ -355,6 +363,29 @@ describe('executeCommand', () => {
     expect(result.exitCode).toBe(0)
     expect(result.timedOut).toBe(false)
     expect(typeof result.output).toBe('string')
+
+    restore()
+  }, 10000)
+
+  it('sends CR newline (not LF) and no leading space for Windows OpenSSH', async () => {
+    vi.mocked(mockGetRemoteOS).mockReturnValue('windows-openssh')
+    const restore = withMockedTime()
+
+    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+      capturedCallback = callback
+      return () => {}
+    })
+
+    const cmdPromise = executeCommand('dir')
+
+    expect(mockSessionWrite).toHaveBeenCalledOnce()
+    const writtenArg = mockSessionWrite.mock.calls[0][1] as string
+    expect(writtenArg).toBe('dir\r') // CR terminator, no leading space
+
+    await Promise.resolve()
+    capturedCallback!(fakeData('test-session-id', `${PROMPT} dir\r\n${PROMPT} `))
+    await cmdPromise
 
     restore()
   }, 10000)

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,16 @@ const (
 	// connection. Dead-connection detection is NOT done here — see readLoop
 	// (EOF) and the OS-level TCP keepalive set in Connect.
 	sshKeepAliveInterval = 90 * time.Second
+
+	// Windows OpenSSH announces itself with a "for_Windows" marker in its
+	// SSH identification string (e.g. "SSH-2.0-OpenSSH_for_Windows_9.5"),
+	// unlike Linux/BSD OpenSSH ("SSH-2.0-OpenSSH_9.9p1"). We match on the
+	// marker to detect the remote OS at handshake time with zero extra
+	// round-trips.
+	windowsOpenSSHMarker = "for_Windows"
+
+	// RemoteOS value reported to the frontend when the marker matches.
+	remoteOSWindowsOpenSSH = "windows-openssh"
 )
 
 type SSHSession struct {
@@ -55,6 +66,11 @@ type SSHSession struct {
 	// Disconnect diagnostics (see readLoop / disconnect logs).
 	lastRecv atomic.Value // []byte: tail of most recent server output (diagnostics)
 	lastSent atomic.Value // []byte: most recent input sent to server (diagnostics)
+
+	// remoteOS records the detected remote operating system ("windows-openssh"
+	// for Microsoft's OpenSSH for Windows, "" otherwise). Set once during
+	// Connect from the server identification string.
+	remoteOS string
 }
 
 func NewSSHSession(id string) *SSHSession {
@@ -66,6 +82,13 @@ func NewSSHSession(id string) *SSHSession {
 		},
 		quit: make(chan struct{}),
 	}
+}
+
+// RemoteOS returns the detected remote operating system. For Microsoft's
+// OpenSSH for Windows this is "windows-openssh"; otherwise it is empty
+// (undetermined). Read-only and set once during Connect.
+func (s *SSHSession) RemoteOS() string {
+	return s.remoteOS
 }
 
 func shouldPromptForSSHPassword(config ConnectionConfig) bool {
@@ -205,6 +228,14 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	if err != nil {
 		s.setStatus(StatusError)
 		return err
+	}
+
+	// Detect Windows OpenSSH from the server identification string exchanged
+	// during the handshake. This is available before any auth/shell and needs
+	// no extra round-trip; the marker "for_Windows" only appears in Microsoft's
+	// OpenSSH fork.
+	if strings.Contains(string(client.ServerVersion()), windowsOpenSSHMarker) {
+		s.remoteOS = remoteOSWindowsOpenSSH
 	}
 
 	session, err := client.NewSession()
