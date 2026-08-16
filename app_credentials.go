@@ -220,7 +220,7 @@ func (a *App) ResetCredentials() error {
 // reencryptAll decrypts all secret fields under oldKey and re-encrypts them
 // under newKey by loading (decrypt) then saving (encrypt) both stores.
 func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
-	if a.connectionStore == nil || a.settingsStore == nil || a.identityStore == nil {
+	if a.connectionStore == nil || a.settingsStore == nil || a.identityStore == nil || a.proxyStore == nil {
 		return errors.New("stores not initialized")
 	}
 	conns, err := a.connectionStore.Load()
@@ -232,6 +232,10 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 		return err
 	}
 	idents, err := a.identityStore.Load()
+	if err != nil {
+		return err
+	}
+	proxies, err := a.proxyStore.Load()
 	if err != nil {
 		return err
 	}
@@ -256,6 +260,13 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 		_ = a.settingsStore.Save(settings)
 		return err
 	}
+	if err := a.proxyStore.Save(proxies); err != nil {
+		cs.SetKey(oldKey)
+		_ = a.connectionStore.Save(conns)
+		_ = a.settingsStore.Save(settings)
+		_ = a.identityStore.Save(idents)
+		return err
+	}
 	return nil
 }
 
@@ -267,6 +278,7 @@ func (a *App) clearEncryptedFields() {
 	clearSecretsInFile(filepath.Join(a.dataDir, "connections.json"), "connections")
 	clearSecretsInFile(filepath.Join(a.dataDir, "settings.json"), "settings")
 	clearSecretsInFile(filepath.Join(a.dataDir, "identities.json"), "identities")
+	clearSecretsInFile(filepath.Join(a.dataDir, "proxies.json"), "proxies")
 }
 
 // clearSecretsInFile blanks the secret fields (connections[].password or
@@ -305,6 +317,14 @@ func clearSecretsInFile(path, kind string) {
 			for _, id := range ids {
 				if im, ok := id.(map[string]interface{}); ok {
 					im["password"] = ""
+				}
+			}
+		}
+	case "proxies":
+		if ps, ok := obj["proxies"].([]interface{}); ok {
+			for _, p := range ps {
+				if pm, ok := p.(map[string]interface{}); ok {
+					pm["pass"] = ""
 				}
 			}
 		}

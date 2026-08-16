@@ -25,6 +25,7 @@ export interface ConnectionConfig {
   password?: string
   keyPath?: string
   identityId?: string // reference to a vault identity (authType === 'identity')
+  proxyId?: string // reference to a saved outbound proxy (SOCKS5/HTTP)
   groupId?: string
   // RDP-specific
   rdpFixedWidth?: number

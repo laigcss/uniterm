@@ -104,7 +104,7 @@ func (g *GitRepo) StageAndCommit(msg string) (bool, error) {
 	for _, name := range []string{
 		"connections.json", "settings.json",
 		"ai-sessions.json", "skills.json",
-		"quickCommands.json", "identities.json", ".sync-salt", "README.md",
+		"quickCommands.json", "identities.json", "proxies.json", ".sync-salt", "README.md",
 	} {
 		if _, err := os.Stat(filepath.Join(g.repoPath, name)); err != nil {
 			continue

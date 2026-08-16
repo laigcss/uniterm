@@ -468,6 +468,16 @@
                 <el-input v-model="form.vncRepeaterID" :placeholder="t('conn.vncRepeaterIDPlaceholder')" />
               </el-form-item>
             </template>
+            <el-form-item v-if="showProxy" :label="t('conn.proxy')">
+              <el-select v-model="form.proxyId" :placeholder="t('conn.proxyPlaceholder')" clearable filterable>
+                <el-option
+                  v-for="p in proxyStore.proxies"
+                  :key="p.id"
+                  :label="`${p.name} (${p.kind} ${p.host}:${p.port})`"
+                  :value="p.id"
+                />
+              </el-select>
+            </el-form-item>
             <el-form-item v-if="showTunnel" :label="t('conn.tunnel')">
               <el-select
                 v-model="form.tunnelSSHConnId"
@@ -536,6 +546,7 @@ import { reactive, computed, watch, ref, nextTick, onMounted } from 'vue'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useIdentityStore } from '../stores/identityStore'
+import { useProxyStore } from '../stores/proxyStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
@@ -548,9 +559,11 @@ const { t } = useI18n()
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const identityStore = useIdentityStore()
+const proxyStore = useProxyStore()
 
 onMounted(() => {
   identityStore.load()
+  proxyStore.load()
 })
 
 // ── Categories & sub-types ──
@@ -775,6 +788,7 @@ const TUNNEL_UNSUPPORTED = ['spice', 'mosh', 'local', 'serial', 'container']
 const showTunnel = computed(() =>
   !TUNNEL_UNSUPPORTED.includes(form.type)
 )
+const showProxy = computed(() => ['ssh', 'sftp', 'monitor'].includes(form.type))
 const showAdvancedToggle = computed(() =>
   showTunnel.value || form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
 )
@@ -849,6 +863,7 @@ const form = reactive<ConnectionConfig>({
   containerTransport: 'ssh',
   containerSSHConnId: undefined,
   containerRuntime: 'docker',
+  proxyId: undefined,
   x11DesktopDesktopType: 'gnome',
   x11DesktopCustomCmd: '',
 })
@@ -1071,6 +1086,7 @@ function resetForm() {
   form.serialParity = 'none'
   serialBaudRateInput.value = ''
   form.tunnelSSHConnId = undefined
+  form.proxyId = undefined
   form.logOnConnect = false
   form.k8sConfigPath = '~/.kube/config'
   form.k8sConfigInline = ''

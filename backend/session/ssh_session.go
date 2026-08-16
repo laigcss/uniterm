@@ -200,7 +200,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	}
 
 	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, clientConfig.Timeout)
+		return dialFirstHop(addr, config.Proxy)
 	})
 	if err != nil {
 		s.setStatus(StatusError)

@@ -491,7 +491,7 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 // getConfigModTime returns the latest modification time of config files in a directory.
 func getConfigModTime(dir string) time.Time {
 	var latest time.Time
-	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json"} {
+	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json", "proxies.json"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil {
 			continue
@@ -509,7 +509,7 @@ func getConfigModTime(dir string) time.Time {
 // treated as "empty" and silently overwritten on first sync
 // (SYNC-P0-1).
 func isConfigDirEmpty(dir string) bool {
-	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "ai-sessions.json", "skills.json", "identities.json"} {
+	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "ai-sessions.json", "skills.json", "identities.json", "proxies.json"} {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -537,7 +537,7 @@ func isConfigDirEmpty(dir string) bool {
 // localDir is the local config directory; remoteDir is the decrypted remote copy.
 // Passwords are backfilled from keychain on the local side before comparison.
 func compareConfigDirs(localDir, remoteDir string, kc *Keychain) (bool, error) {
-	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json"} {
+	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json", "proxies.json"} {
 		same, err := compareConfigFiles(filepath.Join(localDir, name), filepath.Join(remoteDir, name), kc)
 		if err != nil {
 			return false, err
@@ -732,7 +732,7 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 	// Re-encrypt every existing repo ciphertext: decrypt with oldKey,
 	// re-encrypt with newKey, atomic rename. A crash before the rename
 	// leaves the original ciphertext intact and decryptable with oldKey.
-	repoFiles := []string{"connections.json", "settings.json", "quickCommands.json", "identities.json"}
+	repoFiles := []string{"connections.json", "settings.json", "quickCommands.json", "identities.json", "proxies.json"}
 	for _, name := range repoFiles {
 		srcPath := filepath.Join(s.repoPath, name)
 		ciphertext, err := os.ReadFile(srcPath)
@@ -837,7 +837,7 @@ func (s *SyncService) compareLocalWithRepo(encKey []byte) (bool, error) {
 
 // repoHasFiles returns true if the repo directory contains encrypted config files.
 func repoHasFiles(repoPath string) bool {
-	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json"} {
+	for _, name := range []string{"connections.json", "settings.json", "quickCommands.json", "identities.json", "proxies.json"} {
 		if _, err := os.Stat(filepath.Join(repoPath, name)); os.IsNotExist(err) {
 			return false
 		}

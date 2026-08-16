@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"regexp"
 	"strconv"
@@ -137,7 +138,8 @@ func (s *MonitorSession) Connect(config ConnectionConfig) error {
 		Config: sshAlgorithms(),
 	}
 
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port), clientConfig)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	client, err := dialSSHTCP(addr, clientConfig, config.Proxy)
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("ssh dial: %w", err)

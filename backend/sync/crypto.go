@@ -61,6 +61,14 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		return fmt.Errorf("encrypt identities: %w", err)
 	}
 
+	if err := encryptGenericFile(
+		filepath.Join(srcDir, "proxies.json"),
+		filepath.Join(destDir, "proxies.json"),
+		key,
+	); err != nil {
+		return fmt.Errorf("encrypt proxies: %w", err)
+	}
+
 	return nil
 }
 
@@ -175,6 +183,14 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		key,
 	); err != nil {
 		return fmt.Errorf("decrypt identities: %w", err)
+	}
+
+	if err := decryptGenericFile(
+		filepath.Join(srcDir, "proxies.json"),
+		filepath.Join(destDir, "proxies.json"),
+		key,
+	); err != nil {
+		return fmt.Errorf("decrypt proxies: %w", err)
 	}
 
 	return nil

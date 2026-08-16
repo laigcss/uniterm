@@ -555,6 +555,27 @@
         <IdentityEditDialog v-model:visible="identityDialogVisible" :identity="editingIdentity" @saved="identityStore.load()" />
       </div>
 
+      <!-- 代理 -->
+      <div v-if="settingsStore.activeCategory === 'proxies'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.proxies') }}</h2>
+        <p class="section-desc">{{ t('settings.proxiesDesc') }}</p>
+        <el-button type="primary" @click="openProxyDialog()">{{ t('settings.addProxy') }}</el-button>
+        <el-table :data="proxyStore.proxies" size="small" style="margin-top: 12px">
+          <el-table-column prop="name" :label="t('conn.name')" />
+          <el-table-column prop="kind" :label="t('conn.proxyType')" width="100" />
+          <el-table-column :label="t('settings.proxyHost')">
+            <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="160">
+            <template #default="{ row }">
+              <el-button size="small" @click="openProxyDialog(row)">{{ t('common.edit') }}</el-button>
+              <el-button size="small" type="danger" @click="removeProxy(row)">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <ProxyEditDialog v-model:visible="proxyDialogVisible" :proxy="editingProxy" @saved="proxyStore.load()" />
+      </div>
+
       <!-- 关于 -->
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
@@ -848,7 +869,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -872,9 +893,12 @@ import DeleteRepoDialog from './DeleteRepoDialog.vue'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import DataDirDialog from './DataDirDialog.vue'
 import IdentityEditDialog from './IdentityEditDialog.vue'
+import ProxyEditDialog from './ProxyEditDialog.vue'
 import { useCredentialStore } from '../stores/credentialStore'
 import { useIdentityStore } from '../stores/identityStore'
+import { useProxyStore } from '../stores/proxyStore'
 import type { Identity } from '../types/identity'
+import type { Proxy } from '../types/proxy'
 
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
@@ -1081,6 +1105,11 @@ onMounted(async () => {
   } catch {
     // Ignore identity load errors
   }
+  try {
+    await proxyStore.load()
+  } catch {
+    // Ignore proxy load errors
+  }
 })
 
 // Session log directory: shown as placeholder when the setting is
@@ -1107,7 +1136,7 @@ async function pickLogDir() {
 }
 
 watch(() => settingsStore.openCategory, (cat) => {
-  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities')) {
+  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities' || cat === 'proxies')) {
     settingsStore.activeCategory = cat
     settingsStore.openCategory = null
   }
@@ -1231,6 +1260,7 @@ const categories = computed(() => {
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
     { key: 'identities', label: t('settings.identities'), icon: Key },
+    { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
@@ -1250,6 +1280,18 @@ function openIdentityDialog(id?: Identity) {
 async function removeIdentity(row: Identity) {
   await identityStore.remove(row.id)
   ElMessage.success(t('settings.deleted'))
+}
+
+// ── Proxies (代理) ──
+const proxyStore = useProxyStore()
+const proxyDialogVisible = ref(false)
+const editingProxy = ref<Proxy | null>(null)
+function openProxyDialog(p?: Proxy) {
+  editingProxy.value = p ?? null
+  proxyDialogVisible.value = true
+}
+async function removeProxy(row: Proxy) {
+  await proxyStore.remove(row.id)
 }
 
 const showModelForm = ref(false)
