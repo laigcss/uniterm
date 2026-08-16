@@ -193,6 +193,8 @@ import { useSessionStore } from './stores/sessionStore'
 import { useAIStore } from './stores/aiStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
+import { useSkillStore } from './stores/skillStore'
+import { useCommandStore } from './stores/commandStore'
 import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
 import { useContainerStore } from './stores/containerStore'
@@ -306,6 +308,8 @@ function onDataDirDone(restart: boolean) {
   connectionStore.load()
   settingsStore.reload()
   useQuickCommandStore().load()
+  useSkillStore().reload()
+  useCommandStore().reload()
   tunnelStore.load()
   resolveCredentialDialog()
 }
