@@ -113,11 +113,6 @@ type ConnectionConfig struct {
 	// session-log warning fires on connect when it is enabled.
 	FtpSkipVerify bool `json:"ftpSkipVerify,omitempty"`
 	// VNC-specific fields (issue #95)
-	// VncEncryption selects the post-handshake security-type policy.
-	//   "auto"    — accept whatever security type the server offers (noVNC default).
-	//   "require" — disconnect unless the server picks VeNCrypt (TLS).
-	// Empty / unknown values behave as "auto".
-	VncEncryption string `json:"vncEncryption,omitempty"`
 	// VncShared is forwarded to noVNC's RFB constructor as `shared`.
 	// true (default) — the new client may connect alongside other clients.
 	// false — the server will typically disconnect other clients on connect.

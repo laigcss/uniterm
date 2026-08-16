@@ -34,7 +34,6 @@ VNC（Virtual Network Computing）广泛用于 Linux 系统远程控制，通过
 | 主机 | VNC 服务器 IP 或域名 |
 | 端口 | 默认 5900。小于 100 则视为 libvirt 显示器编号（自动加 5900） |
 | 密码 | VNC 认证密码 |
-| 要求 TLS | 开启后仅接受 VeNCrypt（TLS）加密连接，关闭则接受服务器提供的任意安全类型 |
 | 共享会话 | 开启后允许与其他客户端同时连接同一 VNC 服务器，关闭则独占连接 |
 | VNC Repeater ID | 通过 UltraVNC 兼容的中继器连接时填写，留空则直连 VNC 服务器 |
 | SSH 隧道 | 选择已有的 SSH 连接作为跳板机 |

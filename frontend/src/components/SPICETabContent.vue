@@ -293,7 +293,6 @@ watch(() => props.sessionId, (newId) => {
 }
 .spice-area :deep(canvas) {
   display: block;
-  image-rendering: pixelated;
 }
 .spice-overlay {
   position: absolute;

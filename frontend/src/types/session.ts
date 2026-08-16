@@ -78,12 +78,6 @@ export interface ConnectionConfig {
   // rely on it for self-signed certs — but the toggle now exists so the
   // choice is explicit, and a one-shot session-log warning fires on connect.
   ftpSkipVerify?: boolean
-  // VNC-specific (issue #95).
-  // vncEncryption selects the post-handshake security-type policy.
-  //   "auto"    — accept whatever security type the server offers (noVNC default).
-  //   "require" — disconnect unless the server picks VeNCrypt (TLS).
-  // Empty / unknown values behave as "auto".
-  vncEncryption?: 'auto' | 'require'
   // vncShared is forwarded to noVNC's RFB constructor as `shared`.
   // true (default) — the new client may connect alongside other clients.
   // false — the server will typically disconnect other clients on connect.

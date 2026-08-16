@@ -88,7 +88,7 @@ const lastError = ref<string>('')
 const currentSessionId = ref<string | null>(props.sessionId)
 const vncContainer = ref<HTMLDivElement | null>(null)
 const savedPassword = ref<string>('')
-const scaleViewport = ref(false)
+const scaleViewport = ref(true)
 const viewOnly = ref(false)
 const showDotCursor = ref(false)
 
@@ -204,6 +204,14 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
     return
   }
 
+  // Force RFB 3.3 negotiation. RealVNC Server advertises a private
+  // "RFB 005.000" banner which noVNC maps to 3.8; in 3.8 the server then
+  // offers a security-type list ([6,130,2,...]) and noVNC picks RA2ne (6)
+  // ahead of VNC Auth (2), failing with a 1006 close. Cap the max version to
+  // 3.3 so noVNC replies "RFB 003.003" and the server falls back to legacy
+  // single-security-type negotiation, sending VNC Auth (2) directly.
+  rfb._rfbMaxVersion = 3.3
+
   applyRFBOptions()
 
   // issue #95: only flip to 'connected' on the noVNC connect event.
@@ -211,15 +219,6 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
   // up, well before the RFB handshake completed, producing a black
   // screen with no error on security failure or wrong password.
   rfb.addEventListener('connect', () => {
-    const scheme = rfb._rfbAuthScheme as number | undefined
-
-    if (props.config?.vncEncryption === 'require' && scheme !== 19) {
-      rfb.disconnect()
-      lastError.value = t('vnc.errorRequireEncryption', { scheme: schemeName(scheme) })
-      status.value = 'error'
-      return
-    }
-
     lastError.value = ''
     status.value = 'connected'
   })
@@ -251,15 +250,6 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
   })
 
   isIniting = false
-}
-
-function schemeName(scheme: number | undefined): string {
-  switch (scheme) {
-    case 1: return 'None'
-    case 2: return 'VNC-Auth'
-    case 19: return 'TLS'
-    default: return `unknown(${scheme})`
-  }
 }
 
 function onPaste(e: ClipboardEvent) {
@@ -385,7 +375,6 @@ watch(showDotCursor, (val) => {
 }
 .vnc-area :deep(canvas) {
   display: block;
-  image-rendering: pixelated;
   flex-shrink: 0;
 }
 .vnc-overlay {
