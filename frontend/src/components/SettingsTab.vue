@@ -534,6 +534,27 @@
         </template>
       </div>
 
+      <!-- 密钥库 -->
+      <div v-if="settingsStore.activeCategory === 'identities'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.identities') }}</h2>
+        <p class="section-desc">{{ t('settings.identitiesDesc') }}</p>
+        <el-button type="primary" @click="openIdentityDialog()">{{ t('settings.addIdentity') }}</el-button>
+        <el-table :data="identityStore.identities" size="small" style="margin-top: 12px">
+          <el-table-column prop="name" :label="t('conn.name')" />
+          <el-table-column prop="username" :label="t('conn.user')" />
+          <el-table-column :label="t('conn.authType')">
+            <template #default="{ row }">{{ row.authType === 'password' ? t('conn.password') : t('conn.keyPath') }}</template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="160">
+            <template #default="{ row }">
+              <el-button size="small" @click="openIdentityDialog(row)">{{ t('common.edit') }}</el-button>
+              <el-button size="small" type="danger" @click="removeIdentity(row)">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <IdentityEditDialog v-model:visible="identityDialogVisible" :identity="editingIdentity" @saved="identityStore.load()" />
+      </div>
+
       <!-- 关于 -->
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
@@ -827,7 +848,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -836,7 +857,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
@@ -850,7 +871,10 @@ import ChangePasswordDialog from './ChangePasswordDialog.vue'
 import DeleteRepoDialog from './DeleteRepoDialog.vue'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import DataDirDialog from './DataDirDialog.vue'
+import IdentityEditDialog from './IdentityEditDialog.vue'
 import { useCredentialStore } from '../stores/credentialStore'
+import { useIdentityStore } from '../stores/identityStore'
+import type { Identity } from '../types/identity'
 
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
@@ -1052,6 +1076,11 @@ onMounted(async () => {
   } catch {
     // Ignore preview errors
   }
+  try {
+    await identityStore.load()
+  } catch {
+    // Ignore identity load errors
+  }
 })
 
 // Session log directory: shown as placeholder when the setting is
@@ -1078,7 +1107,7 @@ async function pickLogDir() {
 }
 
 watch(() => settingsStore.openCategory, (cat) => {
-  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard')) {
+  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities')) {
     settingsStore.activeCategory = cat
     settingsStore.openCategory = null
   }
@@ -1201,6 +1230,7 @@ const categories = computed(() => {
     { key: 'basic', label: t('settings.basic'), icon: Settings },
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
+    { key: 'identities', label: t('settings.identities'), icon: Key },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
@@ -1208,6 +1238,19 @@ const categories = computed(() => {
   ]
   return cats
 })
+
+// ── Identities (密钥库) ──
+const identityStore = useIdentityStore()
+const identityDialogVisible = ref(false)
+const editingIdentity = ref<Identity | null>(null)
+function openIdentityDialog(id?: Identity) {
+  editingIdentity.value = id ?? null
+  identityDialogVisible.value = true
+}
+async function removeIdentity(row: Identity) {
+  await identityStore.remove(row.id)
+  ElMessage.success(t('settings.deleted'))
+}
 
 const showModelForm = ref(false)
 const modelSuggestions = ref<Array<{ value: string }>>([])

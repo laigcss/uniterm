@@ -220,7 +220,7 @@ func (a *App) ResetCredentials() error {
 // reencryptAll decrypts all secret fields under oldKey and re-encrypts them
 // under newKey by loading (decrypt) then saving (encrypt) both stores.
 func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
-	if a.connectionStore == nil || a.settingsStore == nil {
+	if a.connectionStore == nil || a.settingsStore == nil || a.identityStore == nil {
 		return errors.New("stores not initialized")
 	}
 	conns, err := a.connectionStore.Load()
@@ -228,6 +228,10 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 		return err
 	}
 	settings, err := a.settingsStore.Load()
+	if err != nil {
+		return err
+	}
+	idents, err := a.identityStore.Load()
 	if err != nil {
 		return err
 	}
@@ -244,6 +248,14 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 		_ = a.connectionStore.Save(conns)
 		return err
 	}
+	if err := a.identityStore.Save(idents); err != nil {
+		// Roll back under oldKey: revert the key and re-save conns and settings
+		// so all files stay encrypted under a single consistent key.
+		cs.SetKey(oldKey)
+		_ = a.connectionStore.Save(conns)
+		_ = a.settingsStore.Save(settings)
+		return err
+	}
 	return nil
 }
 
@@ -254,6 +266,7 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 func (a *App) clearEncryptedFields() {
 	clearSecretsInFile(filepath.Join(a.dataDir, "connections.json"), "connections")
 	clearSecretsInFile(filepath.Join(a.dataDir, "settings.json"), "settings")
+	clearSecretsInFile(filepath.Join(a.dataDir, "identities.json"), "identities")
 }
 
 // clearSecretsInFile blanks the secret fields (connections[].password or
@@ -284,6 +297,14 @@ func clearSecretsInFile(path, kind string) {
 					if mm, ok := m.(map[string]interface{}); ok {
 						mm["apiKey"] = ""
 					}
+				}
+			}
+		}
+	case "identities":
+		if ids, ok := obj["identities"].([]interface{}); ok {
+			for _, id := range ids {
+				if im, ok := id.(map[string]interface{}); ok {
+					im["password"] = ""
 				}
 			}
 		}

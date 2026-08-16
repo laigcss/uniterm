@@ -21,9 +21,10 @@ export interface ConnectionConfig {
   host: string
   port: number
   user: string
-  authType: 'password' | 'key' | 'agent'
+  authType: 'password' | 'key' | 'agent' | 'identity'
   password?: string
   keyPath?: string
+  identityId?: string // reference to a vault identity (authType === 'identity')
   groupId?: string
   // RDP-specific
   rdpFixedWidth?: number
