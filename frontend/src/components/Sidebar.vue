@@ -66,6 +66,8 @@
             <el-dropdown-menu>
               <el-dropdown-item command="new-connection">{{ t('header.newConnection') }}</el-dropdown-item>
               <el-dropdown-item command="new-group">{{ t('conn.newGroupTitle') }}</el-dropdown-item>
+              <el-dropdown-item command="import" divided>{{ t('importExport.import') }}</el-dropdown-item>
+              <el-dropdown-item command="export">{{ t('importExport.export') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -277,6 +279,8 @@
     </template>
 
     <ConnectionForm v-model="showForm" :edit-config="editConfig" :default-group-id="newConnGroupId" @save="onSave" @connect="onConnectFromForm" />
+    <ExportDialog v-model:visible="showExportDialog" />
+    <ImportDialog v-model:visible="showImportDialog" />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
 
     <!-- Connection context menu (kept inside sidebar to avoid native RDP occlusion) -->
@@ -461,6 +465,8 @@ import type { GroupTreeNode } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import ConnectionForm from './ConnectionForm.vue'
+import ExportDialog from './ExportDialog.vue'
+import ImportDialog from './ImportDialog.vue'
 import QuickCommandsPanel from './QuickCommandsPanel.vue'
 import TunnelsPanel from './TunnelsPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
@@ -482,6 +488,8 @@ const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
 const showForm = ref(false)
+const showExportDialog = ref(false)
+const showImportDialog = ref(false)
 const editConfig = ref<ConnectionConfig | undefined>(undefined)
 const activeView = ref<'connections' | 'quickCommands' | 'tunnels' | 'history' | 'personalization'>('connections')
 
@@ -1643,6 +1651,10 @@ function onNewConnCommand(cmd: string) {
   } else if (cmd === 'new-group') {
     newGroupParentId.value = undefined
     showNewGroupDialog.value = true
+  } else if (cmd === 'import') {
+    showImportDialog.value = true
+  } else if (cmd === 'export') {
+    showExportDialog.value = true
   }
 }
 
