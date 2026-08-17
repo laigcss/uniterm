@@ -627,8 +627,18 @@ function getInputSelection(el: HTMLElement): string {
 }
 
 function setInputSelection(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
-  const start = el.selectionStart ?? 0
-  const end = el.selectionEnd ?? 0
+  // <input type="number"> (e.g. the port field) doesn't expose a text selection, so
+  // selectionStart/End are null. Falling the offsets back to 0 would prepend the pasted
+  // text instead of replacing it. Treat the unreadable selection as select-all so paste
+  // overwrites the whole value (issue #555).
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  if (start === null || end === null) {
+    el.value = text
+    el.setSelectionRange(text.length, text.length)
+    el.focus()
+    return
+  }
   el.value = el.value.substring(0, start) + text + el.value.substring(end)
   const pos = start + text.length
   el.setSelectionRange(pos, pos)
@@ -660,51 +670,6 @@ function onWheel(e: WheelEvent) {
       ts.fontSize = next
       settingsStore.save()
     }
-  }
-}
-
-// WKWebView doesn't forward Cmd/Ctrl+A/C/V on input/textarea/contenteditable.
-function onEditShortcut(e: KeyboardEvent) {
-  if (e.defaultPrevented) return
-  const target = e.target as HTMLElement
-  const tag = target.tagName
-  const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
-  if (!isEditable) return
-  const mod = e.metaKey || e.ctrlKey
-  if (!mod || e.shiftKey || e.altKey) return
-
-  if (e.key === 'a' || e.key === 'A') {
-    e.preventDefault()
-    if (target.isContentEditable) {
-      const el = target
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      const sel = window.getSelection()
-      sel?.removeAllRanges()
-      sel?.addRange(range)
-    } else {
-      (target as HTMLInputElement | HTMLTextAreaElement).select()
-    }
-    return
-  }
-
-  if (e.key === 'c' || e.key === 'C') {
-    e.preventDefault()
-    const sel = getInputSelection(target)
-    navigator.clipboard.writeText(sel).catch(() => {})
-    return
-  }
-
-  if (e.key === 'v' || e.key === 'V') {
-    e.preventDefault()
-    ClipboardGetText().then(text => {
-      if (target.isContentEditable) {
-        insertTextAtContentEditable(target, text)
-      } else {
-        setInputSelection(target as HTMLInputElement | HTMLTextAreaElement, text)
-      }
-      target.dispatchEvent(new Event('input', { bubbles: true }))
-    }).catch(() => {})
   }
 }
 
@@ -753,8 +718,6 @@ onMounted(async () => {
   // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
   // scrolls, but bails on defaultPrevented — so we must preempt it.
   document.addEventListener('wheel', onWheel, { passive: false, capture: true })
-  // WKWebView doesn't forward Cmd+A/C/V on input/textarea/contenteditable — handle globally.
-  document.addEventListener('keydown', onEditShortcut)
   // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
   try { isMac = (await GetPlatform()) === 'darwin' } catch { isMac = false }
   if (isMac) document.addEventListener('keydown', onMacSystemShortcut, true)
