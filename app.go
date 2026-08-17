@@ -285,6 +285,12 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 						"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
 					})
 				}
+				// Reload in-memory stores after a startup pull so the UI shows
+				// the freshly synced config without requiring a restart.
+				if err == nil && result.Direction == sync.SyncPull {
+					a.reloadStoresAfterSync()
+				}
+				runtime.EventsEmit(a.ctx, "sync:completed")
 			}()
 		}
 	}
