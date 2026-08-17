@@ -45,18 +45,25 @@
       <!-- ① 剪贴板 -->
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copySelection">
         {{ t('terminal.copy') }}
+        <span class="menu-shortcut">{{ menuShortcut('copy') }}</span>
       </div>
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copyAndPaste">
         {{ t('terminal.copyAndPaste') }}
       </div>
-      <div class="menu-item" @click="menu.pasteFromClipboard">{{ t('terminal.paste') }}</div>
+      <div class="menu-item" @click="menu.pasteFromClipboard">
+        {{ t('terminal.paste') }}
+        <span class="menu-shortcut">{{ menuShortcut('paste') }}</span>
+      </div>
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
         {{ t('terminal.askAI') }}
       </div>
 
       <!-- ② 会话文本操作 -->
       <div class="menu-divider" />
-      <div class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
+      <div class="menu-item" @click="triggerSearch">
+        {{ t('terminal.searchText') }}
+        <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+      </div>
       <div class="menu-item" @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</div>
       <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
         {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
@@ -101,7 +108,8 @@ import { EventsOn, BrowserOpenURL, ClipboardGetText } from '../../wailsjs/runtim
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { highlight } from '../composables/useHighlight'
-import { onTerminalKey } from '../composables/useKeyboardShortcuts'
+import { onTerminalKey, formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
@@ -144,6 +152,15 @@ const props = defineProps<{
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 const settingsStore = useSettingsStore()
+
+// Human-readable keybinding for a shortcut action ('' when unset), used to show
+// the current shortcut hint in the terminal right-click context menu. Reactive
+// via settingsStore, so hints update automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 const sessionStore = useSessionStore()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
@@ -1943,6 +1960,10 @@ defineExpose({
 }
 
 .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -1951,6 +1972,14 @@ defineExpose({
   user-select: none;
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
+  white-space: nowrap;
+}
+
+.menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
 }
 
 .menu-item:hover:not(.disabled) {
@@ -1961,6 +1990,10 @@ defineExpose({
 .menu-item.disabled {
   color: var(--text-disabled);
   cursor: default;
+}
+
+.menu-item.disabled .menu-shortcut {
+  opacity: 0.4;
 }
 
 .menu-divider {

@@ -58,10 +58,14 @@
         @click.stop
       >
         <!-- ① 标签类操作 -->
-        <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
+        <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">
+          {{ t('tab.duplicate') }}
+          <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
+        </div>
         <div v-if="hasServerHost" class="menu-item" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
+          <span class="menu-shortcut">{{ menuShortcut('lockAI') }}</span>
         </div>
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
@@ -70,7 +74,10 @@
 
         <!-- ② 会话文本操作 -->
         <div v-if="showGroupTab && showGroupText" class="menu-divider" />
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">
+          {{ t('terminal.searchText') }}
+          <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+        </div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
         <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
           {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
@@ -88,7 +95,10 @@
 
         <!-- ④ 关闭标签操作 -->
         <div v-if="showGroupTab || showGroupText || showGroupConn" class="menu-divider" />
-        <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">{{ t('tab.close') }}</div>
+        <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">
+          {{ t('tab.close') }}
+          <span class="menu-shortcut">{{ menuShortcut('closePanel') }}</span>
+        </div>
         <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
         <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
       </div>
@@ -102,6 +112,8 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import { useK8sStore } from '../stores/k8sStore'
 import { useContainerStore } from '../stores/containerStore'
 import { useI18n } from '../i18n'
@@ -145,6 +157,17 @@ const k8sStore = useK8sStore()
 const containerStore = useContainerStore()
 const settingsStore = useSettingsStore()
 const { t } = useI18n()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// Human-readable keybinding for a shortcut action ('' when unset), shown as a
+// hint in the tab right-click context menu. Reactive via settingsStore, so the
+// hint updates automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 
 const hovered = ref(false)
 const contextMenuVisible = ref(false)
@@ -745,6 +768,10 @@ onUnmounted(() => {
   backdrop-filter: blur(8px);
 }
 .tab-context-menu .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -753,14 +780,24 @@ onUnmounted(() => {
   user-select: none;
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
+  white-space: nowrap;
 }
 .tab-context-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.tab-context-menu .menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
 .tab-context-menu .menu-item-disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+.tab-context-menu .menu-item-disabled .menu-shortcut {
+  opacity: 0.4;
 }
 .tab-context-menu .menu-item-icon {
   margin-right: 6px;

@@ -8,7 +8,7 @@
     <div v-if="platform === 'darwin'" class="mac-traffic-light-spacer" />
 
     <!-- Connections button (icon only, leftmost) -->
-    <button class="header-btn" @click="emit('toggle-sidebar')" :title="t('header.connections')">
+    <button class="header-btn" @click="emit('toggle-sidebar')" :title="t('header.connections') + shortcutSuffix('toggleSidebar')">
       <el-icon><PanelLeft :size="14" /></el-icon>
     </button>
 
@@ -24,12 +24,12 @@
     </div>
 
     <!-- AI button -->
-    <button class="header-btn" @click="emit('toggle-ai')" :title="t('header.ai')">
+    <button class="header-btn" @click="emit('toggle-ai')" :title="t('header.ai') + shortcutSuffix('focusAI')">
       <el-icon><Bot :size="14" /></el-icon>
     </button>
 
     <!-- Settings button (icon only, rightmost) -->
-    <button class="header-btn" @click="emit('open-settings')" :title="t('header.settings')">
+    <button class="header-btn" @click="emit('open-settings')" :title="t('header.settings') + shortcutSuffix('openSettings')">
       <el-icon><Settings :size="14" /></el-icon>
     </button>
 
@@ -53,6 +53,7 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import { useLocalStateStore } from '../stores/localStateStore'
 import WindowControls from './WindowControls.vue'
 import TabsList from './TabsList.vue'
@@ -78,6 +79,17 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// " (Ctrl+Shift+K)" suffix for a shortcut action's tooltip, '' when unset.
+// Reactive via settingsStore, so tooltips update when the user rebinds keys.
+function shortcutSuffix(action: 'focusAI' | 'toggleSidebar' | 'openSettings'): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  const key = formatKeyBinding(b, isMac)
+  return key ? ` (${key})` : ''
+}
 
 const hasActiveConnections = computed(() =>
   tabStore.tabs.some(t => {

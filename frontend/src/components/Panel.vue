@@ -56,12 +56,18 @@
           </button>
           <div v-show="moreMenuVisible" class="panel-more-menu" @click.stop>
             <!-- ① 面板操作 -->
-            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">{{ t('tab.duplicate') }}</div>
+            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">
+              {{ t('tab.duplicate') }}
+              <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
+            </div>
             <div class="menu-item" @click="renamePanel">{{ t('tab.rename') }}</div>
 
             <!-- ② 会话文本操作 -->
             <div class="menu-divider" />
-            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">{{ t('terminal.searchText') }}</div>
+            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">
+              {{ t('terminal.searchText') }}
+              <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+            </div>
             <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
             <div class="menu-item" @click="toggleOutputLog(); moreMenuVisible = false">
               {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
@@ -100,6 +106,8 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import {
   CreateSession,
   CloseSession,
@@ -150,6 +158,17 @@ const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// Human-readable keybinding for a shortcut action ('' when unset), shown as a
+// hint in the panel "..." menu. Reactive via settingsStore, so the hint updates
+// automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 
 const showCredentialDialog = inject<(title: string, subtitle: string, fields: ('user' | 'password')[], initialUser?: string, initialPassword?: string) => Promise<CredentialResult | null>>('showCredentialDialog', () => Promise.resolve(null))
 
@@ -657,6 +676,10 @@ watch(() => props.panel.outputLog, (val) => {
   padding: 4px;
 }
 .panel-more-menu .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -669,6 +692,12 @@ watch(() => props.panel.outputLog, (val) => {
 .panel-more-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.panel-more-menu .menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
 }
 .panel-more-menu .menu-divider {
   height: 1px;
