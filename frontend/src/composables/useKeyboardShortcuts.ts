@@ -2,6 +2,22 @@ import type { KeyboardSettings, KeyBinding, ShortcutAction } from '../types/sett
 
 type ActionHandlers = Record<ShortcutAction, () => void>
 
+/**
+ * Render a KeyBinding as a human-readable combo, e.g. Ctrl+Shift+C.
+ * Shared by the settings UI and the terminal context-menu shortcut hints so
+ * both show the same format (Cmd on macOS, Meta elsewhere).
+ */
+export function formatKeyBinding(b: KeyBinding, isMac: boolean): string {
+  if (!b) return ''
+  const parts: string[] = []
+  if (b.ctrl) parts.push('Ctrl')
+  if (b.meta) parts.push(isMac ? 'Cmd' : 'Meta')
+  if (b.shift) parts.push('Shift')
+  if (b.alt) parts.push('Alt')
+  parts.push(b.key)
+  return parts.join('+')
+}
+
 function bindingKey(b: KeyBinding): string {
   if (!b.key) return ''
   let k = ''

@@ -899,7 +899,7 @@ import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { uninstallGlobalListener, installGlobalListener } from '../composables/useKeyboardShortcuts'
+import { uninstallGlobalListener, installGlobalListener, formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import AddRepoDialog from './AddRepoDialog.vue'
 import EditRepoDialog from './EditRepoDialog.vue'
 import ChangePasswordDialog from './ChangePasswordDialog.vue'
@@ -1162,13 +1162,7 @@ const rebindingAction = ref<ShortcutAction | null>(null)
 function bindingDisplay(action: ShortcutAction): string {
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
-  const parts: string[] = []
-  if (b.ctrl) parts.push('Ctrl')
-  if (b.meta) parts.push(isMac.value ? 'Cmd' : 'Meta')
-  if (b.shift) parts.push('Shift')
-  if (b.alt) parts.push('Alt')
-  parts.push(b.key)
-  return parts.join('+')
+  return formatKeyBinding(b, isMac.value)
 }
 
 function isDefaultBinding(action: ShortcutAction): boolean {

@@ -32,7 +32,7 @@
     <button
       v-if="!showMore"
       class="tab-add-btn"
-      :title="t('startTab.defaultName')"
+      :title="t('startTab.defaultName') + shortcutSuffix('newConnection')"
       @click="onAddStartTab"
     >
       <Plus :size="14" />
@@ -58,7 +58,7 @@
     </el-dropdown>
     <button
       class="tab-add-btn"
-      :title="t('startTab.defaultName')"
+      :title="t('startTab.defaultName') + shortcutSuffix('newConnection')"
       @click="onAddStartTab"
     >
       <Plus :size="14" />
@@ -72,11 +72,26 @@ import { MoreHorizontal, Plus } from '@lucide/vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
+import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import TabItem from './TabItem.vue'
 
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
+const settingsStore = useSettingsStore()
 const { t } = useI18n()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// " (Ctrl+Shift+N)" suffix for the new-tab tooltip, '' when unset. Reactive via
+// settingsStore, so the tooltip updates when the user rebinds the shortcut.
+function shortcutSuffix(action: 'newConnection'): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  const key = formatKeyBinding(b, isMac)
+  return key ? ` (${key})` : ''
+}
+
 const tabs = computed(() => tabStore.tabs)
 const activeTabId = computed(() => tabStore.activeTabId)
 
