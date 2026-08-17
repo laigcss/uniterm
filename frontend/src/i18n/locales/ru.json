@@ -336,6 +336,7 @@
   "settings.themeDesc": "Выберите тему интерфейса",
   "settings.languageDesc": "Переключить язык интерфейса",
   "settings.colorSchemeDesc": "Цветовая схема терминала",
+  "settings.followAppTheme": "Следовать теме приложения",
   "settings.fontDesc": "Шрифт терминала",
   "settings.fontSizeDesc": "Размер шрифта терминала",
   "settings.defaultLocalShell": "Оболочка локального терминала по умолчанию",

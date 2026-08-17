@@ -57,6 +57,7 @@
           <div v-show="moreMenuVisible" class="panel-more-menu" @click.stop>
             <!-- ① 面板操作 -->
             <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">{{ t('tab.duplicate') }}</div>
+            <div class="menu-item" @click="renamePanel">{{ t('tab.rename') }}</div>
 
             <!-- ② 会话文本操作 -->
             <div class="menu-divider" />
@@ -278,6 +279,11 @@ function startEdit() {
     editInputRef.value?.focus()
     editInputRef.value?.select()
   })
+}
+
+function renamePanel() {
+  moreMenuVisible.value = false
+  startEdit()
 }
 
 function confirmEdit() {

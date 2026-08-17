@@ -336,6 +336,7 @@
   "settings.themeDesc": "Choisir le thème de l'interface",
   "settings.languageDesc": "Changer la langue d'affichage",
   "settings.colorSchemeDesc": "Palette de couleurs du terminal",
+  "settings.followAppTheme": "Suivre le thème de l'application",
   "settings.fontDesc": "Police du terminal",
   "settings.fontSizeDesc": "Taille de police du terminal",
   "settings.defaultLocalShell": "Shell local par défaut",
