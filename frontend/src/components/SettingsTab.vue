@@ -142,6 +142,19 @@
               </div>
             </div>
           </template>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.tabCloseButton') }}</div>
+              <div class="setting-desc">{{ t('settings.tabCloseButtonDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.tabCloseButton" @change="settingsStore.save()">
+                <el-option :label="t('settings.tabCloseButtonLeft')" value="left" />
+                <el-option :label="t('settings.tabCloseButtonRight')" value="right" />
+              </el-select>
+            </div>
+          </div>
         </div>
 
         <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>

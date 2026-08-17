@@ -163,6 +163,8 @@ export interface AppSettings {
   sftpBookmarks: SFTPBookmarks
   customTerminalThemes: CustomTerminalTheme[]
   defaultLocalShell: string
+  // Which side of the tab the close (X) button sits on.
+  tabCloseButton: 'left' | 'right'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -206,7 +208,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     remotePaths: []
   },
   customTerminalThemes: [],
-  defaultLocalShell: ''
+  defaultLocalShell: '',
+  tabCloseButton: 'left'
 }
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }

@@ -1721,6 +1721,7 @@ export namespace store {
 	    sftpBookmarks: SFTPBookmarks;
 	    customTerminalThemes: CustomTerminalTheme[];
 	    defaultLocalShell: string;
+	    tabCloseButton: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -1739,6 +1740,7 @@ export namespace store {
 	        this.sftpBookmarks = this.convertValues(source["sftpBookmarks"], SFTPBookmarks);
 	        this.customTerminalThemes = this.convertValues(source["customTerminalThemes"], CustomTerminalTheme);
 	        this.defaultLocalShell = source["defaultLocalShell"];
+	        this.tabCloseButton = source["tabCloseButton"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
