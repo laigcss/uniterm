@@ -161,6 +161,15 @@ func (s *Store) Key() []byte {
 	return s.key
 }
 
+// Unlocked reports whether the store holds a usable key. It is false while
+// master-password mode is not yet unlocked, keychain mode has lost its key, or
+// the store has never been set up.
+func (s *Store) Unlocked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.key != nil
+}
+
 func (s *Store) SetKey(key []byte) {
 	s.mu.Lock()
 	s.key = key
