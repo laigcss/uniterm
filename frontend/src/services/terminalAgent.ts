@@ -143,7 +143,17 @@ export function watchOutput(
         resolve({ output: '', timedOut: false, cancelled: true })
         return
       }
-      const normalized = toDisplayLines(stripAnsi(output)).join('\n').trim()
+      const lines = toDisplayLines(stripAnsi(output))
+      if (!timedOut) {
+        // The command finished when the shell prompt reappeared at the bottom.
+        // That prompt line belongs to the terminal, not the command output —
+        // completion is now reported explicitly by the caller's end-message
+        // (see executeCommand in agent.ts), so drop the prompt (and any
+        // trailing blanks) before returning the output to the AI.
+        while (lines.length > 0 && lines[lines.length - 1].trimEnd() === '') lines.pop()
+        if (lines.length > 0) lines.pop()
+      }
+      const normalized = lines.join('\n').trim()
       resolve({ output: normalized, timedOut })
     }
 
@@ -212,7 +222,7 @@ export function truncateOutput(
   const head = lines.slice(0, headLines).join('\n')
   const tail = lines.slice(total - tailLines).join('\n')
   const omitted = total - headLines - tailLines
-  return `${head}\n\n─────── [截断: 共 ${total} 行, 已省略 ${omitted} 行] ────────\n调整 head_lines / tail_lines 参数可查看更多内容。\n\n${tail}`
+  return `${head}\n\n─────── [TRUNCATED: ${total} lines total, ${omitted} lines omitted] ────────\nAdjust head_lines / tail_lines to see more content.\n\n${tail}`
 }
 
 function resolveActiveSession(panelTitle?: string): { sessionId: string; shellPath?: string; remoteOS?: string } {
@@ -347,14 +357,8 @@ export async function executeCommand(
 
   if (result.timedOut) {
     const truncated = truncateOutput(result.output, headLines, tailLines)
-    const timeoutSec = Math.round(timeoutMs / 1000)
     return {
-      output: truncated
-        + `\n\n⚠️ 命令在 ${timeoutSec}s 内未完成，可能仍在运行中。\n`
-        + `请勿重复发送相同命令。\n`
-        + `• 如果输出显示进度（百分比、文件名滚动等）→ 使用 collect_output 继续等待\n`
-        + `• 如果输出显示密码/确认提示 → 使用 send_terminal_key 响应\n`
-        + `• 如果命令卡住无响应 → 使用 interrupt_command 取消`,
+      output: truncated,
       exitCode: -1,
       timedOut: true,
     }

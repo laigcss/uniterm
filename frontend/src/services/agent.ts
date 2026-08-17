@@ -1,5 +1,6 @@
 import { chat, AVAILABLE_TOOLS, ChatCancelledError, ChatTimeoutError } from './llm'
 import { executeCommand, startCommand, captureTerminal, collectOutput, sendTerminalKey } from './terminalAgent'
+import type { ExecuteResult } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
@@ -242,6 +243,20 @@ function capToolResult(text: string): string {
   const tail = text.slice(text.length - TOOL_RESULT_TAIL_BYTES)
   const omitted = text.length - TOOL_RESULT_HEAD_BYTES - TOOL_RESULT_TAIL_BYTES
   return `${head}\n\n─────── [已截断: 工具结果共 ${text.length} 字节, 已省略 ${omitted} 字节] ────────\n调整工具参数（如 head_lines / tail_lines）或分段调用以查看被截断部分。\n\n${tail}`
+}
+
+function formatExecuteResult(result: ExecuteResult): string {
+  if (!result.timedOut) {
+    return `${result.output}\n\n[COMMAND COMPLETED]`
+  }
+  // Put the timeout guidance right after the status line so the AI sees the
+  // verdict before reading the follow-up advice.
+  return `${result.output}\n\n[COMMAND TIMED OUT]\n\n`
+    + `⚠️ The command did not finish within the timeout and may still be running.\n`
+    + `Do not resend the same command.\n`
+    + `• If the output shows progress (percentages, scrolling filenames, etc.) → use collect_output to keep waiting\n`
+    + `• If the output shows a password/confirmation prompt → use send_terminal_key to respond\n`
+    + `• If the command is stuck and unresponsive → use interrupt_command to cancel`
 }
 
 function getShellName(path?: string): string {
@@ -693,11 +708,10 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
           cleanupStreamListeners()
           return
         }
-        const status = result.timedOut ? '[COMMAND TIMED OUT]' : '[COMMAND COMPLETED]'
         store.addMessage({
           id: `msg-${Date.now()}`,
           role: 'tool',
-          content: capToolResult(`${status}\n${result.output}`),
+          content: capToolResult(formatExecuteResult(result)),
           tool_call_id: tu.id
         })
       } catch (e: any) {
@@ -803,7 +817,7 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
         store.addMessage({
           id: `msg-${Date.now()}`,
           role: 'tool',
-          content: capToolResult(`${status}\n${result.output}`),
+          content: capToolResult(`${result.output}\n\n${status}`),
           tool_call_id: tu.id
         })
       } catch (e: any) {
@@ -1044,11 +1058,10 @@ export async function approveTool(_messageId: string) {
       })
     } else {
       const result = await executeCommand(cmd.command)
-      const status = result.timedOut ? '[COMMAND TIMED OUT]' : '[COMMAND COMPLETED]'
       store.addMessage({
         id: `msg-${Date.now()}`,
         role: 'tool',
-        content: capToolResult(`${status}\n${result.output}`),
+        content: capToolResult(formatExecuteResult(result)),
         tool_call_id: cmd.toolId
       })
     }
