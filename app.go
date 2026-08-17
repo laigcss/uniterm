@@ -270,6 +270,9 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		a.sendStartupErr(fmt.Errorf("sync service: %w", err))
 	} else {
 		a.syncService = syncSvc
+		// Normalize enc:v1: fields at the sync boundary using the credential
+		// store (set by initCredentials above).
+		syncSvc.SetPasswordStore(a.credentialStore)
 		// Auto-sync on startup if enabled
 		if syncSvc.IsAutoSyncEnabled() {
 			go func() {

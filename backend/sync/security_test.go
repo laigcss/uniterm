@@ -82,7 +82,7 @@ func TestCompareLocalWithRepo_WrongKeyReturnsError(t *testing.T) {
 		[]byte(`{"connections":[]}`), 0600); err != nil {
 		t.Fatalf("write src connections: %v", err)
 	}
-	if err := EncryptConfigFiles(srcDir, repoPath, realKey, nil); err != nil {
+	if err := EncryptConfigFiles(srcDir, repoPath, realKey, nil, nil); err != nil {
 		t.Fatalf("encrypt with realKey: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestSync_WrongPasswordSetsPasswordMismatchStatus(t *testing.T) {
 		[]byte(`{"connections":[]}`), 0600); err != nil {
 		t.Fatalf("write src: %v", err)
 	}
-	if err := EncryptConfigFiles(srcDir, repoPath, realKey, nil); err != nil {
+	if err := EncryptConfigFiles(srcDir, repoPath, realKey, nil, nil); err != nil {
 		t.Fatalf("encrypt: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestChangePassword_RewritesSaltAndReencryptsFiles(t *testing.T) {
 			t.Fatalf("write seed %s: %v", name, err)
 		}
 	}
-	if err := EncryptConfigFiles(srcDir, repoPath, oldKey, nil); err != nil {
+	if err := EncryptConfigFiles(srcDir, repoPath, oldKey, nil, nil); err != nil {
 		t.Fatalf("encrypt with oldKey: %v", err)
 	}
 	if err := WriteSaltFile(repoPath, oldSalt); err != nil {
