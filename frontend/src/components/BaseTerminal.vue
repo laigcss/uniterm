@@ -117,7 +117,7 @@ import {
   bumpOnDataGeneration,
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import { applyBackspaceKey } from '../utils/backspaceKey'
 import {
@@ -1564,7 +1564,7 @@ function onSearchPrev() {
 function applyXtermTheme(themeName: string) {
   if (!terminal) return
   const theme = resolveXtermBackground(
-    getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+    getXtermTheme(resolveTerminalThemeName(themeName, settingsStore.resolvedAppTheme), settingsStore.settings.customTerminalThemes),
     localStateStore.state.backgroundEnabled,
     localStateStore.state.backgroundImage
   )
@@ -1599,6 +1599,12 @@ watch(() => settingsStore.settings.terminal, (ts) => {
 // Watch for background image toggling to update terminal transparency
 watch(
   () => localStateStore.state.backgroundEnabled,
+  () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
+)
+
+// Re-apply when the app theme flips so FOLLOW_APP_THEME tracks it live.
+watch(
+  () => settingsStore.resolvedAppTheme,
   () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
 )
 

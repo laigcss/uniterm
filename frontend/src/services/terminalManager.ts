@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { SearchAddon } from '@xterm/addon-search'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import type { CustomTerminalTheme } from '../types/settings'
@@ -77,7 +77,7 @@ export function acquireTerminal(
       || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
     const ls = useLocalStateStore()
     const theme = resolveXtermBackground(
-      getXtermTheme(options.themeName ?? 'dark', customThemes),
+      getXtermTheme(resolveTerminalThemeName(options.themeName, useSettingsStore().resolvedAppTheme), customThemes),
       ls.state.backgroundEnabled,
       ls.state.backgroundImage
     )

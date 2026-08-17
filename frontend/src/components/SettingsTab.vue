@@ -240,6 +240,7 @@
             <div class="setting-control">
               <div class="theme-select-row">
                 <el-select v-model="settingsStore.settings.terminal.theme" @change="settingsStore.save()" popper-class="theme-select-popper">
+                  <el-option :label="t('settings.followAppTheme')" :value="FOLLOW_APP_THEME" />
                   <el-option-group
                     v-for="group in terminalThemeGroups"
                     :key="group.label"
@@ -892,7 +893,7 @@ import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS } from '../types/settings'
+import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'

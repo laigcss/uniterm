@@ -1,4 +1,20 @@
 import type { ITheme, Terminal } from '@xterm/xterm'
+import { FOLLOW_APP_THEME } from '../types/settings'
+
+/**
+ * Resolve the concrete built-in terminal theme name to render.
+ *
+ * When the user picks an explicit palette it is returned unchanged; only the
+ * special FOLLOW_APP_THEME value is derived from the app theme. `appTheme` here
+ * is expected to be already resolved to a concrete light/dark choice.
+ */
+export function resolveTerminalThemeName(
+  terminalTheme: string | undefined,
+  appTheme: 'dark' | 'light'
+): string {
+  if (terminalTheme !== FOLLOW_APP_THEME) return terminalTheme || 'uniterm-dark'
+  return appTheme === 'light' ? 'uniterm-light' : 'uniterm-dark'
+}
 
 /**
  * Resolve the real background color for an xterm theme.

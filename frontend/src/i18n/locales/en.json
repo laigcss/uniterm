@@ -336,6 +336,7 @@
   "settings.themeDesc": "Choose the interface theme",
   "settings.languageDesc": "Switch the display language",
   "settings.colorSchemeDesc": "Terminal color scheme",
+  "settings.followAppTheme": "Follow app theme",
   "settings.fontDesc": "Terminal font family",
   "settings.fontSizeDesc": "Terminal font size",
   "settings.defaultLocalShell": "Default Local Shell",

@@ -336,6 +336,7 @@
   "settings.themeDesc": "インターフェースのテーマを選択",
   "settings.languageDesc": "表示言語を切り替え",
   "settings.colorSchemeDesc": "ターミナルのカラースキーム",
+  "settings.followAppTheme": "アプリのテーマに従う",
   "settings.fontDesc": "ターミナルのフォント",
   "settings.fontSizeDesc": "ターミナルのフォントサイズ",
   "settings.defaultLocalShell": "デフォルトのローカルシェル",

@@ -63,6 +63,7 @@
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
         </div>
+        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
           {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
         </div>

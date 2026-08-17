@@ -12,7 +12,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { highlight } from './useHighlight'
 import { stripCursorBlink } from '../utils/cursor'
-import { resolveXtermBackground, applyTerminalBgVar } from './useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from './useTerminalTheme'
 import type { CustomTerminalTheme } from '../types/settings'
 
 export interface UseTerminalOptions {
@@ -350,7 +350,7 @@ export function useTerminal(
   function getTerminalOptions() {
     const ts = settingsStore.settings.terminal
     const ls = useLocalStateStore()
-    const themeName = ts.theme || 'uniterm-dark'
+    const themeName = resolveTerminalThemeName(ts.theme, settingsStore.resolvedAppTheme)
     const theme = resolveXtermBackground(
       getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
       ls.state.backgroundEnabled,
@@ -694,7 +694,7 @@ export function useTerminal(
     if (!terminal) return
     const ls = useLocalStateStore()
     const theme = resolveXtermBackground(
-      getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+      getXtermTheme(resolveTerminalThemeName(themeName, settingsStore.resolvedAppTheme), settingsStore.settings.customTerminalThemes),
       ls.state.backgroundEnabled,
       ls.state.backgroundImage
     )
@@ -720,6 +720,12 @@ export function useTerminal(
   const localStateStore = useLocalStateStore()
   watch(
     () => localStateStore.state.backgroundEnabled,
+    () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
+  )
+
+  // Re-apply when the app theme flips so FOLLOW_APP_THEME tracks it live.
+  watch(
+    () => settingsStore.resolvedAppTheme,
     () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
   )
 

@@ -21,6 +21,18 @@ export const useSettingsStore = defineStore('settings', () => {
   const terminal = computed(() => settings.value.terminal)
   const ai = computed(() => settings.value.ai)
 
+  // Tracks the OS color-scheme preference so `resolvedAppTheme` stays reactive
+  // to live system changes while the app theme is set to 'system'.
+  const systemPrefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+  // The app theme collapsed to a concrete light/dark choice (never 'system').
+  // Used by the terminal to resolve FOLLOW_APP_THEME.
+  const resolvedAppTheme = computed<'dark' | 'light'>(() => {
+    if (settings.value.theme === 'light') return 'light'
+    if (settings.value.theme === 'system') return systemPrefersDark.value ? 'dark' : 'light'
+    // 'dark' and 'deep-blue' are both dark.
+    return 'dark'
+  })
+
   const activeModel = computed(() =>
     settings.value.ai.models.find(m => m.id === settings.value.ai.activeModelId) || settings.value.ai.models[0]
   )
@@ -189,7 +201,8 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(() => settings.value.theme, applyTheme)
 
   // Listen for system color scheme changes
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    systemPrefersDark.value = e.matches
     if (settings.value.theme === 'system') {
       applyTheme()
     }
@@ -215,6 +228,7 @@ export const useSettingsStore = defineStore('settings', () => {
     loaded,
     availableShells,
     theme,
+    resolvedAppTheme,
     language,
     terminal,
     ai,

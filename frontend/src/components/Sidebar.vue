@@ -237,6 +237,7 @@
           <div class="persist-label">{{ t('settings.colorScheme') }}</div>
           <div class="theme-select-row">
             <el-select v-model="settingsStore.settings.terminal.theme" @change="settingsStore.save()" popper-class="theme-select-popper">
+              <el-option :label="t('settings.followAppTheme')" :value="FOLLOW_APP_THEME" />
               <el-option-group v-for="group in terminalThemeGroups" :key="group.label" :label="group.label">
                 <el-option v-for="th in group.options" :key="th.value" :label="th.label" :value="th.value" />
               </el-option-group>
@@ -474,7 +475,7 @@ import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 import { parseQuickConnect, formatConnSubtitle } from '../utils/quickConnect'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS } from '../types/settings'
+import { FONT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
 import { GetSystemFonts } from '../../wailsjs/go/main/App'

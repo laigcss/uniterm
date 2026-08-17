@@ -336,6 +336,7 @@
   "settings.themeDesc": "選擇介面主題風格",
   "settings.languageDesc": "切換介面顯示語言",
   "settings.colorSchemeDesc": "終端機視窗的配色方案",
+  "settings.followAppTheme": "跟隨應用程式主題",
   "settings.fontDesc": "終端機顯示的字型",
   "settings.fontSizeDesc": "終端機字型大小",
   "settings.defaultLocalShell": "預設本機 Shell",

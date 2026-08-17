@@ -7,6 +7,12 @@ export type Language = Locale | 'system'
 export type Theme = 'dark' | 'deep-blue' | 'light' | 'system'
 export type TerminalTheme = 'uniterm-dark' | 'uniterm-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light'
 
+// Magic value for `AppSettings.terminal.theme`: the effective built-in theme
+// is derived from the current app theme (dark / deep-blue -> uniterm-dark,
+// light -> uniterm-light) instead of being fixed. Kept out of TERMINAL_THEMES
+// because it has no color palette of its own.
+export const FOLLOW_APP_THEME = 'follow-app'
+
 // xterm.js's ITheme shape: the 4 base colors plus the 16 ANSI colors, all as hex strings.
 export interface TerminalThemeColors {
   background: string
@@ -140,7 +146,7 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   navigateNext: { ctrl: false, shift: false, alt: true, key: 'arrowright' },
   lockAI: { ctrl: true, shift: true, alt: false, key: 'l' },
   duplicateSession: { ctrl: true, shift: true, alt: false, key: 'd' },
-  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f' },
+  terminalSearch: { ctrl: true, shift: true, alt: false, key: 'f' },
   openSettings: { ctrl: true, shift: false, alt: false, key: ',' },
   copy: { ctrl: true, shift: true, alt: false, key: 'c' },
   paste: { ctrl: true, shift: true, alt: false, key: 'v' },
@@ -171,7 +177,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   language: 'system',
   terminal: {
-    theme: 'uniterm-dark',
+    theme: FOLLOW_APP_THEME,
     fontFamily: '"JetBrains Mono Variable", Menlo, Consolas, "Courier New", monospace',
     fontSize: 14,
     selectionAction: 'none',
