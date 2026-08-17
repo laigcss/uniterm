@@ -6,7 +6,7 @@
     @dragleave="onDragLeave"
     @drop="onDragDrop"
   >
-    <div ref="terminalRef" class="terminal-area" @contextmenu="menu.onContextMenu"></div>
+    <div ref="terminalRef" class="terminal-area" @contextmenu="onTerminalContextMenu"></div>
 
     <div v-if="dragOver" class="drop-overlay">
       <span>{{ t('sftp.dropHere') }}</span>
@@ -42,9 +42,7 @@
       :style="menu.menuStyle.value"
       @click.stop
     >
-      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
-        {{ t('terminal.askAI') }}
-      </div>
+      <!-- ① 剪贴板 -->
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copySelection">
         {{ t('terminal.copy') }}
       </div>
@@ -52,7 +50,26 @@
         {{ t('terminal.copyAndPaste') }}
       </div>
       <div class="menu-item" @click="menu.pasteFromClipboard">{{ t('terminal.paste') }}</div>
+      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
+        {{ t('terminal.askAI') }}
+      </div>
+
+      <!-- ② 会话文本操作 -->
+      <div class="menu-divider" />
+      <div class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
       <div class="menu-item" @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</div>
+      <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
+        {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
+      </div>
+      <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
+        {{ t('session.openLogDir') }}
+      </div>
+
+      <!-- ③ SSH 连接功能 -->
+      <div v-if="isSsh" class="menu-divider" />
+      <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
+      <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
+      <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
     </div>
 
     <!-- Terminal suggestions popup -->
@@ -73,12 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { SessionWrite, SessionResize, SessionEndZmodem } from '../../wailsjs/go/main/App'
-import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile } from '../../wailsjs/go/main/App'
+import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../wailsjs/go/main/App'
+import { msg } from '../services/message'
 import { EventsOn, BrowserOpenURL, ClipboardGetText } from '../../wailsjs/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
@@ -1671,6 +1689,106 @@ async function pasteToSession(text: string) {
   }
 }
 
+// ── Terminal right-click menu context (mirrors the tab-level menu) ──
+const panel = computed(() => (props.panelId ? panelStore.getPanel(props.panelId) : undefined))
+const isSsh = computed(() => panel.value?.type === 'ssh')
+const supportsOutputLog = computed(() =>
+  !!panel.value && ['ssh', 'telnet', 'serial', 'mosh', 'local'].includes(panel.value.type),
+)
+
+const isOutputLogOn = ref(false)
+const outputLogPath = ref('')
+
+async function refreshOutputLogState() {
+  const pid = props.panelId
+  const p = panel.value
+  if (!pid || !p) {
+    isOutputLogOn.value = false
+    outputLogPath.value = ''
+    return
+  }
+  try {
+    const info = await GetSessionOutputLogInfo(pid)
+    isOutputLogOn.value = !!info.enabled
+    outputLogPath.value = info.path || ''
+    panelStore.setOutputLog(pid, { enabled: isOutputLogOn.value, path: outputLogPath.value })
+  } catch {
+    isOutputLogOn.value = false
+    outputLogPath.value = ''
+  }
+}
+
+function onTerminalContextMenu(e: MouseEvent) {
+  if (supportsOutputLog.value) {
+    refreshOutputLogState()
+  }
+  menu.onContextMenu(e)
+}
+
+function triggerSearch() {
+  menu.closeMenu()
+  openSearch()
+}
+
+async function toggleOutputLog() {
+  menu.closeMenu()
+  const pid = props.panelId
+  if (!pid) return
+  try {
+    if (isOutputLogOn.value) {
+      await DisableSessionOutputLog(pid)
+      isOutputLogOn.value = false
+      const prev = outputLogPath.value
+      outputLogPath.value = ''
+      panelStore.setOutputLog(pid, { enabled: false, path: '' })
+      msg.copyable(t('session.logStopped', { path: prev }), 'info')
+      return
+    }
+    const path = await EnableSessionOutputLog(pid, '')
+    if (!path) {
+      msg.error(t('session.logFailed', { error: 'unknown' }))
+      return
+    }
+    isOutputLogOn.value = true
+    outputLogPath.value = path
+    panelStore.setOutputLog(pid, { enabled: true, path })
+    msg.copyable(t('session.logStarted', { path }), 'success')
+  } catch (e: any) {
+    msg.error(t('session.logFailed', { error: String(e?.message ?? e) }))
+  }
+}
+
+async function openLogDir() {
+  menu.closeMenu()
+  if (!outputLogPath.value) return
+  try {
+    await OpenPathInExplorer(outputLogPath.value)
+  } catch (e: any) {
+    msg.error(String(e?.message ?? e))
+  }
+}
+
+function openSftp() {
+  menu.closeMenu()
+  const p = panel.value
+  if (p) {
+    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: p }))
+  }
+}
+
+function uploadFileRz() {
+  window.dispatchEvent(new CustomEvent('terminal:send-rz', { detail: { panelId: props.panelId } }))
+  menu.closeMenu()
+}
+
+function openMonitor() {
+  menu.closeMenu()
+  const p = panel.value
+  if (p) {
+    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: p }))
+  }
+}
+
 const menu = useTerminalMenu({
   getSelection,
   onPaste: async (text) => {
@@ -1837,6 +1955,12 @@ defineExpose({
 .menu-item.disabled {
   color: var(--text-disabled);
   cursor: default;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
 }
 
 .drop-overlay {

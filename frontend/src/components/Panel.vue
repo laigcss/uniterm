@@ -55,18 +55,25 @@
             <MoreHorizontal :size="14" />
           </button>
           <div v-show="moreMenuVisible" class="panel-more-menu" @click.stop>
-            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">{{ t('terminal.duplicate') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</div>
+            <!-- ① 面板操作 -->
+            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">{{ t('tab.duplicate') }}</div>
+
+            <!-- ② 会话文本操作 -->
+            <div class="menu-divider" />
+            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">{{ t('terminal.searchText') }}</div>
+            <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
             <div class="menu-item" @click="toggleOutputLog(); moreMenuVisible = false">
               {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
             </div>
             <div v-if="isOutputLogOn" class="menu-item" @click="openLogDir(); moreMenuVisible = false">
               {{ t('session.openLogDir') }}
             </div>
-            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">{{ t('terminal.searchText') }}</div>
-            <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
+
+            <!-- ③ 连接功能（ssh） -->
+            <div v-if="panel.type === 'ssh'" class="menu-divider" />
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</div>
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</div>
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</div>
           </div>
         </div>
         <button class="panel-close" @click.stop="emit('close', panel.id)"><X :size="14" /></button>
@@ -656,5 +663,10 @@ watch(() => props.panel.outputLog, (val) => {
 .panel-more-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.panel-more-menu .menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
 }
 </style>

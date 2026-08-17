@@ -118,6 +118,7 @@ type AppSettings struct {
 	SFTPBookmarks        SFTPBookmarks         `json:"sftpBookmarks"`
 	CustomTerminalThemes []CustomTerminalTheme `json:"customTerminalThemes"`
 	DefaultLocalShell    string                `json:"defaultLocalShell"`
+	TabCloseButton       string                `json:"tabCloseButton"`
 }
 
 type SFTPBookmarks struct {

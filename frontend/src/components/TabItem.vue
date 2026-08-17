@@ -11,12 +11,12 @@
     @contextmenu="onContextMenu"
   >
     <button
-      v-if="hovered && !tab.locked"
+      v-if="!tabCloseRight && hovered && !tab.locked"
       class="tab-close"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
     <span
-      v-else
+      v-if="tabCloseRight || !hovered || tab.locked"
       class="tab-icon-wrapper"
     >
       <component
@@ -45,13 +45,10 @@
       @click.stop
     />
     <button
-      class="tab-more"
-      @click.stop="onMoreClick"
-      :title="t('terminal.more')"
-    >
-      <MoreHorizontal :size="14" />
-    </button>
-
+      v-if="tabCloseRight && hovered && !tab.locked"
+      class="tab-close tab-close-right"
+      @click.stop="$emit('close', tab.id)"
+    ><X /></button>
     <Teleport to="body">
       <div
         v-show="contextMenuVisible"
@@ -60,27 +57,36 @@
         :style="contextMenuStyle"
         @click.stop
       >
+        <!-- ① 标签类操作 -->
         <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
-        <div v-if="tab.type === 'k8s'" class="menu-divider" />
-        <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
+        <div v-if="hasServerHost" class="menu-item" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
         </div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
+        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
+          {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
+        </div>
+
+        <!-- ② 会话文本操作 -->
+        <div v-if="showGroupTab && showGroupText" class="menu-divider" />
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
         <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
           {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
         </div>
         <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
           {{ t('session.openLogDir') }}
         </div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-divider" />
-        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
-          {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
-        </div>
+
+        <!-- ③ 连接功能（ssh / rdp） -->
+        <div v-if="showGroupConn && (showGroupTab || showGroupText)" class="menu-divider" />
+        <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
+
+        <!-- ④ 关闭标签操作 -->
+        <div v-if="showGroupTab || showGroupText || showGroupConn" class="menu-divider" />
         <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">{{ t('tab.close') }}</div>
         <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
         <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
@@ -94,6 +100,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import { useK8sStore } from '../stores/k8sStore'
 import { useContainerStore } from '../stores/containerStore'
 import { useI18n } from '../i18n'
@@ -110,10 +117,11 @@ import {
   SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
+import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { waitForTerminalSize } from '../services/terminalManager'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -134,11 +142,16 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const k8sStore = useK8sStore()
 const containerStore = useContainerStore()
+const settingsStore = useSettingsStore()
 const { t } = useI18n()
 
 const hovered = ref(false)
 const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({ left: '0px', top: '0px' })
+
+// Whether the tab close (X) button sits on the right of the tab name,
+// per the appearance setting ("tab close button position").
+const tabCloseRight = computed(() => settingsStore.settings.tabCloseButton === 'right')
 
 const editing = ref(false)
 const editName = ref('')
@@ -238,6 +251,31 @@ const canDuplicate = computed(() => {
   return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
 })
 
+// SSH connection only — used to show the "连接功能" group of menu items.
+const isSsh = computed(() => {
+  if (props.tab.type !== 'terminal') return false
+  const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  return p?.type === 'ssh'
+})
+
+// Visibility of each menu group, used to place dividers strictly between
+// the groups that actually have items for the current tab type.
+const showGroupTab = computed(() =>
+  canDuplicate.value ||
+  props.tab.type === 'terminal' ||
+  (props.tab.type !== 'start' && props.tab.type !== 'settings'),
+)
+const showGroupText = computed(() => props.tab.type === 'terminal')
+const showGroupConn = computed(() => props.tab.type === 'rdp' || isSsh.value)
+
+// Connection host (IP or hostname) of the tab's panel. Empty for tab types
+// without a remote endpoint (local, k8s, container, start, settings…).
+const serverHost = computed(() => {
+  if (!('panelId' in props.tab)) return ''
+  return panelStore.getPanel(props.tab.panelId)?.config?.host || ''
+})
+const hasServerHost = computed(() => !!serverHost.value)
+
 function onDragStart(e: DragEvent) {
   e.dataTransfer?.setData('application/tab-id', props.tab.id)
   e.dataTransfer?.setData('application/tab-type', props.tab.type)
@@ -263,18 +301,6 @@ function onContextMenu(e: MouseEvent) {
   e.stopPropagation()
   window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   contextMenuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
-  contextMenuVisible.value = true
-  if (supportsOutputLog.value) {
-    refreshOutputLogState()
-  }
-}
-
-function onMoreClick(e: MouseEvent) {
-  e.stopPropagation()
-  const btn = e.currentTarget as HTMLElement
-  const rect = btn.getBoundingClientRect()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  contextMenuStyle.value = { left: rect.left + 'px', top: rect.bottom + 4 + 'px' }
   contextMenuVisible.value = true
   if (supportsOutputLog.value) {
     refreshOutputLogState()
@@ -360,6 +386,20 @@ function closeRight() {
   const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
   const ids = allTabs.slice(currentIdx + 1).filter(t => !t.locked).map(t => t.id)
   if (ids.length) emit('closeBatch', ids)
+  closeContextMenu()
+}
+
+async function copyHostAddress() {
+  const host = serverHost.value
+  if (!host) return
+  // Wails clipboard, falling back to the browser API when the runtime is
+  // absent (plain dev in a browser) or the call fails.
+  let ok = false
+  try { ok = await ClipboardSetText(host) } catch { ok = false }
+  if (!ok) {
+    try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
+  }
+  msg.success(t('tab.hostCopied', { host }))
   closeContextMenu()
 }
 
@@ -598,9 +638,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* Always reserve room for the floating more (…) button so hovering never
-     widens the tab (no layout shift) and the button never covers the name. */
-  margin-right: 20px;
   font-weight: 500;
 }
 .tab-name-text {
@@ -685,29 +722,12 @@ onUnmounted(() => {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.tab-more {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: var(--bg-hover);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.tab-item:hover .tab-more {
-  display: inline-flex;
-}
-.tab-more:hover {
-  color: var(--text-primary);
+/* Close button on the right side of the tab (appearance setting).
+   margin-left:auto pushes it flush to the far right edge of the tab
+   (inside the 12px horizontal padding), instead of hugging the name. */
+.tab-close.tab-close-right {
+  margin-left: auto;
+  margin-right: 0;
 }
 </style>
 
