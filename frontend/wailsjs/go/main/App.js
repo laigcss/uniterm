@@ -218,6 +218,10 @@ export function FrontendLog(arg1, arg2) {
   return window['go']['main']['App']['FrontendLog'](arg1, arg2);
 }
 
+export function GetAllFonts() {
+  return window['go']['main']['App']['GetAllFonts']();
+}
+
 export function GetAppInfo() {
   return window['go']['main']['App']['GetAppInfo']();
 }
@@ -296,10 +300,6 @@ export function GetSkillBody(arg1) {
 
 export function GetSkillFile(arg1, arg2) {
   return window['go']['main']['App']['GetSkillFile'](arg1, arg2);
-}
-
-export function GetSystemFonts() {
-  return window['go']['main']['App']['GetSystemFonts']();
 }
 
 export function GetTableSchema(arg1, arg2, arg3) {

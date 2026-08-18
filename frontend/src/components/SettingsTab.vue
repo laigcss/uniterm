@@ -271,17 +271,63 @@
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.font') }}</div>
+              <div class="setting-title">{{ t('settings.fontPrimary') }}</div>
               <div class="setting-desc">{{ t('settings.fontDesc') }}</div>
             </div>
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
+                <template #header>
+                  <div style="padding:4px 12px">
+                    <el-checkbox v-model="firstMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+                  </div>
+                </template>
                 <el-option
                   v-for="f in fontOptions"
                   :key="f.value"
                   :label="f.label"
                   :value="f.value"
-                  :style="{ fontFamily: f.value }"
+                  :style="{ fontFamily: formatFontFamily(f.value) }"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.fontFallback') }}</div>
+              <div class="setting-desc">{{ t('settings.fontFallbackDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
+                <template #header>
+                  <div style="padding:4px 12px">
+                    <el-checkbox v-model="secondMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+                  </div>
+                </template>
+                <el-option value="" :label="t('settings.fontNone')" />
+                <el-option
+                  v-for="f in secondFontOptions"
+                  :key="f.value"
+                  :label="f.label"
+                  :value="f.value"
+                  :style="{ fontFamily: formatFontFamily(f.value) }"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.fontWeight') }}</div>
+              <div class="setting-desc">{{ t('settings.fontWeightDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.fontWeight" @change="settingsStore.save()">
+                <el-option
+                  v-for="w in FONT_WEIGHT_OPTIONS"
+                  :key="w.value"
+                  :label="t(w.labelKey)"
+                  :value="w.value"
                 />
               </el-select>
             </div>
@@ -885,7 +931,7 @@
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
@@ -893,8 +939,8 @@ import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME } from '../types/settings'
-import { formatFontFamily } from '../utils/formatFontFamily'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME } from '../types/settings'
+import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
@@ -1072,14 +1118,25 @@ async function handleCheckUpdate() {
 
 syncStore.loadConfig()
 
-// ── System fonts ──
-const systemFonts = ref<{ label: string; value: string }[]>([])
-const fontOptions = computed(() => {
-  if (systemFonts.value.length > 0) {
-    return systemFonts.value
-  }
-  return FONT_OPTIONS
-})
+// ── Terminal fonts ──
+// Single source: GetAllFonts returns every installed family with its mono
+// flag (the bundled JetBrains Mono Variable is pinned first). The per-select
+// "monospace only" checkbox (inside each dropdown) filters this client-side.
+const allFonts = ref<{ Name: string; IsMono: boolean }[]>([])
+const firstMonoOnly = ref(true)
+const secondMonoOnly = ref(true)
+
+const toFontOption = (name: string) => ({ label: name, value: name })
+const fontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !firstMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
+const secondFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !secondMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
 
 const { terminalThemeGroups, isCustomTheme } = useTerminalThemeOptions()
 
@@ -1097,9 +1154,19 @@ onMounted(async () => {
     platform.value = ''
   }
   try {
-    const fonts = await GetSystemFonts()
+    const fonts = await GetAllFonts()
     if (fonts && fonts.length > 0) {
-      systemFonts.value = fonts.map(f => ({ label: f, value: formatFontFamily(f) }))
+      allFonts.value = fonts
+      // Migrate a legacy full-stack fontFamily down to its bare family name so
+      // it matches a dropdown option (and the new single-name default) — the
+      // old stored value was a raw CSS stack this picker can't show cleanly.
+      const names = new Set(allFonts.value.map(f => f.Name))
+      const cur = settingsStore.settings.terminal.fontFamily
+      const normalized = normalizeFontFamilyValue(cur, names)
+      if (normalized !== cur) {
+        settingsStore.settings.terminal.fontFamily = normalized
+        settingsStore.save()
+      }
     }
   } catch {
     // Fall back to FONT_OPTIONS

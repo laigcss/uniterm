@@ -1514,8 +1514,8 @@ func (a *App) GetPlatform() string {
 	return goruntime.GOOS
 }
 
-func (a *App) GetSystemFonts() ([]string, error) {
-	return platform.GetFontFamilies()
+func (a *App) GetAllFonts() ([]platform.FontInfo, error) {
+	return platform.GetAllFonts()
 }
 
 func (a *App) OnConnectionsChanged(callback func(session.ConnectionStoreData)) {

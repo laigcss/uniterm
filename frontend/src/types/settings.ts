@@ -50,6 +50,16 @@ export interface CustomTerminalTheme {
 export interface TerminalSettings {
   theme: TerminalTheme | string
   fontFamily: string
+  // Secondary font family for glyphs the primary font lacks (most useful for
+  // CJK: the first font usually covers Latin only, and the browser falls back
+  // to this one for CJK characters). Empty means no explicit fallback; the CSS
+  // generic `monospace` covers anything else. Rendered as
+  // `"fontFamily", "fallbackFont", monospace`.
+  fallbackFont: string
+  // Weight of regular terminal text (normal/SemiBold/etc. fire on the bundled
+  // JetBrains Mono Variable through its variable weight axis; fixed fonts map
+  // to their nearest available weight). ANSI-bold text stays a step heavier.
+  fontWeight: number
   fontSize: number
   selectionAction: 'none' | 'copy'
   rightClickAction: 'menu' | 'paste'
@@ -178,7 +188,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'system',
   terminal: {
     theme: FOLLOW_APP_THEME,
-    fontFamily: '"JetBrains Mono Variable", Menlo, Consolas, "Courier New", monospace',
+    fontFamily: 'JetBrains Mono Variable',
+    fallbackFont: '',
+    fontWeight: 400,
     fontSize: 14,
     selectionAction: 'none',
     rightClickAction: 'menu',
@@ -256,6 +268,17 @@ export const FONT_OPTIONS: { label: string; value: string }[] = [
   { label: 'Fira Code', value: '"Fira Code", monospace' },
   { label: 'JetBrains Mono', value: '"JetBrains Mono", monospace' },
   { label: 'Source Code Pro', value: '"Source Code Pro", monospace' }
+]
+
+// Terminal font-weight presets. `labelKey` is an i18n key (the option text is
+// translated via `t(labelKey)`); the value is the CSS/JS number passed to
+// xterm.js — the bundled JetBrains Mono Variable honors each exactly, fixed
+// fonts snap to the nearest available weight.
+export const FONT_WEIGHT_OPTIONS: { labelKey: string; value: number }[] = [
+  { labelKey: 'settings.weightNormal', value: 400 },
+  { labelKey: 'settings.weightMedium', value: 500 },
+  { labelKey: 'settings.weightSemiBold', value: 600 },
+  { labelKey: 'settings.weightBold', value: 700 }
 ]
 
 export const SELECTION_ACTIONS: { label: string; value: TerminalSettings['selectionAction'] }[] = [
