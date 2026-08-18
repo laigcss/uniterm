@@ -634,6 +634,25 @@ export namespace main {
 
 }
 
+export namespace platform {
+	
+	export class FontInfo {
+	    Name: string;
+	    IsMono: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FontInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Name = source["Name"];
+	        this.IsMono = source["IsMono"];
+	    }
+	}
+
+}
+
 export namespace session {
 	
 	export class PostLoginExpectStep {

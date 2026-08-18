@@ -5,6 +5,7 @@ import {session} from '../models';
 import {update} from '../models';
 import {container} from '../models';
 import {main} from '../models';
+import {platform} from '../models';
 import {k8s} from '../models';
 import {store} from '../models';
 import {importer} from '../models';
@@ -118,6 +119,8 @@ export function FileSize(arg1:string):Promise<number>;
 
 export function FrontendLog(arg1:string,arg2:string):Promise<void>;
 
+export function GetAllFonts():Promise<Array<platform.FontInfo>>;
+
 export function GetAppInfo():Promise<main.AppInfo>;
 
 export function GetAvailableShells():Promise<Array<string>>;
@@ -157,8 +160,6 @@ export function GetSessionOutputLogInfo(arg1:string):Promise<main.SessionLogInfo
 export function GetSkillBody(arg1:string):Promise<string>;
 
 export function GetSkillFile(arg1:string,arg2:string):Promise<string>;
-
-export function GetSystemFonts():Promise<Array<string>>;
 
 export function GetTableSchema(arg1:string,arg2:string,arg3:string):Promise<database.SchemaResult>;
 

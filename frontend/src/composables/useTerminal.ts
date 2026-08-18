@@ -12,6 +12,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { highlight } from './useHighlight'
 import { stripCursorBlink } from '../utils/cursor'
+import { formatFontFamily } from '../utils/formatFontFamily'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from './useTerminalTheme'
 import type { CustomTerminalTheme } from '../types/settings'
 
@@ -358,7 +359,8 @@ export function useTerminal(
     )
     return {
       fontSize: ts.fontSize || 13,
-      fontFamily: ts.fontFamily || 'Consolas, "Courier New", monospace',
+      fontFamily: formatFontFamily(ts.fontFamily, ts.fallbackFont),
+      fontWeight: ts.fontWeight || 400,
       theme,
       cursorBlink: ts.cursorBlink ?? true,
       rightClickSelectsWord: false,
@@ -706,7 +708,8 @@ export function useTerminal(
   watch(() => settingsStore.settings.terminal, (ts) => {
     if (!terminal) return
     if (ts.fontSize) terminal.options.fontSize = ts.fontSize
-    if (ts.fontFamily) terminal.options.fontFamily = ts.fontFamily
+    if (ts.fontFamily) terminal.options.fontFamily = formatFontFamily(ts.fontFamily, ts.fallbackFont)
+    if (ts.fontWeight) terminal.options.fontWeight = ts.fontWeight
     if (ts.maxHistoryLines) terminal.options.scrollback = ts.maxHistoryLines
     if (ts.theme) applyXtermTheme(ts.theme)
     if (typeof ts.cursorBlink === 'boolean') {

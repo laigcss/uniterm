@@ -256,14 +256,48 @@
           </div>
         </div>
         <div class="persist-section">
-          <div class="persist-label">{{ t('settings.font') }}</div>
+          <div class="persist-label">{{ t('settings.fontPrimary') }}</div>
           <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
+            <template #header>
+              <div style="padding:4px 12px">
+                <el-checkbox v-model="fontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+              </div>
+            </template>
             <el-option
               v-for="f in personalizationFontOptions"
               :key="f.value"
               :label="f.label"
               :value="f.value"
-              :style="{ fontFamily: f.value }"
+              :style="{ fontFamily: formatFontFamily(f.value) }"
+            />
+          </el-select>
+        </div>
+        <div class="persist-section">
+          <div class="persist-label">{{ t('settings.fontFallback') }}</div>
+          <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
+            <template #header>
+              <div style="padding:4px 12px">
+                <el-checkbox v-model="fallbackFontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+              </div>
+            </template>
+            <el-option value="" :label="t('settings.fontNone')" />
+            <el-option
+              v-for="f in personalizationFallbackFontOptions"
+              :key="f.value"
+              :label="f.label"
+              :value="f.value"
+              :style="{ fontFamily: formatFontFamily(f.value) }"
+            />
+          </el-select>
+        </div>
+        <div class="persist-section">
+          <div class="persist-label">{{ t('settings.fontWeight') }}</div>
+          <el-select v-model="settingsStore.settings.terminal.fontWeight" @change="settingsStore.save()">
+            <el-option
+              v-for="w in FONT_WEIGHT_OPTIONS"
+              :key="w.value"
+              :label="t(w.labelKey)"
+              :value="w.value"
             />
           </el-select>
         </div>
@@ -475,10 +509,10 @@ import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 import { parseQuickConnect, formatConnSubtitle } from '../utils/quickConnect'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
-import { formatFontFamily } from '../utils/formatFontFamily'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
+import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { GetSystemFonts } from '../../wailsjs/go/main/App'
+import { GetAllFonts } from '../../wailsjs/go/main/App'
 import { useLocalStateStore } from '../stores/localStateStore'
 
 defineProps<{
@@ -495,13 +529,24 @@ const editConfig = ref<ConnectionConfig | undefined>(undefined)
 const activeView = ref<'connections' | 'quickCommands' | 'tunnels' | 'history' | 'personalization'>('connections')
 
 // ── Personalization panel ──
-const systemFonts = ref<{ label: string; value: string }[]>([])
-const personalizationFontOptions = computed(() => {
-  if (systemFonts.value.length > 0) {
-    return systemFonts.value
-  }
-  return FONT_OPTIONS
-})
+// Single source: GetAllFonts returns every installed family with its mono
+// flag (the bundled JetBrains Mono Variable is pinned first). Each select's
+// embedded "monospace only" checkbox filters this client-side.
+const allFonts = ref<{ Name: string; IsMono: boolean }[]>([])
+const fontMonoOnly = ref(true)
+const fallbackFontMonoOnly = ref(true)
+
+const toFontOption = (name: string) => ({ label: name, value: name })
+const personalizationFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !fontMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
+const personalizationFallbackFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !fallbackFontMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
 
 const { terminalThemeGroups, isCustomTheme } = useTerminalThemeOptions()
 
@@ -1782,11 +1827,20 @@ onMounted(async () => {
   })
   // Restore group collapse state from persisted settings
   await initCollapseState()
-  // Load system fonts for personalization panel
+  // Load all fonts for personalization panel
   try {
-    const fonts = await GetSystemFonts()
+    const fonts = await GetAllFonts()
     if (fonts && fonts.length > 0) {
-      systemFonts.value = fonts.map(f => ({ label: f, value: formatFontFamily(f) }))
+      allFonts.value = fonts
+      // Migrate a legacy full-stack fontFamily down to its bare family name so
+      // it matches a dropdown option (and the new single-name default).
+      const names = new Set(allFonts.value.map(f => f.Name))
+      const cur = settingsStore.settings.terminal.fontFamily
+      const normalized = normalizeFontFamilyValue(cur, names)
+      if (normalized !== cur) {
+        settingsStore.settings.terminal.fontFamily = normalized
+        settingsStore.save()
+      }
     }
   } catch {
     // Fall back to FONT_OPTIONS

@@ -128,6 +128,7 @@ import { getXtermTheme } from '../composables/useTerminal'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import { applyBackspaceKey } from '../utils/backspaceKey'
+import { formatFontFamily } from '../utils/formatFontFamily'
 import {
   sanitizeTerminalOutput,
   sanitizeLiveTerminalOutput,
@@ -417,7 +418,9 @@ function getTerminalOptions() {
   const ts = settingsStore.settings.terminal
   return {
     fontSize: ts.fontSize || 13,
-    fontFamily: ts.fontFamily || 'Consolas, "Courier New", monospace',
+    fontFamily: ts.fontFamily,
+    fallbackFont: ts.fallbackFont || '',
+    fontWeight: ts.fontWeight || 400,
     themeName: ts.theme || 'dark',
     scrollback: ts.maxHistoryLines || 2500,
   }
@@ -1593,7 +1596,8 @@ function applyXtermTheme(themeName: string) {
 watch(() => settingsStore.settings.terminal, (ts) => {
   if (!terminal) return
   if (ts.fontSize) terminal.options.fontSize = ts.fontSize
-  if (ts.fontFamily) terminal.options.fontFamily = ts.fontFamily
+  if (ts.fontFamily) terminal.options.fontFamily = formatFontFamily(ts.fontFamily, ts.fallbackFont)
+  if (ts.fontWeight) terminal.options.fontWeight = ts.fontWeight
   if (ts.maxHistoryLines) terminal.options.scrollback = ts.maxHistoryLines
   if (ts.theme) applyXtermTheme(ts.theme)
   if (typeof ts.cursorBlink === 'boolean') {

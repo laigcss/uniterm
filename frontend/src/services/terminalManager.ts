@@ -12,6 +12,10 @@ import { formatFontFamily } from '../utils/formatFontFamily'
 export interface TerminalOptions {
   fontSize?: number
   fontFamily?: string
+  // Secondary family (e.g. CJK) appended behind fontFamily at render time.
+  fallbackFont?: string
+  // Weight for regular terminal text (variable-font weights for JetBrains).
+  fontWeight?: number
   themeName?: string
   scrollback?: number
 }
@@ -103,7 +107,8 @@ export function acquireTerminal(
     // would catch a regression on future upgrades.
     const terminal = new Terminal({
       fontSize: options.fontSize ?? 13,
-      fontFamily: formatFontFamily(options.fontFamily ?? 'Consolas, "Courier New", monospace'),
+      fontFamily: formatFontFamily(options.fontFamily ?? 'JetBrains Mono Variable', options.fallbackFont),
+      fontWeight: options.fontWeight ?? 400,
       theme,
       cursorBlink,
       rightClickSelectsWord: false,
