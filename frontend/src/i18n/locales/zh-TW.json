@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "置中",
   "settings.bgFitTile": "平鋪",
   "settings.bgUnsupported": "不支援的圖片格式",
-  "settings.ai": "AI 助理設定",
+  "settings.ai": "AI 模型",
   "settings.about": "關於",
   "settings.aboutDesc": "一款現代化跨平台終端機模擬器，內建可自主執行的 AI Agent —— 能夠獨立規劃並執行多輪 Shell 命令。",
   "settings.version": "版本號",

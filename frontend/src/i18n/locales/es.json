@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "Centrar",
   "settings.bgFitTile": "Mosaico",
   "settings.bgUnsupported": "Formato de imagen no compatible",
-  "settings.ai": "Asistente de IA",
+  "settings.ai": "Modelos de IA",
   "settings.about": "Acerca de",
   "settings.aboutDesc": "Un emulador de terminal moderno y multiplataforma con un agente de IA integrado que puede planificar y ejecutar comandos de shell multivuelta de forma independiente.",
   "settings.version": "Versión",

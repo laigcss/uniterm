@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "Zentriert",
   "settings.bgFitTile": "Kacheln",
   "settings.bgUnsupported": "Nicht unterstütztes Bildformat",
-  "settings.ai": "KI-Assistent",
+  "settings.ai": "KI-Modelle",
   "settings.about": "Über",
   "settings.aboutDesc": "Ein moderner plattformübergreifender Terminal-Emulator mit einem eingebauten KI-Agenten, der eigenständig mehrstufige Shell-Befehle planen und ausführen kann.",
   "settings.version": "Version",

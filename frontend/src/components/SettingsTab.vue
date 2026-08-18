@@ -1362,10 +1362,10 @@ const categories = computed(() => {
     { key: 'basic', label: t('settings.basic'), icon: Settings },
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
-    { key: 'identities', label: t('settings.identities'), icon: Key },
-    { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
+    { key: 'identities', label: t('settings.identities'), icon: Key },
+    { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
