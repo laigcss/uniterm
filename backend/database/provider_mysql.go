@@ -581,7 +581,7 @@ func (p *mysqlProvider) DumpTable(db *sql.DB, dbName, tableName string, opts Dum
 	quotedTable := p.Quote(tableName)
 
 	if opts.Structure {
-		createStmt, kind, derr := showCreateStatement(conn, tableName, quotedTable)
+		createStmt, kind, derr := showCreateStatement(conn, dbName, tableName, quotedTable)
 		if derr != nil {
 			return "", derr
 		}
@@ -593,7 +593,7 @@ func (p *mysqlProvider) DumpTable(db *sql.DB, dbName, tableName string, opts Dum
 	}
 
 	if opts.Data {
-		cols, colTypes, derr := tableColumns(conn, tableName, quotedTable)
+		cols, colTypes, derr := tableColumns(conn, dbName, tableName, quotedTable)
 		if derr != nil {
 			return "", derr
 		}
@@ -643,11 +643,12 @@ func (p *mysqlProvider) DumpTable(db *sql.DB, dbName, tableName string, opts Dum
 }
 
 // tableKind returns "TABLE" or "VIEW" for the given name by querying
-// information_schema; defaults to TABLE on error.
-func tableKind(conn *sql.Conn, tableName string) string {
+// information_schema; defaults to TABLE on error. Scoped to the schema so a
+// name shared across databases resolves to the right object.
+func tableKind(conn *sql.Conn, dbName, tableName string) string {
 	var t string
 	err := conn.QueryRowContext(context.Background(),
-		"SELECT TABLE_TYPE FROM information_schema.tables WHERE TABLE_NAME = ? LIMIT 1", tableName).Scan(&t)
+		"SELECT TABLE_TYPE FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1", dbName, tableName).Scan(&t)
 	if err == nil && strings.HasPrefix(t, "VIEW") {
 		return "VIEW"
 	}
@@ -656,8 +657,8 @@ func tableKind(conn *sql.Conn, tableName string) string {
 
 // showCreateStatement returns the CREATE TABLE/VIEW statement (without trailing ;)
 // and the object kind ("TABLE" or "VIEW").
-func showCreateStatement(conn *sql.Conn, tableName, quotedTable string) (string, string, error) {
-	kind := tableKind(conn, tableName)
+func showCreateStatement(conn *sql.Conn, dbName, tableName, quotedTable string) (string, string, error) {
+	kind := tableKind(conn, dbName, tableName)
 	row := conn.QueryRowContext(context.Background(), "SHOW CREATE "+kind+" "+quotedTable)
 	if kind == "VIEW" {
 		var name, createSQL, charset, collation string
@@ -674,9 +675,12 @@ func showCreateStatement(conn *sql.Conn, tableName, quotedTable string) (string,
 }
 
 // tableColumns returns column names and their uppercased type tokens.
-func tableColumns(conn *sql.Conn, tableName, quotedTable string) ([]string, []string, error) {
+// TABLE_SCHEMA is filtered because information_schema is global — without it,
+// a name shared across schemas mixes in foreign columns and the SELECT below
+// fails with "Unknown column".
+func tableColumns(conn *sql.Conn, dbName, tableName, quotedTable string) ([]string, []string, error) {
 	rows, err := conn.QueryContext(context.Background(),
-		"SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName)
+		"SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", dbName, tableName)
 	if err != nil {
 		return nil, nil, err
 	}
