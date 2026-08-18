@@ -1619,6 +1619,8 @@ watch(() => settingsStore.settings.terminal, (ts) => {
   if (typeof ts.minimumContrast === 'number') {
     terminal.options.minimumContrastRatio = ts.minimumContrast
   }
+  // Live cursorStyle is applied by xterm on the next cursor render.
+  if (ts.cursorStyle) terminal.options.cursorStyle = ts.cursorStyle
   resize()
 }, { deep: true })
 

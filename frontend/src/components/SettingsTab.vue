@@ -354,17 +354,19 @@
               <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-switch :model-value="settingsStore.settings.terminal.highlightEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.highlightEnabled = v; settingsStore.save() }" />
+              <el-switch :model-value="settingsStore.settings.terminal.cursorBlink ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.cursorBlink = v; settingsStore.save() }" />
             </div>
           </div>
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.cursorBlink') }}</div>
-              <div class="setting-desc">{{ t('settings.cursorBlinkDesc') }}</div>
+              <div class="setting-title">{{ t('settings.cursorStyle') }}</div>
+              <div class="setting-desc">{{ t('settings.cursorStyleDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-switch :model-value="settingsStore.settings.terminal.cursorBlink ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.cursorBlink = v; settingsStore.save() }" />
+              <el-select v-model="settingsStore.settings.terminal.cursorStyle" @change="settingsStore.save()">
+                <el-option v-for="opt in cursorStyleOptions" :key="opt.value" :label="t(opt.labelKey)" :value="opt.value" />
+              </el-select>
             </div>
           </div>
 
@@ -379,6 +381,16 @@
                 <el-option :label="t('settings.contrastStandard')" :value="4.5" />
                 <el-option :label="t('settings.contrastHigh')" :value="7" />
               </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.highlight') }}</div>
+              <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.highlightEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.highlightEnabled = v; settingsStore.save() }" />
             </div>
           </div>
         </div>
@@ -953,7 +965,7 @@ import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME } from '../types/settings'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
@@ -1153,6 +1165,8 @@ const secondFontOptions = computed(() =>
 )
 
 const { terminalThemeGroups, isCustomTheme } = useTerminalThemeOptions()
+
+const cursorStyleOptions = CURSOR_STYLES
 
 const themeEditorVisible = ref(false)
 const themeEditorSourceId = ref<string | undefined>(undefined)
