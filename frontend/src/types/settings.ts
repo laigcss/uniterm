@@ -69,6 +69,11 @@ export interface TerminalSettings {
   aiTranscription: boolean
   highlightEnabled: boolean
   cursorBlink: boolean
+  // Minimum text/background contrast ratio (F-039). xterm auto-brightens or
+  // darkens the foreground until this ratio is met, only for cells below it,
+  // so low-contrast pairings (e.g. ls's colored blocks for 777 dirs) stay
+  // readable. 1 = xterm's no-op default = disabled.
+  minimumContrast: number
   // Override for the session output log directory. Empty means the
   // OS default under ~/Documents/uniTerm/logs.
   sessionLogDir: string
@@ -200,6 +205,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     aiTranscription: true,
     highlightEnabled: true,
     cursorBlink: true,
+    minimumContrast: 4.5,
     sessionLogDir: '',
     wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
   },
