@@ -367,6 +367,20 @@
               <el-switch :model-value="settingsStore.settings.terminal.cursorBlink ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.cursorBlink = v; settingsStore.save() }" />
             </div>
           </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.terminalContrast') }}</div>
+              <div class="setting-desc">{{ t('settings.terminalContrastDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.minimumContrast" @change="settingsStore.save()">
+                <el-option :label="t('settings.contrastOff')" :value="1" />
+                <el-option :label="t('settings.contrastStandard')" :value="4.5" />
+                <el-option :label="t('settings.contrastHigh')" :value="7" />
+              </el-select>
+            </div>
+          </div>
         </div>
 
         <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>

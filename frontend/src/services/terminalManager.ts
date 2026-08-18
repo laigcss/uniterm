@@ -115,6 +115,12 @@ export function acquireTerminal(
       scrollback: options.scrollback ?? 2500,
       allowProposedApi: true,
       allowTransparency: true,
+      // Boost text/background contrast (F-039): xterm auto-brightens or
+      // darkens the foreground toward black/white until the configured
+      // minimumContrast ratio (1 = off) is met — only for cells below it,
+      // normal text is untouched. Fixes ls's colored blocks for 777 dirs
+      // (e.g. ow=34;42 blue-on-green is ~1.3:1, illegible) staying readable.
+      minimumContrastRatio: useSettingsStore().settings.terminal.minimumContrast ?? 4.5,
       wordSeparator,
     })
 

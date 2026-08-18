@@ -1614,6 +1614,11 @@ watch(() => settingsStore.settings.terminal, (ts) => {
     // recreating the terminal.
     terminal.options.wordSeparator = ts.wordSeparator
   }
+  // Live minimum-contrast (F-039): xterm reads it on each render, so a plain
+  // assignment re-evaluates the atlas without recreating the terminal.
+  if (typeof ts.minimumContrast === 'number') {
+    terminal.options.minimumContrastRatio = ts.minimumContrast
+  }
   resize()
 }, { deep: true })
 
