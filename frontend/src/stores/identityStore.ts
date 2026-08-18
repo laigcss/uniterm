@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { LoadIdentities, SaveIdentities } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime'
 import type { Identity, IdentityStoreData } from '../types/identity'
+
+// Module-level un-subscriber for the cross-window store:identities:changed listener.
+let unsubIdentitiesChanged: (() => void) | null = null
 
 export const useIdentityStore = defineStore('identity', () => {
   const identities = ref<Identity[]>([])
@@ -23,6 +27,18 @@ export const useIdentityStore = defineStore('identity', () => {
     await SaveIdentities({ identities: identities.value } as any)
   }
 
+  // Reload from disk when the backend pushes updated identity data (e.g. after
+  // a cloud sync pull), so the keychain isn't stale until restart.
+  unsubIdentitiesChanged?.()
+  unsubIdentitiesChanged = EventsOn('store:identities:changed', (data: IdentityStoreData) => {
+    if (data?.identities) identities.value = data.identities
+  })
+
+  function dispose() {
+    unsubIdentitiesChanged?.()
+    unsubIdentitiesChanged = null
+  }
+
   async function add(id: Identity) {
     identities.value.push(id)
     await save()
@@ -39,5 +55,5 @@ export const useIdentityStore = defineStore('identity', () => {
     await save()
   }
 
-  return { identities, loading, load, save, add, update, remove }
+  return { identities, loading, load, save, add, update, remove, dispose }
 })

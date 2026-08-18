@@ -943,13 +943,19 @@ func (a *App) LoadLocalState() (store.LocalState, error) {
 }
 
 // bgDir returns the directory holding the (local-only, never-synced)
-// background image. It is created on demand.
+// background image. It is rooted under the active data directory so the
+// image moves with the config when the data dir is migrated. It is
+// created on demand.
 func (a *App) bgDir() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
+	base := a.dataDir
+	if base == "" {
+		var err error
+		base, err = store.DefaultDataDir()
+		if err != nil {
+			return "", err
+		}
 	}
-	dir := filepath.Join(configDir, "uniTerm", "backgrounds")
+	dir := filepath.Join(base, "backgrounds")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
@@ -1051,6 +1057,16 @@ func (a *App) reloadStoresAfterSync() {
 			runtime.EventsEmit(a.ctx, "store:quickCommands:changed", data)
 		}
 	}
+	if a.identityStore != nil {
+		if data, err := a.identityStore.Load(); err == nil {
+			runtime.EventsEmit(a.ctx, "store:identities:changed", data)
+		}
+	}
+	if a.proxyStore != nil {
+		if data, err := a.proxyStore.Load(); err == nil {
+			runtime.EventsEmit(a.ctx, "store:proxies:changed", data)
+		}
+	}
 }
 
 func (a *App) triggerAutoSync() {
@@ -1148,12 +1164,7 @@ func (a *App) SyncResolveConflict(useLocal bool) (*sync.SyncResult, error) {
 		return nil, err
 	}
 	if result.Direction == sync.SyncPull {
-		if data, err := a.connectionStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:connections:changed", data)
-		}
-		if settings, err := a.settingsStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:settings:changed", settings)
-		}
+		a.reloadStoresAfterSync()
 	}
 	return result, nil
 }
