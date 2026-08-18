@@ -52,7 +52,11 @@ const C = {
 const PATTERNS: { sgr: string; regexes: RegExp[] }[] = [
   { sgr: C.url,     regexes: [/https?:\/\/[^\s\x1b]+/gi] },
   { sgr: C.ip,      regexes: [/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b/g] },
-  { sgr: C.path,    regexes: [/(?<=^|\s)(?:\/|~\/)[\w.\/-]+(?=[\s:;"')\]}]|$)/g] },
+  // NOTE: path/`~/` must not use a lookbehind ((?<=…)) — it is a parse-time
+  // feature unsupported by the JavaScriptCore in macOS ≤12.3 (Safari 15.4
+  // WebView), where the whole module fails to parse and the terminal shows
+  // a black screen. Anchor the start with a consuming (^|\s) group instead.
+  { sgr: C.path,    regexes: [/(?:^|\s)(?:\/|~\/)[\w.\/-]+(?=[\s:;"')\]}]|$)/g] },
   { sgr: C.datetime, regexes: [
     /\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:[.,]\d+)?Z?\b/g,
     /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\b/g,
