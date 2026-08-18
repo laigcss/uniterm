@@ -39,6 +39,7 @@
       v-for="conn in node.connections"
       :key="conn.id"
       class="connection-item indented"
+      :data-conn-id="conn.id"
       :class="{
         active: selected.has(conn.id),
         'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
