@@ -6,7 +6,15 @@
     @dragleave="onDragLeave"
     @drop="onDragDrop"
   >
-    <div ref="terminalRef" class="terminal-area" @contextmenu="onTerminalContextMenu"></div>
+    <div class="terminal-area" @contextmenu="onTerminalContextMenu">
+      <TerminalGutter
+        :session-id="props.sessionId"
+        :show-line-numbers="showLineNumbers"
+        :show-timestamps="showTimestamps"
+        :get-host="getTerminalHost"
+      />
+      <div ref="terminalRef" class="terminal-host"></div>
+    </div>
 
     <div v-if="dragOver" class="drop-overlay">
       <span>{{ t('sftp.dropHere') }}</span>
@@ -65,6 +73,14 @@
         <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
       </div>
       <div class="menu-item" @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</div>
+      <div class="menu-item" @click="toggleLineNumbers">
+        {{ showLineNumbers ? t('settings.hideLineNumbers') : t('settings.showLineNumbers') }}
+        <span class="menu-shortcut">{{ menuShortcut('toggleLineNumbers') }}</span>
+      </div>
+      <div class="menu-item" @click="toggleTimestamps">
+        {{ showTimestamps ? t('settings.hideTimestamps') : t('settings.showTimestamps') }}
+        <span class="menu-shortcut">{{ menuShortcut('toggleTimestamps') }}</span>
+      </div>
       <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
         {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
       </div>
@@ -136,7 +152,9 @@ import {
 import { useTerminalInput } from '../composables/useTerminalInput'
 import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
+import TerminalGutter from './TerminalGutter.vue'
 import { startZmodemService } from '../services/zmodemService'
+import { stampWrittenLines, stampCommandLine, currentAbsoluteLine } from '../services/terminalTimestamps'
 import { useZmodemStore } from '../stores/zmodemStore'
 import ZmodemTransfer from './ZmodemTransfer.vue'
 import { ChevronUp, ChevronDown, X } from '@lucide/vue'
@@ -182,6 +200,42 @@ const terminalInstanceRef = crypto.randomUUID?.() ||
   Date.now().toString(36)
 
 const terminalRef = ref<HTMLDivElement>()
+
+// Whether the line-number gutter is enabled (from the persistent setting).
+const showLineNumbers = computed(() => settingsStore.settings.terminal.showLineNumbers ?? false)
+// Whether the timestamp column is enabled (from the persistent setting).
+const showTimestamps = computed(() => settingsStore.settings.terminal.showTimestamps ?? false)
+
+// Write terminal data and stamp the rows it writes with their arrival time for
+// the timestamp column. Capture the cursor line before the write and stamp up
+// to where it ends after xterm finishes parsing (no-op when timestamps are off).
+function writeStamped(data: string) {
+  const t = terminal
+  const sid = props.sessionId
+  if (!t || !sid) { t?.write(data); return }
+  const ts = Date.now()
+  const before = currentAbsoluteLine(sid)
+  t.write(data, () => {
+    stampWrittenLines(sid, before, currentAbsoluteLine(sid), ts)
+  })
+}
+
+// Pass the xterm host element to the gutter so it can verify the terminal it
+// renders is attached to this very component (KeepAlive/drag can move it).
+function getTerminalHost(): HTMLElement | null {
+  return terminalRef.value ?? null
+}
+
+function toggleLineNumbers() {
+  menu.closeMenu()
+  settingsStore.updateTerminal({ showLineNumbers: !showLineNumbers.value })
+}
+
+function toggleTimestamps() {
+  menu.closeMenu()
+  settingsStore.updateTerminal({ showTimestamps: !showTimestamps.value })
+}
+
 const searchInputRef = ref<HTMLInputElement>()
 const searchVisible = ref(false)
 
@@ -914,7 +968,7 @@ onMounted(() => {
         // Apply syntax highlighting when restoring history so it matches
         // newly arriving lines after a tab switch.
         const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-        terminal.write(hlOn ? highlight(history) : history)
+        writeStamped(hlOn ? highlight(history) : history)
       }
     }
     // Always sync writtenChunks to prevent onActivated from replaying
@@ -982,6 +1036,9 @@ onMounted(() => {
       // Must happen BEFORE terminalInput.handleInput because handleInput
       // clears the line buffer on Enter.
       if ((data === '\r' || data === '\n') && terminalInput && !terminalInput.isInAlternateScreen()) {
+        // Stamp the command line with the moment it was executed (timestamp
+        // column). Must happen before handleInput clears the line buffer.
+        if (props.sessionId) stampCommandLine(props.sessionId, Date.now())
         const line = terminalInput.lineBuffer.value.trim()
         if (/^(?:sudo\s+)?rz\b/.test(line)) {
           zmodemDirection = 'upload'
@@ -1235,7 +1292,7 @@ onMounted(() => {
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
-        terminal.write(cleaned)
+        writeStamped(cleaned)
       }
       writtenChunks++
     } else {
@@ -1248,7 +1305,7 @@ onMounted(() => {
         }
       }
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      terminal.write(hlOn ? highlight(data) : data)
+      writeStamped(hlOn ? highlight(data) : data)
       writtenChunks++
       if (props.mode === 'ssh' && props.onSessionStatus) {
         // onSessionData is handled by the consumer via EventsOn if needed
@@ -1399,7 +1456,7 @@ onActivated(() => {
     if (total > writtenChunks) {
       const tail = sessionStore.getDataFromChunk(props.sessionId, writtenChunks)
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      terminal?.write(hlOn ? highlight(tail) : tail)
+      writeStamped(hlOn ? highlight(tail) : tail)
       writtenChunks = total
     }
   }
@@ -1875,8 +1932,19 @@ defineExpose({
 }
 .terminal-area {
   flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.terminal-host {
+  flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 /* Search bar */

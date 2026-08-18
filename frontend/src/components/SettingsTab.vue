@@ -393,6 +393,37 @@
               <el-switch :model-value="settingsStore.settings.terminal.highlightEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.highlightEnabled = v; settingsStore.save() }" />
             </div>
           </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.showLineNumbers') }}</div>
+              <div class="setting-desc">{{ t('settings.showLineNumbersDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.showLineNumbers ?? false" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.showLineNumbers = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.showTimestamps') }}</div>
+              <div class="setting-desc">{{ t('settings.showTimestampsDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.showTimestamps ?? false" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.showTimestamps = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.timestampFormat') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.timestampFormat" @change="settingsStore.save()">
+                <el-option v-for="opt in TIMESTAMP_FORMATS" :key="opt.value" :label="t(opt.labelKey)" :value="opt.value" />
+              </el-select>
+            </div>
+          </div>
         </div>
 
         <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
@@ -965,7 +996,7 @@ import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES } from '../types/settings'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
