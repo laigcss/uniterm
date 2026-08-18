@@ -111,6 +111,7 @@ export function acquireTerminal(
       fontWeight: options.fontWeight ?? 400,
       theme,
       cursorBlink,
+      cursorStyle: useSettingsStore().settings.terminal.cursorStyle ?? 'block',
       rightClickSelectsWord: false,
       scrollback: options.scrollback ?? 2500,
       allowProposedApi: true,

@@ -69,6 +69,9 @@ export interface TerminalSettings {
   aiTranscription: boolean
   highlightEnabled: boolean
   cursorBlink: boolean
+  // Cursor shape when the terminal is focused, mapped straight onto xterm's
+  // `cursorStyle` option.
+  cursorStyle: 'block' | 'underline' | 'bar'
   // Minimum text/background contrast ratio (F-039). xterm auto-brightens or
   // darkens the foreground until this ratio is met, only for cells below it,
   // so low-contrast pairings (e.g. ls's colored blocks for 777 dirs) stay
@@ -205,6 +208,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     aiTranscription: true,
     highlightEnabled: true,
     cursorBlink: true,
+    cursorStyle: 'block',
     minimumContrast: 4.5,
     sessionLogDir: '',
     wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
@@ -290,6 +294,12 @@ export const FONT_WEIGHT_OPTIONS: { labelKey: string; value: number }[] = [
 export const SELECTION_ACTIONS: { label: string; value: TerminalSettings['selectionAction'] }[] = [
   { label: 'None', value: 'none' },
   { label: 'Copy to clipboard', value: 'copy' }
+]
+
+export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorStyle'] }[] = [
+  { labelKey: 'settings.cursorStyleBlock', value: 'block' },
+  { labelKey: 'settings.cursorStyleUnderline', value: 'underline' },
+  { labelKey: 'settings.cursorStyleBar', value: 'bar' }
 ]
 
 export const RIGHT_CLICK_ACTIONS: { label: string; value: TerminalSettings['rightClickAction'] }[] = [
