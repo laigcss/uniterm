@@ -20,6 +20,7 @@
   "sidebar.connectS3": "S3 で接続",
   "sidebar.edit": "編集",
   "sidebar.duplicate": "複製",
+  "sidebar.locateSession": "セッションを探す",
   "sidebar.delete": "削除",
   "sidebar.deleteConfirm": "選択した接続 {connCount} 件を削除しますか？",
   "sidebar.newConnectionFromSearch": "新規接続...",

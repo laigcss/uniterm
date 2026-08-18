@@ -42,6 +42,7 @@
       :data-conn-id="conn.id"
       :class="{
         active: selected.has(conn.id),
+        'has-session': openConns.has(conn.id),
         'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
         'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
       }"
@@ -92,6 +93,7 @@ const totalCount = computed(() => {
 // Injected from Sidebar
 const expanded = inject<Set<string>>('expandedGroups')!
 const selected = inject<Set<string>>('selectedIds')!
+const openConns = inject<Set<string>>('openPanelConnIds')!
 const dragOverId = inject<any>('dragOverGroupId')!
 const dropIndicator = inject<any>('dropIndicator')!
 const handlers = inject<any>('groupHandlers')!
@@ -253,6 +255,11 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
 }
 .connection-item.active .name {
   color: var(--accent);
+}
+
+/* Connection has an open session → highlight its icon with the AI-lock amber */
+.connection-item.has-session .conn-icon {
+  color: var(--warning);
 }
 
 .conn-more-btn {

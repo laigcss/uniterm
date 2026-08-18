@@ -125,6 +125,7 @@
             :data-conn-id="conn.id"
             :class="{
               active: selectedIds.has(conn.id),
+              'has-session': openPanelConnIds.has(conn.id),
               'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
               'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
             }"
@@ -158,6 +159,7 @@
           :data-conn-id="conn.id"
           :class="{
             active: selectedIds.has(conn.id),
+            'has-session': openPanelConnIds.has(conn.id),
             'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
             'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
           }"
@@ -350,6 +352,7 @@
       <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'container'" class="menu-item" @click="doConnect">{{ t('sidebar.connectContainer') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</div>
+      <div v-if="selectedConn && isConnOpen(selectedConn.id)" class="menu-item" @click="doLocateSession">{{ t('sidebar.locateSession') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</div>
       <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
@@ -499,6 +502,8 @@ import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
 import type { GroupTreeNode } from '../stores/connectionStore'
+import { usePanelStore } from '../stores/panelStore'
+import { useTabStore } from '../stores/tabStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import ConnectionForm from './ConnectionForm.vue'
@@ -523,7 +528,19 @@ defineProps<{
 const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
+const panelStore = usePanelStore()
+const tabStore = useTabStore()
 const { t } = useI18n()
+
+// Connection ids that currently have an open panel/session (panel.config.id).
+// Reactive over the panelStore map, so it updates as panels open/close.
+const openPanelConnIds = computed<Set<string>>(() => {
+  const s = new Set<string>()
+  for (const p of panelStore.panels.values()) {
+    if (p.config?.id) s.add(p.config.id)
+  }
+  return s
+})
 const showForm = ref(false)
 const showExportDialog = ref(false)
 const showImportDialog = ref(false)
@@ -1336,6 +1353,28 @@ function doConnectMonitor() {
   }
 }
 
+// Whether the given connection id currently has an open panel/session.
+function isConnOpen(id: string): boolean {
+  return openPanelConnIds.value.has(id)
+}
+
+// Switch to the existing tab/session hosting this connection instead of opening a new one.
+function doLocateSession() {
+  closeMenu()
+  const id = selectedConn.value?.id
+  if (!id) return
+  for (const p of panelStore.panels.values()) {
+    if (p.config?.id !== id) continue
+    const tab = tabStore.tabs.find(t => t.id === p.tabId)
+    if (!tab) continue
+    tabStore.setActiveTab(tab.id)
+    if (tab.type === 'workspace') {
+      tabStore.setActivePanel(tab.id, p.id)
+    }
+    break
+  }
+}
+
 function doConnectRDP() {
   const ids = getSelectedConnectionIds()
   const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
@@ -1911,6 +1950,7 @@ onUnmounted(() => {
 // Provide to GroupTreeItem (after all refs/functions are defined)
 provide('expandedGroups', expandedGroups)
 provide('selectedIds', selectedIds)
+provide('openPanelConnIds', openPanelConnIds)
 provide('dragOverGroupId', dragOverGroupId)
 provide('dropIndicator', dropIndicator)
 provide('groupHandlers', {
@@ -2178,6 +2218,11 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 .connection-item.active .name {
   color: var(--accent);
+}
+
+/* Connection has an open session → highlight its icon with the AI-lock amber */
+.connection-item.has-session .conn-icon {
+  color: var(--warning);
 }
 
 .conn-more-btn {

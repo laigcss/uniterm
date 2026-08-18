@@ -20,6 +20,7 @@
   "sidebar.connectS3": "Connecter en S3",
   "sidebar.edit": "Modifier",
   "sidebar.duplicate": "Dupliquer",
+  "sidebar.locateSession": "Localiser la session",
   "sidebar.delete": "Supprimer",
   "sidebar.deleteConfirm": "Supprimer {connCount} connexion(s) sélectionnée(s) ?",
   "sidebar.newConnectionFromSearch": "Nouvelle connexion...",
