@@ -37,6 +37,16 @@ export interface ManagedTerminal {
    * double input when multiple KeepAlive-cached components share the same
    * terminal instance. */
   onDataGeneration: number
+  /** Birth time (Date.now()) of buffer rows, keyed by absolute row index
+   * (lineOffset-compensated), used by the timestamp gutter column. Kept on
+   * the shared terminal so it survives KeepAlive and drag-across-panes. */
+  lineTimestamps: Map<number, number>
+  /** Absolute-row offset accumulated from scrollback trimming, so both the
+   * line-number and timestamp columns stay continuous as old lines drop off
+   * the top of the buffer. */
+  lineOffset: number
+  /** Subscription to the normal-buffer line-collection onTrim event. */
+  trimDispose: { dispose(): void } | null
 }
 
 const terminals = new Map<string, ManagedTerminal>()
@@ -157,8 +167,27 @@ export function acquireTerminal(
       disposeTimer: null,
       isNew: true,
       onDataGeneration: 0,
+      lineTimestamps: new Map(),
+      lineOffset: 0,
+      trimDispose: null,
     }
-    terminals.set(sessionId, managed)
+
+    // Track scrollback trimming so line-numbers / timestamps stay continuous
+    // as old lines drop off the top of the buffer. Internal API — guarded.
+    // Doesn't survive terminal re-creation, but a fresh terminal restarts at 0.
+    // Snapshot `managed` into a const so the onTrim closure doesn't re-widen it.
+    const m = managed
+    try {
+      const core = (terminal as any)._core
+      const lines = core?._bufferService?.buffers?.normal?.lines
+      if (typeof lines?.onTrim === 'function') {
+        m.trimDispose = lines.onTrim((amount: number) => {
+          m.lineOffset += amount
+        })
+      }
+    } catch { /* noop */ }
+
+    terminals.set(sessionId, m)
   }
 
   managed.refs.add(ref)
@@ -175,6 +204,8 @@ export function releaseTerminal(sessionId: string, ref: string): void {
     // Delay disposal to survive drag-and-drop lifecycle race.
     // If acquireTerminal is called within 500ms, the timer is cancelled.
     managed.disposeTimer = setTimeout(() => {
+      managed.trimDispose?.dispose()
+      managed.trimDispose = null
       managed.terminal.dispose()
       terminals.delete(sessionId)
     }, 500)
@@ -187,6 +218,8 @@ export function disposeTerminal(sessionId: string): void {
   if (managed.disposeTimer) {
     clearTimeout(managed.disposeTimer)
   }
+  managed.trimDispose?.dispose()
+  managed.trimDispose = null
   managed.terminal.dispose()
   terminals.delete(sessionId)
 }

@@ -85,6 +85,17 @@ export interface TerminalSettings {
   // extended with the most common shell / path punctuation, so that
   // e.g. `foo;bar` selects only `foo` on double-click.
   wordSeparator: string
+  // Show a line-number gutter along the left edge of the terminal.
+  // Wrapped continuation rows show no number (so a wrapped command reads as
+  // one logical line). Defaults to off; the right-click menu can toggle it.
+  showLineNumbers: boolean
+  // Show a timestamp column recording when each logical line first appeared —
+  // the prompt line when its command was executed, output lines when they
+  // arrived. Wrapped continuation rows stay blank. Defaults to off.
+  showTimestamps: boolean
+  // Display template for the timestamp column. Tokenized: YYYY/YY (year),
+  // MM/DD (month/day), HH/mm/ss (hour/minute/second), literals pass through.
+  timestampFormat: string
 }
 
 export interface AIModelConfig {
@@ -123,6 +134,8 @@ export type ShortcutAction =
   | 'openSettings'
   | 'copy'
   | 'paste'
+  | 'toggleLineNumbers'
+  | 'toggleTimestamps'
 
 export interface KeyBinding {
   ctrl: boolean
@@ -150,6 +163,8 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   openSettings: 'shortcut.openSettings',
   copy: 'shortcut.copy',
   paste: 'shortcut.paste',
+  toggleLineNumbers: 'shortcut.toggleLineNumbers',
+  toggleTimestamps: 'shortcut.toggleTimestamps',
 }
 
 export const DEFAULT_KEYBOARD: KeyboardSettings = {
@@ -168,6 +183,8 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   openSettings: { ctrl: true, shift: false, alt: false, key: ',' },
   copy: { ctrl: true, shift: true, alt: false, key: 'c' },
   paste: { ctrl: true, shift: true, alt: false, key: 'v' },
+  toggleLineNumbers: { ctrl: true, shift: true, alt: false, key: 'g' },
+  toggleTimestamps: { ctrl: true, shift: true, alt: false, key: 't' },
 }
 
 export interface SFTPBookmarks {
@@ -211,7 +228,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     cursorStyle: 'block',
     minimumContrast: 4.5,
     sessionLogDir: '',
-    wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
+    wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
+    showLineNumbers: false,
+    showTimestamps: false,
+    timestampFormat: 'HH:mm:ss'
   },
   ai: {
     maxTurns: 20,
@@ -294,6 +314,14 @@ export const FONT_WEIGHT_OPTIONS: { labelKey: string; value: number }[] = [
 export const SELECTION_ACTIONS: { label: string; value: TerminalSettings['selectionAction'] }[] = [
   { label: 'None', value: 'none' },
   { label: 'Copy to clipboard', value: 'copy' }
+]
+
+// Timestamp column display formats. `value` is a tokenized template consumed
+// by formatTimestampMs (see utils/terminalGutter.ts); the option text is its
+// i18n label.
+export const TIMESTAMP_FORMATS: { labelKey: string; value: string; sample: string }[] = [
+  { labelKey: 'settings.timestampFormatTime', value: 'HH:mm:ss', sample: '12:34:56' },
+  { labelKey: 'settings.timestampFormatDateTime', value: 'YYYY-MM-DD HH:mm:ss', sample: '2026-08-18 12:34:56' },
 ]
 
 export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorStyle'] }[] = [

@@ -856,6 +856,16 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     const pid = tabStore.getActivePanelId()
     if (pid) window.dispatchEvent(new CustomEvent('terminal:copy', { detail: { panelId: pid } }))
   },
+  toggleLineNumbers: () => {
+    // Line numbers / timestamps are global terminal settings, so these toggle
+    // them directly rather than dispatching a per-panel event.
+    const cur = settingsStore.settings.terminal.showLineNumbers ?? false
+    settingsStore.updateTerminal({ showLineNumbers: !cur })
+  },
+  toggleTimestamps: () => {
+    const cur = settingsStore.settings.terminal.showTimestamps ?? false
+    settingsStore.updateTerminal({ showTimestamps: !cur })
+  },
   paste: () => {
     const pid = tabStore.getActivePanelId()
     if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
