@@ -178,6 +178,24 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
+// quotedString wraps a string in single quotes with embedded quotes doubled.
+// Shared by the per-dialect dump value escapers (all dialects agree on this
+// rule).
+func quotedString(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+// hexLower returns the lowercase hex encoding of b.
+func hexLower(b []byte) string {
+	const hex = "0123456789abcdef"
+	out := make([]byte, len(b)*2)
+	for i, c := range b {
+		out[i*2] = hex[c>>4]
+		out[i*2+1] = hex[c&0x0f]
+	}
+	return string(out)
+}
+
 // quoteStringValue escapes and quotes a value for an INSERT statement. NULL is
 // emitted as the bare keyword. Binary payloads become _binary 0x… .
 func quoteSQLValue(v any) string {

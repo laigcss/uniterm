@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	_ "github.com/microsoft/go-mssqldb"
 )
@@ -505,5 +506,180 @@ var sqlserverIntTypes = []string{
 }
 
 func (p *sqlserverProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
-	return "", &errDumpUnsupported{"sqlserver"}
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	if err := p.PrepareExec(conn, dbName); err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	quotedTable := p.Quote(tableName)
+
+	if opts.Structure {
+		createSQL, derr := sqlserverCreateTableSQL(conn, dbName, tableName, quotedTable)
+		if derr != nil {
+			return "", derr
+		}
+		b.WriteString("--\n-- Structure for ")
+		b.WriteString(tableName)
+		b.WriteString("\n--\nDROP TABLE IF EXISTS ")
+		b.WriteString(quotedTable)
+		b.WriteString(";\n")
+		b.WriteString(createSQL)
+		if !strings.HasSuffix(createSQL, ";") {
+			b.WriteByte(';')
+		}
+		b.WriteString("\n\n")
+	}
+
+	if opts.Data {
+		cols, colTypes, derr := sqlserverTableColumns(conn, dbName, tableName)
+		if derr != nil {
+			return "", derr
+		}
+		if len(cols) > 0 {
+			b.WriteString("--\n-- Data for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\n")
+			colList := make([]string, len(cols))
+			for i, c := range cols {
+				colList[i] = p.Quote(c)
+			}
+			prefix := "INSERT INTO " + quotedTable + " (" + strings.Join(colList, ", ") + ") VALUES "
+
+			rows, err := conn.QueryContext(ctx, "SELECT "+strings.Join(colList, ", ")+" FROM "+quotedTable)
+			if err != nil {
+				return "", err
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				vals := make([]any, len(cols))
+				ptrs := make([]any, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				if err := rows.Scan(ptrs...); err != nil {
+					return "", err
+				}
+				b.WriteString(prefix)
+				b.WriteByte('(')
+				for i, v := range vals {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(dumpSqlserverValue(v, colTypes[i]))
+				}
+				b.WriteString(");\n")
+			}
+			if err := rows.Err(); err != nil {
+				return "", err
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String(), nil
+}
+
+// sqlserverCreateTableSQL builds a CREATE TABLE statement from INFORMATION_SCHEMA.
+func sqlserverCreateTableSQL(conn *sql.Conn, dbName, tableName, quotedTable string) (string, error) {
+	rows, err := conn.QueryContext(context.Background(), `
+		SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT,
+		       CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+		ORDER BY ORDINAL_POSITION`, dbName, tableName)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var b strings.Builder
+	b.WriteString("CREATE TABLE ")
+	b.WriteString(quotedTable)
+	b.WriteString(" (\n")
+	first := true
+	for rows.Next() {
+		var name, dataType, isNullable string
+		var colDefault sql.NullString
+		var charMaxLen, numPrec, numScale sql.NullString
+		if err := rows.Scan(&name, &dataType, &isNullable, &colDefault, &charMaxLen, &numPrec, &numScale); err != nil {
+			return "", err
+		}
+		if !first {
+			b.WriteString(",\n")
+		}
+		first = false
+		b.WriteString("  [")
+		b.WriteString(name)
+		b.WriteString("] ")
+		b.WriteString(sqlserverFormatType(dataType, charMaxLen.String, numPrec.String, numScale.String))
+		if colDefault.Valid && colDefault.String != "" {
+			b.WriteString(" DEFAULT ")
+			b.WriteString(colDefault.String)
+		}
+		if strings.ToUpper(isNullable) == "NO" {
+			b.WriteString(" NOT NULL")
+		} else {
+			b.WriteString(" NULL")
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	b.WriteString("\n)")
+	return b.String(), nil
+}
+
+// sqlserverTableColumns returns column names and raw type tokens.
+func sqlserverTableColumns(conn *sql.Conn, dbName, tableName string) ([]string, []string, error) {
+	rows, err := conn.QueryContext(context.Background(), `
+		SELECT COLUMN_NAME, DATA_TYPE
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+		ORDER BY ORDINAL_POSITION`, dbName, tableName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var names, types []string
+	for rows.Next() {
+		var name, ty string
+		if err := rows.Scan(&name, &ty); err != nil {
+			return nil, nil, err
+		}
+		names = append(names, name)
+		types = append(types, strings.ToUpper(ty))
+	}
+	return names, types, rows.Err()
+}
+
+// dumpSqlserverValue renders a scanned cell as a T-SQL literal. Unicode text
+// uses the N'..' prefix so nvarchar columns keep non-ASCII; varbinary becomes
+// a bare 0x.. literal (T-SQL has no _binary keyword).
+func dumpSqlserverValue(v any, typeToken string) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case []byte:
+		return "0x" + hexLower(val)
+	case string:
+		return "N'" + strings.ReplaceAll(val, "'", "''") + "'"
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case time.Time:
+		return "'" + val.Format("2006-01-02 15:04:05.999999") + "'"
+	default:
+		return scanToString(v)
+	}
 }
