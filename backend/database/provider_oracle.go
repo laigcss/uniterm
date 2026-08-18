@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/sijms/go-ora/v2"
 )
@@ -507,5 +508,147 @@ var oracleIntTypes = []string{
 }
 
 func (p *oracleProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
-	return "", &errDumpUnsupported{"oracle"}
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	if err := p.PrepareExec(conn, dbName); err != nil {
+		return "", err
+	}
+	// DBMS_METADATA.GET_DDL returns a CLOB; raise LONG so the full text is
+	// returned in the SELECT rather than truncated.
+	_, _ = conn.ExecContext(ctx, "ALTER SESSION SET LONG = 100000000")
+
+	owner, err := p.resolveSchema(db, dbName)
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	quotedTable := p.Quote(tableName)
+
+	if opts.Structure {
+		kind := oracleTableKind(conn, owner, tableName)
+		var createSQL string
+		err := conn.QueryRowContext(ctx,
+			"SELECT DBMS_METADATA.GET_DDL(?, ?, ?) FROM DUAL",
+			strings.ToUpper(kind), strings.ToUpper(tableName), strings.ToUpper(owner)).Scan(&createSQL)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("--\n-- Structure for ")
+		b.WriteString(tableName)
+		b.WriteString("\n--\nDROP " + kind + " IF EXISTS " + quotedTable + ";\n")
+		b.WriteString(createSQL)
+		b.WriteString(";\n\n")
+	}
+
+	if opts.Data {
+		cols, colTypes, derr := oracleTableColumns(conn, owner, tableName)
+		if derr != nil {
+			return "", derr
+		}
+		if len(cols) > 0 {
+			b.WriteString("--\n-- Data for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\n")
+			colList := make([]string, len(cols))
+			for i, c := range cols {
+				colList[i] = p.Quote(c)
+			}
+			prefix := "INSERT INTO " + quotedTable + " (" + strings.Join(colList, ", ") + ") VALUES "
+
+			rows, err := conn.QueryContext(ctx, "SELECT "+strings.Join(colList, ", ")+" FROM "+quotedTable)
+			if err != nil {
+				return "", err
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				vals := make([]any, len(cols))
+				ptrs := make([]any, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				if err := rows.Scan(ptrs...); err != nil {
+					return "", err
+				}
+				b.WriteString(prefix)
+				b.WriteByte('(')
+				for i, v := range vals {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(dumpOracleValue(v, colTypes[i]))
+				}
+				b.WriteString(");\n")
+			}
+			if err := rows.Err(); err != nil {
+				return "", err
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String(), nil
+}
+
+// oracleTableKind returns "TABLE" or "VIEW" by querying all_objects.
+func oracleTableKind(conn *sql.Conn, owner, tableName string) string {
+	var t string
+	err := conn.QueryRowContext(context.Background(),
+		"SELECT object_type FROM all_objects WHERE owner = ? AND object_name = ? AND object_type IN ('TABLE','VIEW')",
+		strings.ToUpper(owner), strings.ToUpper(tableName)).Scan(&t)
+	if err == nil && t == "VIEW" {
+		return "VIEW"
+	}
+	return "TABLE"
+}
+
+// oracleTableColumns returns column names and types for a table.
+func oracleTableColumns(conn *sql.Conn, owner, tableName string) ([]string, []string, error) {
+	rows, err := conn.QueryContext(context.Background(),
+		`SELECT column_name, data_type || DECODE(data_length, 0, '', '(' || data_length || ')')
+		 FROM all_tab_columns WHERE owner = ? AND table_name = ? ORDER BY column_id`,
+		strings.ToUpper(owner), strings.ToUpper(tableName))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var names, types []string
+	for rows.Next() {
+		var name, ty string
+		if err := rows.Scan(&name, &ty); err != nil {
+			return nil, nil, err
+		}
+		names = append(names, name)
+		types = append(types, ty)
+	}
+	return names, types, rows.Err()
+}
+
+// dumpOracleValue renders a scanned cell as an Oracle literal. BLOBs become
+// HEXTORAW('..'); timestamps use TIMESTAMP '..' for reliability against NLS.
+func dumpOracleValue(v any, typeToken string) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case []byte:
+		return "HEXTORAW('" + hexLower(val) + "')"
+	case string:
+		return quotedString(val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case time.Time:
+		return "TIMESTAMP '" + val.Format("2006-01-02 15:04:05.999999") + "'"
+	default:
+		return scanToString(v)
+	}
 }
