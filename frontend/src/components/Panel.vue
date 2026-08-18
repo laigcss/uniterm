@@ -61,6 +61,7 @@
               <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
             </div>
             <div class="menu-item" @click="renamePanel">{{ t('tab.rename') }}</div>
+            <div v-if="panel.config?.id" class="menu-item" @click="locateConnection">{{ t('tab.locate') }}</div>
 
             <!-- ② 会话文本操作 -->
             <div class="menu-divider" />
@@ -303,6 +304,13 @@ function startEdit() {
 function renamePanel() {
   moreMenuVisible.value = false
   startEdit()
+}
+
+function locateConnection() {
+  moreMenuVisible.value = false
+  if (props.panel.config?.id) {
+    window.dispatchEvent(new CustomEvent('app:locate-connection', { detail: { id: props.panel.config.id } }))
+  }
 }
 
 function confirmEdit() {

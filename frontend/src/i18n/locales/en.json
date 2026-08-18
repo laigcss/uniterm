@@ -105,6 +105,7 @@
   "tab.copyHostAddress": "Copy Host Address",
   "tab.hostCopied": "Host address copied: {host}",
   "tab.rename": "Rename",
+  "tab.locate": "Locate connection",
   "tab.closeRight": "Close Tabs to the Right",
   "tab.closeLeft": "Close Tabs to the Left",
   "tab.closeOther": "Close Other Tabs",

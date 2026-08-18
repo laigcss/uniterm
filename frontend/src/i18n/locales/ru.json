@@ -105,6 +105,7 @@
   "tab.copyHostAddress": "Скопировать адрес хоста",
   "tab.hostCopied": "Адрес хоста скопирован: {host}",
   "tab.rename": "Переименовать",
+  "tab.locate": "Найти подключение",
   "tab.closeRight": "Закрыть вкладки справа",
   "tab.closeLeft": "Закрыть вкладки слева",
   "tab.closeOther": "Закрыть другие вкладки",

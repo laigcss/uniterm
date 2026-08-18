@@ -68,6 +68,7 @@
           <span class="menu-shortcut">{{ menuShortcut('lockAI') }}</span>
         </div>
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
+        <div v-if="hasLocatableConnection" class="menu-item" @click="locateHost">{{ t('tab.locate') }}</div>
         <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
           {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
         </div>
@@ -291,6 +292,13 @@ const showGroupTab = computed(() =>
 )
 const showGroupText = computed(() => props.tab.type === 'terminal')
 const showGroupConn = computed(() => props.tab.type === 'rdp' || isSsh.value)
+
+// True when the tab's panel is backed by a saved connection (has a config id),
+// so the "定位到连接" item can locate it in the sidebar's connection list.
+const hasLocatableConnection = computed(() => {
+  if (!('panelId' in props.tab)) return false
+  return !!panelStore.getPanel(props.tab.panelId)?.config?.id
+})
 
 // Connection host (IP or hostname) of the tab's panel. Empty for tab types
 // without a remote endpoint (local, k8s, container, start, settings…).
@@ -542,6 +550,14 @@ function openMonitor() {
   const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
   if (panel) {
     window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: panel }))
+  }
+  closeContextMenu()
+}
+
+function locateHost() {
+  const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  if (panel?.config?.id) {
+    window.dispatchEvent(new CustomEvent('app:locate-connection', { detail: { id: panel.config.id } }))
   }
   closeContextMenu()
 }

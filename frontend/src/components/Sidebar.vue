@@ -122,6 +122,7 @@
             v-for="conn in filteredGrouped.ungrouped"
             :key="conn.id"
             class="connection-item indented"
+            :data-conn-id="conn.id"
             :class="{
               active: selectedIds.has(conn.id),
               'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
@@ -154,6 +155,7 @@
           v-for="conn in filteredGrouped.ungrouped"
           :key="conn.id"
           class="connection-item"
+          :data-conn-id="conn.id"
           :class="{
             active: selectedIds.has(conn.id),
             'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
@@ -1135,6 +1137,50 @@ function onItemClick(e: MouseEvent, conn: ConnectionConfig) {
   }
 }
 
+// ── Locate a connection from the tab context menu ──
+async function locateConnectionById(id: string) {
+  const conn = connectionStore.connections.find(c => c.id === id)
+  if (!conn) return
+
+  // Surface the target: drop any search / type filter that could hide it.
+  searchQuery.value = ''
+  selectedTypeFilter.value = 'all'
+
+  // Expand the containing group (and its ancestors) so the row is rendered.
+  if (conn.groupId) {
+    let gid: string | undefined = conn.groupId
+    while (gid) {
+      expandedGroups.value.add(gid)
+      collapsedGroupIds.value.delete(gid)
+      const g = connectionStore.groups.find(g => g.id === gid)
+      gid = g?.parentId
+    }
+    expandedGroups.value = new Set(expandedGroups.value)
+  } else if (connectionStore.groups.length > 0) {
+    // Ungrouped target with real groups present → expand the virtual No-Group group.
+    expandedGroups.value.add('__ungrouped__')
+    collapsedGroupIds.value.delete('__ungrouped__')
+    expandedGroups.value = new Set(expandedGroups.value)
+  }
+
+  // Select the target. focusedId is set before the filter watcher flushes,
+  // so that watcher keeps our selection instead of resetting to the first row.
+  focusedId.value = conn.id
+  lastClickId.value = conn.id
+  selectedConn.value = conn
+  selectedIds.value = new Set([conn.id])
+
+  await nextTick()
+  await nextTick()
+  const row = sidebarEl.value?.querySelector<HTMLElement>(`.connection-item[data-conn-id="${conn.id}"]`)
+  row?.scrollIntoView({ block: 'nearest' })
+}
+
+function onLocateConnection(e: Event) {
+  const id = (e as CustomEvent)?.detail?.id
+  if (typeof id === 'string') locateConnectionById(id)
+}
+
 function onItemDblClick(conn: ConnectionConfig) {
   selectedIds.value = new Set()
   if (conn.type === 'database') {
@@ -1820,6 +1866,7 @@ onMounted(async () => {
     closeGroupMenu()
     closeEmptyAreaMenu()
   })
+  window.addEventListener('app:locate-connection', onLocateConnection)
   document.addEventListener('click', () => {
     closeMenu()
     closeGroupMenu()
@@ -1853,6 +1900,7 @@ onUnmounted(() => {
     closeGroupMenu()
     closeEmptyAreaMenu()
   })
+  window.removeEventListener('app:locate-connection', onLocateConnection)
   document.removeEventListener('click', () => {
     closeMenu()
     closeGroupMenu()
