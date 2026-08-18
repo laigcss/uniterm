@@ -20,6 +20,7 @@
   "sidebar.connectS3": "連線 S3",
   "sidebar.edit": "編輯",
   "sidebar.duplicate": "複製連接",
+  "sidebar.locateSession": "定位到會話",
   "sidebar.delete": "刪除",
   "sidebar.deleteConfirm": "確定要刪除選中的 {connCount} 個連線嗎？",
   "sidebar.newConnectionFromSearch": "新增連線...",

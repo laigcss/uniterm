@@ -20,6 +20,7 @@
   "sidebar.connectS3": "Подключиться по S3",
   "sidebar.edit": "Редактировать",
   "sidebar.duplicate": "Дублировать",
+  "sidebar.locateSession": "Найти сеанс",
   "sidebar.delete": "Удалить",
   "sidebar.deleteConfirm": "Удалить {connCount} выбранных подключений?",
   "sidebar.newConnectionFromSearch": "Новое подключение...",
