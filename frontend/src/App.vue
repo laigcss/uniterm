@@ -932,18 +932,21 @@ onUnmounted(() => {
   credStore.dispose()
 })
 
-function openSettings() {
+function openSettings(category?: string) {
   // Check if settings tab already exists
   const existingTab = tabStore.tabs.find(t => t.type === 'settings')
   if (existingTab) {
     tabStore.setActiveTab(existingTab.id)
-    return
+  } else {
+    const panel = panelStore.createPanel(null, 'settings')
+    panelStore.updateTitle(panel.id, t('settings.title'))
+    const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+    panelStore.movePanelToTab(panel.id, tab.id)
   }
-
-  const panel = panelStore.createPanel(null, 'settings')
-  panelStore.updateTitle(panel.id, t('settings.title'))
-  const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
+  // Jump to the requested category (e.g. ai / identities / proxies)
+  if (category) {
+    settingsStore.activeCategory = category
+  }
 }
 
 async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {

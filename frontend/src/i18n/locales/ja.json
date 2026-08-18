@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "中央",
   "settings.bgFitTile": "タイル",
   "settings.bgUnsupported": "サポートされていない画像形式です",
-  "settings.ai": "AI アシスタント",
+  "settings.ai": "AI モデル",
   "settings.about": "について",
   "settings.aboutDesc": "組み込みの AI エージェントを備えたモダンなクロスプラットフォームターミナルエミュレータです。マルチターンのシェルコマンドを自律的に計画・実行できます。",
   "settings.version": "バージョン",

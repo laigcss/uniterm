@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "Center",
   "settings.bgFitTile": "Tile",
   "settings.bgUnsupported": "Unsupported image format",
-  "settings.ai": "AI Assistant",
+  "settings.ai": "AI Models",
   "settings.about": "About",
   "settings.aboutDesc": "A modern cross-platform terminal emulator with a built-in AI agent that can independently plan and execute multi-turn shell commands.",
   "settings.version": "Version",

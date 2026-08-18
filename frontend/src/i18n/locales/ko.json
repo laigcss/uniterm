@@ -294,7 +294,7 @@
   "settings.bgFitCenter": "가운데",
   "settings.bgFitTile": "바둑판식",
   "settings.bgUnsupported": "지원되지 않는 이미지 형식입니다",
-  "settings.ai": "AI 어시스턴트",
+  "settings.ai": "AI 모델",
   "settings.about": "정보",
   "settings.aboutDesc": "내장 AI 에이전트를 탑재하여 다단계 셸 명령을 독립적으로 계획하고 실행할 수 있는 현대적인 크로스 플랫폼 터미널 에뮬레이터입니다.",
   "settings.version": "버전",
