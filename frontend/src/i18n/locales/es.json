@@ -64,6 +64,7 @@
   "conn.saveConnect": "Guardar y Conectar",
   "conn.save": "Guardar",
   "conn.saveOnly": "Solo Guardar",
+  "conn.testConnection": "Probar conexión",
   "conn.hostRequired": "El host es obligatorio",
   "conn.advanced": "Avanzado",
   "conn.postLoginScript": "Script Posterior al Inicio de Sesión",
