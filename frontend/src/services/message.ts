@@ -2,11 +2,20 @@ import { ElMessage } from 'element-plus'
 
 const CLOSABLE = { showClose: true, duration: 5000, offset: 50 }
 
+// persist=true keeps the toast until the user closes it (duration 0) instead of
+// auto-dismissing — e.g. a connection-test result whose outcome must be readable.
+type PersistMsg = (m: string, persist?: boolean) => void
+
+const persistMsg =
+  (kind: 'success' | 'error' | 'warning' | 'info'): PersistMsg =>
+  (m, persist = false) =>
+    ElMessage[kind]({ message: m, ...CLOSABLE, duration: persist ? 0 : CLOSABLE.duration })
+
 export const msg = {
-  success(m: string) { ElMessage.success({ message: m, ...CLOSABLE }) },
-  error(m: string)   { ElMessage.error({ message: m, ...CLOSABLE }) },
-  warning(m: string) { ElMessage.warning({ message: m, ...CLOSABLE }) },
-  info(m: string)    { ElMessage.info({ message: m, ...CLOSABLE }) },
+  success: persistMsg('success'),
+  error: persistMsg('error'),
+  warning: persistMsg('warning'),
+  info: persistMsg('info'),
   // Stays until closed so a long path can be read and copied. The message is
   // wrapped in a span with inline no-drag so the WKWebView hands mouse events
   // back to the DOM instead of initiating a window drag on macOS frameless

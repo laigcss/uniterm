@@ -502,6 +502,16 @@
     </div>
     <template #footer>
       <el-button @click="visible = false">{{ t('conn.cancel') }}</el-button>
+      <el-button
+        v-if="canTest"
+        :loading="testStatus === 'checking'"
+        :icon="testStatus === 'success' ? CircleCheck : testStatus === 'error' ? CircleX : undefined"
+        :class="{ 'test-success': testStatus === 'success', 'test-error': testStatus === 'error' }"
+        class="test-status-btn"
+        @click="onTest"
+      >
+        {{ t('conn.testConnection') }}
+      </el-button>
       <el-button @click="onSave">{{ t('conn.saveOnly') }}</el-button>
       <el-button type="primary" @click="onConnect">{{ t('conn.saveConnect') }}</el-button>
     </template>
@@ -544,9 +554,10 @@ import { useIdentityStore } from '../stores/identityStore'
 import { useProxyStore } from '../stores/proxyStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
-import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
-import { ElMessage, ElInput } from 'element-plus'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow } from '@lucide/vue'
+import { OpenFileDialog, GetPlatform, ListSerialPorts, TestConnection } from '../../wailsjs/go/main/App'
+import { ElInput } from 'element-plus'
+import { msg } from '../services/message'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 
@@ -677,6 +688,14 @@ const passwordInputKey = ref(0)
 const postLoginMode = ref<'script' | 'expect'>('script')
 const showAdvanced = ref(false)
 
+// Connection types that support the "test connection" button (issue #377).
+// local/serial/mosh/vnc/rdp/spice/x11-desktop don't have a non-interactive probe.
+const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container']
+// Test-connection result state: 'checking' shows a spinner; 'success'/'error'
+// keep a colored status icon on the button until the next test or a reopen.
+const testStatus = ref<'idle' | 'checking' | 'success' | 'error'>('idle')
+const canTest = computed(() => TESTABLE_TYPES.includes(form.type))
+
 // Serial port config (separate refs so allow-create doesn't produce strings)
 const serialPorts = ref<string[]>([])
 const serialScanning = ref(false)
@@ -732,6 +751,7 @@ const hostInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 
 watch(visible, (val) => {
   if (val) {
+    testStatus.value = 'idle'
     passwordInputKey.value++
     // Apply group on open: the defaultGroupId watch won't fire when the value
     // is unchanged, so restore it here to avoid losing the group on the second
@@ -964,6 +984,8 @@ watch(() => props.defaultGroupId, (gid) => {
 
 // Auto-switch default port when changing type
 watch(() => form.type, (newType) => {
+  // A result icon for the previous type is stale; clear it.
+  testStatus.value = 'idle'
   if (newType !== 'ssh' && postLoginMode.value === 'expect') {
     postLoginMode.value = 'script'
   }
@@ -1258,7 +1280,7 @@ function removeExpectStep(index: number) {
 function validateContainer(): boolean {
   if (form.type !== 'container') return true
   if (form.containerTransport === 'ssh' && !form.containerSSHConnId) {
-    ElMessage.error(t('conn.containerSSHRefRequired'))
+    msg.error(t('conn.containerSSHRefRequired'))
     return false
   }
   if (form.containerTransport === 'ssh' && !sshConnections.value.length) return false
@@ -1268,10 +1290,31 @@ function validateContainer(): boolean {
 function validateX11Desktop(): boolean {
   if (form.type !== 'x11-desktop') return true
   if (form.x11DesktopDesktopType === 'custom' && !form.x11DesktopCustomCmd?.trim()) {
-    ElMessage.error(t('conn.x11DesktopCustomCmdRequired'))
+    msg.error(t('conn.x11DesktopCustomCmdRequired'))
     return false
   }
   return true
+}
+
+async function onTest() {
+  if (!validateContainer()) return
+  if (!validateX11Desktop()) return
+  let config: ConnectionConfig
+  try {
+    config = normalizeForm()
+  } catch {
+    // Host / required field empty; silently return like onSave/onConnect.
+    return
+  }
+  testStatus.value = 'checking'
+  try {
+    const desc = await TestConnection(config)
+    testStatus.value = 'success'
+    msg.success(desc)
+  } catch (e: any) {
+    testStatus.value = 'error'
+    msg.error(String(e?.message || e), true)
+  }
 }
 
 function onSave() {
@@ -1306,6 +1349,15 @@ function onConnect() {
 </script>
 
 <style scoped>
+/* Color the connection-test status icon (rendered via el-button's `icon` prop,
+   so spacing matches the native loading spinner) by result. */
+.test-status-btn.test-success :deep(.el-icon) {
+  color: var(--success);
+}
+.test-status-btn.test-error :deep(.el-icon) {
+  color: var(--error);
+}
+
 /* ── Layout ── */
 .conn-layout {
   display: flex;

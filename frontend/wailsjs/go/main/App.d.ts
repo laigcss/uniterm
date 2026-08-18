@@ -485,6 +485,8 @@ export function SyncTestConnection():Promise<void>;
 
 export function SyncVerifyPassword(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function TestConnection(arg1:session.ConnectionConfig):Promise<string>;
+
 export function TruncateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function UnlockCredentials(arg1:string):Promise<void>;

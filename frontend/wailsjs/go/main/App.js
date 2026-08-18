@@ -950,6 +950,10 @@ export function SyncVerifyPassword(arg1, arg2, arg3) {
   return window['go']['main']['App']['SyncVerifyPassword'](arg1, arg2, arg3);
 }
 
+export function TestConnection(arg1) {
+  return window['go']['main']['App']['TestConnection'](arg1);
+}
+
 export function TruncateTable(arg1, arg2, arg3) {
   return window['go']['main']['App']['TruncateTable'](arg1, arg2, arg3);
 }
