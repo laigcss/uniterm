@@ -46,6 +46,7 @@
     <!-- Terminal context menu -->
     <div
       v-show="menu.menuVisible.value"
+      ref="contextMenuEl"
       class="context-menu"
       :style="menu.menuStyle.value"
       @click.stop
@@ -1880,8 +1881,11 @@ function openMonitor() {
   }
 }
 
+const contextMenuEl = ref<HTMLElement | null>(null)
+
 const menu = useTerminalMenu({
   getSelection,
+  menuElement: contextMenuEl,
   onPaste: async (text) => {
     if (props.mode === 'ssh' || props.mode === 'local') {
       if (props.broadcastActive && props.workspaceId) {

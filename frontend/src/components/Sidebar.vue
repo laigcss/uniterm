@@ -25,35 +25,17 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <el-dropdown trigger="click" placement="bottom-end" popper-class="type-filter-popper">
+            <el-dropdown ref="typeFilterDropdownRef" trigger="click" placement="bottom-end" popper-class="type-filter-popper">
               <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop>
                 <el-icon><Filter :size="14" /></el-icon>
               </span>
               <template #dropdown>
-                <el-dropdown-menu class="type-filter-menu">
-                  <el-dropdown-item
-                    :class="{ 'is-active': selectedTypeFilter === 'all' }"
-                    @click="selectedTypeFilter = 'all'"
-                  >
-                    <span class="dropdown-item-content">
-                      <el-icon v-if="selectedTypeFilter === 'all'"><Check :size="14" /></el-icon>
-                      <span v-else class="check-placeholder"></span>
-                      <span>{{ t('sidebar.filterAll') }}</span>
-                    </span>
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-for="typeOpt in availableTypes"
-                    :key="typeOpt.value"
-                    :class="{ 'is-active': selectedTypeFilter === typeOpt.value }"
-                    @click="selectedTypeFilter = typeOpt.value"
-                  >
-                    <span class="dropdown-item-content">
-                      <el-icon v-if="selectedTypeFilter === typeOpt.value"><Check :size="14" /></el-icon>
-                      <span v-else class="check-placeholder"></span>
-                      <span>{{ typeOpt.label }}</span>
-                    </span>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
+                <TypeFilterMenuContent
+                  :model-value="selectedTypeFilter"
+                  :all-label="t('sidebar.filterAll')"
+                  :groups="filterGroups"
+                  @update:model-value="onFilterSelect"
+                />
               </template>
             </el-dropdown>
           </template>
@@ -116,6 +98,7 @@
             <el-icon v-else><ChevronRight :size="14" /></el-icon>
           </span>
           <span class="group-name">{{ t('conn.noGroup') }}</span>
+          <span v-if="filteredGrouped.ungrouped.length > 0" class="group-count">{{ filteredGrouped.ungrouped.length }}</span>
         </div>
         <template v-if="expandedGroups.has('__ungrouped__')">
           <div
@@ -514,8 +497,9 @@ import TunnelsPanel from './TunnelsPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
+import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
-import { parseQuickConnect, formatConnSubtitle } from '../utils/quickConnect'
+import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog } from '../utils/quickConnect'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
@@ -597,11 +581,6 @@ function focusSearch() {
 }
 
 // ── Type filter ──
-interface TypeOption {
-  label: string
-  value: string
-}
-
 const TYPE_LABELS: Record<string, string> = {
   ssh: 'SSH',
   telnet: 'Telnet',
@@ -626,27 +605,58 @@ const TYPE_LABELS: Record<string, string> = {
   'database:mongodb': 'MongoDB',
 }
 
-const availableTypes = computed<TypeOption[]>(() => {
-  const types = new Set<string>()
-  for (const c of connectionStore.connections) {
-    if (c.type === 'database' && c.dbType) {
-      types.add(`database:${c.dbType}`)
-    } else {
-      types.add(c.type)
-    }
+// Label for a filter value (type / `database:<db>` / `container:<runtime>`).
+function filterTypeLabel(key: string): string {
+  return TYPE_LABELS[key] || formatTypeFilterLabel(key)
+}
+
+// Two-level filter menu: categories (in the same order/names as the
+// new-connection form) → concrete types present in connections.
+const filterGroups = computed(() => {
+  const connKeys = new Set(connectionStore.connections.map(c => getConnectionTypeKey(c)))
+  const catalog = getTypeFilterCatalog(t)
+  const catalogKeys = new Set(catalog.flatMap(g => g.items.map(i => i.key)))
+
+  // Present-but-uncataloged types (e.g. legacy sftp / monitor that aren't in
+  // the new-connection form) are still filterable, appended under their category.
+  const extras = new Map<string, { key: string; label: string }[]>()
+  for (const k of connKeys) {
+    if (catalogKeys.has(k)) continue
+    const cat = getTypeCategory(k)
+    if (!extras.has(cat)) extras.set(cat, [])
+    extras.get(cat)!.push({ key: k, label: filterTypeLabel(k) })
   }
-  return [...types].map(value => ({
-    value,
-    label: TYPE_LABELS[value] || value
-  })).sort((a, b) => a.label.localeCompare(b.label))
+
+  return catalog
+    .map(g => ({
+      key: g.key,
+      label: g.label,
+      items: [...g.items.filter(i => connKeys.has(i.key)), ...(extras.get(g.key) || [])],
+    }))
+    .filter(g => g.items.length > 0)
 })
 
 function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
   if (filter === 'all') return true
   if (filter.startsWith('database:')) {
-    return conn.type === 'database' && conn.dbType === filter.slice(9)
+    return conn.type === 'database' && conn.dbType === filter.slice('database:'.length)
+  }
+  if (filter.startsWith('container:')) {
+    return conn.type === 'container' && (conn.containerRuntime || 'docker') === filter.slice('container:'.length)
   }
   return conn.type === filter
+}
+
+function onFilterSelect(val: string) {
+  selectedTypeFilter.value = val
+  closeTypeFilter()
+}
+
+const typeFilterDropdownRef = ref()
+
+// el-dropdown exposes handleClose() to dismiss the dropdown programmatically.
+function closeTypeFilter() {
+  typeFilterDropdownRef.value?.handleClose()
 }
 
 // ── Expand/collapse state ──
@@ -1809,7 +1819,7 @@ function getShellLabel(path: string): string {
 }
 
 function getSubtitle(conn: ConnectionConfig): string {
-  if (conn.type === 'container') return `${conn.containerRuntime}`
+  if (conn.type === 'container') return conn.containerRuntime || 'container'
   return formatConnSubtitle(conn, getShellLabel)
 }
 
@@ -2169,6 +2179,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   font-weight: 600;
 }
 
+.group-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-disabled);
+  background: var(--bg-subtle);
+  padding: 0 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .group-header.drag-over {
   background: var(--accent-subtle);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -2504,6 +2524,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-md) !important;
+}
+
+/* el-dropdown wraps its content in an el-scrollbar (el-scrollbar wraps in an
+   overflow:auto wrap), whose horizontal scrollable overflow is widened by the
+   two-level flyout submenu — producing a horizontal scrollbar. Let both layers
+   overflow visibly so the flyout shows fully with no scrollbar. The menu is
+   short, so unscrolling vertically is fine. */
+.type-filter-popper .el-scrollbar,
+.type-filter-popper .el-scrollbar__wrap {
+  overflow: visible !important;
 }
 
 .theme-select-popper .el-select-group__title {
