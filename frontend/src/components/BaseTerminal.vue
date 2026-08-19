@@ -1771,11 +1771,29 @@ function bracketPaste(text: string): string {
 
 async function pasteToSession(text: string) {
   if (props.mode === 'ssh' || props.mode === 'local') {
+    // Normalize line endings: \r\n -> \r to prevent extra newlines
+    // when pasting into editors like vim (Windows clipboard often has \r\n)
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '')
+
+    // Broadcast mode: write to every target panel instead of only this
+    // session (issue #597 — pasted command must sync like keyboard input).
+    if (props.broadcastActive && props.workspaceId) {
+      const targets = tabStore.getBroadcastPanelIdsInWorkspace(props.workspaceId)
+      if (targets.length > 0) {
+        for (const pid of targets) {
+          const p = panelStore.getPanel(pid)
+          if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
+            // Bracket per target session — each has its own paste mode.
+            const wrap = getManagedTerminal(p.sessionId)?.terminal.modes.bracketedPasteMode
+            SessionWrite(p.sessionId, wrap ? '\x1b[200~' + normalized + '\x1b[201~' : normalized)
+          }
+        }
+        return
+      }
+    }
+
     const sid = props.sessionId
     if (sid) {
-      // Normalize line endings: \r\n -> \r to prevent extra newlines
-      // when pasting into editors like vim (Windows clipboard often has \r\n)
-      const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '')
       SessionWrite(sid, bracketPaste(normalized))
     }
   }
@@ -1888,24 +1906,7 @@ const menu = useTerminalMenu({
   menuElement: contextMenuEl,
   onPaste: async (text) => {
     if (props.mode === 'ssh' || props.mode === 'local') {
-      if (props.broadcastActive && props.workspaceId) {
-        const targets = tabStore.getBroadcastPanelIdsInWorkspace(props.workspaceId)
-        if (targets.length > 0) {
-          const filtered = filterTerminalInput(text, false)
-          for (const pid of targets) {
-            const p = panelStore.getPanel(pid)
-            if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
-              // Bracket per target session — each has its own paste mode.
-              const wrap = getManagedTerminal(p.sessionId)?.terminal.modes.bracketedPasteMode
-              SessionWrite(p.sessionId, wrap ? '\x1b[200~' + filtered + '\x1b[201~' : filtered)
-            }
-          }
-        } else {
-          await pasteToSession(text)
-        }
-      } else {
-        await pasteToSession(text)
-      }
+      await pasteToSession(text)
     } else {
       pasteToTerminal(text)
     }
