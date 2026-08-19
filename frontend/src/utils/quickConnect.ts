@@ -83,7 +83,9 @@ function getDefaultPort(type: string, dbType?: string): number | undefined {
 }
 
 export function formatConnSubtitle(config: ConnectionConfig, getShellLabel?: (path: string) => string): string {
-  const typeLabel = config.type === 'database' ? (config.dbType || config.type) : config.type
+  let typeLabel = config.type
+  if (config.type === 'database') typeLabel = config.dbType || config.type
+  else if (config.type === 'container') typeLabel = config.containerRuntime || config.type
   let detail: string
   if (config.type === 's3') {
     detail = config.host
@@ -96,4 +98,112 @@ export function formatConnSubtitle(config: ConnectionConfig, getShellLabel?: (pa
     detail = config.user ? `${config.user}@${config.host}${portStr}` : `${config.host}${portStr}`
   }
   return `${typeLabel} ${detail}`
+}
+
+// Origin (base) connection type for a filter key, ignoring any `:` suffix
+// (e.g. `database:mysql` → `database`, `container:docker` → `container`).
+export function getTypeBaseType(key: string): string {
+  return key.split(':')[0]
+}
+
+// Map of base type → top-level filter category, mirroring the two-level type
+// layout of the new-connection form (ConnectionForm `categories`).
+export const TYPE_CATEGORY: Record<string, string> = {
+  ssh: 'terminal', telnet: 'terminal', mosh: 'terminal', local: 'terminal', serial: 'terminal', monitor: 'terminal',
+  sftp: 'filetransfer', ftp: 'filetransfer', smb: 'filetransfer', s3: 'filetransfer', webdav: 'filetransfer',
+  rdp: 'remote', vnc: 'remote', spice: 'remote', 'x11-desktop': 'remote',
+  database: 'database',
+  k8s: 'container', container: 'container',
+}
+
+// Grouping key used by the type filter for a connection, the same shape as a
+// filter value: `database:<dbType>` / `container:<runtime>` / plain type.
+export function getConnectionTypeKey(config: ConnectionConfig): string {
+  if (config.type === 'database' && config.dbType) return `database:${config.dbType}`
+  if (config.type === 'container') return `container:${config.containerRuntime || 'docker'}`
+  return config.type
+}
+
+// Pretty-print a type filter key that isn't covered by a static label — today
+// only container runtimes (`container:docker` → `Docker`). `containerRuntime`
+// values are lowercase; capitalize the first letter for the menu/trigger.
+export function formatTypeFilterLabel(key: string): string {
+  const prefix = 'container:'
+  if (key.startsWith(prefix)) {
+    const rt = key.slice(prefix.length)
+    return rt.charAt(0).toUpperCase() + rt.slice(1)
+  }
+  return key
+}
+
+// Top-level category (key) a filter value belongs to, with a fallback category
+// for any unexpected type so it still shows up in the menu.
+export function getTypeCategory(key: string): string {
+  return TYPE_CATEGORY[getTypeBaseType(key)] || 'other'
+}
+
+// Ordered, labelled category keys for the two-level filter menu.
+export const TYPE_CATEGORIES: string[] = ['terminal', 'filetransfer', 'remote', 'database', 'container', 'other']
+
+// Two-level type catalog for the type filter, matching the new-connection form
+// (ConnectionForm `categories` + `allSubTypes`) exactly — same category order,
+// same subtype order, same labels. `t` is required only for the few names that
+// are localized (category titles, local terminal, serial).
+export function getTypeFilterCatalog(t: (key: string) => string) {
+  return [
+    {
+      key: 'terminal',
+      label: t('conn.categoryTerminal'),
+      items: [
+        { key: 'ssh', label: 'SSH (SFTP)' },
+        { key: 'telnet', label: 'Telnet' },
+        { key: 'mosh', label: 'Mosh' },
+        { key: 'local', label: t('conn.localTerminal') },
+        { key: 'serial', label: t('serial.title') },
+      ],
+    },
+    {
+      key: 'filetransfer',
+      label: t('conn.categoryFileTransfer'),
+      items: [
+        { key: 'ftp', label: 'FTP' },
+        { key: 'smb', label: 'SMB' },
+        { key: 's3', label: 'S3' },
+        { key: 'webdav', label: 'WebDAV' },
+      ],
+    },
+    {
+      key: 'remote',
+      label: t('conn.categoryRemote'),
+      items: [
+        { key: 'rdp', label: 'RDP' },
+        { key: 'vnc', label: 'VNC' },
+        { key: 'spice', label: 'SPICE' },
+        { key: 'x11-desktop', label: 'X11 Desktop' },
+      ],
+    },
+    {
+      key: 'database',
+      label: t('db.database'),
+      items: [
+        { key: 'database:mysql', label: 'MySQL' },
+        { key: 'database:postgres', label: 'PostgreSQL' },
+        { key: 'database:oracle', label: 'Oracle' },
+        { key: 'database:sqlserver', label: 'SQL Server' },
+        { key: 'database:rqlite', label: 'rqlite' },
+        { key: 'database:redis', label: 'Redis' },
+        { key: 'database:mongodb', label: 'MongoDB' },
+      ],
+    },
+    {
+      key: 'container',
+      label: t('conn.categoryContainer'),
+      items: [
+        { key: 'k8s', label: 'Kubernetes' },
+        { key: 'container:docker', label: 'Docker' },
+        { key: 'container:podman', label: 'Podman' },
+        { key: 'container:nerdctl', label: 'nerdctl' },
+      ],
+    },
+  ]
 }

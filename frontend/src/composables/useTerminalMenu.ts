@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime'
@@ -7,6 +7,9 @@ export interface UseTerminalMenuOptions {
   getSelection: () => string
   onPaste: (text: string) => Promise<void> | void
   onAskAI?: (text: string) => void
+  /** The rendered menu element, used to measure its real size so it can be
+   *  clamped inside the viewport instead of relying on an estimated height. */
+  menuElement?: Ref<HTMLElement | null>
 }
 
 export interface UseTerminalMenuReturn {
@@ -44,15 +47,32 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     e.stopPropagation()
     window.dispatchEvent(new CustomEvent('global:close-context-menus'))
     hasSelection.value = !!options.getSelection()
-    menuStyle.value = fitMenuPosition(e.clientX, e.clientY, 120, 140)
-    menuVisible.value = true
+
+    const menuElement = options.menuElement?.value
+    if (menuElement) {
+      // Show at the cursor first, then clamp to the viewport on nextTick once
+      // Vue has laid the menu out so we can read its real width/height.
+      menuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
+      menuVisible.value = true
+      nextTick(() => {
+        if (!menuVisible.value) return
+        menuStyle.value = fitMenuToViewport(e.clientX, e.clientY, menuElement.offsetWidth, menuElement.offsetHeight)
+      })
+    } else {
+      // Fallback when no element is provided (e.g. isolated unit tests).
+      menuStyle.value = fitMenuToViewport(e.clientX, e.clientY, 120, 140)
+      menuVisible.value = true
+    }
   }
 
-  function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
+  function fitMenuToViewport(x: number, y: number, menuW: number, menuH: number) {
+    const margin = 4
     let left = x
     let top = y
-    if (x + menuW > window.innerWidth) left = x - menuW
-    if (y + menuH > window.innerHeight) top = y - menuH
+    if (left + menuW + margin > window.innerWidth) left = window.innerWidth - menuW - margin
+    if (top + menuH + margin > window.innerHeight) top = window.innerHeight - menuH - margin
+    if (left < margin) left = margin
+    if (top < margin) top = margin
     return { left: left + 'px', top: top + 'px' }
   }
 
