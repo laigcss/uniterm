@@ -19,6 +19,7 @@
 - Connection: "Test Connection" button in the new-connection dialog, to check connection reachability before saving.
 - Connection: open-status indicator with locate-session.
 - Connection: locate-to-connection items in tab/panel context menus.
+- Tab: "Reconnect" item in the tab right-click menu, force-disconnects the current session and re-establishes the connection.
 
 **Improvements**
 - SSH: hardened credential handling with legacy fallback, auto-answer for keyboard-interactive auth using the saved password, and synchronous keychain loading so saved credentials are never lost. (@jiayunora)
@@ -51,6 +52,11 @@
 - Settings: fixed the settings page leaving large empty side columns on a maximized window; the content area is now sized and centered independently. Raised the window minimum size (400→600 wide, 300→450 tall).
 - Highlight: fixed text highlighting overwriting already-colored spans (e.g. directory colors) — those spans are now skipped.
 - Menu: fixed terminal and sidebar right-click menus clipping at the viewport bottom; they now measure real size and clamp to the window.
+- Window: fixed a relaunched window (system-title-bar toggle) landing in the background on Windows, and fixed tab close-button jitter in right-side mode by reserving the button's width.
+- Sync: fixed cloud sync dropping tunnel definitions; tunnels.json is now included in the synced config file set.
+- SFTP: fixed drag upload only handling single files; folder and multi-selection drag upload are now supported.
+- Broadcast: fixed pasted input (shortcut, middle-click, Cmd+V) not reaching synced panels unlike typed input; every paste path now broadcasts like keyboard input.
+- Zmodem: fixed sz downloads stopping mid-file with "Zmodem transfer cancelled" — completion now waits until every write reaches disk, and received bytes are batched and flushed in 64KB blocks.
 
 **Notes**
 - As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
@@ -74,6 +80,7 @@ Thanks to @surenwuyuwuqiu and @jiayunora for their contributions to this release
 - 连接：新建连接对话框新增「测试连接」按钮，支持在创建时提前检查连接可达性。
 - 连接：新增打开会话状态展示与定位会话功能。
 - 连接：标签/面板右键菜单新增「定位到连接」。
+- 连接：标签右键菜单新增「重新连接」选项，强制断开当前会话并重新建立连接。
 
 **改进**
 - SSH：加固凭据处理并加入旧版回退，自动用已保存密码应答 keyboard-interactive 认证。（@jiayunora）
@@ -106,6 +113,10 @@ Thanks to @surenwuyuwuqiu and @jiayunora for their contributions to this release
 - 设置：修复窗口最大化时设置页左右空白过大的问题：内容区改为独立缩放并居中。同时提高窗口最小尺寸（宽 400→600，高 300→450）。
 - 高亮：修复文本高亮覆盖已着色 span（如目录颜色）的问题，现跳过已着色 span。
 - 菜单：修复终端与侧边栏右键菜单在视口底部被裁剪的问题，现会测量实际尺寸并限制在窗口内。
+- 同步：修复云同步丢失隧道配置的问题；tunnels.json 现纳入同步配置文件集合。
+- SFTP：修复拖拽上传仅支持单个文件的问题；现支持文件夹与多选拖拽上传。
+- 广播：修复粘贴（快捷键 / 中键 / Cmd+V）与键盘输入不同步、无法到达已同步面板的问题；现在所有粘贴路径与键盘输入一样广播。
+- Zmodem：修复 sz 下载中途停止并提示 "Zmodem transfer cancelled" 的问题；下载完成现在会等待所有写入落盘，接收字节按 64KB 块批量写入。
 
 **说明**
 - 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
