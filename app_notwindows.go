@@ -14,6 +14,10 @@ func (a *App) subclassMainWindow() {}
 
 func (a *App) unsubclassMainWindow() {}
 
+// bringMainWindowToFront is a no-op on non-Windows platforms: the relaunched-
+// window-behind-others issue is Windows-specific and does not occur here.
+func (a *App) bringMainWindowToFront() {}
+
 func (a *App) GetAvailableShells() []string {
 	var shells []string
 	var seen = make(map[string]bool)

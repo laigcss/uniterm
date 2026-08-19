@@ -45,8 +45,9 @@
       @click.stop
     />
     <button
-      v-if="tabCloseRight && hovered && !tab.locked"
+      v-if="tabCloseRight"
       class="tab-close tab-close-right"
+      :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
     <Teleport to="body">
@@ -666,10 +667,19 @@ onUnmounted(() => {
 }
 /* Close button on the right side of the tab (appearance setting).
    margin-left:auto pushes it flush to the far right edge of the tab
-   (inside the 12px horizontal padding), instead of hugging the name. */
+   (inside the 12px horizontal padding), instead of hugging the name.
+
+   The button is always present in the layout when the right-side setting is on
+   — ghosted (visibility:hidden) while not hovered OR the tab is locked — so its
+   slot is always reserved; showing the X only toggles visibility instead of
+   inserting/removing an element, which would otherwise re-truncate long names
+   and cause jitter (including the instant the tab is locked). */
 .tab-close.tab-close-right {
   margin-left: auto;
   margin-right: 0;
+}
+.tab-close-right-ghost {
+  visibility: hidden;
 }
 </style>
 
