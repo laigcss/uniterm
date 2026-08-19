@@ -104,6 +104,8 @@
   "window.maximize": "最大化",
   "window.close": "关闭",
   "tab.duplicate": "复制会话",
+  "tab.reconnect": "重新连接",
+  "tab.reconnectFailed": "重连失败：{error}",
   "tab.copyHostAddress": "复制主机地址",
   "tab.hostCopied": "已复制主机地址：{host}",
   "tab.rename": "重命名",

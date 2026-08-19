@@ -181,6 +181,11 @@ watch(scaleViewport, () => {
   }
 })
 
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.panelId) reconnect()
+}
+
 onMounted(() => {
   if (props.sessionId) {
     currentSessionId.value = props.sessionId
@@ -234,6 +239,9 @@ onMounted(() => {
     }
   })
 
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
+
   // Observe canvas creation for auto-scale
   if (spiceContainer.value) {
     const mo = new MutationObserver(() => {
@@ -246,6 +254,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unsubStatus?.()
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
 
   if (spiceContainer.value) {
     const ro = (spiceContainer.value as any).__scaleObserver

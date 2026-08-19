@@ -254,8 +254,29 @@ async function connect() {
   }
 }
 
-onMounted(connect)
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.tab.panelId) reconnect()
+}
+
+// Force-reconnect: tear down the current cluster connection, then re-run the
+// normal connect() (which already resets error state and re-resolves tunnel
+// credentials on each call).
+async function reconnect() {
+  if (connId.value) {
+    try { k8sClient.disconnect(connId.value) } catch (_) {}
+    connId.value = ''
+  }
+  await connect()
+}
+
+onMounted(() => {
+  connect()
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this tab.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
   if (resizing) {
     document.removeEventListener('mousemove', onResizeMove)
     document.removeEventListener('mouseup', onResizeEnd)

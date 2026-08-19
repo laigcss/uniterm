@@ -63,6 +63,7 @@
           {{ t('tab.duplicate') }}
           <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
         </div>
+        <div v-if="canReconnect" class="menu-item" @click="onReconnect">{{ t('tab.reconnect') }}</div>
         <div v-if="hasServerHost" class="menu-item" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
@@ -272,6 +273,28 @@ const canDuplicate = computed(() => {
   return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
 })
 
+// Reconnectable panels — terminal types that Panel.vue can re-initiate.
+const TTY_RECONNECT_TYPES: readonly string[] = ['ssh', 'telnet', 'serial', 'mosh', 'local', 'k8s-exec', 'container-exec']
+
+// Whether the tab has a right-click 「重连」(Reconnect). Terminal panels are
+// re-initiated by Panel.vue via the 'panel:reconnect' event; desktop-protocol
+// tabs (rdp/vnc/spice/x11) run their own reconnect inside their content component.
+const canReconnect = computed(() => {
+  const type = props.tab.type
+  if (type === 'rdp' || type === 'vnc' || type === 'spice' || type === 'x11-desktop') return true
+  if (type === 'database' || type === 'mongodb' || type === 'redis' || type === 'sftp' || type === 'monitor') {
+    return 'panelId' in props.tab && !!panelStore.getPanel(props.tab.panelId)
+  }
+  if (type === 'k8s' || type === 'container') {
+    return 'panelId' in props.tab
+  }
+  if (type === 'terminal' && 'panelId' in props.tab) {
+    const p = panelStore.getPanel(props.tab.panelId)
+    return !!p && TTY_RECONNECT_TYPES.includes(p.type)
+  }
+  return false
+})
+
 // SSH connection only — used to show the "连接功能" group of menu items.
 const isSsh = computed(() => {
   if (props.tab.type !== 'terminal') return false
@@ -434,6 +457,16 @@ async function copyHostAddress() {
 function onDuplicate() {
   closeContextMenu()
   duplicateSession(props.tab)
+}
+
+// Dispatch a 'panel:reconnect' event so the owning content (Panel.vue for
+// terminals, the desktop tab-content components for rdp/vnc/spice/x11) can
+// force-disconnect and re-initiate the connection.
+function onReconnect() {
+  closeContextMenu()
+  const panelId = 'panelId' in props.tab ? props.tab.panelId : ''
+  if (!panelId) return
+  window.dispatchEvent(new CustomEvent('panel:reconnect', { detail: { panelId } }))
 }
 
 function openSftp() {

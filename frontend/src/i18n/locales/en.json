@@ -104,6 +104,8 @@
   "window.maximize": "Maximize",
   "window.close": "Close",
   "tab.duplicate": "Duplicate",
+  "tab.reconnect": "Reconnect",
+  "tab.reconnectFailed": "Reconnect failed: {error}",
   "tab.copyHostAddress": "Copy Host Address",
   "tab.hostCopied": "Host address copied: {host}",
   "tab.rename": "Rename",

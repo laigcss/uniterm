@@ -783,6 +783,11 @@ onMounted(async () => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectS3(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
 
+  // DB/Redis/Mongo tabs create their connection in App.vue (onConnectDB), not in
+  // a content component, so their right-click 「重连」(Reconnect) is handled here.
+  // Terminal and desktop-protocol panels handle the same event themselves.
+  window.addEventListener('panel:reconnect', onPanelReconnectEvent)
+
   await checkCredentials()
 })
 
@@ -911,6 +916,7 @@ onUnmounted(() => {
   window.removeEventListener('split:resize-end', RDPShowForOverlay)
   window.removeEventListener('rdp:sync-position', rdpResetTracking)
   window.removeEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
+  window.removeEventListener('panel:reconnect', onPanelReconnectEvent)
   // Wails EventsOn teardown (FE-03)
   unsubRdpFullscreenExit?.()
   unsubRdpMoveResizeStart?.()
@@ -1667,6 +1673,82 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
     panelStore.updateStatus(panel.id, 'error')
     msg.error(`${t('db.connectFailed')}: ${errMsg}`)
   }
+}
+
+// Force-reconnect a database/redis/mongodb panel from the tab's right-click
+// 「重连」(Reconnect) menu. These sessions are created in App.vue (onConnectDB),
+// so — unlike terminal/desktop panels — no content component owns the lifecycle:
+// close the old session, then create a fresh one and rebind the same panel.
+async function reconnectDatabasePanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  const oldId = panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  const cfg = panel.config
+  if (!cfg) return
+  let sessionType = 'database'
+  if (cfg.dbType === 'redis') sessionType = 'redis'
+  else if (cfg.dbType === 'mongodb') sessionType = 'mongodb'
+  try {
+    const info = await CreateSession(sessionType, cfg)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('db.connectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+// Force-reconnect a monitor panel. The session is created in App.vue
+// (onConnectMonitor), so it's re-initiated here like the database panels.
+async function reconnectMonitorPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  const oldId = panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  const cfg = panel.config
+  if (!cfg) return
+  try {
+    const info = await CreateSession('monitor', cfg)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+// Force-reconnect a file-transfer panel (sftp/ftp/smb/webdav/s3). Like database
+// and monitor, the session is created in App.vue; its type string equals
+// config.type. The tab content reads the session from the panel reactively.
+async function reconnectSftpPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  const oldId = panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  const cfg = panel.config
+  if (!cfg || !cfg.type) return
+  try {
+    const info = await CreateSession(cfg.type, cfg)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+function onPanelReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (!panelId) return
+  const panel = panelStore.getPanel(panelId)
+  if (!panel) return
+  // These session types are created in App.vue (not in a content component), so
+  // their right-click 「重连」(Reconnect) is handled here. Terminal and desktop-
+  // protocol panels handle the same event themselves.
+  if (panel.type === 'database') reconnectDatabasePanel(panel)
+  else if (panel.type === 'monitor') reconnectMonitorPanel(panel)
+  else if (panel.type === 'sftp') reconnectSftpPanel(panel)
 }
 
 async function onConnectK8s(config: ConnectionConfig, prevStart?: any) {

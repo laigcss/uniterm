@@ -104,6 +104,8 @@
   "window.maximize": "최대화",
   "window.close": "닫기",
   "tab.duplicate": "복제",
+  "tab.reconnect": "재연결",
+  "tab.reconnectFailed": "재연결 실패: {error}",
   "tab.copyHostAddress": "호스트 주소 복사",
   "tab.hostCopied": "호스트 주소가 복사되었습니다: {host}",
   "tab.rename": "이름 변경",

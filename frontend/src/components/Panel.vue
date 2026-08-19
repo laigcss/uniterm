@@ -451,13 +451,39 @@ async function retryConnection() {
   }
 }
 
+// Force-disconnect the current session and re-initiate the connection, invoked
+// from the tab's right-click 「重连」(Reconnect) menu. Unlike the Enter-to-retry
+// path, it first kills the in-flight attempt with CloseSession so a stale
+// "connecting" session can't linger in the backend.
+async function forceReconnect() {
+  if (!props.panel.config) return
+  baseTerminalRef.value?.setRetryOnEnter(false)
+  const oldId = props.panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  retryAttempt = 0
+  await retryConnection()
+}
+
+// Reconnect menu in the tab right-click menu dispatches a 'panel:reconnect'
+// CustomEvent carrying the target panel id; only the matching panel acts.
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.panel.id) {
+    forceReconnect()
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('panel:reconnect', onReconnectEvent)
   refreshOutputLogState()
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
 })
 
 // Watch panel sessionId changes and retry resize
