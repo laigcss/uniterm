@@ -71,12 +71,12 @@ jobs:
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
           # Verify builder glibc (expect 2.28 on Rocky 8)
-          ldd --version | head -1
+          ldd --version 2>&1 | awk 'NR==1{print; exit}' || true
           BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\" -tags webkit2_40"
           echo "BUILD_ARGS=$BUILD_ARGS"
           eval wails build $BUILD_ARGS
           # Sanity: binary must not require glibc newer than 2.28
-          if command -v objdump >/dev/null; then
+          if command -v objdump >/dev/null && [ -f build/bin/uniTerm ]; then
             echo "GLIBC symbols required by binary:"
             objdump -T build/bin/uniTerm 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -5 || true
           fi
