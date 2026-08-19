@@ -338,13 +338,21 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 		if meta, _ := credentials.ReadMeta(dataDir); meta == nil {
 			if err := cred.Setup(credentials.ModeKeychain, ""); err != nil {
 				log.Writef("credential auto-upgrade setup failed: %v", err)
-			} else {
-				if _, err := store.MigrateLegacyKeychainToInPlace(dataDir, sync.NewKeychain(), cred); err != nil {
-					log.Writef("legacy migration failed: %v", err)
-				}
+			} else if _, err := store.MigrateLegacyKeychainToInPlace(dataDir, sync.NewKeychain(), cred); err != nil {
+				log.Writef("legacy migration failed: %v", err)
 			}
 		} else if err := cred.AutoUnlock(); err != nil {
 			log.Writef("credential auto-unlock failed: %v", err)
+		}
+		// Re-run the legacy migration on every upgrade. It is idempotent (only
+		// backfills connections whose JSON password field is still empty) and
+		// closes the window where a user's first-launch migration failed and
+		// was then skipped forever because credentials.meta already existed.
+		// Only meaningful when the credential store holds a usable key.
+		if cred.Unlocked() {
+			if _, err := store.MigrateLegacyKeychainToInPlace(dataDir, sync.NewKeychain(), cred); err != nil {
+				log.Writef("legacy migration failed: %v", err)
+			}
 		}
 	} else if err := cred.AutoUnlock(); err != nil {
 		log.Writef("credential auto-unlock failed: %v", err)
@@ -353,6 +361,9 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	a.credentialStore = cred
 	if a.connectionStore != nil {
 		a.connectionStore.SetPasswordStore(cred)
+		// Fall back to the pre-enc:v1 keychain (conn/<id>) so passwords from
+		// the old scheme remain usable if the one-shot migration didn't run.
+		a.connectionStore.SetLegacyKeychain(sync.NewKeychain())
 	}
 	if a.settingsStore != nil {
 		a.settingsStore.SetPasswordStore(cred)

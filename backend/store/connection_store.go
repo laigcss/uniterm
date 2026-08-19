@@ -24,7 +24,8 @@ type PasswordStore interface {
 
 type ConnectionStore struct {
 	configDir     string
-	passwordStore PasswordStore // nil = passwords kept in JSON (backward compat)
+	passwordStore PasswordStore       // nil = passwords kept in JSON (backward compat)
+	legacy         LegacyPasswordSource // optional fallback to pre-enc:v1 keychain entries
 	mu            sync.Mutex    // serializes Save + populatePasswords writes (STORE-05/06).
 	pwdMu         sync.RWMutex  // guards pwdCache for F-110 async keychain fill.
 	pwdCache      map[string]string
@@ -42,6 +43,13 @@ func NewConnectionStore(configDir string) (*ConnectionStore, error) {
 // are written to the store and cleared from the JSON file on save.
 func (s *ConnectionStore) SetPasswordStore(ps PasswordStore) {
 	s.passwordStore = ps
+}
+
+// SetLegacyKeychain wires the pre-enc:v1 keychain so a connection that lacks
+// an enc:v1 field can still recover its password from the legacy conn/<id>
+// entry. Lazy-migrates the value into enc:v1 on the next save.
+func (s *ConnectionStore) SetLegacyKeychain(kc LegacyPasswordSource) {
+	s.legacy = kc
 }
 
 func (s *ConnectionStore) filePath() string {
@@ -170,7 +178,26 @@ func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) e
 
 	for i := range data.Connections {
 		conn := &data.Connections[i]
-		if conn.AuthType != "password" || conn.Password == "" {
+		if conn.AuthType != "password" {
+			continue
+		}
+		if conn.Password == "" {
+			// No enc:v1 field. Under the pre-enc:v1 scheme the password lived
+			// in the keychain under conn/<id> and the JSON field was omitted;
+			// recover it here so the value stays visible without a manual
+			// re-entry. Falls back to "" when neither source has it.
+			if s.legacy != nil {
+				if pw, err := s.legacy.GetPassword(conn.ID); err == nil && pw != "" {
+					s.pwdMu.Lock()
+					if s.pwdCache == nil {
+						s.pwdCache = map[string]string{}
+					}
+					s.pwdCache[conn.ID] = pw
+					s.pwdMu.Unlock()
+					conn.Password = pw
+					needsSave = true // lazy-migrate into enc:v1 on next save
+				}
+			}
 			continue
 		}
 		if s.passwordStore == nil {
@@ -232,13 +259,30 @@ func (s *ConnectionStore) encryptForSaveLocked(data session.ConnectionStoreData)
 // EnsurePassword returns the cached decrypted password for a connection ID.
 // Load() fills the cache synchronously from encrypted fields, so this is a
 // defensive fallback for callers that construct configs without going through
-// Load. Returns "" when there is no cached entry (no stored password).
+// Load. On a cache miss it tries the legacy keychain (conn/<id>) so a connect
+// attempt can still recover a password that was never migrated into enc:v1.
+// Returns "" when there is no cached entry and no legacy keychain value.
 func (s *ConnectionStore) EnsurePassword(connID string) (string, error) {
 	s.pwdMu.RLock()
 	pw, ok := s.pwdCache[connID]
 	s.pwdMu.RUnlock()
-	if !ok {
+	if ok {
+		return pw, nil
+	}
+	if s.legacy == nil {
 		return "", nil
+	}
+	pw, err := s.legacy.GetPassword(connID)
+	if err != nil {
+		return "", nil
+	}
+	if pw != "" {
+		s.pwdMu.Lock()
+		if s.pwdCache == nil {
+			s.pwdCache = map[string]string{}
+		}
+		s.pwdCache[connID] = pw
+		s.pwdMu.Unlock()
 	}
 	return pw, nil
 }
