@@ -18,8 +18,16 @@ export function AppendTempUpload(arg1, arg2) {
   return window['go']['main']['App']['AppendTempUpload'](arg1, arg2);
 }
 
+export function ApplyImport(arg1) {
+  return window['go']['main']['App']['ApplyImport'](arg1);
+}
+
 export function CancelChatStream() {
   return window['go']['main']['App']['CancelChatStream']();
+}
+
+export function ChangeMasterPassword(arg1, arg2) {
+  return window['go']['main']['App']['ChangeMasterPassword'](arg1, arg2);
 }
 
 export function ChatCompletion(arg1, arg2, arg3, arg4, arg5, arg6) {
@@ -36,10 +44,6 @@ export function ClearBackgroundImage() {
 
 export function CloseSession(arg1) {
   return window['go']['main']['App']['CloseSession'](arg1);
-}
-
-export function ConnectSerial(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['ConnectSerial'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function ContainerAction(arg1, arg2, arg3) {
@@ -142,6 +146,10 @@ export function DBInsertRow(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['DBInsertRow'](arg1, arg2, arg3, arg4);
 }
 
+export function DBPagedTableQuery(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DBPagedTableQuery'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function DBUpdateRow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['DBUpdateRow'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -180,6 +188,10 @@ export function DropTable(arg1, arg2, arg3) {
 
 export function DropView(arg1, arg2, arg3) {
   return window['go']['main']['App']['DropView'](arg1, arg2, arg3);
+}
+
+export function DumpTable(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DumpTable'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function EnableSessionOutputLog(arg1, arg2) {
@@ -258,8 +270,16 @@ export function ExecuteQuery(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteQuery'](arg1, arg2, arg3);
 }
 
+export function ExecuteSQLScript(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExecuteSQLScript'](arg1, arg2, arg3);
+}
+
 export function ExecuteStatement(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteStatement'](arg1, arg2, arg3);
+}
+
+export function ExportConnections(arg1, arg2) {
+  return window['go']['main']['App']['ExportConnections'](arg1, arg2);
 }
 
 export function FetchModels(arg1, arg2, arg3) {
@@ -272,6 +292,10 @@ export function FileSize(arg1) {
 
 export function FrontendLog(arg1, arg2) {
   return window['go']['main']['App']['FrontendLog'](arg1, arg2);
+}
+
+export function GetAllFonts() {
+  return window['go']['main']['App']['GetAllFonts']();
 }
 
 export function GetAppInfo() {
@@ -290,8 +314,16 @@ export function GetCommandBody(arg1) {
   return window['go']['main']['App']['GetCommandBody'](arg1);
 }
 
+export function GetCredentialStatus() {
+  return window['go']['main']['App']['GetCredentialStatus']();
+}
+
 export function GetDBCapabilities(arg1) {
   return window['go']['main']['App']['GetDBCapabilities'](arg1);
+}
+
+export function GetDataDirInfo() {
+  return window['go']['main']['App']['GetDataDirInfo']();
 }
 
 export function GetDatabases(arg1) {
@@ -344,10 +376,6 @@ export function GetSkillBody(arg1) {
 
 export function GetSkillFile(arg1, arg2) {
   return window['go']['main']['App']['GetSkillFile'](arg1, arg2);
-}
-
-export function GetSystemFonts() {
-  return window['go']['main']['App']['GetSystemFonts']();
 }
 
 export function GetTableSchema(arg1, arg2, arg3) {
@@ -446,8 +474,16 @@ export function LoadConnections() {
   return window['go']['main']['App']['LoadConnections']();
 }
 
+export function LoadIdentities() {
+  return window['go']['main']['App']['LoadIdentities']();
+}
+
 export function LoadLocalState() {
   return window['go']['main']['App']['LoadLocalState']();
+}
+
+export function LoadProxies() {
+  return window['go']['main']['App']['LoadProxies']();
 }
 
 export function LoadQuickCommands() {
@@ -548,6 +584,10 @@ export function OpenMultipleFilesDialog() {
 
 export function OpenPathInExplorer(arg1) {
   return window['go']['main']['App']['OpenPathInExplorer'](arg1);
+}
+
+export function ParseImportFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ParseImportFile'](arg1, arg2, arg3);
 }
 
 export function RDPHide(arg1) {
@@ -686,8 +726,16 @@ export function RegisterSessionForPanel(arg1, arg2) {
   return window['go']['main']['App']['RegisterSessionForPanel'](arg1, arg2);
 }
 
+export function RelaunchApp() {
+  return window['go']['main']['App']['RelaunchApp']();
+}
+
 export function RemoveTempFile(arg1) {
   return window['go']['main']['App']['RemoveTempFile'](arg1);
+}
+
+export function ResetCredentials() {
+  return window['go']['main']['App']['ResetCredentials']();
 }
 
 export function SaveAIConfig(arg1) {
@@ -714,8 +762,16 @@ export function SaveFileDialogFiltered(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SaveFileDialogFiltered'](arg1, arg2, arg3, arg4);
 }
 
+export function SaveIdentities(arg1) {
+  return window['go']['main']['App']['SaveIdentities'](arg1);
+}
+
 export function SaveLocalState(arg1) {
   return window['go']['main']['App']['SaveLocalState'](arg1);
+}
+
+export function SaveProxies(arg1) {
+  return window['go']['main']['App']['SaveProxies'](arg1);
 }
 
 export function SaveQuickCommands(arg1) {
@@ -786,6 +842,10 @@ export function SetCommandSortOrder(arg1, arg2) {
   return window['go']['main']['App']['SetCommandSortOrder'](arg1, arg2);
 }
 
+export function SetDataDir(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetDataDir'](arg1, arg2, arg3);
+}
+
 export function SetDefaultSessionLogDir(arg1) {
   return window['go']['main']['App']['SetDefaultSessionLogDir'](arg1);
 }
@@ -808,6 +868,10 @@ export function SetSkillLocked(arg1, arg2) {
 
 export function SetSkillSortOrder(arg1, arg2) {
   return window['go']['main']['App']['SetSkillSortOrder'](arg1, arg2);
+}
+
+export function SetupCredentials(arg1, arg2) {
+  return window['go']['main']['App']['SetupCredentials'](arg1, arg2);
 }
 
 export function SftpCancelTransfer(arg1, arg2) {
@@ -926,6 +990,10 @@ export function StopTunnel(arg1) {
   return window['go']['main']['App']['StopTunnel'](arg1);
 }
 
+export function SwitchCredentialMode(arg1, arg2) {
+  return window['go']['main']['App']['SwitchCredentialMode'](arg1, arg2);
+}
+
 export function SyncChangePassword(arg1, arg2) {
   return window['go']['main']['App']['SyncChangePassword'](arg1, arg2);
 }
@@ -962,8 +1030,16 @@ export function SyncVerifyPassword(arg1, arg2, arg3) {
   return window['go']['main']['App']['SyncVerifyPassword'](arg1, arg2, arg3);
 }
 
+export function TestConnection(arg1) {
+  return window['go']['main']['App']['TestConnection'](arg1);
+}
+
 export function TruncateTable(arg1, arg2, arg3) {
   return window['go']['main']['App']['TruncateTable'](arg1, arg2, arg3);
+}
+
+export function UnlockCredentials(arg1) {
+  return window['go']['main']['App']['UnlockCredentials'](arg1);
 }
 
 export function UnregisterSession(arg1) {
@@ -976,4 +1052,8 @@ export function WriteFileBase64(arg1, arg2) {
 
 export function WriteTempFile(arg1, arg2) {
   return window['go']['main']['App']['WriteTempFile'](arg1, arg2);
+}
+
+export function X11DesktopConnect(arg1, arg2) {
+  return window['go']['main']['App']['X11DesktopConnect'](arg1, arg2);
 }

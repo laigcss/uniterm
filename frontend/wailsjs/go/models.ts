@@ -436,6 +436,26 @@ export namespace database {
 		    return a;
 		}
 	}
+	export class ScriptResult {
+	    executed: number;
+	    failedLine: number;
+	    failedSql: string;
+	    error: string;
+	    affectedTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.executed = source["executed"];
+	        this.failedLine = source["failedLine"];
+	        this.failedSql = source["failedSql"];
+	        this.error = source["error"];
+	        this.affectedTotal = source["affectedTotal"];
+	    }
+	}
 	export class TableInfo {
 	    name: string;
 	    type: string;
@@ -451,6 +471,45 @@ export namespace database {
 	        this.type = source["type"];
 	        this.comment = source["comment"];
 	    }
+	}
+
+}
+
+export namespace importer {
+	
+	export class ImportResult {
+	    groups: session.ConnectionGroup[];
+	    connections: session.ConnectionConfig[];
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.groups = this.convertValues(source["groups"], session.ConnectionGroup);
+	        this.connections = this.convertValues(source["connections"], session.ConnectionConfig);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -494,6 +553,42 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.version = source["version"];
+	    }
+	}
+	export class CredentialStatus {
+	    mode: string;
+	    unlocked: boolean;
+	    needsSetup: boolean;
+	    keychainLost: boolean;
+	    existingSecrets: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CredentialStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.unlocked = source["unlocked"];
+	        this.needsSetup = source["needsSetup"];
+	        this.keychainLost = source["keychainLost"];
+	        this.existingSecrets = source["existingSecrets"];
+	    }
+	}
+	export class DataDirInfo {
+	    dataDir: string;
+	    type: string;
+	    firstRun: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataDirInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dataDir = source["dataDir"];
+	        this.type = source["type"];
+	        this.firstRun = source["firstRun"];
 	    }
 	}
 	export class K8sResponse {
@@ -541,6 +636,25 @@ export namespace main {
 
 }
 
+export namespace platform {
+	
+	export class FontInfo {
+	    Name: string;
+	    IsMono: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FontInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Name = source["Name"];
+	        this.IsMono = source["IsMono"];
+	    }
+	}
+
+}
+
 export namespace session {
 	
 	export class PostLoginExpectStep {
@@ -564,11 +678,13 @@ export namespace session {
 	export class ConnectionConfig {
 	    id: string;
 	    name: string;
+	    remark?: string;
 	    type: string;
 	    host: string;
 	    port: number;
 	    user: string;
 	    authType: string;
+	    identityId?: string;
 	    password?: string;
 	    keyPath?: string;
 	    groupId?: string;
@@ -599,17 +715,16 @@ export namespace session {
 	    postLoginScript?: string;
 	    postLoginExpectSteps?: PostLoginExpectStep[];
 	    tunnelSSHConnId?: string;
+	    proxyId?: string;
 	    tunnelSSHUser?: string;
 	    tunnelSSHPassword?: string;
 	    sftpMaxConcurrency?: number;
 	    initialCols?: number;
 	    initialRows?: number;
-	    deferConnect?: boolean;
 	    ftpEncryption?: string;
 	    ftpPassive: boolean;
 	    ftpEncoding?: string;
 	    ftpSkipVerify?: boolean;
-	    vncEncryption?: string;
 	    vncShared?: boolean;
 	    vncRepeaterID?: string;
 	    smbDomain?: string;
@@ -620,6 +735,10 @@ export namespace session {
 	    encoding?: string;
 	    x11Forwarding?: boolean;
 	    backspaceKey?: string;
+	    telnetNegotiationMode?: string;
+	    localEcho?: boolean;
+	    telnetSendMode?: string;
+	    newlineMode?: string;
 	    k8sConfigPath?: string;
 	    k8sConfigInline?: string;
 	    k8sContext?: string;
@@ -629,6 +748,8 @@ export namespace session {
 	    containerSSHConnId?: string;
 	    containerRuntime?: string;
 	    logOnConnect?: boolean;
+	    x11DesktopDesktopType?: string;
+	    x11DesktopCustomCmd?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionConfig(source);
@@ -638,11 +759,13 @@ export namespace session {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.remark = source["remark"];
 	        this.type = source["type"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];
 	        this.authType = source["authType"];
+	        this.identityId = source["identityId"];
 	        this.password = source["password"];
 	        this.keyPath = source["keyPath"];
 	        this.groupId = source["groupId"];
@@ -673,17 +796,16 @@ export namespace session {
 	        this.postLoginScript = source["postLoginScript"];
 	        this.postLoginExpectSteps = this.convertValues(source["postLoginExpectSteps"], PostLoginExpectStep);
 	        this.tunnelSSHConnId = source["tunnelSSHConnId"];
+	        this.proxyId = source["proxyId"];
 	        this.tunnelSSHUser = source["tunnelSSHUser"];
 	        this.tunnelSSHPassword = source["tunnelSSHPassword"];
 	        this.sftpMaxConcurrency = source["sftpMaxConcurrency"];
 	        this.initialCols = source["initialCols"];
 	        this.initialRows = source["initialRows"];
-	        this.deferConnect = source["deferConnect"];
 	        this.ftpEncryption = source["ftpEncryption"];
 	        this.ftpPassive = source["ftpPassive"];
 	        this.ftpEncoding = source["ftpEncoding"];
 	        this.ftpSkipVerify = source["ftpSkipVerify"];
-	        this.vncEncryption = source["vncEncryption"];
 	        this.vncShared = source["vncShared"];
 	        this.vncRepeaterID = source["vncRepeaterID"];
 	        this.smbDomain = source["smbDomain"];
@@ -694,6 +816,10 @@ export namespace session {
 	        this.encoding = source["encoding"];
 	        this.x11Forwarding = source["x11Forwarding"];
 	        this.backspaceKey = source["backspaceKey"];
+	        this.telnetNegotiationMode = source["telnetNegotiationMode"];
+	        this.localEcho = source["localEcho"];
+	        this.telnetSendMode = source["telnetSendMode"];
+	        this.newlineMode = source["newlineMode"];
 	        this.k8sConfigPath = source["k8sConfigPath"];
 	        this.k8sConfigInline = source["k8sConfigInline"];
 	        this.k8sContext = source["k8sContext"];
@@ -703,6 +829,8 @@ export namespace session {
 	        this.containerSSHConnId = source["containerSSHConnId"];
 	        this.containerRuntime = source["containerRuntime"];
 	        this.logOnConnect = source["logOnConnect"];
+	        this.x11DesktopDesktopType = source["x11DesktopDesktopType"];
+	        this.x11DesktopCustomCmd = source["x11DesktopCustomCmd"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1009,6 +1137,58 @@ export namespace session {
 		    return a;
 		}
 	}
+	export class Identity {
+	    id: string;
+	    name: string;
+	    username: string;
+	    authType: string;
+	    password?: string;
+	    keyPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Identity(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.username = source["username"];
+	        this.authType = source["authType"];
+	        this.password = source["password"];
+	        this.keyPath = source["keyPath"];
+	    }
+	}
+	export class IdentityStoreData {
+	    identities: Identity[];
+	
+	    static createFrom(source: any = {}) {
+	        return new IdentityStoreData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.identities = this.convertValues(source["identities"], Identity);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class MongoIndexInfo {
 	    name: string;
 	    keys: string[];
@@ -1090,6 +1270,60 @@ export namespace session {
 	    }
 	}
 	
+	export class Proxy {
+	    id: string;
+	    name: string;
+	    kind: string;
+	    host: string;
+	    port: number;
+	    user?: string;
+	    pass?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Proxy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.pass = source["pass"];
+	    }
+	}
+	export class ProxyStoreData {
+	    proxies: Proxy[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyStoreData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.proxies = this.convertValues(source["proxies"], Proxy);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class RedisKeyInfo {
 	    name: string;
 	    type: string;
@@ -1612,6 +1846,7 @@ export namespace store {
 	    rightClickAction: string;
 	    maxHistoryLines: number;
 	    smartCompletion?: boolean;
+	    aiTranscription?: boolean;
 	    highlightEnabled?: boolean;
 	    cursorBlink?: boolean;
 	    sessionLogDir?: string;
@@ -1630,6 +1865,7 @@ export namespace store {
 	        this.rightClickAction = source["rightClickAction"];
 	        this.maxHistoryLines = source["maxHistoryLines"];
 	        this.smartCompletion = source["smartCompletion"];
+	        this.aiTranscription = source["aiTranscription"];
 	        this.highlightEnabled = source["highlightEnabled"];
 	        this.cursorBlink = source["cursorBlink"];
 	        this.sessionLogDir = source["sessionLogDir"];
@@ -1648,6 +1884,7 @@ export namespace store {
 	    sftpBookmarks: SFTPBookmarks;
 	    customTerminalThemes: CustomTerminalTheme[];
 	    defaultLocalShell: string;
+	    tabCloseButton: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -1666,6 +1903,7 @@ export namespace store {
 	        this.sftpBookmarks = this.convertValues(source["sftpBookmarks"], SFTPBookmarks);
 	        this.customTerminalThemes = this.convertValues(source["customTerminalThemes"], CustomTerminalTheme);
 	        this.defaultLocalShell = source["defaultLocalShell"];
+	        this.tabCloseButton = source["tabCloseButton"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

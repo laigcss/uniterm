@@ -25,35 +25,17 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <el-dropdown trigger="click" placement="bottom-end" popper-class="type-filter-popper">
+            <el-dropdown ref="typeFilterDropdownRef" trigger="click" placement="bottom-end" popper-class="type-filter-popper">
               <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop>
                 <el-icon><Filter :size="14" /></el-icon>
               </span>
               <template #dropdown>
-                <el-dropdown-menu class="type-filter-menu">
-                  <el-dropdown-item
-                    :class="{ 'is-active': selectedTypeFilter === 'all' }"
-                    @click="selectedTypeFilter = 'all'"
-                  >
-                    <span class="dropdown-item-content">
-                      <el-icon v-if="selectedTypeFilter === 'all'"><Check :size="14" /></el-icon>
-                      <span v-else class="check-placeholder"></span>
-                      <span>{{ t('sidebar.filterAll') }}</span>
-                    </span>
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-for="typeOpt in availableTypes"
-                    :key="typeOpt.value"
-                    :class="{ 'is-active': selectedTypeFilter === typeOpt.value }"
-                    @click="selectedTypeFilter = typeOpt.value"
-                  >
-                    <span class="dropdown-item-content">
-                      <el-icon v-if="selectedTypeFilter === typeOpt.value"><Check :size="14" /></el-icon>
-                      <span v-else class="check-placeholder"></span>
-                      <span>{{ typeOpt.label }}</span>
-                    </span>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
+                <TypeFilterMenuContent
+                  :model-value="selectedTypeFilter"
+                  :all-label="t('sidebar.filterAll')"
+                  :groups="filterGroups"
+                  @update:model-value="onFilterSelect"
+                />
               </template>
             </el-dropdown>
           </template>
@@ -66,6 +48,8 @@
             <el-dropdown-menu>
               <el-dropdown-item command="new-connection">{{ t('header.newConnection') }}</el-dropdown-item>
               <el-dropdown-item command="new-group">{{ t('conn.newGroupTitle') }}</el-dropdown-item>
+              <el-dropdown-item command="import" divided>{{ t('importExport.import') }}</el-dropdown-item>
+              <el-dropdown-item command="export">{{ t('importExport.export') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -114,14 +98,17 @@
             <el-icon v-else><ChevronRight :size="14" /></el-icon>
           </span>
           <span class="group-name">{{ t('conn.noGroup') }}</span>
+          <span v-if="filteredGrouped.ungrouped.length > 0" class="group-count">{{ filteredGrouped.ungrouped.length }}</span>
         </div>
         <template v-if="expandedGroups.has('__ungrouped__')">
           <div
             v-for="conn in filteredGrouped.ungrouped"
             :key="conn.id"
             class="connection-item indented"
+            :data-conn-id="conn.id"
             :class="{
               active: selectedIds.has(conn.id),
+              'has-session': openPanelConnIds.has(conn.id),
               'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
               'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
             }"
@@ -152,8 +139,10 @@
           v-for="conn in filteredGrouped.ungrouped"
           :key="conn.id"
           class="connection-item"
+          :data-conn-id="conn.id"
           :class="{
             active: selectedIds.has(conn.id),
+            'has-session': openPanelConnIds.has(conn.id),
             'drop-before': dropIndicator?.id === conn.id && dropIndicator?.position === 'before',
             'drop-after': dropIndicator?.id === conn.id && dropIndicator?.position === 'after',
           }"
@@ -235,6 +224,7 @@
           <div class="persist-label">{{ t('settings.colorScheme') }}</div>
           <div class="theme-select-row">
             <el-select v-model="settingsStore.settings.terminal.theme" @change="settingsStore.save()" popper-class="theme-select-popper">
+              <el-option :label="t('settings.followAppTheme')" :value="FOLLOW_APP_THEME" />
               <el-option-group v-for="group in terminalThemeGroups" :key="group.label" :label="group.label">
                 <el-option v-for="th in group.options" :key="th.value" :label="th.label" :value="th.value" />
               </el-option-group>
@@ -253,14 +243,48 @@
           </div>
         </div>
         <div class="persist-section">
-          <div class="persist-label">{{ t('settings.font') }}</div>
+          <div class="persist-label">{{ t('settings.fontPrimary') }}</div>
           <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
+            <template #header>
+              <div style="padding:4px 12px">
+                <el-checkbox v-model="fontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+              </div>
+            </template>
             <el-option
               v-for="f in personalizationFontOptions"
               :key="f.value"
               :label="f.label"
               :value="f.value"
-              :style="{ fontFamily: f.value }"
+              :style="{ fontFamily: formatFontFamily(f.value) }"
+            />
+          </el-select>
+        </div>
+        <div class="persist-section">
+          <div class="persist-label">{{ t('settings.fontFallback') }}</div>
+          <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
+            <template #header>
+              <div style="padding:4px 12px">
+                <el-checkbox v-model="fallbackFontMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+              </div>
+            </template>
+            <el-option value="" :label="t('settings.fontNone')" />
+            <el-option
+              v-for="f in personalizationFallbackFontOptions"
+              :key="f.value"
+              :label="f.label"
+              :value="f.value"
+              :style="{ fontFamily: formatFontFamily(f.value) }"
+            />
+          </el-select>
+        </div>
+        <div class="persist-section">
+          <div class="persist-label">{{ t('settings.fontWeight') }}</div>
+          <el-select v-model="settingsStore.settings.terminal.fontWeight" @change="settingsStore.save()">
+            <el-option
+              v-for="w in FONT_WEIGHT_OPTIONS"
+              :key="w.value"
+              :label="t(w.labelKey)"
+              :value="w.value"
             />
           </el-select>
         </div>
@@ -277,6 +301,8 @@
     </template>
 
     <ConnectionForm v-model="showForm" :edit-config="editConfig" :default-group-id="newConnGroupId" @save="onSave" @connect="onConnectFromForm" />
+    <ExportDialog v-model:visible="showExportDialog" />
+    <ImportDialog v-model:visible="showImportDialog" />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
 
     <!-- Connection context menu (kept inside sidebar to avoid native RDP occlusion) -->
@@ -303,17 +329,19 @@
       <div v-if="selectedConn && selectedConn.type === 'rdp'" class="menu-item" @click="doConnectRDP">{{ t('sidebar.connectRDP') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'vnc'" class="menu-item" @click="doConnectVNC">{{ t('sidebar.connectVNC') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'spice'" class="menu-item" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</div>
+      <div v-if="selectedConn && selectedConn.type === 'x11-desktop'" class="menu-item" @click="doConnectX11Desktop">{{ t('sidebar.connectX11Desktop') }}</div>
       <!-- Database & Monitor -->
       <div v-if="selectedConn && selectedConn.type === 'database'" class="menu-item" @click="doConnectDB">{{ t('db.connectDB') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'container'" class="menu-item" @click="doConnect">{{ t('sidebar.connectContainer') }}</div>
       <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</div>
+      <div v-if="selectedConn && isConnOpen(selectedConn.id)" class="menu-item" @click="doLocateSession">{{ t('sidebar.locateSession') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</div>
       <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
       <div class="menu-divider" />
       <div class="menu-item" @click="doChangeGroup">{{ t('conn.moveTo') }}</div>
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
       <div class="menu-divider" />
       <div class="menu-item danger" @click="doDelete">{{ t('sidebar.delete') }}</div>
     </div>
@@ -326,7 +354,7 @@
       :style="groupMenuStyle"
       @click.stop
     >
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
       <div class="menu-item" @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</div>
       <template v-if="selectedGroup && selectedGroup.id !== '__ungrouped__'">
         <div class="menu-divider" />
@@ -345,7 +373,7 @@
       :style="emptyAreaMenuStyle"
       @click.stop
     >
-      <div class="menu-item" @click="doNewGroup">{{ t('conn.newGroupTitle') }}</div>
+      <div class="menu-item" @click="doNewGroup()">{{ t('conn.newGroupTitle') }}</div>
     </div>
 
     <!-- Delete group dialog -->
@@ -452,46 +480,76 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel, Boxes } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
 import type { GroupTreeNode } from '../stores/connectionStore'
+import { usePanelStore } from '../stores/panelStore'
+import { useTabStore } from '../stores/tabStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import ConnectionForm from './ConnectionForm.vue'
+import ExportDialog from './ExportDialog.vue'
+import ImportDialog from './ImportDialog.vue'
 import QuickCommandsPanel from './QuickCommandsPanel.vue'
 import TunnelsPanel from './TunnelsPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
+import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
-import { parseQuickConnect, formatConnSubtitle } from '../utils/quickConnect'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS } from '../types/settings'
-import { formatFontFamily } from '../utils/formatFontFamily'
+import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog } from '../utils/quickConnect'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
+import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { GetSystemFonts } from '../../wailsjs/go/main/App'
+import { GetAllFonts } from '../../wailsjs/go/main/App'
 import { useLocalStateStore } from '../stores/localStateStore'
 
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
+const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
+const panelStore = usePanelStore()
+const tabStore = useTabStore()
 const { t } = useI18n()
+
+// Connection ids that currently have an open panel/session (panel.config.id).
+// Reactive over the panelStore map, so it updates as panels open/close.
+const openPanelConnIds = computed<Set<string>>(() => {
+  const s = new Set<string>()
+  for (const p of panelStore.panels.values()) {
+    if (p.config?.id) s.add(p.config.id)
+  }
+  return s
+})
 const showForm = ref(false)
+const showExportDialog = ref(false)
+const showImportDialog = ref(false)
 const editConfig = ref<ConnectionConfig | undefined>(undefined)
 const activeView = ref<'connections' | 'quickCommands' | 'tunnels' | 'history' | 'personalization'>('connections')
 
 // ── Personalization panel ──
-const systemFonts = ref<{ label: string; value: string }[]>([])
-const personalizationFontOptions = computed(() => {
-  if (systemFonts.value.length > 0) {
-    return systemFonts.value
-  }
-  return FONT_OPTIONS
-})
+// Single source: GetAllFonts returns every installed family with its mono
+// flag (the bundled JetBrains Mono Variable is pinned first). Each select's
+// embedded "monospace only" checkbox filters this client-side.
+const allFonts = ref<{ Name: string; IsMono: boolean }[]>([])
+const fontMonoOnly = ref(true)
+const fallbackFontMonoOnly = ref(true)
+
+const toFontOption = (name: string) => ({ label: name, value: name })
+const personalizationFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !fontMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
+const personalizationFallbackFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !fallbackFontMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
 
 const { terminalThemeGroups, isCustomTheme } = useTerminalThemeOptions()
 
@@ -523,11 +581,6 @@ function focusSearch() {
 }
 
 // ── Type filter ──
-interface TypeOption {
-  label: string
-  value: string
-}
-
 const TYPE_LABELS: Record<string, string> = {
   ssh: 'SSH',
   telnet: 'Telnet',
@@ -552,27 +605,58 @@ const TYPE_LABELS: Record<string, string> = {
   'database:mongodb': 'MongoDB',
 }
 
-const availableTypes = computed<TypeOption[]>(() => {
-  const types = new Set<string>()
-  for (const c of connectionStore.connections) {
-    if (c.type === 'database' && c.dbType) {
-      types.add(`database:${c.dbType}`)
-    } else {
-      types.add(c.type)
-    }
+// Label for a filter value (type / `database:<db>` / `container:<runtime>`).
+function filterTypeLabel(key: string): string {
+  return TYPE_LABELS[key] || formatTypeFilterLabel(key)
+}
+
+// Two-level filter menu: categories (in the same order/names as the
+// new-connection form) → concrete types present in connections.
+const filterGroups = computed(() => {
+  const connKeys = new Set(connectionStore.connections.map(c => getConnectionTypeKey(c)))
+  const catalog = getTypeFilterCatalog(t)
+  const catalogKeys = new Set(catalog.flatMap(g => g.items.map(i => i.key)))
+
+  // Present-but-uncataloged types (e.g. legacy sftp / monitor that aren't in
+  // the new-connection form) are still filterable, appended under their category.
+  const extras = new Map<string, { key: string; label: string }[]>()
+  for (const k of connKeys) {
+    if (catalogKeys.has(k)) continue
+    const cat = getTypeCategory(k)
+    if (!extras.has(cat)) extras.set(cat, [])
+    extras.get(cat)!.push({ key: k, label: filterTypeLabel(k) })
   }
-  return [...types].map(value => ({
-    value,
-    label: TYPE_LABELS[value] || value
-  })).sort((a, b) => a.label.localeCompare(b.label))
+
+  return catalog
+    .map(g => ({
+      key: g.key,
+      label: g.label,
+      items: [...g.items.filter(i => connKeys.has(i.key)), ...(extras.get(g.key) || [])],
+    }))
+    .filter(g => g.items.length > 0)
 })
 
 function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
   if (filter === 'all') return true
   if (filter.startsWith('database:')) {
-    return conn.type === 'database' && conn.dbType === filter.slice(9)
+    return conn.type === 'database' && conn.dbType === filter.slice('database:'.length)
+  }
+  if (filter.startsWith('container:')) {
+    return conn.type === 'container' && (conn.containerRuntime || 'docker') === filter.slice('container:'.length)
   }
   return conn.type === filter
+}
+
+function onFilterSelect(val: string) {
+  selectedTypeFilter.value = val
+  closeTypeFilter()
+}
+
+const typeFilterDropdownRef = ref()
+
+// el-dropdown exposes handleClose() to dismiss the dropdown programmatically.
+function closeTypeFilter() {
+  typeFilterDropdownRef.value?.handleClose()
 }
 
 // ── Expand/collapse state ──
@@ -874,6 +958,10 @@ function onListKeydown(e: KeyboardEvent) {
             emit('connectRdp', c)
           } else if (c.type === 'vnc') {
             emit('connectVnc', c)
+          } else if (c.type === 'spice') {
+            emit('connectSpice', c)
+          } else if (c.type === 'x11-desktop') {
+            emit('connectX11Desktop', c)
           } else {
             emit('connect', c)
           }
@@ -1076,6 +1164,50 @@ function onItemClick(e: MouseEvent, conn: ConnectionConfig) {
   }
 }
 
+// ── Locate a connection from the tab context menu ──
+async function locateConnectionById(id: string) {
+  const conn = connectionStore.connections.find(c => c.id === id)
+  if (!conn) return
+
+  // Surface the target: drop any search / type filter that could hide it.
+  searchQuery.value = ''
+  selectedTypeFilter.value = 'all'
+
+  // Expand the containing group (and its ancestors) so the row is rendered.
+  if (conn.groupId) {
+    let gid: string | undefined = conn.groupId
+    while (gid) {
+      expandedGroups.value.add(gid)
+      collapsedGroupIds.value.delete(gid)
+      const g = connectionStore.groups.find(g => g.id === gid)
+      gid = g?.parentId
+    }
+    expandedGroups.value = new Set(expandedGroups.value)
+  } else if (connectionStore.groups.length > 0) {
+    // Ungrouped target with real groups present → expand the virtual No-Group group.
+    expandedGroups.value.add('__ungrouped__')
+    collapsedGroupIds.value.delete('__ungrouped__')
+    expandedGroups.value = new Set(expandedGroups.value)
+  }
+
+  // Select the target. focusedId is set before the filter watcher flushes,
+  // so that watcher keeps our selection instead of resetting to the first row.
+  focusedId.value = conn.id
+  lastClickId.value = conn.id
+  selectedConn.value = conn
+  selectedIds.value = new Set([conn.id])
+
+  await nextTick()
+  await nextTick()
+  const row = sidebarEl.value?.querySelector<HTMLElement>(`.connection-item[data-conn-id="${conn.id}"]`)
+  row?.scrollIntoView({ block: 'nearest' })
+}
+
+function onLocateConnection(e: Event) {
+  const id = (e as CustomEvent)?.detail?.id
+  if (typeof id === 'string') locateConnectionById(id)
+}
+
 function onItemDblClick(conn: ConnectionConfig) {
   selectedIds.value = new Set()
   if (conn.type === 'database') {
@@ -1086,6 +1218,8 @@ function onItemDblClick(conn: ConnectionConfig) {
     emit('connectVnc', conn)
   } else if (conn.type === 'spice') {
     emit('connectSpice', conn)
+  } else if (conn.type === 'x11-desktop') {
+    emit('connectX11Desktop', conn)
   } else {
     emit('connect', conn)
   }
@@ -1229,6 +1363,28 @@ function doConnectMonitor() {
   }
 }
 
+// Whether the given connection id currently has an open panel/session.
+function isConnOpen(id: string): boolean {
+  return openPanelConnIds.value.has(id)
+}
+
+// Switch to the existing tab/session hosting this connection instead of opening a new one.
+function doLocateSession() {
+  closeMenu()
+  const id = selectedConn.value?.id
+  if (!id) return
+  for (const p of panelStore.panels.values()) {
+    if (p.config?.id !== id) continue
+    const tab = tabStore.tabs.find(t => t.id === p.tabId)
+    if (!tab) continue
+    tabStore.setActiveTab(tab.id)
+    if (tab.type === 'workspace') {
+      tabStore.setActivePanel(tab.id, p.id)
+    }
+    break
+  }
+}
+
 function doConnectRDP() {
   const ids = getSelectedConnectionIds()
   const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
@@ -1256,6 +1412,16 @@ function doConnectSPICE() {
   closeMenu()
   for (const c of conns) {
     emit('connectSpice', c)
+  }
+}
+
+function doConnectX11Desktop() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  selectedIds.value = new Set()
+  closeMenu()
+  for (const c of conns) {
+    emit('connectX11Desktop', c)
   }
 }
 
@@ -1378,14 +1544,20 @@ function doNewConnInGroup() {
   showForm.value = true
 }
 
-function doNewGroup() {
+function doNewGroup(parentGroupId?: string) {
   closeMenu()
   closeGroupMenu()
   closeEmptyAreaMenu()
   newGroupName.value = ''
-  // Default parent to selected group if triggered from group context menu
-  newGroupParentId.value = (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') ? selectedGroup.value.id : undefined
+  // Clear the parent first, then render the explicitly-passed group. Callers
+  // decide what to pass; empty-area creation passes nothing, so it defaults
+  // to "None" instead of carrying over a previously-selected group.
+  newGroupParentId.value = parentGroupId
   showNewGroupDialog.value = true
+}
+
+function selectedGroupParentId(): string | undefined {
+  return (selectedGroup.value && selectedGroup.value.id !== '__ungrouped__') ? selectedGroup.value.id : undefined
 }
 
 async function confirmNewGroup() {
@@ -1620,6 +1792,10 @@ function onNewConnCommand(cmd: string) {
   } else if (cmd === 'new-group') {
     newGroupParentId.value = undefined
     showNewGroupDialog.value = true
+  } else if (cmd === 'import') {
+    showImportDialog.value = true
+  } else if (cmd === 'export') {
+    showExportDialog.value = true
   }
 }
 
@@ -1643,7 +1819,7 @@ function getShellLabel(path: string): string {
 }
 
 function getSubtitle(conn: ConnectionConfig): string {
-  if (conn.type === 'container') return `${conn.containerRuntime}`
+  if (conn.type === 'container') return conn.containerRuntime || 'container'
   return formatConnSubtitle(conn, getShellLabel)
 }
 
@@ -1662,6 +1838,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'rdp': return Monitor
     case 'vnc': return MonitorSmartphone
     case 'spice': return MonitorCloud
+    case 'x11-desktop': return AppWindow
     case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : Database
     case 'monitor': return Activity
     case 'k8s': return ShipWheel
@@ -1724,6 +1901,8 @@ function onConnectFromForm(config: ConnectionConfig) {
     emit('connectRdp', config)
   } else if (config.type === 'vnc') {
     emit('connectVnc', config)
+  } else if (config.type === 'x11-desktop') {
+    emit('connectX11Desktop', config)
   } else {
     emit('connect', config)
   }
@@ -1736,6 +1915,7 @@ onMounted(async () => {
     closeGroupMenu()
     closeEmptyAreaMenu()
   })
+  window.addEventListener('app:locate-connection', onLocateConnection)
   document.addEventListener('click', () => {
     closeMenu()
     closeGroupMenu()
@@ -1743,11 +1923,20 @@ onMounted(async () => {
   })
   // Restore group collapse state from persisted settings
   await initCollapseState()
-  // Load system fonts for personalization panel
+  // Load all fonts for personalization panel
   try {
-    const fonts = await GetSystemFonts()
+    const fonts = await GetAllFonts()
     if (fonts && fonts.length > 0) {
-      systemFonts.value = fonts.map(f => ({ label: f, value: formatFontFamily(f) }))
+      allFonts.value = fonts
+      // Migrate a legacy full-stack fontFamily down to its bare family name so
+      // it matches a dropdown option (and the new single-name default).
+      const names = new Set(allFonts.value.map(f => f.Name))
+      const cur = settingsStore.settings.terminal.fontFamily
+      const normalized = normalizeFontFamilyValue(cur, names)
+      if (normalized !== cur) {
+        settingsStore.settings.terminal.fontFamily = normalized
+        settingsStore.save()
+      }
     }
   } catch {
     // Fall back to FONT_OPTIONS
@@ -1760,6 +1949,7 @@ onUnmounted(() => {
     closeGroupMenu()
     closeEmptyAreaMenu()
   })
+  window.removeEventListener('app:locate-connection', onLocateConnection)
   document.removeEventListener('click', () => {
     closeMenu()
     closeGroupMenu()
@@ -1770,6 +1960,7 @@ onUnmounted(() => {
 // Provide to GroupTreeItem (after all refs/functions are defined)
 provide('expandedGroups', expandedGroups)
 provide('selectedIds', selectedIds)
+provide('openPanelConnIds', openPanelConnIds)
 provide('dragOverGroupId', dragOverGroupId)
 provide('dropIndicator', dropIndicator)
 provide('groupHandlers', {
@@ -1988,6 +2179,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   font-weight: 600;
 }
 
+.group-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-disabled);
+  background: var(--bg-subtle);
+  padding: 0 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .group-header.drag-over {
   background: var(--accent-subtle);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -2037,6 +2238,11 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 
 .connection-item.active .name {
   color: var(--accent);
+}
+
+/* Connection has an open session → highlight its icon with the AI-lock amber */
+.connection-item.has-session .conn-icon {
+  color: var(--warning);
 }
 
 .conn-more-btn {
@@ -2318,6 +2524,16 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-md) !important;
+}
+
+/* el-dropdown wraps its content in an el-scrollbar (el-scrollbar wraps in an
+   overflow:auto wrap), whose horizontal scrollable overflow is widened by the
+   two-level flyout submenu — producing a horizontal scrollbar. Let both layers
+   overflow visibly so the flyout shows fully with no scrollbar. The menu is
+   short, so unscrolling vertically is fine. */
+.type-filter-popper .el-scrollbar,
+.type-filter-popper .el-scrollbar__wrap {
+  overflow: visible !important;
 }
 
 .theme-select-popper .el-select-group__title {

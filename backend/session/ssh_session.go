@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,16 @@ const (
 	// connection. Dead-connection detection is NOT done here — see readLoop
 	// (EOF) and the OS-level TCP keepalive set in Connect.
 	sshKeepAliveInterval = 90 * time.Second
+
+	// Windows OpenSSH announces itself with a "for_Windows" marker in its
+	// SSH identification string (e.g. "SSH-2.0-OpenSSH_for_Windows_9.5"),
+	// unlike Linux/BSD OpenSSH ("SSH-2.0-OpenSSH_9.9p1"). We match on the
+	// marker to detect the remote OS at handshake time with zero extra
+	// round-trips.
+	windowsOpenSSHMarker = "for_Windows"
+
+	// RemoteOS value reported to the frontend when the marker matches.
+	remoteOSWindowsOpenSSH = "windows-openssh"
 )
 
 type SSHSession struct {
@@ -55,6 +66,11 @@ type SSHSession struct {
 	// Disconnect diagnostics (see readLoop / disconnect logs).
 	lastRecv atomic.Value // []byte: tail of most recent server output (diagnostics)
 	lastSent atomic.Value // []byte: most recent input sent to server (diagnostics)
+
+	// remoteOS records the detected remote operating system ("windows-openssh"
+	// for Microsoft's OpenSSH for Windows, "" otherwise). Set once during
+	// Connect from the server identification string.
+	remoteOS string
 }
 
 func NewSSHSession(id string) *SSHSession {
@@ -66,6 +82,13 @@ func NewSSHSession(id string) *SSHSession {
 		},
 		quit: make(chan struct{}),
 	}
+}
+
+// RemoteOS returns the detected remote operating system. For Microsoft's
+// OpenSSH for Windows this is "windows-openssh"; otherwise it is empty
+// (undetermined). Read-only and set once during Connect.
+func (s *SSHSession) RemoteOS() string {
+	return s.remoteOS
 }
 
 func shouldPromptForSSHPassword(config ConnectionConfig) bool {
@@ -131,7 +154,23 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		config.Password = answer
 	}
 
+	// Auto-answer keyboard-interactive challenges with the saved password on
+	// the FIRST challenge. Many servers (e.g. SuSE/NetIQ) advertise only
+	// keyboard-interactive (no "password" method), so the ssh.Password method
+	// above is rejected and the callback gets invoked with a "Password: "
+	// prompt. Without this, the user would be prompted for a password that is
+	// already saved. If the saved password is wrong, the server re-challenges
+	// and we fall through to interactive prompting so the user can type the
+	// correct one.
+	var kbAutoAnswered int32
 	kbCallback := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		if isSavedPasswordChallenge(config, questions, echos) && atomic.CompareAndSwapInt32(&kbAutoAnswered, 0, 1) {
+			answers := make([]string, len(questions))
+			for i := range questions {
+				answers[i] = config.Password
+			}
+			return answers, nil
+		}
 		answers := make([]string, len(questions))
 		for i, q := range questions {
 			s.emitData([]byte("\r\n" + q + " "))
@@ -181,28 +220,23 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		Auth:            authMethods,
 		Timeout:         30 * time.Second,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config: ssh.Config{
-			KeyExchanges: sshKeyExchanges(),
-		},
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
+	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
+	})
 	if err != nil {
 		s.setStatus(StatusError)
-		return fmt.Errorf("tcp dial: %w", err)
-	}
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(sshKeepAliveInterval)
+		return err
 	}
 
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
-	if err != nil {
-		conn.Close()
-		s.setStatus(StatusError)
-		return fmt.Errorf("ssh handshake: %w", err)
+	// Detect Windows OpenSSH from the server identification string exchanged
+	// during the handshake. This is available before any auth/shell and needs
+	// no extra round-trip; the marker "for_Windows" only appears in Microsoft's
+	// OpenSSH fork.
+	if strings.Contains(string(client.ServerVersion()), windowsOpenSSHMarker) {
+		s.remoteOS = remoteOSWindowsOpenSSH
 	}
-	client := ssh.NewClient(sshConn, chans, reqs)
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -232,7 +266,8 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 				xauthPath = home + "/.Xauthority"
 			}
 		}
-		fwd, ferr := startX11Forward(client, session, xauthPath, os.Getenv("DISPLAY"))
+		resolvedDisplay := ResolveSSHX11Display()
+		fwd, ferr := startX11Forward(client, session, xauthPath, resolvedDisplay)
 		switch {
 		case ferr == nil, errors.Is(ferr, errX11TrustedFallback):
 			s.x11Forwarder = fwd
@@ -310,6 +345,14 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	go s.runPostLoginAutomation(config)
 
 	return nil
+}
+
+// isSavedPasswordChallenge limits automatic answers to an unambiguous
+// password-only prompt. Key passphrases and password+OTP challenges remain
+// interactive so credentials are never sent to the wrong question.
+func isSavedPasswordChallenge(config ConnectionConfig, questions []string, echos []bool) bool {
+	return (config.AuthType == "" || config.AuthType == "password") &&
+		config.Password != "" && len(questions) == 1 && len(echos) == 1 && !echos[0]
 }
 
 func (s *SSHSession) readStderr() {

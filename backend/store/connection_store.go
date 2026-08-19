@@ -9,21 +9,17 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/session"
 )
 
 const storeFileName = "connections.json"
 
-// PasswordStore is the interface for reading/writing connection passwords and AI model API keys.
-// Implementations store secrets externally (e.g. OS keychain).
+// PasswordStore encrypts/decrypts individual secret field values in-place.
+// Implementations own the master key (OS keychain or master-password derived).
 type PasswordStore interface {
-	GetPassword(connID string) (string, error)
-	SetPassword(connID, password string) error
-	DeletePassword(connID string) error
-
-	GetModelAPIKey(modelID string) (string, error)
-	SetModelAPIKey(modelID, apiKey string) error
-	DeleteModelAPIKey(modelID string) error
+	Encrypt(plaintext string) (string, error)
+	Decrypt(encoded string) (string, error)
 }
 
 type ConnectionStore struct {
@@ -35,16 +31,11 @@ type ConnectionStore struct {
 	lastSavedHash string // F-105: skip no-op rewrites keyed by canonical content hash.
 }
 
-func NewConnectionStore() (*ConnectionStore, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
+func NewConnectionStore(configDir string) (*ConnectionStore, error) {
+	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, err
 	}
-	appDir := filepath.Join(configDir, "uniTerm")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return nil, err
-	}
-	return &ConnectionStore{configDir: appDir}, nil
+	return &ConnectionStore{configDir: configDir}, nil
 }
 
 // SetPasswordStore sets the external password store. Once set, passwords
@@ -65,28 +56,35 @@ func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
 	connections := make([]session.ConnectionConfig, len(data.Connections))
 	copy(connections, data.Connections)
 
-	// Extract passwords to external store before writing JSON
+	// Encrypt password fields in place before writing JSON.
 	for i := range connections {
 		conn := &connections[i]
 		if conn.AuthType != "password" {
 			continue
 		}
 		if conn.Password == "" {
-			// Password was cleared - remove old entry from keychain.
-			if s.passwordStore != nil {
-				_ = s.passwordStore.DeletePassword(conn.ID)
-			}
+			// Password cleared — drop cached plaintext so EnsurePassword can't
+			// resurrect a deleted password.
+			s.pwdMu.Lock()
+			delete(s.pwdCache, conn.ID)
+			s.pwdMu.Unlock()
 			continue
 		}
 		if s.passwordStore == nil {
-			// Fail closed: never write a plaintext password to disk when the
-			// keychain isn't available. STORE-04.
+			// Fail closed: never write plaintext when no cipher is available.
 			return errors.New("passwordStore not initialized; refusing to save plaintext password")
 		}
-		if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
+		enc, err := s.passwordStore.Encrypt(conn.Password)
+		if err != nil {
 			return err
 		}
-		conn.Password = ""
+		s.pwdMu.Lock()
+		if s.pwdCache == nil {
+			s.pwdCache = map[string]string{}
+		}
+		s.pwdCache[conn.ID] = conn.Password
+		s.pwdMu.Unlock()
+		conn.Password = enc
 	}
 
 	saveData := session.ConnectionStoreData{
@@ -169,96 +167,78 @@ func (s *ConnectionStore) Load() (session.ConnectionStoreData, error) {
 
 func (s *ConnectionStore) populatePasswords(data *session.ConnectionStoreData) error {
 	needsSave := false
-	var toFetch []string
 
 	for i := range data.Connections {
 		conn := &data.Connections[i]
-		if conn.AuthType != "password" {
+		if conn.AuthType != "password" || conn.Password == "" {
 			continue
 		}
-
-		if s.passwordStore != nil {
-			// One-time migration: plaintext JSON password → keychain.
-			if conn.Password != "" {
-				if err := s.passwordStore.SetPassword(conn.ID, conn.Password); err != nil {
-					return err
-				}
-				conn.Password = ""
-				needsSave = true
+		if s.passwordStore == nil {
+			continue // no cipher wired — leave as-is (backward compat)
+		}
+		if credentials.IsEncrypted(conn.Password) {
+			pw, err := s.passwordStore.Decrypt(conn.Password)
+			if err != nil {
+				return err
 			}
-		}
-
-		// F-110: serve from cache when available, otherwise schedule an
-		// async keychain fill so Load() does not block on per-connection IPC.
-		s.pwdMu.RLock()
-		pw, cached := s.pwdCache[conn.ID]
-		s.pwdMu.RUnlock()
-		if cached && pw != "" {
+			s.pwdMu.Lock()
+			if s.pwdCache == nil {
+				s.pwdCache = map[string]string{}
+			}
+			s.pwdCache[conn.ID] = pw
+			s.pwdMu.Unlock()
 			conn.Password = pw
-			continue
+		} else {
+			// Legacy plaintext on disk (never migrated to keychain). Keep the
+			// plaintext for the caller but re-save so it lands encrypted.
+			needsSave = true
 		}
-		if s.passwordStore != nil {
-			toFetch = append(toFetch, conn.ID)
-		}
-	}
-
-	if len(toFetch) > 0 {
-		go s.asyncFillPasswords(toFetch)
 	}
 
 	if needsSave {
-		// Save cleaned JSON (passwords migrated out)
+		clean := *data
+		clean.Connections = make([]session.ConnectionConfig, len(data.Connections))
+		copy(clean.Connections, data.Connections)
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		return s.writeJSONLocked(*data)
+		return s.writeJSONLocked(s.encryptForSaveLocked(clean))
 	}
 	return nil
 }
 
-// asyncFillPasswords runs after Load() returns; it fetches each requested
-// password from the keychain and writes the result into pwdCache. A cache
-// hit on the next Load avoids the per-connection IPC entirely.
-func (s *ConnectionStore) asyncFillPasswords(ids []string) {
-	for _, id := range ids {
-		pw, err := s.passwordStore.GetPassword(id)
-		if err != nil || pw == "" {
+// encryptForSaveLocked returns a copy of data with plaintext password fields
+// encrypted. Caller must hold s.mu.
+func (s *ConnectionStore) encryptForSaveLocked(data session.ConnectionStoreData) session.ConnectionStoreData {
+	out := data
+	out.Connections = make([]session.ConnectionConfig, len(data.Connections))
+	copy(out.Connections, data.Connections)
+	for i := range out.Connections {
+		conn := &out.Connections[i]
+		if conn.AuthType != "password" || conn.Password == "" || credentials.IsEncrypted(conn.Password) {
 			continue
 		}
-		s.pwdMu.Lock()
-		if s.pwdCache == nil {
-			s.pwdCache = map[string]string{}
+		if s.passwordStore == nil {
+			continue
 		}
-		s.pwdCache[id] = pw
-		s.pwdMu.Unlock()
+		enc, err := s.passwordStore.Encrypt(conn.Password)
+		if err != nil {
+			continue // best-effort; the plaintext remains, encrypted on next Save
+		}
+		conn.Password = enc
 	}
+	return out
 }
 
-// EnsurePassword returns the password for a connection ID, populating from
-// the keychain on cache miss. Callers needing synchronous access (e.g.
-// SSH Connect right after Load) should call this instead of relying on
-// conn.Password, which may be empty for the first Load after process start.
-// Returns "" if no password store is set or the keychain has no entry.
+// EnsurePassword returns the cached decrypted password for a connection ID.
+// Load() fills the cache synchronously from encrypted fields, so this is a
+// defensive fallback for callers that construct configs without going through
+// Load. Returns "" when there is no cached entry (no stored password).
 func (s *ConnectionStore) EnsurePassword(connID string) (string, error) {
 	s.pwdMu.RLock()
 	pw, ok := s.pwdCache[connID]
 	s.pwdMu.RUnlock()
-	if ok {
-		return pw, nil
-	}
-	if s.passwordStore == nil {
+	if !ok {
 		return "", nil
-	}
-	pw, err := s.passwordStore.GetPassword(connID)
-	if err != nil {
-		return "", err
-	}
-	if pw != "" {
-		s.pwdMu.Lock()
-		if s.pwdCache == nil {
-			s.pwdCache = map[string]string{}
-		}
-		s.pwdCache[connID] = pw
-		s.pwdMu.Unlock()
 	}
 	return pw, nil
 }

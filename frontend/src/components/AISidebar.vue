@@ -102,9 +102,6 @@
               <button class="panel-tag-close" @click="onRemovePanelTag(pid)">&times;</button>
             </span>
           </template>
-          <template v-else>
-            <span class="no-terminal-hint">{{ t('ai.noTerminalHint') }}</span>
-          </template>
           <el-dropdown trigger="click" @command="onAddPanelTag">
             <button class="panel-tag-add-btn" :title="t('ai.addTerminal')">+</button>
             <template #dropdown>
@@ -174,8 +171,8 @@
           <div
             ref="editableRef"
             class="ai-editable"
-            contenteditable="true"
-            :data-placeholder="t('ai.placeholder')"
+            :contenteditable="lockedPanels.length > 0 || currentIsTerminal ? 'true' : 'false'"
+            :data-placeholder="lockedPanels.length === 0 && !currentIsTerminal ? t('ai.noTerminalHint') : t('ai.placeholder')"
             @input="onEditableInput"
             @keydown="onKeydown"
             @paste="onPaste"
@@ -236,7 +233,7 @@
             <button
               v-if="!(busy && !inputText.trim())"
               class="send-btn"
-              :disabled="!inputText.trim() && !hasSkillTag && !hasCommandTag"
+              :disabled="(!inputText.trim() && !hasSkillTag && !hasCommandTag) || (lockedPanels.length === 0 && !currentIsTerminal)"
               :title="busy ? t('ai.queue') : t('ai.send')"
               @click="onSend"
             >

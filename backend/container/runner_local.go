@@ -58,6 +58,7 @@ func (r *LocalRunner) command(ctx context.Context, argv []string) (*exec.Cmd, er
 		argv[0] = p
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	setHideWindow(cmd)
 	return cmd, nil
 }
 

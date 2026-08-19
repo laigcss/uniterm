@@ -55,18 +55,33 @@
             <MoreHorizontal :size="14" />
           </button>
           <div v-show="moreMenuVisible" class="panel-more-menu" @click.stop>
-            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">{{ t('terminal.duplicate') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</div>
+            <!-- ① 面板操作 -->
+            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">
+              {{ t('tab.duplicate') }}
+              <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
+            </div>
+            <div class="menu-item" @click="renamePanel">{{ t('tab.rename') }}</div>
+            <div v-if="panel.config?.id" class="menu-item" @click="locateConnection">{{ t('tab.locate') }}</div>
+
+            <!-- ② 会话文本操作 -->
+            <div class="menu-divider" />
+            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">
+              {{ t('terminal.searchText') }}
+              <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+            </div>
+            <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
             <div class="menu-item" @click="toggleOutputLog(); moreMenuVisible = false">
               {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
             </div>
             <div v-if="isOutputLogOn" class="menu-item" @click="openLogDir(); moreMenuVisible = false">
               {{ t('session.openLogDir') }}
             </div>
-            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">{{ t('terminal.searchText') }}</div>
-            <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
+
+            <!-- ③ 连接功能（ssh） -->
+            <div v-if="panel.type === 'ssh'" class="menu-divider" />
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</div>
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</div>
+            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</div>
           </div>
         </div>
         <button class="panel-close" @click.stop="emit('close', panel.id)"><X :size="14" /></button>
@@ -92,6 +107,8 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import {
   CreateSession,
   CloseSession,
@@ -142,6 +159,17 @@ const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// Human-readable keybinding for a shortcut action ('' when unset), shown as a
+// hint in the panel "..." menu. Reactive via settingsStore, so the hint updates
+// automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 
 const showCredentialDialog = inject<(title: string, subtitle: string, fields: ('user' | 'password')[], initialUser?: string, initialPassword?: string) => Promise<CredentialResult | null>>('showCredentialDialog', () => Promise.resolve(null))
 
@@ -273,6 +301,18 @@ function startEdit() {
   })
 }
 
+function renamePanel() {
+  moreMenuVisible.value = false
+  startEdit()
+}
+
+function locateConnection() {
+  moreMenuVisible.value = false
+  if (props.panel.config?.id) {
+    window.dispatchEvent(new CustomEvent('app:locate-connection', { detail: { id: props.panel.config.id } }))
+  }
+}
+
 function confirmEdit() {
   if (!editing.value) return
   editing.value = false
@@ -312,7 +352,6 @@ async function retryConnection() {
         ...props.panel.config,
         type: 'local',
         shellPath,
-        deferConnect: true,
         initialCols: 0,
         initialRows: 0,
       }
@@ -391,7 +430,6 @@ async function retryConnection() {
   try {
     const config: ConnectionConfig = {
       ...props.panel.config,
-      deferConnect: true,
       initialCols: 0,
       initialRows: 0,
     }
@@ -646,6 +684,10 @@ watch(() => props.panel.outputLog, (val) => {
   padding: 4px;
 }
 .panel-more-menu .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -658,5 +700,16 @@ watch(() => props.panel.outputLog, (val) => {
 .panel-more-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.panel-more-menu .menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
+.panel-more-menu .menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
 }
 </style>

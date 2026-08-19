@@ -23,8 +23,11 @@
           <History :size="14" />
           {{ t('db.queryHistory') }}
         </button>
+        <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.runSqlFile')" @click="onOpenScriptFile">
+          <FolderOpen :size="14" />
+        </button>
         <button class="btn btn-primary btn-sm" @click="onExecute">{{ t('db.execute') }}</button>
-        <span class="shortcut-hint">Ctrl/⌘+Enter</span>
+        <span class="shortcut-hint">Ctrl/?+Enter</span>
       </div>
       <div v-if="historyOpen" class="history-panel">
         <div v-if="history.length === 0" class="history-empty">{{ t('db.noHistory') }}</div>
@@ -38,7 +41,7 @@
           <span class="history-meta">
             <span v-if="item.error" class="history-err">err</span>
             <span v-else>{{ item.rowCount ?? 0 }} {{ t('db.rows') }}</span>
-            · {{ item.durationMs }}ms
+            ? {{ item.durationMs }}ms
           </span>
         </button>
       </div>
@@ -55,9 +58,20 @@
     <div class="editor-resizer" @mousedown="onResizeStart" />
     <div class="editor-bottom">
       <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="scriptResult" class="script-result" :class="{ 'has-error': scriptResult.failedLine }">
+        <template v-if="scriptResult.failedLine">
+          <div class="script-error-head">{{ t('db.scriptFailedLine', { line: scriptResult.failedLine }) }}</div>
+          <div class="script-error-detail">{{ scriptResult.error }}</div>
+          <pre class="script-error-sql">{{ scriptResult.failedSql }}</pre>
+        </template>
+        <template v-else>
+          <span class="script-ok">{{ t('db.scriptExecuted', { n: scriptResult.executed }) }}</span>
+          <span class="script-affected">{{ t('db.affectedRowsTotal') }}: {{ scriptResult.affectedTotal }}</span>
+        </template>
+      </div>
       <div v-if="execResult" class="result-info">
         {{ t('db.affectedRows') }}: {{ execResult.affected }}
-        <span v-if="lastDurationMs != null" class="result-duration"> · {{ lastDurationMs }}ms</span>
+        <span v-if="lastDurationMs != null" class="result-duration"> ? {{ lastDurationMs }}ms</span>
       </div>
 
       <div v-if="queryResult" class="result-toolbar">
@@ -69,7 +83,7 @@
         <div class="result-toolbar-right">
           <span class="result-count">
             {{ displayRows.length }}{{ resultFilter ? ` / ${queryResult.rows.length}` : '' }} {{ t('db.rows') }}
-            <span v-if="lastDurationMs != null"> · {{ lastDurationMs }}ms</span>
+            <span v-if="lastDurationMs != null"> ? {{ lastDurationMs }}ms</span>
           </span>
           <el-pagination
             v-if="browseMode"
@@ -160,16 +174,17 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
-import { Sparkles, History } from '@lucide/vue'
+import { Sparkles, History, FolderOpen } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import SyntaxEditor from './SyntaxEditor.vue'
 import DBResultGrid from './DBResultGrid.vue'
-import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow } from '../../wailsjs/go/main/App'
+import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64 } from '../../wailsjs/go/main/App'
 import { chat } from '../services/llm'
 import { msg } from '../services/message'
 import { loadSqlHistory, pushSqlHistory } from '../composables/useDbSqlHistory'
 import type { QueryResult, ExecResult, ColumnInfo, HistoryEntry } from '../types/database'
+import { database as dbModels } from '../../wailsjs/go/models'
 
 const { t } = useI18n()
 
@@ -411,6 +426,7 @@ async function onExecute() {
   error.value = ''
   queryResult.value = null
   execResult.value = null
+  scriptResult.value = null
   loading.value = true
   cancelled = false
   resultFilter.value = ''
@@ -478,6 +494,43 @@ async function onExecute() {
 function onCancelQuery() {
   cancelled = true
   loading.value = false
+}
+
+const scriptResult = shallowRef<dbModels.ScriptResult | null>(null)
+
+async function onOpenScriptFile() {
+  try {
+    const path = await OpenFileDialogFiltered(t('db.runSqlFile'), 'SQL File', '*.sql')
+    if (!path) return
+    const b64 = await ReadFileBase64(path)
+    const text = decodeBase64(b64)
+    error.value = ''
+    queryResult.value = null
+    execResult.value = null
+    scriptResult.value = null
+    loading.value = true
+    cancelled = false
+    const result = await ExecuteSQLScript(props.sessionId, props.dbName || '', text)
+    if (!cancelled) {
+      scriptResult.value = result
+      if (result?.failedLine) emit('cellUpdated')
+    }
+  } catch (e: any) {
+    if (!cancelled) error.value = e?.message || String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+function decodeBase64(b64: string): string {
+  try {
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return new TextDecoder('utf-8').decode(bytes)
+  } catch {
+    return ''
+  }
 }
 
 async function onPageChange(p: number) {
@@ -567,7 +620,7 @@ async function onDeleteRowByRow(row: Record<string, any>) {
   await onDeleteRow(idx)
 }
 
-// ── Resize splitter ──
+// ?? Resize splitter ??
 
 const topHeight = ref(200)
 let resizeStartY = 0
@@ -954,6 +1007,37 @@ function onEditRowCancel() {
   font-size: 13px;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+.script-result {
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.script-result.has-error {
+  background: var(--error-subtle);
+  color: var(--error);
+}
+.script-ok { color: var(--text-primary); }
+.script-affected { margin-left: 12px; }
+.script-error-head { font-weight: 600; }
+.script-error-detail { margin-top: 4px; font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
+.script-error-sql {
+  margin: 4px 0 0;
+  padding: 6px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
 }
 .result-duration { color: var(--text-muted); }
 .result-toolbar {

@@ -6,28 +6,18 @@
 
       <!-- Search row -->
     <div class="start-search-row">
-      <el-dropdown trigger="click" placement="bottom-start" :teleported="false">
+      <el-dropdown ref="typeFilterDropdownRef" trigger="click" placement="bottom-start" :teleported="false" popper-class="type-filter-popper">
         <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }">
           <el-icon><Filter :size="14" /></el-icon>
-          <span>{{ selectedTypeFilter === 'all' ? t('sidebar.filterAll') : (TYPE_LABELS[selectedTypeFilter] || selectedTypeFilter) }}</span>
+          <span>{{ filterDisplay }}</span>
         </span>
         <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              :class="{ 'is-active': selectedTypeFilter === 'all' }"
-              @click="selectedTypeFilter = 'all'"
-            >
-              {{ t('sidebar.filterAll') }}
-            </el-dropdown-item>
-            <el-dropdown-item
-              v-for="typeOpt in availableTypes"
-              :key="typeOpt.value"
-              :class="{ 'is-active': selectedTypeFilter === typeOpt.value }"
-              @click="selectedTypeFilter = typeOpt.value"
-            >
-              {{ typeOpt.label }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
+          <TypeFilterMenuContent
+            :model-value="selectedTypeFilter"
+            :all-label="t('sidebar.filterAll')"
+            :groups="filterGroups"
+            @update:model-value="onFilterSelect"
+          />
         </template>
       </el-dropdown>
       <el-input
@@ -71,10 +61,7 @@
           </template>
         </el-dropdown>
       </div>
-      <button class="start-action-btn" @click="emit('connect-serial', $event.ctrlKey || $event.metaKey)">
-        <el-icon><Cable :size="14" /></el-icon>
-        {{ t('sidebar.connectSerial') }}
-      </button>
+
     </div>
 
     <!-- Breadcrumb for group view -->
@@ -119,6 +106,7 @@
                 <el-icon v-else-if="config.type === 'rdp'"><Monitor :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'vnc'"><MonitorSmartphone :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'spice'"><MonitorCloud :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'x11-desktop'"><AppWindow :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'database'">
                   <DatabaseZap v-if="config.dbType === 'redis'" :size="28" />
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
@@ -206,6 +194,7 @@
                 <el-icon v-else-if="config.type === 'rdp'"><Monitor :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'vnc'"><MonitorSmartphone :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'spice'"><MonitorCloud :size="28" /></el-icon>
+                <el-icon v-else-if="config.type === 'x11-desktop'"><AppWindow :size="28" /></el-icon>
                 <el-icon v-else-if="config.type === 'database'">
                   <DatabaseZap v-if="config.dbType === 'redis'" :size="28" />
                   <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
@@ -280,6 +269,7 @@
               <el-icon v-else-if="config.type === 'rdp'"><Monitor :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'vnc'"><MonitorSmartphone :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'spice'"><MonitorCloud :size="28" /></el-icon>
+              <el-icon v-else-if="config.type === 'x11-desktop'"><AppWindow :size="28" /></el-icon>
               <el-icon v-else-if="config.type === 'database'">
                 <DatabaseZap v-if="config.dbType === 'redis'" :size="28" />
                 <Layers v-else-if="config.dbType === 'mongodb'" :size="28" />
@@ -349,6 +339,7 @@
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'rdp'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectRdp(contextMenuConfig)">{{ t('sidebar.connectRDP') }}</div>
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'vnc'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectVnc(contextMenuConfig)">{{ t('sidebar.connectVNC') }}</div>
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'spice'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSpice(contextMenuConfig)">{{ t('sidebar.connectSPICE') }}</div>
+      <div v-if="contextMenuConfig && contextMenuConfig.type === 'x11-desktop'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectX11Desktop(contextMenuConfig)">{{ t('sidebar.connectX11Desktop') }}</div>
       <!-- Database & Monitor -->
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'database'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectDb(contextMenuConfig)">{{ t('db.connectDB') }}</div>
       <div v-if="contextMenuConfig && contextMenuConfig.type === 'k8s'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectK8s(contextMenuConfig)">{{ t('sidebar.connectK8s') }}</div>
@@ -448,8 +439,9 @@ import { useTabStore } from '../stores/tabStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { GetRecentConnections } from '../../wailsjs/go/main/App'
-import { formatConnSubtitle } from '../utils/quickConnect'
-import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Search, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes } from '@lucide/vue'
+import { formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog } from '../utils/quickConnect'
+import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
+import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, Search, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
   tab: StartTab
@@ -457,9 +449,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   connect: [config: ConnectionConfig, keepOpen?: boolean]
-  'new-connection': [payload?: { host?: string; groupId?: string }]
+  'new-connection': [payload?: { host?: string; groupId?: string; type?: string }]
   'local-terminal': [shellPath: string, keepOpen?: boolean]
-  'connect-serial': [keepOpen?: boolean]
   'close-self': [tabId: string]
   'edit-connection': [config: ConnectionConfig]
   'change-group': [config: ConnectionConfig]
@@ -545,27 +536,58 @@ const TYPE_LABELS: Record<string, string> = {
   'database:mongodb': 'MongoDB', 'database:elasticsearch': 'Elasticsearch',
 }
 
-const availableTypes = computed(() => {
-  const types = new Set<string>()
-  for (const c of connectionStore.connections) {
-    if (c.type === 'database' && c.dbType) {
-      types.add(`database:${c.dbType}`)
-    } else {
-      types.add(c.type)
-    }
+// Two-level filter menu: categories (in the same order/names as the
+// new-connection form) → concrete types present in connections.
+const filterGroups = computed(() => {
+  const connKeys = new Set(connectionStore.connections.map(c => getConnectionTypeKey(c)))
+  const catalog = getTypeFilterCatalog(t)
+  const catalogKeys = new Set(catalog.flatMap(g => g.items.map(i => i.key)))
+
+  // Present-but-uncataloged types (e.g. legacy sftp / monitor that aren't in
+  // the new-connection form) are still filterable, appended under their category.
+  const extras = new Map<string, { key: string; label: string }[]>()
+  for (const k of connKeys) {
+    if (catalogKeys.has(k)) continue
+    const cat = getTypeCategory(k)
+    if (!extras.has(cat)) extras.set(cat, [])
+    extras.get(cat)!.push({ key: k, label: TYPE_LABELS[k] || formatTypeFilterLabel(k) })
   }
-  return [...types].map(value => ({
-    value,
-    label: TYPE_LABELS[value] || value
-  })).sort((a, b) => a.label.localeCompare(b.label))
+
+  return catalog
+    .map(g => ({
+      key: g.key,
+      label: g.label,
+      items: [...g.items.filter(i => connKeys.has(i.key)), ...(extras.get(g.key) || [])],
+    }))
+    .filter(g => g.items.length > 0)
+})
+
+const filterDisplay = computed(() => {
+  if (selectedTypeFilter.value === 'all') return t('sidebar.filterAll')
+  return TYPE_LABELS[selectedTypeFilter.value] || formatTypeFilterLabel(selectedTypeFilter.value)
 })
 
 function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
   if (filter === 'all') return true
   if (filter.startsWith('database:')) {
-    return conn.type === 'database' && conn.dbType === filter.slice(9)
+    return conn.type === 'database' && conn.dbType === filter.slice('database:'.length)
+  }
+  if (filter.startsWith('container:')) {
+    return conn.type === 'container' && (conn.containerRuntime || 'docker') === filter.slice('container:'.length)
   }
   return conn.type === filter
+}
+
+function onFilterSelect(val: string) {
+  selectedTypeFilter.value = val
+  closeTypeFilter()
+}
+
+const typeFilterDropdownRef = ref()
+
+// el-dropdown exposes handleClose() to dismiss the dropdown programmatically.
+function closeTypeFilter() {
+  typeFilterDropdownRef.value?.handleClose()
 }
 
 // ── Shell label helper ──
@@ -594,6 +616,13 @@ async function loadRecent() {
   }
 }
 loadRecent()
+
+// Refresh the recent list when connections are added/removed, so a newly
+// created connection shows up in "Recent" without requiring a reload.
+watch(
+  () => connectionStore.connections.map(c => c.id),
+  () => loadRecent()
+)
 
 const recentConfigs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -1203,7 +1232,7 @@ onUnmounted(() => {
 
 // Context menu actions
 function doConnect(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
-function doConnectSerial(_config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect-serial', e.ctrlKey || e.metaKey) }
+function doConnectSerial(config: ConnectionConfig, e: MouseEvent) { closeContextMenu(); emit('connect', config, e.ctrlKey || e.metaKey) }
 function doConnectSftp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: config })) }
 function doConnectMonitor(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: config })) }
 function doConnectRdp(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-rdp', { detail: config })) }
@@ -1215,6 +1244,7 @@ function doConnectFtp(config: ConnectionConfig) { closeContextMenu(); window.dis
 function doConnectSmb(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-smb', { detail: config })) }
 function doConnectS3(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-s3', { detail: config })) }
 function doConnectWebdav(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-webdav', { detail: config })) }
+function doConnectX11Desktop(config: ConnectionConfig) { closeContextMenu(); window.dispatchEvent(new CustomEvent('app:connect-x11-desktop', { detail: config })) }
 function doEditConnection(config: ConnectionConfig | null) {
   if (!config) return
   closeContextMenu()

@@ -11,12 +11,36 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
+const encFieldPrefix = "enc:v1:"
+
+// isEncryptedField reports whether a secret field value is already in-place
+// encrypted (opaque to sync). Sync must carry it through without backfilling
+// from keychain or stripping it.
+func isEncryptedField(s string) bool { return strings.HasPrefix(s, encFieldPrefix) }
+
+// PasswordStore encrypts/decrypts individual in-place secret field values
+// (enc:v1:). It is the credential store. Sync uses it to normalize fields to
+// plaintext before upload (so the whole file is protected solely by the sync
+// key) and back to enc:v1: after download (so local storage stays encrypted
+// under the local credential mode's key).
+type PasswordStore interface {
+	Encrypt(plaintext string) (string, error)
+	Decrypt(encoded string) (string, error)
+	// Unlocked reports whether the credential store currently holds a usable
+	// key. When false (master-password not yet entered, keychain lost, or never
+	// set up), sync must refuse to run rather than leak or mis-carry secrets.
+	Unlocked() bool
+}
+
 // EncryptConfigFiles encrypts entire config files from srcDir into destDir.
-// kc is used to backfill passwords from keychain before encryption.
-// Pass nil for kc to skip backfill.
-func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error {
+// kc is used to backfill legacy empty passwords from keychain before
+// encryption. ps is used to normalize enc:v1: fields to plaintext so only the
+// sync key protects the file at rest in the repo. Pass nil for either to skip
+// that step.
+func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain, ps PasswordStore) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
@@ -24,7 +48,7 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 	if err := encryptConnectionsFile(
 		filepath.Join(srcDir, "connections.json"),
 		filepath.Join(destDir, "connections.json"),
-		key, kc,
+		key, kc, ps,
 	); err != nil {
 		return fmt.Errorf("encrypt connections: %w", err)
 	}
@@ -32,7 +56,7 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 	if err := encryptSettingsFile(
 		filepath.Join(srcDir, "settings.json"),
 		filepath.Join(destDir, "settings.json"),
-		key, kc,
+		key, kc, ps,
 	); err != nil {
 		return fmt.Errorf("encrypt settings: %w", err)
 	}
@@ -45,16 +69,32 @@ func EncryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		return fmt.Errorf("encrypt quick commands: %w", err)
 	}
 
+	if err := encryptIdentitiesFile(
+		filepath.Join(srcDir, "identities.json"),
+		filepath.Join(destDir, "identities.json"),
+		key, ps,
+	); err != nil {
+		return fmt.Errorf("encrypt identities: %w", err)
+	}
+
+	if err := encryptProxiesFile(
+		filepath.Join(srcDir, "proxies.json"),
+		filepath.Join(destDir, "proxies.json"),
+		key, ps,
+	); err != nil {
+		return fmt.Errorf("encrypt proxies: %w", err)
+	}
+
 	return nil
 }
 
-func encryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
+func encryptConnectionsFile(src, dest string, key []byte, kc *Keychain, ps PasswordStore) error {
 	data, err := readJSONFile(src)
 	if err != nil {
 		return err
 	}
 
-	if kc != nil {
+	if kc != nil || ps != nil {
 		var wrapper struct {
 			Groups      []map[string]interface{} `json:"groups"`
 			Connections []map[string]interface{} `json:"connections"`
@@ -68,10 +108,16 @@ func encryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 			}
 			pw, _ := cm["password"].(string)
 			if pw == "" {
-				if id, ok := cm["id"].(string); ok {
+				// Legacy: password stored in keychain, not in JSON.
+				if id, ok := cm["id"].(string); ok && kc != nil {
 					if kcPw, err := kc.GetPassword(id); err == nil && kcPw != "" {
 						cm["password"] = kcPw
 					}
+				}
+			} else if isEncryptedField(pw) && ps != nil {
+				// Normalize in-place encrypted field to plaintext for upload.
+				if pt, err := ps.Decrypt(pw); err == nil {
+					cm["password"] = pt
 				}
 			}
 		}
@@ -85,13 +131,13 @@ func encryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 	return os.WriteFile(dest, []byte(encoded), 0600)
 }
 
-func encryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
+func encryptSettingsFile(src, dest string, key []byte, kc *Keychain, ps PasswordStore) error {
 	data, err := readJSONFile(src)
 	if err != nil {
 		return err
 	}
 
-	if kc != nil {
+	if kc != nil || ps != nil {
 		var obj map[string]interface{}
 		if err := json.Unmarshal(data, &obj); err == nil {
 			if ai, ok := obj["ai"].(map[string]interface{}); ok {
@@ -100,10 +146,15 @@ func encryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
 						if mm, ok := m.(map[string]interface{}); ok {
 							ak, _ := mm["apiKey"].(string)
 							if ak == "" {
-								if id, ok := mm["id"].(string); ok {
+								// Legacy: apiKey stored in keychain, not in JSON.
+								if id, ok := mm["id"].(string); ok && kc != nil {
 									if kcAk, err := kc.GetModelAPIKey(id); err == nil && kcAk != "" {
 										mm["apiKey"] = kcAk
 									}
+								}
+							} else if isEncryptedField(ak) && ps != nil {
+								if pt, err := ps.Decrypt(ak); err == nil {
+									mm["apiKey"] = pt
 								}
 							}
 						}
@@ -121,10 +172,75 @@ func encryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
 	return os.WriteFile(dest, []byte(encoded), 0600)
 }
 
+// encryptIdentitiesFile encrypts identities.json, normalizing any enc:v1:
+// Password field to plaintext for upload.
+func encryptIdentitiesFile(src, dest string, key []byte, ps PasswordStore) error {
+	data, err := readJSONFile(src)
+	if err != nil {
+		return err
+	}
+
+	if ps != nil {
+		var wrapper struct {
+			Identities []map[string]interface{} `json:"identities"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err != nil {
+			return fmt.Errorf("parse identities: %w", err)
+		}
+		for _, im := range wrapper.Identities {
+			if pw, ok := im["password"].(string); ok && isEncryptedField(pw) {
+				if pt, err := ps.Decrypt(pw); err == nil {
+					im["password"] = pt
+				}
+			}
+		}
+		data, _ = json.MarshalIndent(wrapper, "", "  ")
+	}
+
+	encoded, err := encryptBytes(data, key)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dest, []byte(encoded), 0600)
+}
+
+// encryptProxiesFile encrypts proxies.json, normalizing any enc:v1: pass field
+// to plaintext for upload.
+func encryptProxiesFile(src, dest string, key []byte, ps PasswordStore) error {
+	data, err := readJSONFile(src)
+	if err != nil {
+		return err
+	}
+
+	if ps != nil {
+		var wrapper struct {
+			Proxies []map[string]interface{} `json:"proxies"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err != nil {
+			return fmt.Errorf("parse proxies: %w", err)
+		}
+		for _, pm := range wrapper.Proxies {
+			if pass, ok := pm["pass"].(string); ok && isEncryptedField(pass) {
+				if pt, err := ps.Decrypt(pass); err == nil {
+					pm["pass"] = pt
+				}
+			}
+		}
+		data, _ = json.MarshalIndent(wrapper, "", "  ")
+	}
+
+	encoded, err := encryptBytes(data, key)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dest, []byte(encoded), 0600)
+}
+
 // DecryptConfigFiles decrypts config files from srcDir into destDir.
-// kc is used to write decrypted passwords to keychain and clear them from JSON.
-// Pass nil for kc to skip keychain (passwords stay in JSON).
-func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error {
+// ps is used to re-encrypt plaintext secret fields back to enc:v1: under the
+// local credential key after download. Pass nil for ps to keep fields as
+// plaintext (e.g. temporary dirs used only for comparison).
+func DecryptConfigFiles(srcDir, destDir string, key []byte, ps PasswordStore) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
@@ -132,7 +248,7 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 	if err := decryptConnectionsFile(
 		filepath.Join(srcDir, "connections.json"),
 		filepath.Join(destDir, "connections.json"),
-		key, kc,
+		key, ps,
 	); err != nil {
 		return fmt.Errorf("decrypt connections: %w", err)
 	}
@@ -140,7 +256,7 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 	if err := decryptSettingsFile(
 		filepath.Join(srcDir, "settings.json"),
 		filepath.Join(destDir, "settings.json"),
-		key, kc,
+		key, ps,
 	); err != nil {
 		return fmt.Errorf("decrypt settings: %w", err)
 	}
@@ -153,10 +269,26 @@ func DecryptConfigFiles(srcDir, destDir string, key []byte, kc *Keychain) error 
 		return fmt.Errorf("decrypt quick commands: %w", err)
 	}
 
+	if err := decryptIdentitiesFile(
+		filepath.Join(srcDir, "identities.json"),
+		filepath.Join(destDir, "identities.json"),
+		key, ps,
+	); err != nil {
+		return fmt.Errorf("decrypt identities: %w", err)
+	}
+
+	if err := decryptProxiesFile(
+		filepath.Join(srcDir, "proxies.json"),
+		filepath.Join(destDir, "proxies.json"),
+		key, ps,
+	); err != nil {
+		return fmt.Errorf("decrypt proxies: %w", err)
+	}
+
 	return nil
 }
 
-func decryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
+func decryptConnectionsFile(src, dest string, key []byte, ps PasswordStore) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -170,7 +302,7 @@ func decryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 		return fmt.Errorf("decrypt connections: %w", err)
 	}
 
-	if kc != nil {
+	if ps != nil {
 		var wrapper struct {
 			Groups      []map[string]interface{} `json:"groups"`
 			Connections []map[string]interface{} `json:"connections"`
@@ -179,11 +311,11 @@ func decryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 			return fmt.Errorf("parse connections: %w", err)
 		}
 		for _, cm := range wrapper.Connections {
-			if pw, ok := cm["password"].(string); ok && pw != "" {
-				if id, ok := cm["id"].(string); ok {
-					_ = kc.SetPassword(id, pw)
+			if pw, ok := cm["password"].(string); ok && pw != "" && !isEncryptedField(pw) {
+				// Re-encrypt plaintext under the local credential key.
+				if enc, err := ps.Encrypt(pw); err == nil {
+					cm["password"] = enc
 				}
-				cm["password"] = ""
 			}
 		}
 		plaintext, _ = json.MarshalIndent(wrapper, "", "  ")
@@ -192,7 +324,7 @@ func decryptConnectionsFile(src, dest string, key []byte, kc *Keychain) error {
 	return os.WriteFile(dest, plaintext, 0600)
 }
 
-func decryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
+func decryptSettingsFile(src, dest string, key []byte, ps PasswordStore) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,19 +338,18 @@ func decryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
 		return fmt.Errorf("decrypt settings: %w", err)
 	}
 
-	// Extract per-model apiKeys to keychain, clear from JSON
-	if kc != nil {
+	if ps != nil {
 		var obj map[string]interface{}
 		if err := json.Unmarshal(plaintext, &obj); err == nil {
 			if ai, ok := obj["ai"].(map[string]interface{}); ok {
 				if models, ok := ai["models"].([]interface{}); ok {
 					for _, m := range models {
 						if mm, ok := m.(map[string]interface{}); ok {
-							if ak, ok := mm["apiKey"].(string); ok && ak != "" {
-								if id, ok := mm["id"].(string); ok {
-									_ = kc.SetModelAPIKey(id, ak)
+							if ak, ok := mm["apiKey"].(string); ok && ak != "" && !isEncryptedField(ak) {
+								// Re-encrypt plaintext under the local credential key.
+								if enc, err := ps.Encrypt(ak); err == nil {
+									mm["apiKey"] = enc
 								}
-								mm["apiKey"] = ""
 							}
 						}
 					}
@@ -226,6 +357,78 @@ func decryptSettingsFile(src, dest string, key []byte, kc *Keychain) error {
 			}
 			plaintext, _ = json.MarshalIndent(obj, "", "  ")
 		}
+	}
+
+	return os.WriteFile(dest, plaintext, 0600)
+}
+
+// decryptIdentitiesFile decrypts identities.json, re-encrypting any plaintext
+// Password field back to enc:v1: under the local credential key.
+func decryptIdentitiesFile(src, dest string, key []byte, ps PasswordStore) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.WriteFile(dest, []byte("{}"), 0600)
+		}
+		return err
+	}
+
+	plaintext, err := decryptBytes(string(data), key)
+	if err != nil {
+		return fmt.Errorf("decrypt identities: %w", err)
+	}
+
+	if ps != nil {
+		var wrapper struct {
+			Identities []map[string]interface{} `json:"identities"`
+		}
+		if err := json.Unmarshal(plaintext, &wrapper); err != nil {
+			return fmt.Errorf("parse identities: %w", err)
+		}
+		for _, im := range wrapper.Identities {
+			if pw, ok := im["password"].(string); ok && pw != "" && !isEncryptedField(pw) {
+				if enc, err := ps.Encrypt(pw); err == nil {
+					im["password"] = enc
+				}
+			}
+		}
+		plaintext, _ = json.MarshalIndent(wrapper, "", "  ")
+	}
+
+	return os.WriteFile(dest, plaintext, 0600)
+}
+
+// decryptProxiesFile decrypts proxies.json, re-encrypting any plaintext pass
+// field back to enc:v1: under the local credential key.
+func decryptProxiesFile(src, dest string, key []byte, ps PasswordStore) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.WriteFile(dest, []byte("{}"), 0600)
+		}
+		return err
+	}
+
+	plaintext, err := decryptBytes(string(data), key)
+	if err != nil {
+		return fmt.Errorf("decrypt proxies: %w", err)
+	}
+
+	if ps != nil {
+		var wrapper struct {
+			Proxies []map[string]interface{} `json:"proxies"`
+		}
+		if err := json.Unmarshal(plaintext, &wrapper); err != nil {
+			return fmt.Errorf("parse proxies: %w", err)
+		}
+		for _, pm := range wrapper.Proxies {
+			if pass, ok := pm["pass"].(string); ok && pass != "" && !isEncryptedField(pass) {
+				if enc, err := ps.Encrypt(pass); err == nil {
+					pm["pass"] = enc
+				}
+			}
+		}
+		plaintext, _ = json.MarshalIndent(wrapper, "", "  ")
 	}
 
 	return os.WriteFile(dest, plaintext, 0600)
@@ -258,6 +461,61 @@ func decryptGenericFile(src, dest string, key []byte) error {
 		return fmt.Errorf("decrypt: %w", err)
 	}
 	return os.WriteFile(dest, plaintext, 0600)
+}
+
+// decryptFieldsInPlace decrypts any enc:v1: secret fields in a decoded config
+// object so both sides of a sync comparison are plaintext. Best-effort: on a
+// decrypt error (locked/wrong key) the field is left untouched.
+func decryptFieldsInPlace(obj map[string]interface{}, ps PasswordStore) {
+	if ps == nil {
+		return
+	}
+	if conns, ok := obj["connections"].([]interface{}); ok {
+		for _, c := range conns {
+			if cm, ok := c.(map[string]interface{}); ok {
+				if pw, ok := cm["password"].(string); ok && isEncryptedField(pw) {
+					if pt, err := ps.Decrypt(pw); err == nil {
+						cm["password"] = pt
+					}
+				}
+			}
+		}
+	}
+	if ai, ok := obj["ai"].(map[string]interface{}); ok {
+		if models, ok := ai["models"].([]interface{}); ok {
+			for _, m := range models {
+				if mm, ok := m.(map[string]interface{}); ok {
+					if ak, ok := mm["apiKey"].(string); ok && isEncryptedField(ak) {
+						if pt, err := ps.Decrypt(ak); err == nil {
+							mm["apiKey"] = pt
+						}
+					}
+				}
+			}
+		}
+	}
+	if ids, ok := obj["identities"].([]interface{}); ok {
+		for _, id := range ids {
+			if im, ok := id.(map[string]interface{}); ok {
+				if pw, ok := im["password"].(string); ok && isEncryptedField(pw) {
+					if pt, err := ps.Decrypt(pw); err == nil {
+						im["password"] = pt
+					}
+				}
+			}
+		}
+	}
+	if proxies, ok := obj["proxies"].([]interface{}); ok {
+		for _, p := range proxies {
+			if pm, ok := p.(map[string]interface{}); ok {
+				if pass, ok := pm["pass"].(string); ok && isEncryptedField(pass) {
+					if pt, err := ps.Decrypt(pass); err == nil {
+						pm["pass"] = pt
+					}
+				}
+			}
+		}
+	}
 }
 
 // encryptBytes encrypts plaintext under key, binding the ciphertext to a

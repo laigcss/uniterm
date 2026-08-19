@@ -14,7 +14,7 @@
       @tab-dragstart="onTabDragStart"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" @new-local-terminal-with-shell="createLocalTerminalWithShell" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" @new-local-terminal-with-shell="createLocalTerminalWithShell" />
       <div class="tab-area">
         <template v-if="activeTab">
           <KeepAlive>
@@ -52,6 +52,13 @@
             />
             <SPICETabContent
               v-else-if="activeTab.type === 'spice'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
+            <X11DesktopTabContent
+              v-else-if="activeTab.type === 'x11-desktop'"
               :key="activeTab.id"
               :panel-id="activeTab.panelId"
               :config="getPanelConfig(activeTab.panelId)"
@@ -103,7 +110,6 @@
               @connect="onConnect"
               @new-connection="onNewConnectionFromStart"
               @local-terminal="createLocalTerminalWithShell"
-              @connect-serial="(keepOpen?: boolean) => { serialKeepOpen = keepOpen; showSerialDialog = true }"
               @close-self="(tabId: string) => closeTab(tabId)"
               @edit-connection="onEditConnection"
               @change-group="onChangeGroupFromStart"
@@ -118,7 +124,7 @@
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
     <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
-    <SerialConnectDialog v-model="showSerialDialog" @connect="(sid: string, portName: string, baudRate: number) => onConnectSerial(sid, portName, baudRate, serialKeepOpen)" />
+
     <CredentialPrompt
       v-model:visible="credentialVisible"
       :title="credentialTitle"
@@ -143,6 +149,10 @@
     </div>
 
     <SyncConflictDialog />
+    <DataDirDialog v-model:visible="dataDirVisible" :first-run="credStore.firstRun || credStore.dataDirInfo.firstRun" @done="onDataDirDone" />
+    <EncryptionModeDialog v-model:visible="encryptVisible" :existing-secrets="credStore.status.existingSecrets" @done="onEncryptDone" />
+    <CredentialUnlockDialog v-model:visible="unlockVisible" @done="onUnlockDone" @reset="onReset" />
+    <KeychainLostDialog v-model:visible="keychainLostVisible" @done="onKeychainLostDone" />
   </div>
   </el-config-provider>
 </template>
@@ -167,6 +177,7 @@ import SFTPTabContent from './components/SFTPTabContent.vue'
 import RDPTabContent from './components/RDPTabContent.vue'
 import VNCTabContent from './components/VNCTabContent.vue'
 import SPICETabContent from './components/SPICETabContent.vue'
+import X11DesktopTabContent from './components/X11DesktopTabContent.vue'
 import DBTabContent from './components/DBTabContent.vue'
 import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
@@ -180,7 +191,10 @@ import AISidebar from './components/AISidebar.vue'
 import FileSidebar from './components/FileSidebar.vue'
 import MonitorOverviewSidebar from './components/MonitorOverviewSidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
-import SerialConnectDialog from './components/SerialConnectDialog.vue'
+import DataDirDialog from './components/DataDirDialog.vue'
+import EncryptionModeDialog from './components/EncryptionModeDialog.vue'
+import CredentialUnlockDialog from './components/CredentialUnlockDialog.vue'
+import KeychainLostDialog from './components/KeychainLostDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
 import type { CredentialResult } from './components/CredentialPrompt.vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
@@ -192,17 +206,21 @@ import { useAIStore } from './stores/aiStore'
 import { useCompanionStore } from './stores/companionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
+import { useSkillStore } from './stores/skillStore'
+import { useCommandStore } from './stores/commandStore'
 import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
 import { useContainerStore } from './stores/containerStore'
 import { useSyncStore } from './stores/syncStore'
+import { useCredentialStore } from './stores/credentialStore'
 import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
+import { useDuplicateSession } from './composables/useDuplicateSession'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../wailsjs/go/main/App'
 import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
@@ -253,6 +271,7 @@ const tabStore = useTabStore()
 const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+const { duplicateSession } = useDuplicateSession()
 const aiStore = useAIStore()
 const companionStore = useCompanionStore()
 const settingsStore = useSettingsStore()
@@ -271,6 +290,70 @@ const EL_LOCALE_MAP: Record<string, typeof enUs> = {
   'zh-CN': zhCn, 'zh-TW': zhTw, en: enUs, ja, ko, de, es, fr, ru,
 }
 const elLocale = computed(() => EL_LOCALE_MAP[locale.value] || enUs)
+
+// ── Credential / first-run flow ─────────────────────────────────
+const credStore = useCredentialStore()
+const dataDirVisible = ref(false)
+const encryptVisible = ref(false)
+const unlockVisible = ref(false)
+const keychainLostVisible = ref(false)
+
+// Determine which credential dialog (keychain-lost / setup / unlock) to show
+// based on the current store status. Shared by startup and by the first-run
+// data-dir selection path so that pointing at a directory that already holds
+// master-password config correctly prompts for the password.
+function resolveCredentialDialog() {
+  if (credStore.status.keychainLost) { keychainLostVisible.value = true; return }
+  if (credStore.status.needsSetup) { encryptVisible.value = true; return }
+  if (!credStore.status.unlocked && credStore.status.mode === 'master-password') {
+    unlockVisible.value = true
+  }
+}
+
+function onDataDirDone(restart: boolean) {
+  if (restart) {
+    ElMessageBox.confirm(t('dataDir.restartMsg'), t('dataDir.restartTitle'),
+      { confirmButtonText: t('settings.restartNow'), cancelButtonText: t('conn.cancel'), type: 'warning' })
+      .then(() => RelaunchApp()).catch(() => {})
+    return
+  }
+  // Backend just initialized the stores for the newly selected data dir. Reload
+  // so the frontend reflects existing connections/settings/quick-commands/tunnels.
+  // When credentials are still locked the loads come back empty and onUnlockDone
+  // re-loads after unlock.
+  connectionStore.load()
+  settingsStore.reload()
+  useQuickCommandStore().load()
+  useSkillStore().reload()
+  useCommandStore().reload()
+  tunnelStore.load()
+  resolveCredentialDialog()
+}
+function onEncryptDone() { connectionStore.load() }
+function onUnlockDone() {
+  connectionStore.load()
+  settingsStore.reload()
+}
+function onKeychainLostDone() { credStore.reset().then(() => { encryptVisible.value = true }) }
+async function onReset() {
+  try {
+    await ElMessageBox.confirm(t('unlock.resetConfirm'), t('unlock.reset'), { type: 'warning' })
+    await credStore.reset()
+    encryptVisible.value = true
+    unlockVisible.value = false
+  } catch { /* cancelled */ }
+}
+
+async function checkCredentials() {
+  credStore.watchEvents()
+  await credStore.loadDataDir()
+  await credStore.loadStatus()
+  if (credStore.firstRun || credStore.dataDirInfo.firstRun) {
+    dataDirVisible.value = true
+    return
+  }
+  resolveCredentialDialog()
+}
 // ── RDP position sync ──
 // Called explicitly on tab switch and overlay restore; no polling needed.
 
@@ -351,8 +434,6 @@ function RDPShowForOverlay() {
 
 
 const showConnectionForm = ref(false)
-const showSerialDialog = ref(false)
-const serialKeepOpen = ref(false)
 const sidebarVisible = ref(false)
 const sidebarRef = ref<any>(null)
 const aiSidebarRef = ref<any>(null)
@@ -405,6 +486,8 @@ function needsCredentialCheck(config: ConnectionConfig): boolean {
   const inScope = ['ssh', 'mosh', 'sftp', 'ftp'].includes(config.type)
   if (!inScope) return false
   if ((config.type === 'ssh' || config.type === 'mosh') && config.authType === 'key') return false
+  // 身份认证：账密来自身份库，由后端 materializeIdentity 解析，无需补全提示
+  if (config.authType === 'identity') return false
   return !config.user || !config.password
 }
 
@@ -560,8 +643,18 @@ function getInputSelection(el: HTMLElement): string {
 }
 
 function setInputSelection(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
-  const start = el.selectionStart ?? 0
-  const end = el.selectionEnd ?? 0
+  // <input type="number"> (e.g. the port field) doesn't expose a text selection, so
+  // selectionStart/End are null. Falling the offsets back to 0 would prepend the pasted
+  // text instead of replacing it. Treat the unreadable selection as select-all so paste
+  // overwrites the whole value (issue #555).
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  if (start === null || end === null) {
+    el.value = text
+    el.setSelectionRange(text.length, text.length)
+    el.focus()
+    return
+  }
   el.value = el.value.substring(0, start) + text + el.value.substring(end)
   const pos = start + text.length
   el.setSelectionRange(pos, pos)
@@ -593,51 +686,6 @@ function onWheel(e: WheelEvent) {
       ts.fontSize = next
       settingsStore.save()
     }
-  }
-}
-
-// WKWebView doesn't forward Cmd/Ctrl+A/C/V on input/textarea/contenteditable.
-function onEditShortcut(e: KeyboardEvent) {
-  if (e.defaultPrevented) return
-  const target = e.target as HTMLElement
-  const tag = target.tagName
-  const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
-  if (!isEditable) return
-  const mod = e.metaKey || e.ctrlKey
-  if (!mod || e.shiftKey || e.altKey) return
-
-  if (e.key === 'a' || e.key === 'A') {
-    e.preventDefault()
-    if (target.isContentEditable) {
-      const el = target
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      const sel = window.getSelection()
-      sel?.removeAllRanges()
-      sel?.addRange(range)
-    } else {
-      (target as HTMLInputElement | HTMLTextAreaElement).select()
-    }
-    return
-  }
-
-  if (e.key === 'c' || e.key === 'C') {
-    e.preventDefault()
-    const sel = getInputSelection(target)
-    navigator.clipboard.writeText(sel).catch(() => {})
-    return
-  }
-
-  if (e.key === 'v' || e.key === 'V') {
-    e.preventDefault()
-    ClipboardGetText().then(text => {
-      if (target.isContentEditable) {
-        insertTextAtContentEditable(target, text)
-      } else {
-        setInputSelection(target as HTMLInputElement | HTMLTextAreaElement, text)
-      }
-      target.dispatchEvent(new Event('input', { bubbles: true }))
-    }).catch(() => {})
   }
 }
 
@@ -686,8 +734,6 @@ onMounted(async () => {
   // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
   // scrolls, but bails on defaultPrevented — so we must preempt it.
   document.addEventListener('wheel', onWheel, { passive: false, capture: true })
-  // WKWebView doesn't forward Cmd+A/C/V on input/textarea/contenteditable — handle globally.
-  document.addEventListener('keydown', onEditShortcut)
   // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
   try { isMac = (await GetPlatform()) === 'darwin' } catch { isMac = false }
   if (isMac) document.addEventListener('keydown', onMacSystemShortcut, true)
@@ -729,6 +775,9 @@ onMounted(async () => {
   window.addEventListener('app:connect-spice', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSPICE(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
+  window.addEventListener('app:connect-x11-desktop', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectX11Desktop(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
   window.addEventListener('app:connect-db', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectDB(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
@@ -748,6 +797,7 @@ onMounted(async () => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectS3(c, prev?.type === 'start' ? prev : undefined) }
   }) as EventListener)
 
+  await checkCredentials()
 })
 
 function navigatePanel(dir: number) {
@@ -827,45 +877,41 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     const pid = tabStore.getActivePanelId()
     if (pid) window.dispatchEvent(new CustomEvent('terminal:open-search', { detail: { panelId: pid } }))
   },
+  copy: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:copy', { detail: { panelId: pid } }))
+  },
+  toggleLineNumbers: () => {
+    // Line numbers / timestamps are global terminal settings, so these toggle
+    // them directly rather than dispatching a per-panel event.
+    const cur = settingsStore.settings.terminal.showLineNumbers ?? false
+    settingsStore.updateTerminal({ showLineNumbers: !cur })
+  },
+  toggleTimestamps: () => {
+    const cur = settingsStore.settings.terminal.showTimestamps ?? false
+    settingsStore.updateTerminal({ showTimestamps: !cur })
+  },
+  paste: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
+  },
   navigatePrev: () => navigatePanel(-1),
   navigateNext: () => navigatePanel(1),
   openSettings: () => openSettings(),
-  duplicateSession: async () => {
-    const pid = tabStore.getActivePanelId()
-    if (!pid) return
-    const panel = panelStore.getPanel(pid)
-    if (!panel?.config) return
-    const newPanel = panelStore.createPanel(
-      { ...panel.config } as ConnectionConfig,
-      panel.type
-    )
-    panelStore.updateTitle(newPanel.id, panel.title)
-    try {
-      // Same D1 deferred-start pattern as onConnect — see that helper
-      // for the rationale.
-      const dupConfig: ConnectionConfig = {
-        ...panel.config,
-        deferConnect: true,
-        initialCols: 0,
-        initialRows: 0,
-      }
-      const info = await CreateSession(panel.config.type, dupConfig)
-      panelStore.bindSession(newPanel.id, info.id)
-      sessionStore.initSession(info.id)
-      const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
-      panelStore.movePanelToTab(newPanel.id, newTab.id)
-      const size = await waitForTerminalSize(info.id)
-      if (size.cols > 0 && size.rows > 0) {
-        dupConfig.initialCols = size.cols
-        dupConfig.initialRows = size.rows
-      }
-      await SessionStart(info.id, dupConfig).catch((e) => {
-        console.error('Failed to start duplicated session:', e)
-        CloseSession(info.id).catch(() => {})
-      })
-    } catch (e) {
-      console.error('Failed to duplicate session:', e)
+  duplicateSession: () => {
+    // Same logic as the tab context menu's "复制会话": delegate to the shared
+    // duplicate routine so both entry points behave identically.
+    const tab = tabStore.activeTab
+    if (!tab) return
+    if (tab.type === 'workspace') {
+      // A workspace holds several panels; the shortcut duplicates the focused
+      // one (a terminal). Feed it to the shared routine as a terminal tab.
+      const pid = tabStore.getActivePanelId()
+      const panel = pid ? panelStore.getPanel(pid) : undefined
+      if (panel) duplicateSession({ type: 'terminal', panelId: pid, title: panel.title })
+      return
     }
+    duplicateSession(tab)
   },
 }
 
@@ -899,20 +945,24 @@ onUnmounted(() => {
   syncStore.dispose?.()
   tunnelStore.dispose?.()
   disposeSessionStore?.()
+  credStore.dispose()
 })
 
-function openSettings() {
+function openSettings(category?: string) {
   // Check if settings tab already exists
   const existingTab = tabStore.tabs.find(t => t.type === 'settings')
   if (existingTab) {
     tabStore.setActiveTab(existingTab.id)
-    return
+  } else {
+    const panel = panelStore.createPanel(null, 'settings')
+    panelStore.updateTitle(panel.id, t('settings.title'))
+    const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+    panelStore.movePanelToTab(panel.id, tab.id)
   }
-
-  const panel = panelStore.createPanel(null, 'settings')
-  panelStore.updateTitle(panel.id, t('settings.title'))
-  const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
+  // Jump to the requested category (e.g. ai / identities / proxies)
+  if (category) {
+    settingsStore.activeCategory = category
+  }
 }
 
 async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
@@ -1030,6 +1080,13 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       if (p?.sessionId) {
         try { await CloseSession(p.sessionId) } catch (_) {}
       }
+    }
+  }
+  // X11 desktop session cleanup
+  if (tab && tab.type === 'x11-desktop') {
+    const p = panelStore.getPanel(tab.panelId)
+    if (p?.sessionId) {
+      try { await CloseSession(p.sessionId) } catch (_) {}
     }
   }
   const panelIds = tabStore.closeTab(tabId)
@@ -1158,6 +1215,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   if (config.type === 'rdp') { await onConnectRDP(config, prevStart); return }
   if (config.type === 'vnc') { await onConnectVNC(config, prevStart); return }
   if (config.type === 'spice') { await onConnectSPICE(config, prevStart); return }
+  if (config.type === 'x11-desktop') { await onConnectX11Desktop(config, prevStart); return }
   if (config.type === 'database') { await onConnectDB(config, prevStart); return }
   if (config.type === 'k8s') { await onConnectK8s(config, prevStart); return }
   if (config.type === 'container') { onConnectContainer(config, prevStart); return }
@@ -1177,11 +1235,12 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   // default 80x24 and Claude Code draws its first batch of tables at that
   // width, drifting relative to later output that wraps at the real cols.
   let sessionId = ''
-  config.deferConnect = true
-  config.initialCols = 0
-  config.initialRows = 0
   try {
-    const info = await CreateSession(config.type, config)
+    const info = await CreateSession(config.type, {
+      ...config,
+      initialCols: 0,
+      initialRows: 0,
+    })
     sessionId = info.id
   } catch (e) {
     console.error('Failed to create session:', e)
@@ -1245,11 +1304,13 @@ async function createLocalTerminalWithShell(shellPath: string, keepOpen?: boolea
 
 const pendingGroupId = ref<string | undefined>(undefined)
 
-function onNewConnectionFromStart(payload?: { host?: string; groupId?: string }) {
+function onNewConnectionFromStart(payload?: { host?: string; groupId?: string; type?: string }) {
   pendingGroupId.value = payload?.groupId
   if (payload?.host) {
     const parsed = parseQuickConnect(payload.host)
     editConfig.value = (parsed || { host: payload.host }) as ConnectionConfig
+  } else if (payload?.type) {
+    editConfig.value = { type: payload.type } as ConnectionConfig
   } else {
     editConfig.value = null
   }
@@ -1306,10 +1367,6 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
       user: '',
       authType: 'password' as any,
       shellPath: shellPath || undefined,
-      // Defer Connect until BaseTerminal has measured the real cols/rows;
-      // same D1 fix as onConnect — without it Claude Code's first batch
-      // of tables wraps at the 80x24 default.
-      deferConnect: true,
       initialCols: 0,
       initialRows: 0,
     }
@@ -1552,6 +1609,28 @@ async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
+async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any) {
+  connectionStore.add(config)
+
+  // Ensure the X11 desktop config itself has saved credentials before
+  // handing off to X11DesktopConnect.
+  const resolved = await ensureCredentials(config)
+  if (!resolved) return
+
+  const displayTitle = config.name || config.host || 'X11 Desktop'
+
+  const panel = panelStore.createPanel(config, 'x11-desktop')
+  panelStore.updateTitle(panel.id, displayTitle)
+  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+  const tab = tabStore.createX11DesktopTab(displayTitle, panel.id)
+  if (reposition) reposition(tab.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+  RecordRecentConnection(config.id)
+
+  // The X11DesktopTabContent owns CreateSession + X11DesktopConnect.
+  // It runs when the tab mounts and has access to the resolved config.
+}
+
 async function onConnectMonitor(config: ConnectionConfig, prevStart?: any) {
   connectionStore.add(config)
 
@@ -1655,27 +1734,6 @@ function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
   RecordRecentConnection(config.id)
 }
 
-async function onConnectSerial(sessionId: string, portName: string, baudRate: number, keepOpen?: boolean) {
-  const config: ConnectionConfig = {
-    id: '',
-    name: `${portName} (${baudRate})`,
-    type: 'serial' as any,
-    host: portName,
-    port: baudRate,
-    user: '',
-    authType: 'password' as any,
-  }
-  const panel = panelStore.createPanel(config, 'serial')
-  panelStore.updateTitle(panel.id, `${portName} (${baudRate})`)
-  panelStore.bindSession(panel.id, sessionId)
-  sessionStore.initSession(sessionId)
-  const prev = tabStore.activeTab
-  const tab = prev?.type === 'start' && !keepOpen
-    ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
-    : tabStore.createTerminalTab(panel.title, panel.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  // Serial connections are temporary — don't record in history
-}
 
 // Show/hide native RDP window on tab switch.
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),

@@ -99,7 +99,7 @@
             <component :is="row.spec?.unschedulable ? CircleCheck : Ban" :size="14" />
           </button>
           <button v-if="has('drain')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionDrain')" @click.stop="onCommand('drain', row)">
-            <Download :size="14" />
+            <CirclePower :size="14" />
           </button>
           <button v-if="has('delete')" class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onCommand('delete', row)">
             <Trash2 :size="14" />
@@ -127,7 +127,7 @@ import {
 } from 'element-plus'
 import { Refresh, Plus } from '@element-plus/icons-vue'
 import {
-  Pencil, ScrollText, SquareTerminal, Box, Repeat, ArrowUpDown, Ban, CircleCheck, Download, Trash2,
+  Pencil, ScrollText, SquareTerminal, Box, Repeat, ArrowUpDown, Ban, CircleCheck, CirclePower, Trash2,
 } from '@lucide/vue'
 import { useK8sStore } from '../stores/k8sStore'
 import { useI18n } from '../i18n'
@@ -357,7 +357,9 @@ async function onCommand(cmd: string, row: any) {
       const { value } = await ElMessageBox.prompt(t('k8s.scaleReplicas'), t('k8s.scaleTitle'), { inputPattern: /^\d+$/, inputValue: String(row.spec?.replicas ?? 1), confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') })
       await scaleWorkload(props.connId, scaleApiBase(row), row.metadata?.namespace, row.metadata?.name, Number(value)); ElMessage.success(t('k8s.scaled'))
     } else if (cmd === 'cordon') {
-      await cordonNode(props.connId, row.metadata?.name, !row.spec?.unschedulable); ElMessage.success(t('k8s.done')); emit('changed')
+      const unschedulable = !row.spec?.unschedulable
+      await ElMessageBox.confirm(t(unschedulable ? 'k8s.cordonConfirm' : 'k8s.uncordonConfirm', { name: row.metadata?.name }), t('k8s.confirmTitle'), { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') })
+      await cordonNode(props.connId, row.metadata?.name, unschedulable); ElMessage.success(t('k8s.done')); emit('changed')
     } else if (cmd === 'drain') {
       await ElMessageBox.confirm(t('k8s.drainConfirm', { name: row.metadata?.name }), t('k8s.confirmTitle'), { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') })
       const r = await drainNode(props.connId, row.metadata?.name); ElMessage.success(t('k8s.drained', { evicted: r.evicted, skipped: r.skipped }) + (r.errors.length ? t('k8s.drainErrors', { count: r.errors.length }) : ''))

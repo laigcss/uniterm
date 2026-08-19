@@ -34,11 +34,16 @@ type ConnectionGroup struct {
 type ConnectionConfig struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
+	Remark   string `json:"remark,omitempty"`
 	Type     string `json:"type"`
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
 	AuthType string `json:"authType"`
+	// IdentityId references a saved Identity (see identity.go). When set with
+	// AuthType "identity", MaterializeIdentity resolves and injects the
+	// credentials at connect time.
+	IdentityId string `json:"identityId,omitempty"`
 	// Password is stored in plaintext JSON. Will be migrated to OS keychain in a future iteration.
 	Password string  `json:"password,omitempty"`
 	KeyPath  string  `json:"keyPath,omitempty"`
@@ -47,7 +52,7 @@ type ConnectionConfig struct {
 	RdpFixedWidth  int  `json:"rdpFixedWidth,omitempty"`
 	RdpFixedHeight int  `json:"rdpFixedHeight,omitempty"`
 	RdpSmartSizing bool `json:"rdpSmartSizing"`
-	RdpEnableNLA  bool `json:"rdpEnableNLA"`
+	RdpEnableNLA   bool `json:"rdpEnableNLA"`
 	// Local terminal shell path
 	ShellPath string `json:"shellPath,omitempty"`
 	// Working directory for local terminal (defaults to user home directory if empty)
@@ -81,9 +86,16 @@ type ConnectionConfig struct {
 	// SSH tunnel: reference to an existing SSH connection used as a jump host.
 	// When set, the connection goes through local port forwarding:
 	//   127.0.0.1:auto-port → tunnel SSH → target Host:Port
-	TunnelSSHConnID   string `json:"tunnelSSHConnId,omitempty"`
-	TunnelSSHUser     string `json:"tunnelSSHUser,omitempty"`
-	TunnelSSHPassword string `json:"tunnelSSHPassword,omitempty"`
+	TunnelSSHConnID string `json:"tunnelSSHConnId,omitempty"`
+	// Proxy: reference to a saved Proxy (see proxy.go). When set, the
+	// first-hop TCP dial goes through this SOCKS5/HTTP proxy instead of
+	// connecting directly.
+	ProxyId string `json:"proxyId,omitempty"`
+	// Proxy is the resolved runtime proxy for this connect attempt. Populated
+	// by materializeProxy at connect time; never persisted.
+	Proxy             *SocksProxy `json:"-"`
+	TunnelSSHUser     string      `json:"tunnelSSHUser,omitempty"`
+	TunnelSSHPassword string      `json:"tunnelSSHPassword,omitempty"`
 	// SFTP max concurrent transfers (0 = unlimited)
 	SftpMaxConcurrency int `json:"sftpMaxConcurrency,omitempty"`
 	// Initial terminal size reported by the frontend BEFORE the
@@ -96,13 +108,6 @@ type ConnectionConfig struct {
 	// SetPendingSize before Connect so getInitialSize picks them up.
 	InitialCols int `json:"initialCols,omitempty"`
 	InitialRows int `json:"initialRows,omitempty"`
-	// DeferConnect tells the App layer to skip the auto-Connect goroutine
-	// when CreateSession is called. The frontend then calls SessionStart
-	// after mounting the xterm terminal and writing InitialCols/InitialRows
-	// via SetPendingSize — guarantees the PTY starts at the real xterm
-	// size, not the 80x24 default that would otherwise wrap Claude Code
-	// tables at the wrong column count.
-	DeferConnect bool `json:"deferConnect,omitempty"`
 	// FTP-specific fields
 	FtpEncryption string `json:"ftpEncryption,omitempty"` // "none"(default) | "auto" | "required"
 	FtpPassive    bool   `json:"ftpPassive"`              // passive mode (default true)
@@ -114,11 +119,6 @@ type ConnectionConfig struct {
 	// session-log warning fires on connect when it is enabled.
 	FtpSkipVerify bool `json:"ftpSkipVerify,omitempty"`
 	// VNC-specific fields (issue #95)
-	// VncEncryption selects the post-handshake security-type policy.
-	//   "auto"    — accept whatever security type the server offers (noVNC default).
-	//   "require" — disconnect unless the server picks VeNCrypt (TLS).
-	// Empty / unknown values behave as "auto".
-	VncEncryption string `json:"vncEncryption,omitempty"`
 	// VncShared is forwarded to noVNC's RFB constructor as `shared`.
 	// true (default) — the new client may connect alongside other clients.
 	// false — the server will typically disconnect other clients on connect.
@@ -157,6 +157,18 @@ type ConnectionConfig struct {
 	// kept here so the Wails binding reflects the full connection contract.
 	// ""(default) | "del"(0x7F) | "bs"(0x08) | "vt220"(ESC[3~)
 	BackspaceKey string `json:"backspaceKey,omitempty"`
+	// Telnet-specific fields
+	// TelnetNegotiationMode controls who initiates option negotiation.
+	// "active" (default) — client sends WILL/DO after connect.
+	// "passive" — client only responds to server negotiation.
+	TelnetNegotiationMode string `json:"telnetNegotiationMode,omitempty"`
+	// LocalEcho echoes typed characters locally when the remote side doesn't.
+	LocalEcho bool `json:"localEcho,omitempty"`
+	// TelnetSendMode: "character" (default) — each keystroke sent immediately.
+	// "line" — buffer until Enter, send the whole line.
+	TelnetSendMode string `json:"telnetSendMode,omitempty"`
+	// NewlineMode: "cr" (default) — Enter sends \r. "crlf" — Enter sends \r\n.
+	NewlineMode string `json:"newlineMode,omitempty"`
 	// K8s-specific fields
 	K8sConfigPath   string `json:"k8sConfigPath,omitempty"`   // File 模式：kubeconfig 文件路径
 	K8sConfigInline string `json:"k8sConfigInline,omitempty"` // Inline 模式：kubeconfig YAML 全文（明文存储，同其他连接密码策略）
@@ -172,6 +184,19 @@ type ConnectionConfig struct {
 	// a session. It has no effect on later reconnects — a manually
 	// stopped log stays stopped for the life of the panel.
 	LogOnConnect bool `json:"logOnConnect,omitempty"`
+	// X11Desktop fields. Used when Type == "x11-desktop".
+	// This type carries its own SSH credentials (Host, Port, User,
+	// AuthType, Password, KeyPath) and connects directly — it no
+	// longer references a separate SSH connection. X11 forward is
+	// forced on automatically (this type is meaningless without it).
+	//   DesktopType — "gnome" | "kde" | "xfce" | "mate" | "cinnamon" |
+	//                 "openbox" | "custom". Mapped to a built-in command or
+	//                 to CustomCmd verbatim.
+	//   CustomCmd   — only used when DesktopType == "custom". The string is
+	//                 passed to sshd verbatim (so it goes through
+	//                 /bin/sh -c on the remote).
+	X11DesktopDesktopType string `json:"x11DesktopDesktopType,omitempty"`
+	X11DesktopCustomCmd   string `json:"x11DesktopCustomCmd,omitempty"`
 }
 
 // ConnectionStoreData is the top-level structure persisted to connections.json.

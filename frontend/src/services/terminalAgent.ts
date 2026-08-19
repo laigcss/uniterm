@@ -3,6 +3,7 @@ import { SessionWrite } from '../../wailsjs/go/main/App'
 import { getManagedTerminal } from '../services/terminalManager'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { watch } from 'vue'
 
 // F-317: maintain a title→panelId index for O(1) lookups in
@@ -142,7 +143,17 @@ export function watchOutput(
         resolve({ output: '', timedOut: false, cancelled: true })
         return
       }
-      const normalized = toDisplayLines(stripAnsi(output)).join('\n').trim()
+      const lines = toDisplayLines(stripAnsi(output))
+      if (!timedOut) {
+        // The command finished when the shell prompt reappeared at the bottom.
+        // That prompt line belongs to the terminal, not the command output —
+        // completion is now reported explicitly by the caller's end-message
+        // (see executeCommand in agent.ts), so drop the prompt (and any
+        // trailing blanks) before returning the output to the AI.
+        while (lines.length > 0 && lines[lines.length - 1].trimEnd() === '') lines.pop()
+        if (lines.length > 0) lines.pop()
+      }
+      const normalized = lines.join('\n').trim()
       resolve({ output: normalized, timedOut })
     }
 
@@ -211,10 +222,10 @@ export function truncateOutput(
   const head = lines.slice(0, headLines).join('\n')
   const tail = lines.slice(total - tailLines).join('\n')
   const omitted = total - headLines - tailLines
-  return `${head}\n\n─────── [截断: 共 ${total} 行, 已省略 ${omitted} 行] ────────\n调整 head_lines / tail_lines 参数可查看更多内容。\n\n${tail}`
+  return `${head}\n\n─────── [TRUNCATED: ${total} lines total, ${omitted} lines omitted] ────────\nAdjust head_lines / tail_lines to see more content.\n\n${tail}`
 }
 
-function resolveActiveSession(panelTitle?: string): { sessionId: string; shellPath?: string } {
+function resolveActiveSession(panelTitle?: string): { sessionId: string; shellPath?: string; remoteOS?: string } {
   const tabStore = useTabStore()
   const panelStore = usePanelStore()
 
@@ -275,10 +286,21 @@ function resolveActiveSession(panelTitle?: string): { sessionId: string; shellPa
     }
   }
 
-  return { sessionId: panel.sessionId, shellPath: panel.config?.shellPath }
+  const sessionId = panel.sessionId
+  return {
+    sessionId,
+    shellPath: panel.config?.shellPath,
+    remoteOS: useSessionStore().getRemoteOS(sessionId),
+  }
 }
 
-function getShellNewline(shellPath?: string): string {
+function getShellNewline(shellPath?: string, remoteOS?: string): string {
+  // Windows OpenSSH (cmd/PowerShell via ConPTY): the line terminator must be
+  // CR — a lone LF is not accepted as Enter, so the command is echoed but never
+  // executed. CR is what the Enter key actually emits in the terminal.
+  if (remoteOS === 'windows-openssh') {
+    return '\r'
+  }
   const lowerShell = (shellPath || '').toLowerCase()
   if (lowerShell.includes('powershell') || lowerShell.includes('pwsh')) {
     return '\r'
@@ -315,10 +337,10 @@ export async function executeCommand(
   shouldCancel?: () => boolean,
   panelTitle?: string
 ): Promise<ExecuteResult> {
-  const { sessionId, shellPath } = resolveActiveSession(panelTitle)
+  const { sessionId, shellPath, remoteOS } = resolveActiveSession(panelTitle)
   const promptLine = capturePromptLine(sessionId)
-  const fullCommand = buildCommand(command, shellPath)
-  const newline = getShellNewline(shellPath)
+  const fullCommand = buildCommand(command, shellPath, remoteOS)
+  const newline = getShellNewline(shellPath, remoteOS)
 
   await SessionWrite(sessionId, fullCommand + newline)
 
@@ -335,14 +357,8 @@ export async function executeCommand(
 
   if (result.timedOut) {
     const truncated = truncateOutput(result.output, headLines, tailLines)
-    const timeoutSec = Math.round(timeoutMs / 1000)
     return {
-      output: truncated
-        + `\n\n⚠️ 命令在 ${timeoutSec}s 内未完成，可能仍在运行中。\n`
-        + `请勿重复发送相同命令。\n`
-        + `• 如果输出显示进度（百分比、文件名滚动等）→ 使用 collect_output 继续等待\n`
-        + `• 如果输出显示密码/确认提示 → 使用 send_terminal_key 响应\n`
-        + `• 如果命令卡住无响应 → 使用 interrupt_command 取消`,
+      output: truncated,
       exitCode: -1,
       timedOut: true,
     }
@@ -361,8 +377,8 @@ export interface StartResult {
 }
 
 export async function startCommand(command: string, panelTitle?: string): Promise<StartResult> {
-  const { sessionId, shellPath } = resolveActiveSession(panelTitle)
-  const newline = getShellNewline(shellPath)
+  const { sessionId, shellPath, remoteOS } = resolveActiveSession(panelTitle)
+  const newline = getShellNewline(shellPath, remoteOS)
 
   await SessionWrite(sessionId, command + newline)
 
@@ -472,7 +488,7 @@ export async function sendTerminalKey(
   sendEnter: boolean = true,
   panelTitle?: string
 ): Promise<SendKeyResult> {
-  const { sessionId, shellPath } = resolveActiveSession(panelTitle)
+  const { sessionId, shellPath, remoteOS } = resolveActiveSession(panelTitle)
 
   let data: string
   if (control) {
@@ -481,7 +497,7 @@ export async function sendTerminalKey(
     } else if (control === 'ctrl_d') {
       data = '\x04'
     } else if (control === 'enter') {
-      data = '\n'
+      data = remoteOS === 'windows-openssh' ? '\r' : '\n'
     } else {
       data = ''
     }
@@ -493,7 +509,7 @@ export async function sendTerminalKey(
 
   // Append shell-appropriate newline when send_enter is true and input was provided
   if (sendEnter && !control && input !== undefined && input !== '') {
-    data += getShellNewline(shellPath)
+    data += getShellNewline(shellPath, remoteOS)
   }
 
   await SessionWrite(sessionId, data)
@@ -522,9 +538,9 @@ export async function sendTerminalKey(
 // (see watchOutput). This keeps the terminal clean and, for POSIX shells,
 // avoids corrupting multi-line input such as here-documents. A single leading
 // space keeps the command out of shell history (HISTCONTROL=ignorespace).
-function buildCommand(command: string, shellPath?: string): string {
+function buildCommand(command: string, shellPath?: string, remoteOS?: string): string {
   const lower = (shellPath || '').toLowerCase()
-  if (lower.includes('powershell') || lower.includes('pwsh') || lower.includes('cmd')) {
+  if (remoteOS === 'windows-openssh' || lower.includes('powershell') || lower.includes('pwsh') || lower.includes('cmd')) {
     return command
   }
   // bash / sh / zsh / fish

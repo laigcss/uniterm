@@ -21,6 +21,18 @@ export const useSettingsStore = defineStore('settings', () => {
   const terminal = computed(() => settings.value.terminal)
   const ai = computed(() => settings.value.ai)
 
+  // Tracks the OS color-scheme preference so `resolvedAppTheme` stays reactive
+  // to live system changes while the app theme is set to 'system'.
+  const systemPrefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+  // The app theme collapsed to a concrete light/dark choice (never 'system').
+  // Used by the terminal to resolve FOLLOW_APP_THEME.
+  const resolvedAppTheme = computed<'dark' | 'light'>(() => {
+    if (settings.value.theme === 'light') return 'light'
+    if (settings.value.theme === 'system') return systemPrefersDark.value ? 'dark' : 'light'
+    // 'dark' and 'deep-blue' are both dark.
+    return 'dark'
+  })
+
   const activeModel = computed(() =>
     settings.value.ai.models.find(m => m.id === settings.value.ai.activeModelId) || settings.value.ai.models[0]
   )
@@ -59,6 +71,24 @@ export const useSettingsStore = defineStore('settings', () => {
     // logs enabled before the user opens the settings tab already
     // respect it. Fire-and-forget; the backend has a safe empty fallback.
     SetDefaultSessionLogDir(settings.value.terminal.sessionLogDir || '').catch(() => {})
+    applyTheme()
+    setLocale(settings.value.language)
+  }
+
+  // Reload settings after the credential store is unlocked (e.g. after a
+  // data-dir migration in master-password mode). Model apiKeys can only be
+  // decrypted once the store is unlocked; re-running LoadSettings re-fetches
+  // them instead of leaving the initial load's empty fallback in place.
+  async function reload() {
+    try {
+      const loadedSettings = await LoadSettings()
+      if (loadedSettings) {
+        settings.value = mergeSettings(loadedSettings)
+        loaded.value = true
+      }
+    } catch {
+      // use defaults
+    }
     applyTheme()
     setLocale(settings.value.language)
   }
@@ -171,7 +201,8 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(() => settings.value.theme, applyTheme)
 
   // Listen for system color scheme changes
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    systemPrefersDark.value = e.matches
     if (settings.value.theme === 'system') {
       applyTheme()
     }
@@ -197,6 +228,7 @@ export const useSettingsStore = defineStore('settings', () => {
     loaded,
     availableShells,
     theme,
+    resolvedAppTheme,
     language,
     terminal,
     ai,
@@ -204,6 +236,7 @@ export const useSettingsStore = defineStore('settings', () => {
     activeCategory,
     openCategory,
     init,
+    reload,
     save,
     applyTheme,
     updateTheme,
@@ -251,6 +284,7 @@ function mergeSettings(loaded: AppSettings): AppSettings {
       remotePaths: loaded.sftpBookmarks?.remotePaths || []
     },
     customTerminalThemes: loaded.customTerminalThemes || [],
-    defaultLocalShell: loaded.defaultLocalShell ?? DEFAULT_SETTINGS.defaultLocalShell
+    defaultLocalShell: loaded.defaultLocalShell ?? DEFAULT_SETTINGS.defaultLocalShell,
+    tabCloseButton: loaded.tabCloseButton || DEFAULT_SETTINGS.tabCloseButton
   }
 }

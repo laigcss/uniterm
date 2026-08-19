@@ -115,7 +115,18 @@ export function installTerminalFocusRestore(): () => void {
 
     const capturedPanelId = active.closest('[data-panel-id]')?.getAttribute('data-panel-id') || null
 
+    // Focusing xterm's helper textarea clears the document selection, so a
+    // drag that selected text anywhere (AI messages, SFTP listings, query
+    // results) must not be treated as accidental focus loss. xterm keeps its
+    // own selection model outside the DOM, so this never sees a terminal's
+    // own selection and can't disarm the guard for it.
+    const hasTextSelection = () => {
+      const sel = window.getSelection()
+      return !!sel && !sel.isCollapsed && sel.toString().trim() !== ''
+    }
+
     const restore = () => {
+      if (hasTextSelection()) return
       const now = document.activeElement
       if (now instanceof HTMLElement && now.classList.contains('xterm-helper-textarea')) {
         return // browser kept us on the terminal, nothing to do

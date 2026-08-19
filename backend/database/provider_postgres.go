@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
@@ -66,6 +67,10 @@ func (p *postgresProvider) DefaultTableQuery(dbName, tableName string, limit, of
 		return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
 	}
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
+}
+
+func (p *postgresProvider) PagedTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
 }
 
 func (p *postgresProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
@@ -493,4 +498,234 @@ var postgresTypes = []string{
 
 var postgresIntTypes = []string{
 	"SMALLINT", "INTEGER", "BIGINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL",
+}
+
+func (p *postgresProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	schema := "public"
+	if dbName != "" {
+		schema = dbName
+	}
+
+	var b strings.Builder
+	quotedTable := p.Quote(tableName)
+
+	// PG connections bind a single database; tables resolve via the session
+	// search_path (default public). dbName on this connection is the database
+	// name, not a schema — resolve the actual current schema instead.
+	if curSchema, err := pgCurrentSchema(conn); err == nil && curSchema != "" {
+		schema = curSchema
+	}
+
+	if opts.Structure {
+		createSQL, derr := pgCreateTableSQL(conn, schema, tableName, quotedTable)
+		if derr != nil {
+			return "", derr
+		}
+		b.WriteString("--\n-- Structure for ")
+		b.WriteString(tableName)
+		b.WriteString("\n--\nDROP TABLE IF EXISTS ")
+		b.WriteString(quotedTable)
+		b.WriteString(" CASCADE;\n")
+		b.WriteString(createSQL)
+		if !strings.HasSuffix(createSQL, ";") {
+			b.WriteByte(';')
+		}
+		b.WriteString("\n\n")
+	}
+
+	if opts.Data {
+		cols, colTypes, derr := pgTableColumns(conn, schema, tableName)
+		if derr != nil {
+			return "", derr
+		}
+		if len(cols) > 0 {
+			b.WriteString("--\n-- Data for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\n")
+			colList := make([]string, len(cols))
+			for i, c := range cols {
+				colList[i] = p.Quote(c)
+			}
+			prefix := "INSERT INTO " + quotedTable + " (" + strings.Join(colList, ", ") + ") VALUES "
+
+			rows, err := conn.QueryContext(ctx, "SELECT "+strings.Join(colList, ", ")+" FROM "+quotedTable)
+			if err != nil {
+				return "", err
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				vals := make([]any, len(cols))
+				ptrs := make([]any, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				if err := rows.Scan(ptrs...); err != nil {
+					return "", err
+				}
+				b.WriteString(prefix)
+				b.WriteByte('(')
+				for i, v := range vals {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(dumpPgValue(v, colTypes[i]))
+				}
+				b.WriteString(");\n")
+			}
+			if err := rows.Err(); err != nil {
+				return "", err
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String(), nil
+}
+
+// pgCurrentSchema returns the first schema on the session search_path.
+func pgCurrentSchema(conn *sql.Conn) (string, error) {
+	var s string
+	err := conn.QueryRowContext(context.Background(), "SELECT current_schema()").Scan(&s)
+	return s, err
+}
+
+// pgCreateTableSQL builds a CREATE TABLE statement from pg_catalog, including
+// column types (via format_type), defaults, NOT NULL, and table constraints
+// (PK / UNIQUE / CHECK / FK) via pg_get_constraintdef.
+func pgCreateTableSQL(conn *sql.Conn, schema, tableName, quotedTable string) (string, error) {
+	rows, err := conn.QueryContext(context.Background(), `
+		SELECT a.attname,
+		       format_type(a.atttypid, a.atttypmod),
+		       a.attnotnull,
+		       pg_get_expr(a.adbin, a.attrelid) AS default
+		FROM pg_attribute a
+		JOIN pg_class t ON a.attrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = $1 AND n.nspname = $2
+		  AND a.attnum > 0 AND NOT a.attisdropped
+		ORDER BY a.attnum`, tableName, schema)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var b strings.Builder
+	b.WriteString("CREATE TABLE ")
+	b.WriteString(quotedTable)
+	b.WriteString(" (\n")
+	colLines := []string{}
+	for rows.Next() {
+		var name, ty string
+		var notnull bool
+		var dflt sql.NullString
+		if err := rows.Scan(&name, &ty, &notnull, &dflt); err != nil {
+			return "", err
+		}
+		quotedName, _ := SafePgIdent(name)
+		line := "  " + quotedName + " " + ty
+		if dflt.Valid && dflt.String != "" {
+			line += " DEFAULT " + dflt.String
+		}
+		if notnull {
+			line += " NOT NULL"
+		}
+		colLines = append(colLines, line)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+
+	constraints, err := pgConstraintDefs(conn, schema, tableName)
+	if err != nil {
+		return "", err
+	}
+	colLines = append(colLines, constraints...)
+
+	b.WriteString(strings.Join(colLines, ",\n"))
+	b.WriteString("\n)")
+	return b.String(), nil
+}
+
+// pgConstraintDefs returns table constraint clauses (PK/UNIQUE/CHECK/FK)
+// via pg_get_constraintdef.
+func pgConstraintDefs(conn *sql.Conn, schema, tableName string) ([]string, error) {
+	rows, err := conn.QueryContext(context.Background(), `
+		SELECT pg_get_constraintdef(c.oid)
+		FROM pg_constraint c
+		JOIN pg_class t ON c.conrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = $1 AND n.nspname = $2
+		ORDER BY c.contype`, tableName, schema)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var def sql.NullString
+		if err := rows.Scan(&def); err != nil {
+			return nil, err
+		}
+		if def.Valid && def.String != "" {
+			out = append(out, "  "+def.String)
+		}
+	}
+	return out, rows.Err()
+}
+
+// pgTableColumns returns column names and types for a table.
+func pgTableColumns(conn *sql.Conn, schema, tableName string) ([]string, []string, error) {
+	rows, err := conn.QueryContext(context.Background(), `
+		SELECT a.attname, format_type(a.atttypid, a.atttypmod)
+		FROM pg_attribute a
+		JOIN pg_class t ON a.attrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE t.relname = $1 AND n.nspname = $2
+		  AND a.attnum > 0 AND NOT a.attisdropped
+		ORDER BY a.attnum`, tableName, schema)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var names, types []string
+	for rows.Next() {
+		var name, ty string
+		if err := rows.Scan(&name, &ty); err != nil {
+			return nil, nil, err
+		}
+		names = append(names, name)
+		types = append(types, ty)
+	}
+	return names, types, rows.Err()
+}
+
+// dumpPgValue renders a scanned cell as a PostgreSQL literal. Booleans become
+// TRUE/FALSE; bytea becomes '\x..'; timestamps drop the T/Z separators.
+func dumpPgValue(v any, typeToken string) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case []byte:
+		return "'\\x" + hexLower(val) + "'"
+	case string:
+		return quotedString(val)
+	case bool:
+		if val {
+			return "TRUE"
+		}
+		return "FALSE"
+	case time.Time:
+		return "'" + val.Format("2006-01-02 15:04:05.999999") + "'"
+	default:
+		return scanToString(v)
+	}
 }

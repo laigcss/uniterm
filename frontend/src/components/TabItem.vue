@@ -11,12 +11,12 @@
     @contextmenu="onContextMenu"
   >
     <button
-      v-if="hovered && !tab.locked"
+      v-if="!tabCloseRight && hovered && !tab.locked"
       class="tab-close"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
     <span
-      v-else
+      v-if="tabCloseRight || !hovered || tab.locked"
       class="tab-icon-wrapper"
     >
       <component
@@ -45,13 +45,11 @@
       @click.stop
     />
     <button
-      class="tab-more"
-      @click.stop="onMoreClick"
-      :title="t('terminal.more')"
-    >
-      <MoreHorizontal :size="14" />
-    </button>
-
+      v-if="tabCloseRight"
+      class="tab-close tab-close-right"
+      :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
+      @click.stop="$emit('close', tab.id)"
+    ><X /></button>
     <Teleport to="body">
       <div
         v-show="contextMenuVisible"
@@ -60,32 +58,51 @@
         :style="contextMenuStyle"
         @click.stop
       >
-        <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
-        <div v-if="tab.type === 'k8s'" class="menu-divider" />
-        <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
+        <!-- ① 标签类操作 -->
+        <div v-if="canDuplicate" class="menu-item" @click="onDuplicate">
+          {{ t('tab.duplicate') }}
+          <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
+        </div>
+        <div v-if="hasServerHost" class="menu-item" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</div>
         <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
           {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
+          <span class="menu-shortcut">{{ menuShortcut('lockAI') }}</span>
         </div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
-        <div v-if="tab.type === 'terminal' && panelStore.getPanel(tab.panelId)?.type === 'ssh'" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
+        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
+        <div v-if="hasLocatableConnection" class="menu-item" @click="locateHost">{{ t('tab.locate') }}</div>
+        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
+          {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
+        </div>
+
+        <!-- ② 会话文本操作 -->
+        <div v-if="showGroupTab && showGroupText" class="menu-divider" />
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">
+          {{ t('terminal.searchText') }}
+          <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+        </div>
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
         <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
           {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
         </div>
         <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
           {{ t('session.openLogDir') }}
         </div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">{{ t('terminal.searchText') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-divider" />
-        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
-          {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
+
+        <!-- ③ 连接功能（ssh / rdp） -->
+        <div v-if="showGroupConn && (showGroupTab || showGroupText)" class="menu-divider" />
+        <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
+        <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
+
+        <!-- ④ 关闭标签操作 -->
+        <div v-if="showGroupTab || showGroupText || showGroupConn" class="menu-divider" />
+        <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">
+          {{ t('tab.close') }}
+          <span class="menu-shortcut">{{ menuShortcut('closePanel') }}</span>
         </div>
-        <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">{{ t('tab.close') }}</div>
         <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
         <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
-        <div class="menu-item" @click="closeLeft">{{ t('tab.closeLeft') }}</div>
       </div>
     </Teleport>
   </div>
@@ -96,26 +113,25 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import { useK8sStore } from '../stores/k8sStore'
 import { useContainerStore } from '../stores/containerStore'
 import { useI18n } from '../i18n'
 import {
-  CreateSession,
-  CloseSession,
-  K8sExecSession,
-  ContainerExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
-  SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
+import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
-import { waitForTerminalSize } from '../services/terminalManager'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Search, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, MoreHorizontal, ShipWheel, Box, Boxes } from '@lucide/vue'
+import { useDuplicateSession } from '../composables/useDuplicateSession'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Search, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -136,11 +152,28 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const k8sStore = useK8sStore()
 const containerStore = useContainerStore()
+const settingsStore = useSettingsStore()
+const { duplicateSession } = useDuplicateSession()
 const { t } = useI18n()
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// Human-readable keybinding for a shortcut action ('' when unset), shown as a
+// hint in the tab right-click context menu. Reactive via settingsStore, so the
+// hint updates automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 
 const hovered = ref(false)
 const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({ left: '0px', top: '0px' })
+
+// Whether the tab close (X) button sits on the right of the tab name,
+// per the appearance setting ("tab close button position").
+const tabCloseRight = computed(() => settingsStore.settings.tabCloseButton === 'right')
 
 const editing = ref(false)
 const editName = ref('')
@@ -159,6 +192,7 @@ const tabIcon = computed(() => {
   if (t.type === 'rdp') return Monitor
   if (t.type === 'vnc') return MonitorSmartphone
   if (t.type === 'spice') return MonitorCloud
+  if (t.type === 'x11-desktop') return AppWindow
   if (t.type === 'database' || t.type === 'mongodb' || t.type === 'elasticsearch') {
     const panel = panelStore.getPanel(t.panelId)
     if (panel?.config?.dbType === 'redis') return DatabaseZap
@@ -240,6 +274,38 @@ const canDuplicate = computed(() => {
   return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'elasticsearch' || type === 'k8s'
 })
 
+// SSH connection only — used to show the "连接功能" group of menu items.
+const isSsh = computed(() => {
+  if (props.tab.type !== 'terminal') return false
+  const p = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  return p?.type === 'ssh'
+})
+
+// Visibility of each menu group, used to place dividers strictly between
+// the groups that actually have items for the current tab type.
+const showGroupTab = computed(() =>
+  canDuplicate.value ||
+  props.tab.type === 'terminal' ||
+  (props.tab.type !== 'start' && props.tab.type !== 'settings'),
+)
+const showGroupText = computed(() => props.tab.type === 'terminal')
+const showGroupConn = computed(() => props.tab.type === 'rdp' || isSsh.value)
+
+// True when the tab's panel is backed by a saved connection (has a config id),
+// so the "定位到连接" item can locate it in the sidebar's connection list.
+const hasLocatableConnection = computed(() => {
+  if (!('panelId' in props.tab)) return false
+  return !!panelStore.getPanel(props.tab.panelId)?.config?.id
+})
+
+// Connection host (IP or hostname) of the tab's panel. Empty for tab types
+// without a remote endpoint (local, k8s, container, start, settings…).
+const serverHost = computed(() => {
+  if (!('panelId' in props.tab)) return ''
+  return panelStore.getPanel(props.tab.panelId)?.config?.host || ''
+})
+const hasServerHost = computed(() => !!serverHost.value)
+
 function onDragStart(e: DragEvent) {
   e.dataTransfer?.setData('application/tab-id', props.tab.id)
   e.dataTransfer?.setData('application/tab-type', props.tab.type)
@@ -265,18 +331,6 @@ function onContextMenu(e: MouseEvent) {
   e.stopPropagation()
   window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   contextMenuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
-  contextMenuVisible.value = true
-  if (supportsOutputLog.value) {
-    refreshOutputLogState()
-  }
-}
-
-function onMoreClick(e: MouseEvent) {
-  e.stopPropagation()
-  const btn = e.currentTarget as HTMLElement
-  const rect = btn.getBoundingClientRect()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  contextMenuStyle.value = { left: rect.left + 'px', top: rect.bottom + 4 + 'px' }
   contextMenuVisible.value = true
   if (supportsOutputLog.value) {
     refreshOutputLogState()
@@ -365,112 +419,23 @@ function closeRight() {
   closeContextMenu()
 }
 
-function closeLeft() {
-  const allTabs = tabStore.tabs
-  const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
-  const ids = allTabs.slice(0, currentIdx).filter(t => !t.locked).map(t => t.id)
-  if (ids.length) emit('closeBatch', ids)
+async function copyHostAddress() {
+  const host = serverHost.value
+  if (!host) return
+  // Wails clipboard, falling back to the browser API when the runtime is
+  // absent (plain dev in a browser) or the call fails.
+  let ok = false
+  try { ok = await ClipboardSetText(host) } catch { ok = false }
+  if (!ok) {
+    try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
+  }
+  msg.success(t('tab.hostCopied', { host }))
   closeContextMenu()
 }
 
-async function duplicateTab() {
+function onDuplicate() {
   closeContextMenu()
-  const tab = props.tab
-  if (!('panelId' in tab)) return
-  const panel = panelStore.getPanel(tab.panelId)
-  if (!panel) return
-
-  // k8s tab has no backend session; it connects itself on mount from
-  // connectionId + namespace. Duplicate = a fresh panel + K8s tab reusing the
-  // same connection (a new independent session), matching other tab types.
-  if (tab.type === 'k8s') {
-    const newPanel = panelStore.createPanel(panel.config, 'k8s')
-    panelStore.updateTitle(newPanel.id, panel.title)
-    const k8sTab = tab as any
-    const newTab = tabStore.createK8sTab(newPanel.title, newPanel.id, k8sTab.connectionId, k8sTab.namespace || '')
-    panelStore.movePanelToTab(newPanel.id, newTab.id)
-    return
-  }
-
-  const newPanel = panelStore.createPanel(panel.config, panel.type)
-  panelStore.updateTitle(newPanel.id, panel.title)
-
-  // Create + bind the session BEFORE mounting the tab, so the terminal has a
-  // sessionId on first mount. Mounting first (empty sessionId) leaves the
-  // shared terminal keyed by '' and bindSession's later id change can't
-  // transfer it (the watch skips when oldId is falsy), so server output is
-  // dropped until an incidental resize rebuilds the reference.
-  let info
-  if (panel.config) {
-    try {
-      if (panel.type === 'k8s-exec' || panel.type === 'container-exec') {
-        // Exec panels can't be rebuilt via CreateSession (no such type); re-dial the exec stream.
-        const c = panel.config
-        info = panel.type === 'k8s-exec'
-          ? await K8sExecSession(c.k8sExecConnId, c.k8sNamespace || '', c.k8sExecPod, c.k8sExecContainer)
-          : await ContainerExecSession(c.containerExecConnId, c.containerExecContainerId, c.containerExecShell || 'sh')
-        panelStore.bindSession(newPanel.id, info.id)
-        sessionStore.initSession(info.id)
-        sessionStore.updateStatus(info.id, 'connected')
-      } else {
-        const sessionType = resolveSessionType(tab.type, panel.config)
-        const config: ConnectionConfig = {
-          ...panel.config,
-          deferConnect: true,
-          initialCols: 0,
-          initialRows: 0,
-        }
-        info = await CreateSession(sessionType, config)
-        panelStore.bindSession(newPanel.id, info.id)
-        sessionStore.initSession(info.id)
-        if (tab.type === 'terminal') {
-          const size = await waitForTerminalSize(info.id)
-          if (size.cols > 0 && size.rows > 0) {
-            config.initialCols = size.cols
-            config.initialRows = size.rows
-          }
-          await SessionStart(info.id, config).catch((e) => {
-            console.error('Failed to start duplicated session:', e)
-            CloseSession(info.id).catch(() => {})
-          })
-        }
-      }
-    } catch (e) {
-      console.error('Failed to duplicate session:', e)
-      return
-    }
-  }
-
-  let newTab
-  if (tab.type === 'terminal') {
-    newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
-  } else if (tab.type === 'sftp') {
-    newTab = tabStore.createFtpTab(newPanel.title, newPanel.id)
-  } else if (tab.type === 'database' || tab.type === 'mongodb' || tab.type === 'redis' || tab.type === 'elasticsearch') {
-    newTab = tabStore.createDBTab(newPanel.title, newPanel.id)
-    newTab.type = tab.type
-  } else {
-    return
-  }
-  panelStore.movePanelToTab(newPanel.id, newTab.id)
-}
-
-// The session-type argument to CreateSession isn't always panel.config.type:
-// - database panels split into mysql/postgres/redis/mongodb/elasticsearch by dbType;
-// - a file-transfer (sftp) tab shares the SSH connection, so its config.type
-//   is 'ssh' but the session must be created as 'sftp' (ftp/smb/webdav/s3
-//   already carry a matching config.type).
-function resolveSessionType(tabType: string, config: any): string {
-  if (tabType === 'database' || tabType === 'mongodb' || tabType === 'redis' || tabType === 'elasticsearch') {
-    if (config?.dbType === 'redis') return 'redis'
-    if (config?.dbType === 'mongodb') return 'mongodb'
-    if (config?.dbType === 'elasticsearch') return 'elasticsearch'
-    return 'database'
-  }
-  if (tabType === 'sftp') {
-    return config?.type === 'ssh' ? 'sftp' : config?.type
-  }
-  return config?.type
+  duplicateSession(props.tab)
 }
 
 function openSftp() {
@@ -490,6 +455,14 @@ function openMonitor() {
   const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
   if (panel) {
     window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: panel }))
+  }
+  closeContextMenu()
+}
+
+function locateHost() {
+  const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  if (panel?.config?.id) {
+    window.dispatchEvent(new CustomEvent('app:locate-connection', { detail: { id: panel.config.id } }))
   }
   closeContextMenu()
 }
@@ -610,9 +583,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* Always reserve room for the floating more (…) button so hovering never
-     widens the tab (no layout shift) and the button never covers the name. */
-  margin-right: 20px;
   font-weight: 500;
 }
 .tab-name-text {
@@ -697,29 +667,21 @@ onUnmounted(() => {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.tab-more {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: var(--bg-hover);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
+/* Close button on the right side of the tab (appearance setting).
+   margin-left:auto pushes it flush to the far right edge of the tab
+   (inside the 12px horizontal padding), instead of hugging the name.
+
+   The button is always present in the layout when the right-side setting is on
+   — ghosted (visibility:hidden) while not hovered OR the tab is locked — so its
+   slot is always reserved; showing the X only toggles visibility instead of
+   inserting/removing an element, which would otherwise re-truncate long names
+   and cause jitter (including the instant the tab is locked). */
+.tab-close.tab-close-right {
+  margin-left: auto;
+  margin-right: 0;
 }
-.tab-item:hover .tab-more {
-  display: inline-flex;
-}
-.tab-more:hover {
-  color: var(--text-primary);
+.tab-close-right-ghost {
+  visibility: hidden;
 }
 </style>
 
@@ -736,6 +698,10 @@ onUnmounted(() => {
   backdrop-filter: blur(8px);
 }
 .tab-context-menu .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -744,14 +710,24 @@ onUnmounted(() => {
   user-select: none;
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
+  white-space: nowrap;
 }
 .tab-context-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.tab-context-menu .menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
 .tab-context-menu .menu-item-disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+.tab-context-menu .menu-item-disabled .menu-shortcut {
+  opacity: 0.4;
 }
 .tab-context-menu .menu-item-icon {
   margin-right: 6px;

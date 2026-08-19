@@ -62,6 +62,13 @@ vi.mock('../stores/tabStore', () => ({
 vi.mock('../stores/panelStore', () => ({
   usePanelStore: vi.fn(() => mockPanelStore),
 }))
+const mockGetRemoteOS = vi.fn().mockReturnValue(undefined)
+const mockSessionStore = {
+  getRemoteOS: mockGetRemoteOS,
+}
+vi.mock('../stores/sessionStore', () => ({
+  useSessionStore: vi.fn(() => mockSessionStore),
+}))
 
 // ---- import after mocks ----
 import { watchOutput, executeCommand, truncateOutput } from './terminalAgent'
@@ -105,8 +112,8 @@ describe('truncateOutput', () => {
     expect(result).toContain('line18')
     expect(result).toContain('line19')
     expect(result).toContain('line20')
-    expect(result).toContain('截断')
-    expect(result).toContain('已省略')
+    expect(result).toContain('TRUNCATED')
+    expect(result).toContain('omitted')
   })
 
   it('handles edge case: headLines=0', () => {
@@ -114,7 +121,7 @@ describe('truncateOutput', () => {
     const text = lines.join('\n')
     const result = truncateOutput(text, 0, 2)
 
-    expect(result).toContain('省略')
+    expect(result).toContain('omitted')
     expect(result).toContain('line9')
     expect(result).toContain('line10')
   })
@@ -126,7 +133,7 @@ describe('truncateOutput', () => {
 
     expect(result).toContain('line1')
     expect(result).toContain('line3')
-    expect(result).toContain('省略')
+    expect(result).toContain('omitted')
   })
 
   it('handles single line input', () => {
@@ -190,6 +197,9 @@ describe('watchOutput', () => {
     const result: WatchResult = await promise
     expect(result.timedOut).toBe(false)
     expect(result.output).toContain('hi')
+    // The reappeared prompt line is stripped: output ends at the last output
+    // line, not with a trailing prompt.
+    expect(result.output).not.toMatch(/\[root@node140 ~\]#\s*$/)
   })
 
   it('resolves via idle heuristic when prompt differs (e.g. dynamic prompt)', async () => {
@@ -315,6 +325,7 @@ describe('executeCommand', () => {
     vi.mocked(mockGetPanel).mockReturnValue(mockPanel)
     vi.mocked(mockGetAILockedPanel).mockReturnValue(null)
     vi.mocked(mockGetAILockedPanels).mockReturnValue([])
+    vi.mocked(mockGetRemoteOS).mockReturnValue(undefined)
     mockActiveTab.type = 'terminal'
     mockActiveTab.panelId = 'panel-1'
   })
@@ -359,6 +370,29 @@ describe('executeCommand', () => {
     restore()
   }, 10000)
 
+  it('sends CR newline (not LF) and no leading space for Windows OpenSSH', async () => {
+    vi.mocked(mockGetRemoteOS).mockReturnValue('windows-openssh')
+    const restore = withMockedTime()
+
+    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+      capturedCallback = callback
+      return () => {}
+    })
+
+    const cmdPromise = executeCommand('dir')
+
+    expect(mockSessionWrite).toHaveBeenCalledOnce()
+    const writtenArg = mockSessionWrite.mock.calls[0][1] as string
+    expect(writtenArg).toBe('dir\r') // CR terminator, no leading space
+
+    await Promise.resolve()
+    capturedCallback!(fakeData('test-session-id', `${PROMPT} dir\r\n${PROMPT} `))
+    await cmdPromise
+
+    restore()
+  }, 10000)
+
   it('returns timedOut=true on timeout', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
@@ -379,7 +413,7 @@ describe('executeCommand', () => {
     const result: ExecuteResult = await cmdPromise
     expect(result.exitCode).toBe(-1)
     expect(result.timedOut).toBe(true)
-    expect(result.output).toContain('截断')
+    expect(result.output).toContain('TRUNCATED')
     expect(result.output).toContain('line1')
     expect(result.output).toContain('line2')
     expect(result.output).toContain('line4')
@@ -413,15 +447,18 @@ describe('executeCommand', () => {
     const result: ExecuteResult = await cmdPromise
     expect(result.exitCode).toBe(0)
     expect(result.timedOut).toBe(false)
-    expect(result.output).toContain('截断')
-    // headLines=3 keeps the echoed command line + line1 + line2;
-    // tailLines=3 keeps line9 + line10 + the returning prompt. line8
-    // falls inside the omitted middle.
+    expect(result.output).toContain('TRUNCATED')
+    // headLines=3 keeps the echoed command line + line1 + line2. The trailing
+    // prompt that reappeared on completion is stripped before truncation, so
+    // tailLines=3 now keeps line8 + line9 + line10 (line8 was previously
+    // omitted because the returning prompt occupied one tail slot).
     expect(result.output).toContain('line1')
     expect(result.output).toContain('line2')
-    expect(result.output).not.toContain('line8')
+    expect(result.output).toContain('line8')
     expect(result.output).toContain('line9')
     expect(result.output).toContain('line10')
+    // The reappeared prompt must not leak into the returned output.
+    expect(result.output).not.toMatch(/\n\[root@node140 ~\]#\s*$/)
 
     restore()
   })

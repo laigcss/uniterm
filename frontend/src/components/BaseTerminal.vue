@@ -6,7 +6,15 @@
     @dragleave="onDragLeave"
     @drop="onDragDrop"
   >
-    <div ref="terminalRef" class="terminal-area" @contextmenu="menu.onContextMenu"></div>
+    <div class="terminal-area" @contextmenu="onTerminalContextMenu">
+      <TerminalGutter
+        :session-id="props.sessionId"
+        :show-line-numbers="showLineNumbers"
+        :show-timestamps="showTimestamps"
+        :get-host="getTerminalHost"
+      />
+      <div ref="terminalRef" class="terminal-host"></div>
+    </div>
 
     <div v-if="dragOver" class="drop-overlay">
       <span>{{ t('sftp.dropHere') }}</span>
@@ -38,21 +46,54 @@
     <!-- Terminal context menu -->
     <div
       v-show="menu.menuVisible.value"
+      ref="contextMenuEl"
       class="context-menu"
       :style="menu.menuStyle.value"
       @click.stop
     >
-      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
-        {{ t('terminal.askAI') }}
-      </div>
+      <!-- ① 剪贴板 -->
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copySelection">
         {{ t('terminal.copy') }}
+        <span class="menu-shortcut">{{ menuShortcut('copy') }}</span>
       </div>
       <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copyAndPaste">
         {{ t('terminal.copyAndPaste') }}
       </div>
-      <div class="menu-item" @click="menu.pasteFromClipboard">{{ t('terminal.paste') }}</div>
+      <div class="menu-item" @click="menu.pasteFromClipboard">
+        {{ t('terminal.paste') }}
+        <span class="menu-shortcut">{{ menuShortcut('paste') }}</span>
+      </div>
+      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
+        {{ t('terminal.askAI') }}
+      </div>
+
+      <!-- ② 会话文本操作 -->
+      <div class="menu-divider" />
+      <div class="menu-item" @click="triggerSearch">
+        {{ t('terminal.searchText') }}
+        <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
+      </div>
       <div class="menu-item" @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</div>
+      <div class="menu-item" @click="toggleLineNumbers">
+        {{ showLineNumbers ? t('settings.hideLineNumbers') : t('settings.showLineNumbers') }}
+        <span class="menu-shortcut">{{ menuShortcut('toggleLineNumbers') }}</span>
+      </div>
+      <div class="menu-item" @click="toggleTimestamps">
+        {{ showTimestamps ? t('settings.hideTimestamps') : t('settings.showTimestamps') }}
+        <span class="menu-shortcut">{{ menuShortcut('toggleTimestamps') }}</span>
+      </div>
+      <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
+        {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
+      </div>
+      <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
+        {{ t('session.openLogDir') }}
+      </div>
+
+      <!-- ③ SSH 连接功能 -->
+      <div v-if="isSsh" class="menu-divider" />
+      <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
+      <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
+      <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
     </div>
 
     <!-- Terminal suggestions popup -->
@@ -73,17 +114,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { SessionWrite, SessionResize, SessionEndZmodem } from '../../wailsjs/go/main/App'
-import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile } from '../../wailsjs/go/main/App'
+import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../wailsjs/go/main/App'
+import { msg } from '../services/message'
 import { EventsOn, BrowserOpenURL, ClipboardGetText } from '../../wailsjs/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { highlight } from '../composables/useHighlight'
-import { onTerminalKey } from '../composables/useKeyboardShortcuts'
+import { onTerminalKey, formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import type { ShortcutAction } from '../types/settings'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
@@ -99,9 +142,10 @@ import {
   bumpOnDataGeneration,
 } from '../services/terminalManager'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import { applyBackspaceKey } from '../utils/backspaceKey'
+import { formatFontFamily } from '../utils/formatFontFamily'
 import {
   sanitizeTerminalOutput,
   sanitizeLiveTerminalOutput,
@@ -109,7 +153,9 @@ import {
 import { useTerminalInput } from '../composables/useTerminalInput'
 import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
+import TerminalGutter from './TerminalGutter.vue'
 import { startZmodemService } from '../services/zmodemService'
+import { stampWrittenLines, stampCommandLine, currentAbsoluteLine } from '../services/terminalTimestamps'
 import { useZmodemStore } from '../stores/zmodemStore'
 import ZmodemTransfer from './ZmodemTransfer.vue'
 import { ChevronUp, ChevronDown, X } from '@lucide/vue'
@@ -126,6 +172,15 @@ const props = defineProps<{
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 const settingsStore = useSettingsStore()
+
+// Human-readable keybinding for a shortcut action ('' when unset), used to show
+// the current shortcut hint in the terminal right-click context menu. Reactive
+// via settingsStore, so hints update automatically when the user rebinds keys.
+function menuShortcut(action: ShortcutAction): string {
+  const b = settingsStore.settings.keyboard[action]
+  if (!b) return ''
+  return formatKeyBinding(b, isMac)
+}
 const sessionStore = useSessionStore()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
@@ -146,6 +201,42 @@ const terminalInstanceRef = crypto.randomUUID?.() ||
   Date.now().toString(36)
 
 const terminalRef = ref<HTMLDivElement>()
+
+// Whether the line-number gutter is enabled (from the persistent setting).
+const showLineNumbers = computed(() => settingsStore.settings.terminal.showLineNumbers ?? false)
+// Whether the timestamp column is enabled (from the persistent setting).
+const showTimestamps = computed(() => settingsStore.settings.terminal.showTimestamps ?? false)
+
+// Write terminal data and stamp the rows it writes with their arrival time for
+// the timestamp column. Capture the cursor line before the write and stamp up
+// to where it ends after xterm finishes parsing (no-op when timestamps are off).
+function writeStamped(data: string) {
+  const t = terminal
+  const sid = props.sessionId
+  if (!t || !sid) { t?.write(data); return }
+  const ts = Date.now()
+  const before = currentAbsoluteLine(sid)
+  t.write(data, () => {
+    stampWrittenLines(sid, before, currentAbsoluteLine(sid), ts)
+  })
+}
+
+// Pass the xterm host element to the gutter so it can verify the terminal it
+// renders is attached to this very component (KeepAlive/drag can move it).
+function getTerminalHost(): HTMLElement | null {
+  return terminalRef.value ?? null
+}
+
+function toggleLineNumbers() {
+  menu.closeMenu()
+  settingsStore.updateTerminal({ showLineNumbers: !showLineNumbers.value })
+}
+
+function toggleTimestamps() {
+  menu.closeMenu()
+  settingsStore.updateTerminal({ showTimestamps: !showTimestamps.value })
+}
+
 const searchInputRef = ref<HTMLInputElement>()
 const searchVisible = ref(false)
 
@@ -178,6 +269,8 @@ let onTerminalAuxClick: ((e: MouseEvent) => void) | null = null
 let onOpenSearch: ((e: Event) => void) | null = null
 let onExport: ((e: Event) => void) | null = null
 let onSendRz: ((e: Event) => void) | null = null
+let onTerminalCopy: ((e: Event) => void) | null = null
+let onTerminalPaste: ((e: Event) => void) | null = null
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let isResizing = false
@@ -380,7 +473,9 @@ function getTerminalOptions() {
   const ts = settingsStore.settings.terminal
   return {
     fontSize: ts.fontSize || 13,
-    fontFamily: ts.fontFamily || 'Consolas, "Courier New", monospace',
+    fontFamily: ts.fontFamily,
+    fallbackFont: ts.fallbackFont || '',
+    fontWeight: ts.fontWeight || 400,
     themeName: ts.theme || 'dark',
     scrollback: ts.maxHistoryLines || 2500,
   }
@@ -653,14 +748,55 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   // Check global shortcuts first (Ctrl+Shift+/Alt+ combos)
   if (e.type === 'keydown' && !onTerminalKey(e)) return false
 
+  // macOS 26/27 beta: the first letter typed right after toggling Caps Lock
+  // arrives with keyCode 229 (the IME "composing" code) despite no real
+  // composition, so xterm's CompositionHelper swallows it and it only appears
+  // on the next keystroke (upstream xtermjs/xterm.js#5887, issue #483). keyCode
+  // 229 never fires for an ordinary letter key, and we further require Caps Lock
+  // on + an uppercase A–Z so lowercase IME composition (pinyin's first key) is
+  // untouched — re-inject the char through the normal onData pipeline ourselves.
+  if (
+    isMac &&
+    e.type === 'keydown' &&
+    e.keyCode === 229 &&
+    !e.isComposing &&
+    e.getModifierState('CapsLock') &&
+    /^[A-Z]$/.test(e.key) &&
+    !e.ctrlKey && !e.metaKey && !e.altKey &&
+    (props.mode === 'ssh' || props.mode === 'local')
+  ) {
+    e.preventDefault()
+    terminal?.input(e.key)
+    return false
+  }
+
+  // A bare modifier key (Shift/Ctrl/Alt/Meta held alone) produces no input, yet
+  // xterm's _keyDown still runs and, with scrollOnUserInput=true, fires
+  // scrollToBottom() — yanking the viewport back to the bottom when the user
+  // has scrolled up to read history (issue #538). Short-circuit bare modifiers
+  // before they reach xterm's scroll logic; they shouldn't be PTY input anyway.
+  if (e.type === 'keydown' && (e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta')) {
+    return false
+  }
+
+  // macOS 26 WKWebView: xterm's modifier handling for Shift+Delete is
+  // unreliable and may emit no sequence, so the key silently fails to delete
+  // (issue #538). Inject the standard CSI delete sequence ESC[3~ directly for
+  // all plain Delete presses. Ctrl/Meta/Cmd combos are left to xterm so future
+  // Delete-chord shortcuts can still hook in.
+  if (e.type === 'keydown' && e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault()
+    terminal?.input('\x1b[3~')
+    return false
+  }
+
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
-  // Bind to the platform's paste shortcut only — Cmd+V on macOS, Ctrl+Shift+V
-  // elsewhere. Plain Ctrl+V is never intercepted, so it passes through to the
-  // terminal app (vim visual block, bash literal-next…) on every platform.
-  const pasteCombo = isMac
-    ? (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey)
-    : (e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey)
-  if (pasteCombo && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+  // macOS Cmd+V stays hardcoded — it is not one of the configurable shortcuts.
+  // On Windows/Linux, Ctrl+Shift+V is handled by the configurable shortcut
+  // system (see the terminal:paste event below). Plain Ctrl+V is never
+  // intercepted, so it passes through to the terminal app (vim visual block,
+  // bash literal-next…) on every platform.
+  if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
     e.preventDefault()
     if (props.mode === 'ssh' || props.mode === 'local') {
       ClipboardGetText().then(text => {
@@ -680,15 +816,6 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
       return false
     }
     return true
-  }
-
-  // Ctrl+Shift+C: copy terminal selection to clipboard
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-    const sel = terminal?.getSelection()
-    if (sel) {
-      navigator.clipboard.writeText(sel).catch(() => {})
-    }
-    return false
   }
 
   // macOS-style cursor word/line jumping via Option/Cmd + arrow keys
@@ -842,7 +969,7 @@ onMounted(() => {
         // Apply syntax highlighting when restoring history so it matches
         // newly arriving lines after a tab switch.
         const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-        terminal.write(hlOn ? highlight(history) : history)
+        writeStamped(hlOn ? highlight(history) : history)
       }
     }
     // Always sync writtenChunks to prevent onActivated from replaying
@@ -910,6 +1037,9 @@ onMounted(() => {
       // Must happen BEFORE terminalInput.handleInput because handleInput
       // clears the line buffer on Enter.
       if ((data === '\r' || data === '\n') && terminalInput && !terminalInput.isInAlternateScreen()) {
+        // Stamp the command line with the moment it was executed (timestamp
+        // column). Must happen before handleInput clears the line buffer.
+        if (props.sessionId) stampCommandLine(props.sessionId, Date.now())
         const line = terminalInput.lineBuffer.value.trim()
         if (/^(?:sudo\s+)?rz\b/.test(line)) {
           zmodemDirection = 'upload'
@@ -974,7 +1104,7 @@ onMounted(() => {
           const isPrintable = data.length === 1 && data >= ' '
           if (!wasVisible && !isPrintable) return
           if (terminalInput.isAtLineEnd() && terminalInput.currentToken.value && !terminalInput.isPasswordMode()) {
-            suggestions.updateSuggestions(terminalInput.currentToken.value)
+            suggestions.updateSuggestions(terminalInput.currentToken.value, settingsStore.settings.terminal.aiTranscription)
           } else {
             suggestions.close()
           }
@@ -1163,7 +1293,7 @@ onMounted(() => {
     if (props.mode === 'sftp') {
       const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
       if (cleaned) {
-        terminal.write(cleaned)
+        writeStamped(cleaned)
       }
       writtenChunks++
     } else {
@@ -1176,7 +1306,7 @@ onMounted(() => {
         }
       }
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      terminal.write(hlOn ? highlight(data) : data)
+      writeStamped(hlOn ? highlight(data) : data)
       writtenChunks++
       if (props.mode === 'ssh' && props.onSessionStatus) {
         // onSessionData is handled by the consumer via EventsOn if needed
@@ -1264,6 +1394,31 @@ onMounted(() => {
   }
   window.addEventListener('terminal:send-rz', onSendRz)
 
+  // Configurable copy/paste shortcuts (Ctrl+Shift+C/V on Windows/Linux).
+  // The App-level shortcut handler dispatches these events to the active panel.
+  onTerminalCopy = (e: Event) => {
+    if (!isActive.value) return
+    const detail = (e as CustomEvent).detail
+    if (detail?.panelId && detail.panelId !== props.panelId) return
+    const sel = terminal?.getSelection()
+    if (sel) {
+      navigator.clipboard.writeText(sel).catch(() => {})
+    }
+  }
+  window.addEventListener('terminal:copy', onTerminalCopy)
+
+  onTerminalPaste = (e: Event) => {
+    if (!isActive.value) return
+    const detail = (e as CustomEvent).detail
+    if (detail?.panelId && detail.panelId !== props.panelId) return
+    if (props.mode === 'ssh' || props.mode === 'local') {
+      ClipboardGetText().then(text => {
+        if (text) pasteToSession(text)
+      }).catch(() => {})
+    }
+  }
+  window.addEventListener('terminal:paste', onTerminalPaste)
+
   bindListeners()
 
   resizeObserver = new ResizeObserver(() => {
@@ -1302,7 +1457,7 @@ onActivated(() => {
     if (total > writtenChunks) {
       const tail = sessionStore.getDataFromChunk(props.sessionId, writtenChunks)
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      terminal?.write(hlOn ? highlight(tail) : tail)
+      writeStamped(hlOn ? highlight(tail) : tail)
       writtenChunks = total
     }
   }
@@ -1487,7 +1642,7 @@ function onSearchPrev() {
 function applyXtermTheme(themeName: string) {
   if (!terminal) return
   const theme = resolveXtermBackground(
-    getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+    getXtermTheme(resolveTerminalThemeName(themeName, settingsStore.resolvedAppTheme), settingsStore.settings.customTerminalThemes),
     localStateStore.state.backgroundEnabled,
     localStateStore.state.backgroundImage
   )
@@ -1499,7 +1654,8 @@ function applyXtermTheme(themeName: string) {
 watch(() => settingsStore.settings.terminal, (ts) => {
   if (!terminal) return
   if (ts.fontSize) terminal.options.fontSize = ts.fontSize
-  if (ts.fontFamily) terminal.options.fontFamily = ts.fontFamily
+  if (ts.fontFamily) terminal.options.fontFamily = formatFontFamily(ts.fontFamily, ts.fallbackFont)
+  if (ts.fontWeight) terminal.options.fontWeight = ts.fontWeight
   if (ts.maxHistoryLines) terminal.options.scrollback = ts.maxHistoryLines
   if (ts.theme) applyXtermTheme(ts.theme)
   if (typeof ts.cursorBlink === 'boolean') {
@@ -1516,12 +1672,25 @@ watch(() => settingsStore.settings.terminal, (ts) => {
     // recreating the terminal.
     terminal.options.wordSeparator = ts.wordSeparator
   }
+  // Live minimum-contrast (F-039): xterm reads it on each render, so a plain
+  // assignment re-evaluates the atlas without recreating the terminal.
+  if (typeof ts.minimumContrast === 'number') {
+    terminal.options.minimumContrastRatio = ts.minimumContrast
+  }
+  // Live cursorStyle is applied by xterm on the next cursor render.
+  if (ts.cursorStyle) terminal.options.cursorStyle = ts.cursorStyle
   resize()
 }, { deep: true })
 
 // Watch for background image toggling to update terminal transparency
 watch(
   () => localStateStore.state.backgroundEnabled,
+  () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
+)
+
+// Re-apply when the app theme flips so FOLLOW_APP_THEME tracks it live.
+watch(
+  () => settingsStore.resolvedAppTheme,
   () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
 )
 
@@ -1568,6 +1737,8 @@ onUnmounted(() => {
   if (onOpenSearch) window.removeEventListener('terminal:open-search', onOpenSearch)
   if (onExport) window.removeEventListener('terminal:export', onExport)
   if (onSendRz) window.removeEventListener('terminal:send-rz', onSendRz)
+  if (onTerminalCopy) window.removeEventListener('terminal:copy', onTerminalCopy)
+  if (onTerminalPaste) window.removeEventListener('terminal:paste', onTerminalPaste)
   suggestions.close()
   if (!zmodemStore.getActiveTransfer(props.sessionId || '')) {
     disposeZmodemService(props.sessionId || '')
@@ -1610,8 +1781,111 @@ async function pasteToSession(text: string) {
   }
 }
 
+// ── Terminal right-click menu context (mirrors the tab-level menu) ──
+const panel = computed(() => (props.panelId ? panelStore.getPanel(props.panelId) : undefined))
+const isSsh = computed(() => panel.value?.type === 'ssh')
+const supportsOutputLog = computed(() =>
+  !!panel.value && ['ssh', 'telnet', 'serial', 'mosh', 'local'].includes(panel.value.type),
+)
+
+const isOutputLogOn = ref(false)
+const outputLogPath = ref('')
+
+async function refreshOutputLogState() {
+  const pid = props.panelId
+  const p = panel.value
+  if (!pid || !p) {
+    isOutputLogOn.value = false
+    outputLogPath.value = ''
+    return
+  }
+  try {
+    const info = await GetSessionOutputLogInfo(pid)
+    isOutputLogOn.value = !!info.enabled
+    outputLogPath.value = info.path || ''
+    panelStore.setOutputLog(pid, { enabled: isOutputLogOn.value, path: outputLogPath.value })
+  } catch {
+    isOutputLogOn.value = false
+    outputLogPath.value = ''
+  }
+}
+
+function onTerminalContextMenu(e: MouseEvent) {
+  if (supportsOutputLog.value) {
+    refreshOutputLogState()
+  }
+  menu.onContextMenu(e)
+}
+
+function triggerSearch() {
+  menu.closeMenu()
+  openSearch()
+}
+
+async function toggleOutputLog() {
+  menu.closeMenu()
+  const pid = props.panelId
+  if (!pid) return
+  try {
+    if (isOutputLogOn.value) {
+      await DisableSessionOutputLog(pid)
+      isOutputLogOn.value = false
+      const prev = outputLogPath.value
+      outputLogPath.value = ''
+      panelStore.setOutputLog(pid, { enabled: false, path: '' })
+      msg.copyable(t('session.logStopped', { path: prev }), 'info')
+      return
+    }
+    const path = await EnableSessionOutputLog(pid, '')
+    if (!path) {
+      msg.error(t('session.logFailed', { error: 'unknown' }))
+      return
+    }
+    isOutputLogOn.value = true
+    outputLogPath.value = path
+    panelStore.setOutputLog(pid, { enabled: true, path })
+    msg.copyable(t('session.logStarted', { path }), 'success')
+  } catch (e: any) {
+    msg.error(t('session.logFailed', { error: String(e?.message ?? e) }))
+  }
+}
+
+async function openLogDir() {
+  menu.closeMenu()
+  if (!outputLogPath.value) return
+  try {
+    await OpenPathInExplorer(outputLogPath.value)
+  } catch (e: any) {
+    msg.error(String(e?.message ?? e))
+  }
+}
+
+function openSftp() {
+  menu.closeMenu()
+  const p = panel.value
+  if (p) {
+    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: p }))
+  }
+}
+
+function uploadFileRz() {
+  window.dispatchEvent(new CustomEvent('terminal:send-rz', { detail: { panelId: props.panelId } }))
+  menu.closeMenu()
+}
+
+function openMonitor() {
+  menu.closeMenu()
+  const p = panel.value
+  if (p) {
+    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: p }))
+  }
+}
+
+const contextMenuEl = ref<HTMLElement | null>(null)
+
 const menu = useTerminalMenu({
   getSelection,
+  menuElement: contextMenuEl,
   onPaste: async (text) => {
     if (props.mode === 'ssh' || props.mode === 'local') {
       if (props.broadcastActive && props.workspaceId) {
@@ -1662,8 +1936,19 @@ defineExpose({
 }
 .terminal-area {
   flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.terminal-host {
+  flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 /* Search bar */
@@ -1758,6 +2043,10 @@ defineExpose({
 }
 
 .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   padding: 7px 14px;
   font-size: 12px;
   font-family: var(--font-ui);
@@ -1766,6 +2055,14 @@ defineExpose({
   user-select: none;
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
+  white-space: nowrap;
+}
+
+.menu-shortcut {
+  color: var(--text-muted, var(--text-disabled));
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
 }
 
 .menu-item:hover:not(.disabled) {
@@ -1776,6 +2073,16 @@ defineExpose({
 .menu-item.disabled {
   color: var(--text-disabled);
   cursor: default;
+}
+
+.menu-item.disabled .menu-shortcut {
+  opacity: 0.4;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
 }
 
 .drop-overlay {

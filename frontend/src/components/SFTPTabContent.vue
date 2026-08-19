@@ -941,13 +941,24 @@ async function onSendToRemote(items: FileItem[]) {
   }
 }
 
-function onSendToLocal(items: FileItem[]) {
+async function onSendToLocal(items: FileItem[]) {
   const sid = panel.value?.sessionId
   if (!sid) return
+
+  const fileNames = items.filter(i => i.name !== '..').map(i => i.name)
+  const action = await checkLocalConflicts(fileNames)
+  if (action === 'cancel') return
+
+  const existingNames = localFiles.value.map(f => f.name)
   for (const item of items) {
     if (item.name === '..') continue
+    let resolvedName = item.name
+    if (action === 'rename' && existingNames.includes(item.name)) {
+      resolvedName = autoRename(item.name, existingNames)
+    }
+    existingNames.push(resolvedName)
     const remotePath = joinPath(cwd.value, item.name)
-    const localPath = joinPath(localCwd.value, item.name).replace(/\\/g, '/')
+    const localPath = joinPath(localCwd.value, resolvedName).replace(/\\/g, '/')
     SftpGet(sid, remotePath, localPath, item.isDir)
   }
 }
@@ -983,10 +994,30 @@ async function onDownloadTo(items: FileItem[]) {
   try {
     const dir = await OpenDirectoryDialog()
     if (!dir) return
+
+    const fileNames = items.filter(i => i.name !== '..').map(i => i.name)
+    // Conflict check against the selected directory (may differ from current localCwd).
+    let targetNames: string[] = []
+    try {
+      const result = await SftpListLocal(sid, dir)
+      targetNames = result.files.map(f => f.name)
+    } catch { /* if listing fails, proceed without conflict prompting */ }
+    const conflicts = fileNames.filter(n => targetNames.includes(n))
+    let action: 'overwrite' | 'rename' | 'cancel' = 'overwrite'
+    if (conflicts.length > 0) {
+      action = await showConflictDialog(conflicts)
+      if (action === 'cancel') return
+    }
+    const existingNames = [...targetNames]
     for (const item of items) {
       if (item.name === '..') continue
+      let resolvedName = item.name
+      if (action === 'rename' && existingNames.includes(item.name)) {
+        resolvedName = autoRename(item.name, existingNames)
+      }
+      existingNames.push(resolvedName)
       const remotePath = joinPath(cwd.value, item.name)
-      const localPath = (dir + '/' + item.name).replace(/\\/g, '/')
+      const localPath = (dir + '/' + resolvedName).replace(/\\/g, '/')
       SftpGet(sid, remotePath, localPath, item.isDir)
     }
   } catch (e) {
@@ -1070,6 +1101,13 @@ function showConflictDialog(conflicts: string[]): Promise<'overwrite' | 'rename'
 
 async function checkRemoteConflicts(fileNames: string[]): Promise<'overwrite' | 'rename' | 'cancel'> {
   const existingNames = remoteFiles.value.map(f => f.name)
+  const conflicts = fileNames.filter(n => existingNames.includes(n))
+  if (conflicts.length === 0) return 'overwrite'
+  return showConflictDialog(conflicts)
+}
+
+async function checkLocalConflicts(fileNames: string[]): Promise<'overwrite' | 'rename' | 'cancel'> {
+  const existingNames = localFiles.value.map(f => f.name)
   const conflicts = fileNames.filter(n => existingNames.includes(n))
   if (conflicts.length === 0) return 'overwrite'
   return showConflictDialog(conflicts)
@@ -1632,7 +1670,7 @@ function clearDragState() {
   dragSource.value = null
 }
 
-function onDropLocal(e: DragEvent) {
+async function onDropLocal(e: DragEvent) {
   e.preventDefault()
   dragDroppedInternally = true
   clearDragState()
@@ -1641,9 +1679,19 @@ function onDropLocal(e: DragEvent) {
   try {
     const item = JSON.parse(data)
     if (item.mode === 'remote') {
+      const sid = panel.value?.sessionId
+      if (!sid) return
+      const action = await checkLocalConflicts([item.name])
+      if (action === 'cancel') return
+
+      let resolvedName = item.name
+      if (action === 'rename') {
+        const existingNames = localFiles.value.map(f => f.name)
+        resolvedName = autoRename(item.name, existingNames)
+      }
       const remotePath = joinPath(cwd.value, item.name)
-      const localPath = joinPath(localCwd.value, item.name).replace(/\\/g, '/')
-      SftpGet(panel.value?.sessionId!, remotePath, localPath, item.isDir)
+      const localPath = joinPath(localCwd.value, resolvedName).replace(/\\/g, '/')
+      SftpGet(sid, remotePath, localPath, item.isDir)
     }
   } catch (e) { console.error('onDropLocal:', e) }
 }

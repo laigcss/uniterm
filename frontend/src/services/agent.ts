@@ -1,9 +1,11 @@
 import { chat, AVAILABLE_TOOLS, ChatCancelledError, ChatTimeoutError } from './llm'
 import { executeCommand, startCommand, captureTerminal, collectOutput, sendTerminalKey } from './terminalAgent'
+import type { ExecuteResult } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { useSkillStore } from '../stores/skillStore'
 import { GetSkillFile, ListSkillFiles } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime'
@@ -243,6 +245,20 @@ function capToolResult(text: string): string {
   return `${head}\n\n─────── [已截断: 工具结果共 ${text.length} 字节, 已省略 ${omitted} 字节] ────────\n调整工具参数（如 head_lines / tail_lines）或分段调用以查看被截断部分。\n\n${tail}`
 }
 
+function formatExecuteResult(result: ExecuteResult): string {
+  if (!result.timedOut) {
+    return `${result.output}\n\n[COMMAND COMPLETED]`
+  }
+  // Put the timeout guidance right after the status line so the AI sees the
+  // verdict before reading the follow-up advice.
+  return `${result.output}\n\n[COMMAND TIMED OUT]\n\n`
+    + `⚠️ The command did not finish within the timeout and may still be running.\n`
+    + `Do not resend the same command.\n`
+    + `• If the output shows progress (percentages, scrolling filenames, etc.) → use collect_output to keep waiting\n`
+    + `• If the output shows a password/confirmation prompt → use send_terminal_key to respond\n`
+    + `• If the command is stuck and unresponsive → use interrupt_command to cancel`
+}
+
 function getShellName(path?: string): string {
   if (!path) return 'Unknown'
   const lower = path.toLowerCase()
@@ -260,7 +276,10 @@ function getShellName(path?: string): string {
  * Shell-specific suffix: appended to system rules dynamically (NOT cached).
  * Lightweight enough that it doesn't significantly impact cache efficiency.
  */
-function getShellGuidance(shellPath?: string, isWindowsShell?: boolean): string {
+function getShellGuidance(shellPath?: string, isWindowsShell?: boolean, isWindowsOpenSSH?: boolean): string {
+  if (isWindowsOpenSSH) {
+    return '\n\nThe active terminal is a Windows OpenSSH remote. Its shell could be CMD or PowerShell — determine which first (e.g. run `echo %COMSPEC%` / `ver` for CMD, or `$PSVersionTable` for PowerShell), then use the matching syntax: CMD (dir, type, cd, wmic) or PowerShell (Get-ChildItem, Get-Content, Set-Location).'
+  }
   if (isWindowsShell) {
     const isCmd = shellPath?.toLowerCase().includes('cmd')
     return isCmd
@@ -268,6 +287,16 @@ function getShellGuidance(shellPath?: string, isWindowsShell?: boolean): string 
       : '\n\nThe active terminal is Windows PowerShell. Use cmdlets like Get-ChildItem, Set-Location, Get-Content, etc.'
   }
   return '\n\nThe active terminal is a Unix-like shell. Use standard Unix syntax (ls, cat, grep, find, etc.).'
+}
+
+/**
+ * Whether the given panel is a Windows OpenSSH remote, as detected by the
+ * backend from the SSH server identification string and reported via the
+ * session:status event. Only meaningful once the connection is established.
+ */
+function isWindowsOpenSSHPanel(p: { sessionId: string | null } | undefined): boolean {
+  if (!p?.sessionId) return false
+  return useSessionStore().getRemoteOS(p.sessionId) === 'windows-openssh'
 }
 
 /**
@@ -308,7 +337,7 @@ function buildDynamicContext(): string {
     const shellPath = p.config?.shellPath
     const shellName = shellPath
       ? getShellName(shellPath)
-      : (p.type === 'ssh' ? 'SSH (Unix-like)' : 'Unknown')
+      : (p.type === 'ssh' ? (isWindowsOpenSSHPanel(p) ? 'SSH (Windows OpenSSH)' : 'SSH (Unix-like)') : 'Unknown')
 
     const displayName = titleCounts.get(p.title)! > 1
       ? `${p.title} (id: ${p.id})`
@@ -353,7 +382,8 @@ function buildSystemPrompt(): string {
     shellPath.toLowerCase().includes('pwsh') ||
     shellPath.toLowerCase().includes('cmd')
   )
-  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell) + buildSkillIndex()
+  const isWindowsOpenSSH = isWindowsOpenSSHPanel(activePanel)
+  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell, isWindowsOpenSSH) + buildSkillIndex()
 }
 
 /**
@@ -372,18 +402,7 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
   const store = useAIStore()
 
   if (!hasActiveSession()) {
-    if (userInput) {
-      store.addMessage({
-        id: `msg-${Date.now()}`,
-        role: 'user',
-        content: userInput
-      })
-    }
-    store.addMessage({
-      id: `msg-${Date.now()}`,
-      role: 'tool',
-      content: '请先在主窗口中打开一个终端会话，这样我才能执行命令。'
-    })
+    // 输入框已禁用，正常流程不会走到这里；兜底直接返回，不写入任何消息
     return
   }
 
@@ -445,45 +464,20 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     })
   }
 
-  // Track active stream listeners for cleanup
   // Track whether streaming already delivered text, to skip onChunk duplication
   let streamedText = ''
-
-  // F-311: buffer SSE tokens into a non-reactive string and flush at rAF
-  // cadence (~16ms / 60Hz) instead of mutating `activeAssistantMsg.content`
-  // per token. Per-token `+=` on a deep-reactive string triggers Vue's dep
-  // graph on every token (100+/s for fast models); one assignment per rAF
-  // caps re-renders at the display refresh rate.
-  let pendingText = ''
-  let flushRafId: number | null = null
-
-  function flushStream() {
-    flushRafId = null
-    if (pendingText && activeAssistantMsg) {
-      activeAssistantMsg.content += pendingText
-    }
-    pendingText = ''
-  }
 
   // Register stream event listener (fires from Go backend SSE events)
   const cleanupTokenListener = registerTokenListener((data: any) => {
     if (store.stopRequested) return
     if (activeAssistantMsg && data.text) {
-      pendingText += data.text
+      activeAssistantMsg.content += data.text
       streamedText += data.text
       store.status = 'outputting'
-      if (flushRafId === null) {
-        flushRafId = requestAnimationFrame(flushStream)
-      }
     }
   })
 
   function cleanupStreamListeners() {
-    if (flushRafId !== null) {
-      cancelAnimationFrame(flushRafId)
-      flushRafId = null
-    }
-    flushStream()
     cleanupTokenListener()
     setActiveAssistantMsg(null)
   }
@@ -556,13 +550,6 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     try {
       store.status = 'thinking'
       await chat(chatOptions)
-      // F-311: drain any rAF-buffered tokens so the assistant message holds
-      // the full text before we read .content for _rawApiMsg / doSave.
-      if (flushRafId !== null) {
-        cancelAnimationFrame(flushRafId)
-        flushRafId = null
-      }
-      flushStream()
       // Preserve raw API message blocks for conversation history
       if (chatOptions._rawApiMsg) {
         assistantMsg._rawApiMsg = chatOptions._rawApiMsg
@@ -721,11 +708,10 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
           cleanupStreamListeners()
           return
         }
-        const status = result.timedOut ? '[COMMAND TIMED OUT]' : '[COMMAND COMPLETED]'
         store.addMessage({
           id: `msg-${Date.now()}`,
           role: 'tool',
-          content: capToolResult(`${status}\n${result.output}`),
+          content: capToolResult(formatExecuteResult(result)),
           tool_call_id: tu.id
         })
       } catch (e: any) {
@@ -831,7 +817,7 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
         store.addMessage({
           id: `msg-${Date.now()}`,
           role: 'tool',
-          content: capToolResult(`${status}\n${result.output}`),
+          content: capToolResult(`${result.output}\n\n${status}`),
           tool_call_id: tu.id
         })
       } catch (e: any) {
@@ -1054,11 +1040,6 @@ export async function approveTool(_messageId: string) {
 
   if (!hasActiveSession()) {
     store.clearPendingCommand()
-    store.addMessage({
-      id: `msg-${Date.now()}`,
-      role: 'tool',
-      content: '请先打开一个终端会话，再执行此命令。'
-    })
     return
   }
 
@@ -1077,11 +1058,10 @@ export async function approveTool(_messageId: string) {
       })
     } else {
       const result = await executeCommand(cmd.command)
-      const status = result.timedOut ? '[COMMAND TIMED OUT]' : '[COMMAND COMPLETED]'
       store.addMessage({
         id: `msg-${Date.now()}`,
         role: 'tool',
-        content: capToolResult(`${status}\n${result.output}`),
+        content: capToolResult(formatExecuteResult(result)),
         tool_call_id: cmd.toolId
       })
     }

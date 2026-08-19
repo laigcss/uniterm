@@ -1,5 +1,98 @@
 # Changelog
 
+## v1.7.0
+
+### What's Changed
+
+**New Features**
+- X11 forwarding for SSH connections. Run Linux GUI applications remotely and display them on your local machine. Windows builds bundle VcXsrv X Server with no extra components needed; macOS requires XQuartz (`brew install --cask xquartz`). Enable the toggle in the SSH connection form's advanced settings.
+- X11 desktop support. Launch full Linux desktop environments (GNOME, KDE, XFCE, MATE, Cinnamon, Openbox) over SSH with X11 forwarding. A new `x11-desktop` session type with standalone SSH credentials and auto-launched X Server.
+- VNC Require TLS toggle, shared session mode, and VNC Repeater ID support.
+- S3 connections now support virtual-hosted–style endpoints (e.g. Alibaba Cloud OSS, Tencent COS, Huawei OBS).
+- Telnet negotiation mode, local echo, send mode (character/line), newline mode (CR/CRLF), and character encoding options for compatibility with diverse telnet servers.
+- Serial port connections now use the unified connection form (same as all other protocols) instead of a standalone dialog, with new support for character encoding, local echo, and newline mode.
+- Per-connection backspace key option for SSH, Telnet, Serial, and Mosh sessions. Choose between ASCII Delete (DEL, 0x7F), ASCII Backspace (BS, 0x08), or VT220 Delete. Default changed from DEL to Backspace (^H) for out-of-the-box compatibility with Huawei, H3C, Cisco network gear and serial consoles.
+
+**Improvements**
+- xterm.js upgraded to 6.0.0 with all addons (search, fit, ligatures, Unicode 11, clipboard). (@coderstory)
+- JetBrains Mono Variable font bundled as the default monospace font, replacing the previous system font stack. (@coderstory)
+- Terminal text highlighting no longer highlights inside code fences or full code blocks, avoiding false positives in AI output and markdown. (@coderstory)
+- Extensive performance and stability hardening across all subsystems: store (atomic writes, debounced I/O, sharded sessions), session (larger read buffers, event-driven flush loops, lock contention reduction), frontend (rAF-coalesced rendering, memoized computations, ring buffer for session data), K8s (HTTP transport tuning, cached parsing, watch/log reconnect with backoff), AI/LLM (SSE streaming buffers, shared HTTP client, typed event payloads), sync (async init, ETag conditional GETs, AES-GCM AAD binding), and database (connection pool tuning, parallel schema loading, identifier escaping). (@coderstory)
+- Configurable terminal double-click word separator. Choose which characters act as word boundaries for double-click selection in terminal settings. (@wangxufeng)
+- Refined the built-in uniTerm Dark and uniTerm Light terminal theme colors.
+- macOS DMG now split into separate amd64 and arm64 packages instead of a universal binary, avoiding compatibility warnings on macOS 26+.
+- Connection remark field for adding free-form notes to any connection.
+- Redesigned database and MongoDB natural-language query layout: the NL input now sits to the left of the SQL/filter editor at matching height, with the generate button styled like the Execute button for better discoverability.
+
+**Bug Fixes**
+- Fixed cursor blink setting not persisting across restarts. (@wangxufeng)
+- Fixed Claude Code and other TUI glyphs not rendering after terminal history restore. (@coderstory)
+- Fixed AI CancelChatStream race condition that could leave stale cancellations across overlapping requests. (@coderstory)
+- Fixed sync security: enforced file whitelist, improved password mismatch handling, removed hostname leak from config. (@coderstory)
+- Fixed K8s auth not retrying on 401, watch/log streams not reconnecting after transient failures. (@coderstory)
+- Fixed database connection pool race, query timeout handling, and SQL Server resource cleanup. (@coderstory)
+- Fixed monitor trend chart colors not resolving CSS variables, causing invisible chart lines.
+- Fixed container commands (docker/nerdctl) flashing a console window on Windows.
+- Fixed K8s node operations: added confirmation prompts before cordon/uncordon and corrected the drain icon.
+- Fixed macOS Caps Lock swallowing the first letter typed after toggling on macOS 26/27 beta. (@surenwuyuwuqiu)
+- Fixed legacy SSH servers failing to connect due to missing CBC/3DES ciphers and hmac-sha1-96 MAC algorithms.
+- Fixed terminal history recording reliability: restored bottom-up prompt scanning for compatibility with diverse shell prompts. Added independent AI transcription toggle so users can keep history suggestions while turning off AI-powered command rewrites.
+- Fixed X11 forwarding failure on macOS when DISPLAY is empty (e.g. app launched from Finder/Dock) by probing /tmp/.X11-unix. (@surenwuyuwuqiu)
+- Fixed SSH jump-host tunnel not working for terminal sessions. (@wangxufeng)
+- Fixed AI sidebar allowing messages to be sent without an active terminal session, causing failed messages to persist in conversation history and later be sent to the LLM as valid context. The input box and send button are now disabled when no terminal panel is associated.
+- Fixed NL-to-SQL prompt not including the currently selected table name, so the AI had no context about which table the user was viewing.
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @coderstory, @wangxufeng, and @surenwuyuwuqiu for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- SSH X11 转发。在 SSH 连接表单高级设置中开启后，可运行 Linux 远程 GUI 应用并在本地显示。Windows 版本内置 VcXsrv X Server，无需额外安装组件；macOS 需安装 XQuartz（`brew install --cask xquartz`）。
+- X11 桌面支持。通过 SSH X11 转发启动完整 Linux 桌面环境（GNOME、KDE、XFCE、MATE、Cinnamon、Openbox）。新增 `x11-desktop` 会话类型，独立 SSH 凭据，自动启动 X Server。
+- VNC 连接新增 TLS 开关、共享会话模式和 VNC Repeater ID 支持。
+- S3 连接支持虚拟主机风格端点（如阿里云 OSS、腾讯 COS、华为 OBS）。
+- Telnet 协商模式、本地回显、发送模式（字符/行）、换行模式（CR/CRLF）、字符编码选项，提升与不同 Telnet 服务器的兼容性。
+- 串口连接统一使用标准连接表单（与其他协议一致），不再使用独立弹窗；新增字符编码、本地回显、换行模式支持。
+- SSH、Telnet、Serial、Mosh 连接新增退格键选项：可选 ASCII Delete（DEL, 0x7F）、ASCII Backspace（BS, 0x08）或 VT220 Delete。默认值由 DEL 改为 Backspace（^H），兼容华为、H3C、Cisco 网络设备及串口控制台。
+
+**改进**
+- xterm.js 升级至 6.0.0，所有插件同步升级（search、fit、ligatures、Unicode 11、clipboard）。（@coderstory）
+
+- 内置 JetBrains Mono Variable 字体作为默认等宽字体，取代之前的系统字体栈。（@coderstory）
+- 终端文本高亮不再匹配代码块（code fence）内的内容，避免 AI 输出和 markdown 中的误高亮。（@coderstory）
+- 全面性能与稳定性加固：store（原子写入、防抖 I/O、会话分片）、session（更大读缓冲、事件驱动刷新循环、减少锁竞争）、前端（rAF 合并渲染、缓存计算、会话数据环形缓冲）、K8s（HTTP 传输调优、缓存解析、watch/log 断线重连与退避）、AI/LLM（SSE 流缓冲、共享 HTTP 客户端、类型化事件负载）、sync（异步初始化、ETag 条件 GET、AES-GCM AAD 绑定）、database（连接池调优、并行 schema 加载、标识符转义）。（@coderstory）
+- 终端双击选词分隔符可配置。在终端设置中可自定义哪些字符作为单词边界。（@wangxufeng）
+- 优化内置 uniTerm Dark 和 uniTerm Light 终端主题配色。
+- macOS DMG 拆分为独立的 amd64 和 arm64 安装包，避免通用二进制在 macOS 26+ 上的兼容性警告。
+- 连接备注字段，可为任意连接添加自由文本备注。
+- 重新设计数据库和 MongoDB 自然语言查询布局：NL 输入框移至 SQL/过滤编辑器左侧，高度一致，生成按钮样式与执行按钮对齐，更易发现和使用。
+
+**Bug 修复**
+- 修复光标闪烁设置在重启后丢失的问题。（@wangxufeng）
+- 修复终端历史恢复后 Claude Code 等 TUI 字形无法渲染的问题。（@coderstory）
+- 修复 AI CancelChatStream 在重叠请求下的竞态条件。（@coderstory）
+- 修复同步安全：强制文件白名单校验、改进密码不匹配处理、移除配置中的主机名泄露。（@coderstory）
+- 修复 K8s 认证 401 不重试、watch/log 流断线不重连的问题。（@coderstory）
+- 修复数据库连接池竞态、查询超时处理、SQL Server 资源清理问题。（@coderstory）
+- 修复监控趋势图颜色因 CSS 变量未解析导致折线不可见的问题。
+- 修复容器命令（docker/nerdctl）在 Windows 上弹出控制台窗口的问题。
+- 修复 K8s 节点操作：cordon/uncordon 增加确认提示，修正 drain 图标。
+- 修复 macOS 26/27 beta 上切换 Caps Lock 后第一个字母被吞掉的问题。（@surenwuyuwuqiu）
+- 修复旧版 SSH 服务器因缺少 CBC/3DES 加密算法和 hmac-sha1-96 MAC 算法导致连接失败的问题。
+- 修复终端历史记录可靠性：恢复从底部向上扫描提示符的命令提取逻辑，兼容更多类型的 shell 提示符。新增独立的 AI 转录开关，用户可在保留历史补全建议的同时关闭 AI 命令改写。
+- 修复 macOS 上从 Finder/Dock 启动应用时 DISPLAY 为空导致 X11 转发失败的问题，自动探测 /tmp/.X11-unix。（@surenwuyuwuqiu）
+- 修复 SSH 跳板隧道对终端会话不生效的问题。（@wangxufeng）
+- 修复 AI 侧边栏在无终端关联时仍可发送消息的问题，导致失败消息残留在对话历史中并被后续发送给 LLM 作为有效上下文。现在无终端面板关联时输入框和发送按钮自动禁用。
+- 修复 NL-to-SQL 提示词不含当前选中表名，AI 无法感知用户正在操作哪张表的问题。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @coderstory、@wangxufeng 和 @surenwuyuwuqiu 对本版本的贡献。
+
 ## v1.6.0
 
 ### What's Changed

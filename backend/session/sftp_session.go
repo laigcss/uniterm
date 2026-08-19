@@ -1,10 +1,12 @@
 package session
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	osUser "os/user"
 	"path"
@@ -81,12 +83,11 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		Auth:            authMethods,
 		Timeout:         30 * time.Second,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config: ssh.Config{
-			KeyExchanges: sshKeyExchanges(),
-		},
+		Config: sshAlgorithms(),
 	}
 
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port), clientConfig)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	client, err := dialSSHTCP(addr, clientConfig, config.Proxy)
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("ssh dial: %w", err)
@@ -94,9 +95,16 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 
 	sc, err := sftp.NewClient(client)
 	if err != nil {
-		client.Close()
-		s.setStatus(StatusError)
-		return fmt.Errorf("sftp client: %w", err)
+		// subsystem 启动失败：若是协议流被污染(登录脚本打印)，像 MobaXterm 那样
+		// fallback 到 exec sftp-server 并跳过噪声；仍失败再抛可操作提示。
+		sc2, ferr := trySFTPExecFallback(client, err)
+		if ferr == nil {
+			sc = sc2
+		} else {
+			client.Close()
+			s.setStatus(StatusError)
+			return fmt.Errorf("sftp client: %w", hintSFTPStartupError(err, ferr))
+		}
 	}
 
 	go func() {
@@ -112,6 +120,120 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 	s.setStatus(StatusConnected)
 
 	return nil
+}
+
+// isSFTPStreamPolluted 判断错误是否为“SFTP 协议流被服务器输出污染”那一类。
+func isSFTPStreamPolluted(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "packet too long") ||
+		strings.Contains(msg, "message too long") ||
+		strings.Contains(msg, "version packet")
+}
+
+// sftpServerPaths 是各发行版 sftp-server 二进制的常见位置。
+// 逗号分隔的 shell 表达式：找到第一个存在的就 exec 它。
+var sftpServerPaths = []string{
+	"/usr/libexec/sftp-server",     // RHEL/CentOS/Fedora、macOS
+	"/usr/lib/openssh/sftp-server", // Debian/Ubuntu
+	"/usr/lib/ssh/sftp-server",     // Arch、SUSE
+	"/usr/libexec/openssh/sftp-server",
+	"/usr/lib/sftp-server",
+}
+
+// sftpFallbackMarker 是插在噪声与 SFTP 协议流之间的唯一分隔标记。
+// 登录脚本的打印发生在 marker 之前，客户端读到 marker 后丢弃前面全部垃圾，
+// 再把干净的剩余流交给 SFTP 解析——这样无论 profile/bashrc/BASH_ENV/~/.ssh/rc
+// 怎么打印都不影响。
+const sftpFallbackMarker = "__UNITERM_SFTP_BEGIN__"
+
+// buildSFTPExecCommand 生成一条 shell 命令：先在 PATH 与常见路径里找到 sftp-server，
+// 打印 marker，然后 exec 它接管 stdio。找不到则以非零码退出。
+func buildSFTPExecCommand() string {
+	// 候选：先查 PATH，再逐个常见绝对路径。
+	candidates := append([]string{"$(command -v sftp-server 2>/dev/null)"}, sftpServerPaths...)
+	var b strings.Builder
+	b.WriteString("s=''; for p in ")
+	b.WriteString(strings.Join(candidates, " "))
+	b.WriteString("; do if [ -x \"$p\" ]; then s=\"$p\"; break; fi; done; ")
+	b.WriteString("[ -n \"$s\" ] || exit 127; ")
+	// marker 后紧跟换行，printf 到 stdout；随后 exec 覆盖当前进程，之后 stdout 全是 SFTP 协议。
+	b.WriteString("printf '" + sftpFallbackMarker + "\\n'; exec \"$s\"")
+	return b.String()
+}
+
+// trySFTPExecFallback 在 subsystem 方式失败(且属于协议流被污染)时，
+// 改为 exec sftp-server，并跳过 stdout 上 marker 之前的全部噪声，
+// 再用管道接管，绕过被登录脚本污染的协议流。
+func trySFTPExecFallback(client *ssh.Client, subsystemErr error) (*sftp.Client, error) {
+	if !isSFTPStreamPolluted(subsystemErr) {
+		return nil, subsystemErr
+	}
+	sess, err := client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("fallback new session: %w", err)
+	}
+	stdin, err := sess.StdinPipe()
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fallback stdin: %w", err)
+	}
+	stdoutRaw, err := sess.StdoutPipe()
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fallback stdout: %w", err)
+	}
+	if err := sess.Start(buildSFTPExecCommand()); err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fallback exec sftp-server: %w", err)
+	}
+	// 跳过 marker 之前的全部噪声，把游标停在 SFTP 协议第一个字节。
+	clean := bufio.NewReader(stdoutRaw)
+	if err := skipToMarker(clean, sftpFallbackMarker); err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fallback marker: %w", err)
+	}
+	sc, err := sftp.NewClientPipe(clean, stdin)
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fallback sftp handshake: %w", err)
+	}
+	return sc, nil
+}
+
+// skipToMarker 从 r 逐行读，丢弃直到读到含 marker 的那一行为止（含该行）。
+// 之后 r 的读游标停在 marker 行的换行符之后，即 SFTP 协议流起点。
+func skipToMarker(r *bufio.Reader, marker string) error {
+	for {
+		line, err := r.ReadString('\n')
+		if strings.Contains(line, marker) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("未在服务器输出中找到 SFTP 起始标记（sftp-server 可能不存在或被拒绝执行）")
+		}
+	}
+}
+
+// hintSFTPStartupError 把 sftp 子系统启动失败的底层错误翻成可操作的提示。
+// 最常见的是 packet too long：SSH 通了、认证也过了，但服务器登录脚本
+// (/etc/profile、~/.bashrc、~/.ssh/rc 等) 在非交互会话里往 stdout 打印了内容，
+// 污染了 SFTP 协议流。subErr 是 subsystem 方式的原始错误，fbErr 是 exec fallback
+// 的失败原因(便于诊断到底卡在哪一步)。
+func hintSFTPStartupError(subErr, fbErr error) error {
+	if isSFTPStreamPolluted(subErr) {
+		return fmt.Errorf("服务器 SFTP 子系统启动失败：登录脚本在非交互会话中产生了输出，"+
+			"污染了 SFTP 协议流；已尝试自动 fallback 到 exec sftp-server 但未成功。"+
+			"请清理服务器上 /etc/profile、/etc/profile.d/*、~/.bashrc、~/.ssh/rc、/etc/ssh/sshrc "+
+			"以及 $BASH_ENV 指向的脚本里向 stdout 的打印（用 `case $- in *i*)` 判断仅交互 shell 才输出）。"+
+			"subsystem 错误：%v；fallback 错误：%w", subErr, fbErr)
+	}
+	if fbErr != nil {
+		return fbErr
+	}
+	return subErr
 }
 
 func (s *SFTPSession) Write(data []byte) error {

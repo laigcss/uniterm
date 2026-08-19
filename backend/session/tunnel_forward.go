@@ -228,6 +228,7 @@ func (ts *TunnelService) dialChain(chain []ConnectionConfig, upstream *SocksProx
 			Auth:            makeSSHAuthMethods(cfg, nil),
 			Timeout:         30 * time.Second,
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Config:          sshAlgorithms(),
 		}
 		sshConn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
 		if err != nil {
@@ -264,7 +265,7 @@ func dialFirstHop(addr string, upstream *SocksProxy) (net.Conn, error) {
 		if upstream.User != "" {
 			auth = &proxy.Auth{User: upstream.User, Password: upstream.Pass}
 		}
-		d, err := proxy.SOCKS5("tcp", proxyAddr, auth, proxy.Direct)
+		d, err := proxy.SOCKS5("tcp", proxyAddr, auth, &net.Dialer{Timeout: 30 * time.Second})
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +293,11 @@ func dialHTTPConnect(proxyAddr string, up *SocksProxy, addr string) (net.Conn, e
 		conn.Close()
 		return nil, err
 	}
-	// Read status line up to the header terminator.
+	// Read status line up to the header terminator, bounded by the connect timeout.
+	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		conn.Close()
+		return nil, err
+	}
 	buf := make([]byte, 0, 256)
 	one := make([]byte, 1)
 	for {
@@ -312,6 +317,11 @@ func dialHTTPConnect(proxyAddr string, up *SocksProxy, addr string) (net.Conn, e
 	if len(buf) < 12 || string(buf[9:12]) != "200" {
 		conn.Close()
 		return nil, fmt.Errorf("http proxy CONNECT failed")
+	}
+	// Clear the read deadline so the connection is usable for the SSH session.
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		conn.Close()
+		return nil, err
 	}
 	return conn, nil
 }

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       preview:
-        description: 'Create a preview release (draft, hidden from public feed)'
+        description: 'Create a snapshot release (fixed tag, prerelease, rolling)'
         type: boolean
         required: false
         default: false
@@ -28,13 +28,21 @@ jobs:
             platform: linux/amd64
             slug: linux-amd64
             artifact: uniTerm
+            webkit: '41'
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             slug: linux-arm64
             artifact: uniTerm
+            webkit: '41'
+          # Kylin / RHEL / openEuler: webkit2gtk3 = ABI 4.0
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            slug: linux-amd64-webkit40
+            artifact: uniTerm
+            webkit: '40'
           - os: macos-latest
-            platform: darwin/universal
-            slug: darwin-universal
+            platform: darwin
+            slug: darwin
             artifact: uniTerm.app
 
     runs-on: ${{ matrix.os }}
@@ -44,7 +52,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Free disk space (macOS)
-        if: matrix.platform == 'darwin/universal'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
           sudo rm -rf /Library/Developer/CoreSimulator
           sudo rm -rf /Applications/Xcode_*.app 2>/dev/null || true
@@ -115,36 +123,56 @@ jobs:
           fi
           echo "PATH=$PATH"
 
-          BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
+          if [ "$PLATFORM" = "darwin" ]; then
+            for ARCH in amd64 arm64; do
+              echo "Building darwin/$ARCH..."
+              wails build -platform "darwin/$ARCH" -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -skipbindings
+              mv build/bin/uniTerm.app "build/bin/uniTerm-${ARCH}.app"
+            done
+          else
+            BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
 
-          if [[ "$PLATFORM" == windows/* ]]; then
-            BUILD_ARGS="$BUILD_ARGS"
-          fi
-
-          if [ "${PLATFORM%/*}" = "linux" ]; then
-            BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\""
-            WEBKIT_TAG="webkit2_41"
-            if [ "${{ matrix.webkit }}" = "40" ]; then
-              WEBKIT_TAG="webkit2_40"
+            if [ "${PLATFORM%/*}" = "linux" ]; then
+              BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\""
+              WEBKIT_TAG="webkit2_41"
+              if [ "${{ matrix.webkit }}" = "40" ]; then
+                WEBKIT_TAG="webkit2_40"
+              fi
+              BUILD_ARGS="$BUILD_ARGS -tags $WEBKIT_TAG"
             fi
-            BUILD_ARGS="$BUILD_ARGS -tags $WEBKIT_TAG"
+
+            echo "BUILD_ARGS=$BUILD_ARGS"
+            eval wails build $BUILD_ARGS
           fi
-
-          echo "BUILD_ARGS=$BUILD_ARGS"
-          eval wails build $BUILD_ARGS
-
       - name: Package (macOS)
-        if: matrix.platform == 'darwin/universal'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
-          chmod +x build/bin/uniTerm.app/Contents/MacOS/uniTerm
-          codesign --force --deep --sign - build/bin/uniTerm.app
+          for ARCH in amd64 arm64; do
+            APP="build/bin/uniTerm-${ARCH}.app"
+            chmod +x "$APP/Contents/MacOS/uniTerm"
+            codesign --force --deep --sign - "$APP"
 
-          cd build/bin
-          mkdir -p dmg_staging
-          cp -R uniTerm.app dmg_staging/
-          ln -s /Applications dmg_staging/Applications
-          hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
-          rm -rf dmg_staging
+            cd build/bin
+            mkdir -p dmg_staging
+            cp -R "uniTerm-${ARCH}.app" dmg_staging/uniTerm.app
+            ln -s /Applications dmg_staging/Applications
+            hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO "../../uniterm-darwin-${ARCH}-${VERSION}.dmg"
+            rm -rf dmg_staging
+            cd ../..
+          done
+
+      - name: Download VcXsrv (Windows)
+        if: startsWith(matrix.platform, 'windows')
+        shell: pwsh
+        env:
+          VCXSRV_VERSION: v1.0.0
+        run: |
+          $VCXSRV_DIR = Join-Path $env:GITHUB_WORKSPACE 'build\windows\installer\plugins\vcxsrv'
+          New-Item -ItemType Directory -Force -Path $VCXSRV_DIR | Out-Null
+          $zip = Join-Path $env:TEMP 'vcxsrv.zip'
+          Invoke-WebRequest -Uri "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $VCXSRV_DIR -Force
+          Get-ChildItem $VCXSRV_DIR
 
       - name: Package (Windows)
         if: startsWith(matrix.platform, 'windows')
@@ -162,14 +190,16 @@ jobs:
           # new Go WebView2Loader produces for windows/arm64
           upx --best --lzma $AMD64_BIN
 
+          $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\plugins\vcxsrv'
+
           # rebuild NSIS installers (one per arch) so the amd64 installer
           # embeds the compressed binary; arm64 installer is regenerated
           # too but with the original uncompressed binary. Use absolute
           # paths (mirroring how Wails internally invokes makensis) since
           # NSIS' `File` command is unreliable with `..` relative paths
           # on Windows.
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" $NSI
-          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" $NSI
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
+          & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
             $srcExe = Join-Path $ROOT "build\bin\uniTerm-$arch.exe"
@@ -178,6 +208,7 @@ jobs:
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
             Copy-Item $srcExe "dist_tmp\uniTerm.exe"
+            Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\plugins\vcxsrv"
             Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp
 
@@ -284,14 +315,12 @@ jobs:
       - name: Determine release mode
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "DRAFT=true" >> $GITHUB_ENV
-          else
-            echo "DRAFT=false" >> $GITHUB_ENV
+            echo "PRERELEASE=true" >> $GITHUB_ENV
           fi
 
       - name: Extract changelog
         run: |
-          if [ "$DRAFT" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             SHA="${{ github.sha }}"
             SHORT=$(echo "$SHA" | cut -c1-7)
             NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
@@ -299,7 +328,7 @@ jobs:
             cat > release_body.md <<EOF
           ## ⚠️ Preview Release / 预览版本
 
-          This is a **preview/draft** build, **not an official release**. Do not distribute.
+          This is a **preview/prerelease** build, **not an official release**. Do not distribute.
           本次为**预览构建，非正式发布版本**，请勿对外分发。
 
           - Commit: \`${SHORT}\`
@@ -312,6 +341,7 @@ jobs:
           fi
 
       - name: Detect prerelease
+        if: github.event_name != 'workflow_dispatch'
         run: |
           if echo "${{ github.ref_name }}" | grep -qiE '\-(rc|beta|alpha|pre|dev)'; then
             echo "PRERELEASE=true" >> $GITHUB_ENV
@@ -319,10 +349,19 @@ jobs:
             echo "PRERELEASE=false" >> $GITHUB_ENV
           fi
 
+      - name: Update snapshot tag
+        if: github.event_name == 'workflow_dispatch' && inputs.preview == true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f main-snapshot
+          git push -f origin main-snapshot
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          draft: ${{ env.DRAFT == 'true' }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && 'main-snapshot' || github.ref_name }}
+          name: ${{ github.event_name == 'workflow_dispatch' && 'Main Snapshot' || github.ref_name }}
           prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: release_body.md
           files: |

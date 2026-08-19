@@ -49,8 +49,9 @@ Windows 文件共享协议（Samba），用于连接局域网共享文件夹或 
 | Endpoint | 服务端点地址 |
 | Access Key | 访问密钥 ID |
 | Secret Key | 访问密钥 |
-| Bucket | 存储桶名称 |
-| Region | 区域（可选） |
+| Bucket | 存储桶名称（可选，留空则列出所有 Bucket） |
+| Region | 区域 |
+| URL 风格 | Virtual-hosted（默认）适用于阿里云 OSS / 腾讯 COS / 华为 OBS；Path 适用于 AWS S3 / MinIO |
 
 
 ## 文件浏览器

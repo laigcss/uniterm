@@ -7,6 +7,12 @@ export type Language = Locale | 'system'
 export type Theme = 'dark' | 'deep-blue' | 'light' | 'system'
 export type TerminalTheme = 'uniterm-dark' | 'uniterm-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light' | 'xshell-xterm' | 'xshell-ansi-black' | 'xshell-new-black' | 'mobaxterm-default' | 'mobaxterm-ubuntu' | 'finalshell-dark' | 'finalshell-light'
 
+// Magic value for `AppSettings.terminal.theme`: the effective built-in theme
+// is derived from the current app theme (dark / deep-blue -> uniterm-dark,
+// light -> uniterm-light) instead of being fixed. Kept out of TERMINAL_THEMES
+// because it has no color palette of its own.
+export const FOLLOW_APP_THEME = 'follow-app'
+
 // xterm.js's ITheme shape: the 4 base colors plus the 16 ANSI colors, all as hex strings.
 export interface TerminalThemeColors {
   background: string
@@ -44,14 +50,33 @@ export interface CustomTerminalTheme {
 export interface TerminalSettings {
   theme: TerminalTheme | string
   fontFamily: string
+  // Secondary font family for glyphs the primary font lacks (most useful for
+  // CJK: the first font usually covers Latin only, and the browser falls back
+  // to this one for CJK characters). Empty means no explicit fallback; the CSS
+  // generic `monospace` covers anything else. Rendered as
+  // `"fontFamily", "fallbackFont", monospace`.
+  fallbackFont: string
+  // Weight of regular terminal text (normal/SemiBold/etc. fire on the bundled
+  // JetBrains Mono Variable through its variable weight axis; fixed fonts map
+  // to their nearest available weight). ANSI-bold text stays a step heavier.
+  fontWeight: number
   fontSize: number
   selectionAction: 'none' | 'copy'
   rightClickAction: 'menu' | 'paste'
   middleClickAction: 'none' | 'paste'
   maxHistoryLines: number
   smartCompletion: boolean
+  aiTranscription: boolean
   highlightEnabled: boolean
   cursorBlink: boolean
+  // Cursor shape when the terminal is focused, mapped straight onto xterm's
+  // `cursorStyle` option.
+  cursorStyle: 'block' | 'underline' | 'bar'
+  // Minimum text/background contrast ratio (F-039). xterm auto-brightens or
+  // darkens the foreground until this ratio is met, only for cells below it,
+  // so low-contrast pairings (e.g. ls's colored blocks for 777 dirs) stay
+  // readable. 1 = xterm's no-op default = disabled.
+  minimumContrast: number
   // Override for the session output log directory. Empty means the
   // OS default under ~/Documents/uniTerm/logs.
   sessionLogDir: string
@@ -60,6 +85,17 @@ export interface TerminalSettings {
   // extended with the most common shell / path punctuation, so that
   // e.g. `foo;bar` selects only `foo` on double-click.
   wordSeparator: string
+  // Show a line-number gutter along the left edge of the terminal.
+  // Wrapped continuation rows show no number (so a wrapped command reads as
+  // one logical line). Defaults to off; the right-click menu can toggle it.
+  showLineNumbers: boolean
+  // Show a timestamp column recording when each logical line first appeared —
+  // the prompt line when its command was executed, output lines when they
+  // arrived. Wrapped continuation rows stay blank. Defaults to off.
+  showTimestamps: boolean
+  // Display template for the timestamp column. Tokenized: YYYY/YY (year),
+  // MM/DD (month/day), HH/mm/ss (hour/minute/second), literals pass through.
+  timestampFormat: string
 }
 
 export interface AIModelConfig {
@@ -96,6 +132,10 @@ export type ShortcutAction =
   | 'duplicateSession'
   | 'terminalSearch'
   | 'openSettings'
+  | 'copy'
+  | 'paste'
+  | 'toggleLineNumbers'
+  | 'toggleTimestamps'
 
 export interface KeyBinding {
   ctrl: boolean
@@ -121,6 +161,10 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   duplicateSession: 'shortcut.duplicateSession',
   terminalSearch: 'shortcut.terminalSearch',
   openSettings: 'shortcut.openSettings',
+  copy: 'shortcut.copy',
+  paste: 'shortcut.paste',
+  toggleLineNumbers: 'shortcut.toggleLineNumbers',
+  toggleTimestamps: 'shortcut.toggleTimestamps',
 }
 
 export const DEFAULT_KEYBOARD: KeyboardSettings = {
@@ -135,8 +179,12 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   navigateNext: { ctrl: false, shift: false, alt: true, key: 'arrowright' },
   lockAI: { ctrl: true, shift: true, alt: false, key: 'l' },
   duplicateSession: { ctrl: true, shift: true, alt: false, key: 'd' },
-  terminalSearch: { ctrl: true, shift: false, alt: false, key: 'f' },
+  terminalSearch: { ctrl: true, shift: true, alt: false, key: 'f' },
   openSettings: { ctrl: true, shift: false, alt: false, key: ',' },
+  copy: { ctrl: true, shift: true, alt: false, key: 'c' },
+  paste: { ctrl: true, shift: true, alt: false, key: 'v' },
+  toggleLineNumbers: { ctrl: true, shift: true, alt: false, key: 'g' },
+  toggleTimestamps: { ctrl: true, shift: true, alt: false, key: 't' },
 }
 
 export interface SFTPBookmarks {
@@ -156,24 +204,34 @@ export interface AppSettings {
   sftpBookmarks: SFTPBookmarks
   customTerminalThemes: CustomTerminalTheme[]
   defaultLocalShell: string
+  // Which side of the tab the close (X) button sits on.
+  tabCloseButton: 'left' | 'right'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   language: 'system',
   terminal: {
-    theme: 'uniterm-dark',
-    fontFamily: '"JetBrains Mono Variable", Menlo, Consolas, "Courier New", monospace',
+    theme: FOLLOW_APP_THEME,
+    fontFamily: 'JetBrains Mono Variable',
+    fallbackFont: '',
+    fontWeight: 400,
     fontSize: 14,
     selectionAction: 'none',
     rightClickAction: 'menu',
     middleClickAction: 'paste',
     maxHistoryLines: 2500,
     smartCompletion: true,
+    aiTranscription: true,
     highlightEnabled: true,
     cursorBlink: true,
+    cursorStyle: 'block',
+    minimumContrast: 4.5,
     sessionLogDir: '',
-    wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
+    wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
+    showLineNumbers: false,
+    showTimestamps: false,
+    timestampFormat: 'HH:mm:ss'
   },
   ai: {
     maxTurns: 20,
@@ -198,7 +256,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     remotePaths: []
   },
   customTerminalThemes: [],
-  defaultLocalShell: ''
+  defaultLocalShell: '',
+  tabCloseButton: 'left'
 }
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light'; group?: 'builtin' | 'ssh' }
@@ -249,9 +308,34 @@ export const FONT_OPTIONS: { label: string; value: string }[] = [
   { label: 'Source Code Pro', value: '"Source Code Pro", monospace' }
 ]
 
+// Terminal font-weight presets. `labelKey` is an i18n key (the option text is
+// translated via `t(labelKey)`); the value is the CSS/JS number passed to
+// xterm.js — the bundled JetBrains Mono Variable honors each exactly, fixed
+// fonts snap to the nearest available weight.
+export const FONT_WEIGHT_OPTIONS: { labelKey: string; value: number }[] = [
+  { labelKey: 'settings.weightNormal', value: 400 },
+  { labelKey: 'settings.weightMedium', value: 500 },
+  { labelKey: 'settings.weightSemiBold', value: 600 },
+  { labelKey: 'settings.weightBold', value: 700 }
+]
+
 export const SELECTION_ACTIONS: { label: string; value: TerminalSettings['selectionAction'] }[] = [
   { label: 'None', value: 'none' },
   { label: 'Copy to clipboard', value: 'copy' }
+]
+
+// Timestamp column display formats. `value` is a tokenized template consumed
+// by formatTimestampMs (see utils/terminalGutter.ts); the option text is its
+// i18n label.
+export const TIMESTAMP_FORMATS: { labelKey: string; value: string; sample: string }[] = [
+  { labelKey: 'settings.timestampFormatTime', value: 'HH:mm:ss', sample: '12:34:56' },
+  { labelKey: 'settings.timestampFormatDateTime', value: 'YYYY-MM-DD HH:mm:ss', sample: '2026-08-18 12:34:56' },
+]
+
+export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorStyle'] }[] = [
+  { labelKey: 'settings.cursorStyleBlock', value: 'block' },
+  { labelKey: 'settings.cursorStyleUnderline', value: 'underline' },
+  { labelKey: 'settings.cursorStyleBar', value: 'bar' }
 ]
 
 export const RIGHT_CLICK_ACTIONS: { label: string; value: TerminalSettings['rightClickAction'] }[] = [

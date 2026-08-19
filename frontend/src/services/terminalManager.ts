@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { SearchAddon } from '@xterm/addon-search'
 import { getXtermTheme } from '../composables/useTerminal'
-import { resolveXtermBackground, applyTerminalBgVar } from '../composables/useTerminalTheme'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import type { CustomTerminalTheme } from '../types/settings'
@@ -12,6 +12,10 @@ import { formatFontFamily } from '../utils/formatFontFamily'
 export interface TerminalOptions {
   fontSize?: number
   fontFamily?: string
+  // Secondary family (e.g. CJK) appended behind fontFamily at render time.
+  fallbackFont?: string
+  // Weight for regular terminal text (variable-font weights for JetBrains).
+  fontWeight?: number
   themeName?: string
   scrollback?: number
 }
@@ -33,6 +37,16 @@ export interface ManagedTerminal {
    * double input when multiple KeepAlive-cached components share the same
    * terminal instance. */
   onDataGeneration: number
+  /** Birth time (Date.now()) of buffer rows, keyed by absolute row index
+   * (lineOffset-compensated), used by the timestamp gutter column. Kept on
+   * the shared terminal so it survives KeepAlive and drag-across-panes. */
+  lineTimestamps: Map<number, number>
+  /** Absolute-row offset accumulated from scrollback trimming, so both the
+   * line-number and timestamp columns stay continuous as old lines drop off
+   * the top of the buffer. */
+  lineOffset: number
+  /** Subscription to the normal-buffer line-collection onTrim event. */
+  trimDispose: { dispose(): void } | null
 }
 
 const terminals = new Map<string, ManagedTerminal>()
@@ -77,7 +91,7 @@ export function acquireTerminal(
       || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?'
     const ls = useLocalStateStore()
     const theme = resolveXtermBackground(
-      getXtermTheme(options.themeName ?? 'dark', customThemes),
+      getXtermTheme(resolveTerminalThemeName(options.themeName, useSettingsStore().resolvedAppTheme), customThemes),
       ls.state.backgroundEnabled,
       ls.state.backgroundImage
     )
@@ -103,13 +117,21 @@ export function acquireTerminal(
     // would catch a regression on future upgrades.
     const terminal = new Terminal({
       fontSize: options.fontSize ?? 13,
-      fontFamily: formatFontFamily(options.fontFamily ?? 'Consolas, "Courier New", monospace'),
+      fontFamily: formatFontFamily(options.fontFamily ?? 'JetBrains Mono Variable', options.fallbackFont),
+      fontWeight: options.fontWeight ?? 400,
       theme,
       cursorBlink,
+      cursorStyle: useSettingsStore().settings.terminal.cursorStyle ?? 'block',
       rightClickSelectsWord: false,
       scrollback: options.scrollback ?? 2500,
       allowProposedApi: true,
       allowTransparency: true,
+      // Boost text/background contrast (F-039): xterm auto-brightens or
+      // darkens the foreground toward black/white until the configured
+      // minimumContrast ratio (1 = off) is met — only for cells below it,
+      // normal text is untouched. Fixes ls's colored blocks for 777 dirs
+      // (e.g. ow=34;42 blue-on-green is ~1.3:1, illegible) staying readable.
+      minimumContrastRatio: useSettingsStore().settings.terminal.minimumContrast ?? 4.5,
       wordSeparator,
     })
 
@@ -145,8 +167,27 @@ export function acquireTerminal(
       disposeTimer: null,
       isNew: true,
       onDataGeneration: 0,
+      lineTimestamps: new Map(),
+      lineOffset: 0,
+      trimDispose: null,
     }
-    terminals.set(sessionId, managed)
+
+    // Track scrollback trimming so line-numbers / timestamps stay continuous
+    // as old lines drop off the top of the buffer. Internal API — guarded.
+    // Doesn't survive terminal re-creation, but a fresh terminal restarts at 0.
+    // Snapshot `managed` into a const so the onTrim closure doesn't re-widen it.
+    const m = managed
+    try {
+      const core = (terminal as any)._core
+      const lines = core?._bufferService?.buffers?.normal?.lines
+      if (typeof lines?.onTrim === 'function') {
+        m.trimDispose = lines.onTrim((amount: number) => {
+          m.lineOffset += amount
+        })
+      }
+    } catch { /* noop */ }
+
+    terminals.set(sessionId, m)
   }
 
   managed.refs.add(ref)
@@ -163,6 +204,8 @@ export function releaseTerminal(sessionId: string, ref: string): void {
     // Delay disposal to survive drag-and-drop lifecycle race.
     // If acquireTerminal is called within 500ms, the timer is cancelled.
     managed.disposeTimer = setTimeout(() => {
+      managed.trimDispose?.dispose()
+      managed.trimDispose = null
       managed.terminal.dispose()
       terminals.delete(sessionId)
     }, 500)
@@ -175,6 +218,8 @@ export function disposeTerminal(sessionId: string): void {
   if (managed.disposeTimer) {
     clearTimeout(managed.disposeTimer)
   }
+  managed.trimDispose?.dispose()
+  managed.trimDispose = null
   managed.terminal.dispose()
   terminals.delete(sessionId)
 }

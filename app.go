@@ -28,7 +28,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/ys-ll/uniterm/backend/container"
+	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/database"
+	"github.com/ys-ll/uniterm/backend/importer"
 	"github.com/ys-ll/uniterm/backend/k8s"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/platform"
@@ -48,6 +50,8 @@ type App struct {
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
+	identityStore        *store.IdentityStore
+	proxyStore           *store.ProxyStore
 	localStateStore      *store.LocalStateStore
 	quickCommandsStore   *store.QuickCommandsStore
 	skillsStore          *store.SkillsStore
@@ -62,8 +66,13 @@ type App struct {
 	wndProcCb            uintptr // keep alive to prevent GC
 	inSizeMove           bool
 	webviewDataPath      string
-	chatCancel           atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
-	moveResizeCh         chan string                        // defer EventsEmit from WndProc
+	// dataDir is the resolved config data directory, passed to store
+	// constructors. Resolved at startup; finalized by bootstrap in a later task.
+	dataDir         string
+	credentialStore *credentials.Store
+	storesReady     bool
+	chatCancel      atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
+	moveResizeCh    chan string                        // defer EventsEmit from WndProc
 	// F-043: foreground flag — true while the window is visible and the
 	// user is interacting; background goroutines (keepalive, output_log
 	// flush, k8s watches, auto-sync) should consult IsForeground before
@@ -160,7 +169,32 @@ func (a *App) startup(ctx context.Context) {
 	a.mainHwnd = a.findMainWindow()
 	a.subclassMainWindow()
 
-	cs, err := store.NewConnectionStore()
+	// Resolve data directory. First run (no bootstrap, no existing config)
+	// defers all store init until the frontend calls SetDataDir.
+	dd, err := store.ResolveDataDir()
+	if err != nil {
+		log.Writef("Failed to resolve data dir: %v", err)
+		a.sendStartupErr(fmt.Errorf("data dir: %w", err))
+		a.drainStartupErr()
+		return
+	}
+	if dd.FirstRun {
+		a.dataDir = ""
+		runtime.EventsEmit(a.ctx, "app:firstRun", nil)
+		a.drainStartupErr()
+		return
+	}
+	a.dataDir = dd.Path
+
+	a.initStores(dd.Path, dd.Upgrade)
+}
+
+// initStores initializes every config store under dataDir and brings up the
+// credential store + sync service. Extracted from startup so first-run defers
+// it until SetDataDir picks a directory; on the normal path it runs once at
+// startup. Runs exactly once either way.
+func (a *App) initStores(dataDir string, upgrade bool) {
+	cs, err := store.NewConnectionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init connection store: %v", err)
 		a.sendStartupErr(fmt.Errorf("connection store: %w", err))
@@ -168,7 +202,7 @@ func (a *App) startup(ctx context.Context) {
 		a.connectionStore = cs
 	}
 
-	ass, err := store.NewAISessionStore()
+	ass, err := store.NewAISessionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init AI session store: %v", err)
 		a.sendStartupErr(fmt.Errorf("ai session store: %w", err))
@@ -176,7 +210,7 @@ func (a *App) startup(ctx context.Context) {
 		a.aiSessionStore = ass
 	}
 
-	ss, err := store.NewSettingsStore()
+	ss, err := store.NewSettingsStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init settings store: %v", err)
 		a.sendStartupErr(fmt.Errorf("settings store: %w", err))
@@ -190,16 +224,29 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
-	// Init terminal history store (same config dir as other stores)
-	configDir, _ := os.UserConfigDir()
-	appDir := filepath.Join(configDir, "uniTerm")
-	a.terminalHistoryStore = store.NewTerminalHistoryStore(appDir)
-	a.quickCommandsStore = store.NewQuickCommandsStore(appDir)
-	a.skillsStore = store.NewSkillsStore(appDir)
-	a.commandsStore = store.NewCommandsStore(appDir)
-	a.tunnelStore = store.NewTunnelStore(appDir)
-	a.localStateStore = store.NewLocalStateStore(appDir)
-	a.recentStore = store.NewRecentStore(appDir)
+	is, err := store.NewIdentityStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init identity store: %v", err)
+		a.sendStartupErr(fmt.Errorf("identity store: %w", err))
+	} else {
+		a.identityStore = is
+	}
+
+	ps, err := store.NewProxyStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init proxy store: %v", err)
+		a.sendStartupErr(fmt.Errorf("proxy store: %w", err))
+	} else {
+		a.proxyStore = ps
+	}
+
+	a.terminalHistoryStore = store.NewTerminalHistoryStore(dataDir)
+	a.quickCommandsStore = store.NewQuickCommandsStore(dataDir)
+	a.skillsStore = store.NewSkillsStore(dataDir)
+	a.commandsStore = store.NewCommandsStore(dataDir)
+	a.tunnelStore = store.NewTunnelStore(dataDir)
+	a.localStateStore = store.NewLocalStateStore(dataDir)
+	a.recentStore = store.NewRecentStore(dataDir)
 	if _, err := a.recentStore.Load(); err != nil {
 		log.Writef("recentStore.Load: %v", err)
 	}
@@ -209,26 +256,24 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(a.ctx, "tunnel:state", st)
 	})
 	go a.autoStartTunnels()
+	go a.watchForeground(a.ctx)
 
-	// F-043: poll WindowIsMinimised as a fallback for the visibility
-	// change the JS side doesn't get to fire (Cmd+H before any document
-	// is loaded, OS-level Alt+Tab). The SetAppVisibility hook is the
-	// primary entry point — this is belt-and-suspenders.
-	go a.watchForeground(ctx)
+	// Credential store + auto-unlock / upgrade (wires PasswordStore into
+	// connection + settings stores).
+	a.initCredentials(dataDir, upgrade)
 
-	syncSvc, err := sync.NewSyncService()
+	// Sync service: sync metadata (sync-config.json + local repo clone) lives
+	// in the system user-config dir; the config files it encrypts/decrypts are
+	// read from dataDir.
+	syncSvc, err := sync.NewSyncService(dataDir)
 	if err != nil {
 		log.Writef("Failed to create sync service: %v", err)
 		a.sendStartupErr(fmt.Errorf("sync service: %w", err))
 	} else {
 		a.syncService = syncSvc
-		// Wire keychain into stores for password/API key migration
-		if a.connectionStore != nil {
-			a.connectionStore.SetPasswordStore(syncSvc.PasswordStore())
-		}
-		if a.settingsStore != nil {
-			a.settingsStore.SetPasswordStore(syncSvc.PasswordStore())
-		}
+		// Normalize enc:v1: fields at the sync boundary using the credential
+		// store (set by initCredentials above).
+		syncSvc.SetPasswordStore(a.credentialStore)
 		// Auto-sync on startup if enabled
 		if syncSvc.IsAutoSyncEnabled() {
 			go func() {
@@ -241,12 +286,29 @@ func (a *App) startup(ctx context.Context) {
 						"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
 					})
 				}
+				// Reload in-memory stores after a startup pull so the UI shows
+				// the freshly synced config without requiring a restart.
+				if err == nil && result.Direction == sync.SyncPull {
+					a.reloadStoresAfterSync()
+				}
+				runtime.EventsEmit(a.ctx, "sync:completed")
 			}()
 		}
 	}
 
+	a.storesReady = true
 	// Restore window position and size from last session
-	a.restoreWindow(ctx)
+	a.restoreWindow(a.ctx)
+
+	// Raise the window to the foreground once, shortly after launch. On Windows a
+	// relaunched instance can otherwise land behind other windows; the short delay
+	// keeps this one-shot raise inside the window where the old (foreground)
+	// process is still alive, which is what grants the set-foreground permission
+	// (see RelaunchApp). No-op on other platforms.
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		a.bringMainWindowToFront()
+	}()
 
 	// Drain any non-fatal init failures and surface them to the frontend so
 	// the user sees a banner instead of getting an NPE on the first store
@@ -254,7 +316,53 @@ func (a *App) startup(ctx context.Context) {
 	// guarded as before; the app still launches.
 	a.drainStartupErr()
 	if a.startupErr != nil {
-		runtime.EventsEmit(ctx, "app:startup-error", a.startupErr.Error())
+		runtime.EventsEmit(a.ctx, "app:startup-error", a.startupErr.Error())
+	}
+}
+
+// initCredentials wires the credential store as the PasswordStore for the
+// connection + settings stores, silently auto-upgrading existing users
+// (bootstrap + keychain mode + legacy migration) or auto-unlocking on the
+// normal path.
+func (a *App) initCredentials(dataDir string, upgrade bool) {
+	cred := credentials.New(dataDir, sync.NewKeychain())
+
+	if upgrade {
+		// Existing user: silently auto-upgrade to default + keychain mode.
+		_ = store.WriteBootstrap("default", "")
+		// Idempotency (review Critical #1): Setup generates a NEW random key and
+		// overwrites the keychain entry. If a prior upgrade already ran but
+		// bootstrap.json was lost (deleted / <exe>/data unwritable / portable zip
+		// extracted to a new folder), credentials.meta still exists and the fields
+		// are already encrypted under the persisted key — running Setup again would
+		// orphan them. Recover the existing key instead.
+		if meta, _ := credentials.ReadMeta(dataDir); meta == nil {
+			if err := cred.Setup(credentials.ModeKeychain, ""); err != nil {
+				log.Writef("credential auto-upgrade setup failed: %v", err)
+			} else {
+				if _, err := store.MigrateLegacyKeychainToInPlace(dataDir, sync.NewKeychain(), cred); err != nil {
+					log.Writef("legacy migration failed: %v", err)
+				}
+			}
+		} else if err := cred.AutoUnlock(); err != nil {
+			log.Writef("credential auto-unlock failed: %v", err)
+		}
+	} else if err := cred.AutoUnlock(); err != nil {
+		log.Writef("credential auto-unlock failed: %v", err)
+	}
+
+	a.credentialStore = cred
+	if a.connectionStore != nil {
+		a.connectionStore.SetPasswordStore(cred)
+	}
+	if a.settingsStore != nil {
+		a.settingsStore.SetPasswordStore(cred)
+	}
+	if a.identityStore != nil {
+		a.identityStore.SetPasswordStore(cred)
+	}
+	if a.proxyStore != nil {
+		a.proxyStore.SetPasswordStore(cred)
 	}
 }
 
@@ -540,6 +648,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.sessionManager != nil {
 		a.sessionManager.CloseAll()
 	}
+	session.CleanupSSHX11Server()
 	if a.terminalHistoryStore != nil {
 		_ = a.terminalHistoryStore.Close()
 	}
@@ -565,6 +674,72 @@ func (a *App) LoadConnections() (session.ConnectionStoreData, error) {
 		return session.ConnectionStoreData{}, fmt.Errorf("connection store not initialized")
 	}
 	return a.connectionStore.Load()
+}
+
+func (a *App) LoadIdentities() (session.IdentityStoreData, error) {
+	if a.identityStore == nil {
+		return session.IdentityStoreData{Identities: []session.Identity{}}, nil
+	}
+	return a.identityStore.Load()
+}
+
+func (a *App) SaveIdentities(data session.IdentityStoreData) error {
+	if a.identityStore == nil {
+		return fmt.Errorf("identity store not initialized")
+	}
+	return a.identityStore.Save(data)
+}
+
+func (a *App) LoadProxies() (session.ProxyStoreData, error) {
+	if a.proxyStore == nil {
+		return session.ProxyStoreData{Proxies: []session.Proxy{}}, nil
+	}
+	return a.proxyStore.Load()
+}
+
+func (a *App) SaveProxies(data session.ProxyStoreData) error {
+	if a.proxyStore == nil {
+		return fmt.Errorf("proxy store not initialized")
+	}
+	return a.proxyStore.Save(data)
+}
+
+// ExportConnections writes the full store to destPath as a .utm file. When
+// password is non-empty, password fields are encrypted; otherwise cleared.
+func (a *App) ExportConnections(destPath, password string) error {
+	if a.connectionStore == nil {
+		return fmt.Errorf("connection store not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	out, err := importer.ExportUniterm(data, password)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(destPath, out, 0600)
+}
+
+// ParseImportFile parses a third-party or own-format file into an ImportResult
+// with regenerated ids. It does not write to the store.
+func (a *App) ParseImportFile(format, srcPath, password string) (*importer.ImportResult, error) {
+	return importer.Parse(format, srcPath, importer.ParseOptions{Password: password})
+}
+
+// ApplyImport merges parsed connections into the existing store and saves,
+// reusing existing groups by path. The saved result is broadcast via the
+// existing store:connections:changed event.
+func (a *App) ApplyImport(data session.ConnectionStoreData) error {
+	if a.connectionStore == nil {
+		return fmt.Errorf("connection store not initialized")
+	}
+	existing, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	merged := importer.MergeImported(existing, data)
+	return a.SaveConnections(merged)
 }
 
 // TunnelStore methods
@@ -598,10 +773,96 @@ func (a *App) connResolver() (session.ConnResolver, error) {
 	for _, c := range conns.Connections {
 		index[c.ID] = c
 	}
+	idResolve, err := a.identityResolver()
+	if err != nil {
+		return nil, err
+	}
 	return func(id string) (session.ConnectionConfig, bool) {
 		c, ok := index[id]
-		return c, ok
+		if !ok {
+			return session.ConnectionConfig{}, false
+		}
+		if c.AuthType == "identity" {
+			m, err := session.MaterializeIdentity(c, idResolve)
+			if err != nil {
+				return session.ConnectionConfig{}, false
+			}
+			return m, true
+		}
+		return c, true
 	}, nil
+}
+
+// identityResolver 返回基于当前身份库的解密 resolver（镜像 connResolver）。
+func (a *App) identityResolver() (session.IdentityResolver, error) {
+	if a.identityStore == nil {
+		return func(string) (session.Identity, bool) { return session.Identity{}, false }, nil
+	}
+	data, err := a.identityStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]session.Identity, len(data.Identities))
+	for _, id := range data.Identities {
+		index[id.ID] = id
+	}
+	return func(id string) (session.Identity, bool) {
+		ident, ok := index[id]
+		return ident, ok
+	}, nil
+}
+
+// materializeIdentity resolves an identity-reference config into a concrete
+// password/key config. No-op for non-identity configs.
+func (a *App) materializeIdentity(config session.ConnectionConfig) (session.ConnectionConfig, error) {
+	if config.AuthType != "identity" {
+		return config, nil
+	}
+	resolve, err := a.identityResolver()
+	if err != nil {
+		return config, err
+	}
+	return session.MaterializeIdentity(config, resolve)
+}
+
+// proxyResolver returns a resolver over the saved proxies (mirrors identityResolver).
+func (a *App) proxyResolver() (session.ProxyResolver, error) {
+	if a.proxyStore == nil {
+		return func(string) (session.SocksProxy, bool) { return session.SocksProxy{}, false }, nil
+	}
+	data, err := a.proxyStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]session.Proxy, len(data.Proxies))
+	for _, p := range data.Proxies {
+		index[p.ID] = p
+	}
+	return func(id string) (session.SocksProxy, bool) {
+		p, ok := index[id]
+		if !ok {
+			return session.SocksProxy{}, false
+		}
+		return session.SocksProxy{Kind: p.Kind, Host: p.Host, Port: p.Port, User: p.User, Pass: p.Pass}, true
+	}, nil
+}
+
+// materializeProxy resolves config.ProxyId into config.Proxy. No-op when no
+// proxy is set. Mirrors materializeIdentity.
+func (a *App) materializeProxy(config session.ConnectionConfig) (session.ConnectionConfig, error) {
+	if config.ProxyId == "" {
+		return config, nil
+	}
+	resolve, err := a.proxyResolver()
+	if err != nil {
+		return config, err
+	}
+	p, ok := resolve(config.ProxyId)
+	if !ok {
+		return config, fmt.Errorf("referenced proxy not found: %s", config.ProxyId)
+	}
+	config.Proxy = &p
+	return config, nil
 }
 
 // StartTunnel brings the tunnel with the given ID up and returns its state.
@@ -714,13 +975,19 @@ func (a *App) LoadLocalState() (store.LocalState, error) {
 }
 
 // bgDir returns the directory holding the (local-only, never-synced)
-// background image. It is created on demand.
+// background image. It is rooted under the active data directory so the
+// image moves with the config when the data dir is migrated. It is
+// created on demand.
 func (a *App) bgDir() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
+	base := a.dataDir
+	if base == "" {
+		var err error
+		base, err = store.DefaultDataDir()
+		if err != nil {
+			return "", err
+		}
 	}
-	dir := filepath.Join(configDir, "uniTerm", "backgrounds")
+	dir := filepath.Join(base, "backgrounds")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
@@ -822,6 +1089,16 @@ func (a *App) reloadStoresAfterSync() {
 			runtime.EventsEmit(a.ctx, "store:quickCommands:changed", data)
 		}
 	}
+	if a.identityStore != nil {
+		if data, err := a.identityStore.Load(); err == nil {
+			runtime.EventsEmit(a.ctx, "store:identities:changed", data)
+		}
+	}
+	if a.proxyStore != nil {
+		if data, err := a.proxyStore.Load(); err == nil {
+			runtime.EventsEmit(a.ctx, "store:proxies:changed", data)
+		}
+	}
 }
 
 func (a *App) triggerAutoSync() {
@@ -920,12 +1197,7 @@ func (a *App) SyncResolveConflict(useLocal bool) (*sync.SyncResult, error) {
 		return nil, err
 	}
 	if result.Direction == sync.SyncPull {
-		if data, err := a.connectionStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:connections:changed", data)
-		}
-		if settings, err := a.settingsStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:settings:changed", settings)
-		}
+		a.reloadStoresAfterSync()
 	}
 	return result, nil
 }
@@ -1275,8 +1547,8 @@ func (a *App) GetPlatform() string {
 	return goruntime.GOOS
 }
 
-func (a *App) GetSystemFonts() ([]string, error) {
-	return platform.GetFontFamilies()
+func (a *App) GetAllFonts() ([]platform.FontInfo, error) {
+	return platform.GetAllFonts()
 }
 
 func (a *App) OnConnectionsChanged(callback func(session.ConnectionStoreData)) {
@@ -1297,6 +1569,33 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	}
 	log.Writef("[CreateSession] type=%s, dbType=%s, host=%s, port=%d, user=%s, dbName=%s, name=%s",
 		sessionType, config.DBType, config.Host, config.Port, config.User, config.DBName, config.Name)
+	// Defensive credential fallback: the frontend may hold a connection
+	// snapshot taken before passwords were filled (or a stale copy from an
+	// older session). If the password is stored in the OS keychain, resolve
+	// it synchronously so the session never prompts for a password it
+	// already has. No-op when Password is already set, no store is wired,
+	// the keychain has no entry, or the config carries no connection ID.
+	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
+		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
+			config.Password = pw
+		}
+	}
+	// Resolve an identity reference into a concrete password/key config
+	// before the session manager dials.
+	if config.AuthType == "identity" {
+		mc, err := a.materializeIdentity(config)
+		if err != nil {
+			return nil, err
+		}
+		config = mc
+	}
+	// Resolve a proxy reference into a concrete proxy config so SSH-family
+	// first-hop dials route through it.
+	mc, err := a.materializeProxy(config)
+	if err != nil {
+		return nil, err
+	}
+	config = mc
 	s, err := a.sessionManager.Create(sessionType, config)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
@@ -1320,12 +1619,21 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			sz.SetPendingSize(config.InitialCols, config.InitialRows)
 		}
 	}
-	// Apply terminal character encoding (SSH / Telnet). No-op for utf-8/empty.
+	// Apply terminal character encoding. No-op for utf-8/empty.
 	if ssh, ok := s.(*session.SSHSession); ok {
 		ssh.SetEncoding(config.Encoding)
 	}
 	if telnet, ok := s.(*session.TelnetSession); ok {
 		telnet.SetEncoding(config.Encoding)
+	}
+	if serial, ok := s.(*session.SerialSession); ok {
+		serial.SetEncoding(config.Encoding)
+	}
+	if mosh, ok := s.(*session.MoshSession); ok {
+		mosh.SetEncoding(config.Encoding)
+	}
+	if local, ok := s.(*session.LocalSession); ok {
+		local.SetEncoding(config.Encoding)
 	}
 
 	// Apply serial config; connection itself is handled by the async goroutine
@@ -1368,60 +1676,6 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			Parity:   par,
 		})
 	}
-
-	// ── SSH Tunnel ──────────────────────────────────────────────
-	if config.TunnelSSHConnID != "" && a.tunnelService != nil {
-		if a.connectionStore == nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("connection store not initialized")
-		}
-		data, err := a.connectionStore.Load()
-		if err != nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("load connections for tunnel: %w", err)
-		}
-		var tunnelSSHConfig *session.ConnectionConfig
-		for _, c := range data.Connections {
-			if c.ID == config.TunnelSSHConnID {
-				tunnelSSHConfig = &c
-				break
-			}
-		}
-		if tunnelSSHConfig == nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
-		}
-
-		// Apply inline tunnel credentials if the frontend provided them
-		// (e.g. credential prompt "connect" without saving to store).
-		if config.TunnelSSHUser != "" {
-			tunnelSSHConfig.User = config.TunnelSSHUser
-		}
-		if config.TunnelSSHPassword != "" {
-			tunnelSSHConfig.Password = config.TunnelSSHPassword
-		}
-
-		// Resolve actual target port. VNC/SPICE use libvirt display
-		// numbers (port < 100 means display :N → port 5900+N).
-		targetPort := config.Port
-		if sessionType == "vnc" || sessionType == "spice" {
-			if targetPort <= 0 {
-				targetPort = 5900
-			} else if targetPort < 100 {
-				targetPort += 5900
-			}
-		}
-		localPort, err := a.tunnelService.Start(s.ID(), *tunnelSSHConfig, config.Host, targetPort)
-		if err != nil {
-			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("tunnel start: %w", err)
-		}
-		log.Writef("[CreateSession] tunnel established for session=%s via ssh=%s, localPort=%d",
-			s.ID(), config.TunnelSSHConnID, localPort)
-		config.Host = "127.0.0.1"
-		config.Port = localPort
-	}
-	// ── End SSH Tunnel ──────────────────────────────────────────
 
 	// SFTP concurrency limit
 	if sessionType == "sftp" {
@@ -1480,29 +1734,51 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			if spice, ok := s.(*session.SPICESession); ok {
 				payload["proxyAddr"] = spice.ProxyAddr()
 			}
+			// Attach remoteOS for SSH sessions so the AI agent can distinguish
+			// Windows OpenSSH (cmd/PowerShell) from Unix-like shells. Empty for
+			// non-Windows or undetermined servers.
+			if sshSess, ok := s.(*session.SSHSession); ok {
+				if remoteOS := sshSess.RemoteOS(); remoteOS != "" {
+					payload["remoteOS"] = remoteOS
+				}
+			}
 		}
 
 		runtime.EventsEmit(a.ctx, "session:status", payload)
 	})
 
-	// Database and Redis sessions connect synchronously so errors are returned to the frontend.
-	if sessionType == "database" || sessionType == "redis" {
-		log.Writef("[CreateSession] connecting database session synchronously...")
-		if err := s.Connect(config); err != nil {
-			log.Writef("[CreateSession] database connect failed: %v", err)
+	// Database, Redis, and MongoDB sessions connect synchronously so
+	// errors are returned to the frontend try/catch.
+	if sessionType == "database" || sessionType == "redis" || sessionType == "mongodb" {
+		// Set up jump-host tunnel before connecting, so database/redis/mongo
+		// sessions ride the tunnel just like other session types.
+		if err := a.setupJumpHostTunnel(s.ID(), sessionType, &config); err != nil {
 			_ = a.sessionManager.Close(s.ID())
-			return nil, fmt.Errorf("database connect failed: %w", err)
+			return nil, err
 		}
-		log.Writef("[CreateSession] database session connected successfully, id=%s", s.ID())
-	} else if !config.DeferConnect {
-		// Non-database sessions (SSH, Local, Mosh, Telnet, SFTP, FTP, SMB,
-		// WebDAV, S3, Serial, K8s, Mongo, Spice) auto-connect UNLESS the
-		// frontend set DeferConnect — which it does so it can mount the
-		// xterm terminal, fitAddon-measure the real cols/rows, write them
-		// into config.InitialCols/InitialRows and only THEN call
-		// SessionStart. Without that gap Claude Code draws tables at the
-		// 80x24 default before SessionResize propagates the real width,
-		// and the borders drift across output batches.
+		log.Writef("[CreateSession] connecting %s session synchronously...", sessionType)
+		if err := s.Connect(config); err != nil {
+			log.Writef("[CreateSession] %s connect failed: %v", sessionType, err)
+			// Clean up any tunnel that was set up for this session.
+			if a.tunnelService != nil {
+				a.tunnelService.Stop(s.ID())
+			}
+			_ = a.sessionManager.Close(s.ID())
+			return nil, fmt.Errorf("%s connect failed: %w", sessionType, err)
+		}
+		log.Writef("[CreateSession] %s session connected successfully, id=%s", sessionType, s.ID())
+	} else if sessionType == "x11-desktop" {
+		// x11-desktop uses its own X11DesktopConnect entry point; the
+		// generic Connect goroutine must never call s.Connect() here.
+	} else if sessionType == "ssh" || sessionType == "local" || sessionType == "telnet" || sessionType == "mosh" || sessionType == "serial" {
+		// Terminal session types that mount xterm: defer Connect until
+		// SessionStart is called after the frontend measures real cols/rows.
+		// Without this gap Claude Code draws tables at the 80x24 default
+		// before SessionResize propagates the real width, and the borders
+		// drift across output batches.
+	} else {
+		// Non-terminal sessions (sftp, monitor, ftp, smb, webdav, s3,
+		// rdp, vnc, spice) connect immediately.
 		a.launchConnectGoroutine(s, sessionType, config)
 	}
 
@@ -1515,10 +1791,10 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	return info, nil
 }
 
-// launchConnectGoroutine starts the async Connect path that used to live
-// inline in CreateSession. Extracted so CreateSession can skip it when
-// the frontend opts into a deferred-start flow (DeferConnect=true) and
-// instead drives the connection via SessionStart after measuring cols/rows.
+// launchConnectGoroutine starts the async Connect path. CreateSession
+// skips it for terminal session types (ssh, local, telnet, mosh, serial,
+// x11-desktop) — those instead drive the connection via SessionStart after
+// the frontend measures cols/rows.
 func (a *App) launchConnectGoroutine(s session.Session, sessionType string, config session.ConnectionConfig) {
 	go func() {
 		defer func() {
@@ -1526,6 +1802,21 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 				log.Writef("session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
 			}
 		}()
+
+		// ── SSH Tunnel (jump host) ──────────────────────────────
+		// Set up the local-port-forward through the jump host BEFORE
+		// any dial / pre-check, then point config at the local listener
+		// so the subsequent s.Connect() (and the RDP pre-check below)
+		// ride the tunnel. This block lives here — not in CreateSession —
+		// because terminal session types defer their Connect until
+		// SessionStart, by which point any config rewrite from
+		// CreateSession would be discarded along with the local config
+		// copy.
+		if err := a.setupJumpHostTunnel(s.ID(), sessionType, &config); err != nil {
+			a.failSessionConnect(s, err)
+			return
+		}
+		// ── End SSH Tunnel ──────────────────────────────────────
 
 		// RDP TCP pre-check: fail fast before creating the ActiveX window.
 		if sessionType == "rdp" {
@@ -1536,44 +1827,128 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 			addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
 			if tcpErr != nil {
-				log.Writef("[CreateSession] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
-				if a.ctx != nil {
-					runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
-						"id":           s.ID(),
-						"status":       "error",
-						"errorMessage": fmt.Sprintf("Cannot reach %s: %v", addr, tcpErr),
-					})
-				}
-				if a.sessionManager != nil {
-					_ = a.sessionManager.Close(s.ID())
-				}
+				log.Writef("[launchConnect] RDP TCP pre-check to %s failed: %v", addr, tcpErr)
+				a.failSessionConnect(s, fmt.Errorf("Cannot reach %s: %v", addr, tcpErr))
 				return
 			}
 			tcpConn.Close()
-			log.Writef("[CreateSession] RDP TCP pre-check to %s succeeded", addr)
+			log.Writef("[launchConnect] RDP TCP pre-check to %s succeeded", addr)
 		}
 
 		if err := s.Connect(config); err != nil {
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-					"id":   s.ID(),
-					"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
-				})
-			}
-			log.Writef("session %s connect error: %v", s.ID(), err)
-			if a.sessionManager != nil {
-				_ = a.sessionManager.Close(s.ID())
-			}
+			a.failSessionConnect(s, err)
 		}
 	}()
 }
 
-// SessionStart triggers the actual Connect() for a session that was
-// created with config.DeferConnect=true. The frontend calls this AFTER
-// mounting the xterm terminal and writing the measured InitialCols/InitialRows
-// into the deferred config, so the PTY is created at the correct
-// dimensions from the first byte — no 80x24 default phase where Claude
-// Code can draw tables at the wrong column count.
+// failSessionConnect is the shared error path inside launchConnectGoroutine
+// for tunnel setup, RDP pre-check, and s.Connect failures. It surfaces the
+// error to both terminal (session:data) and non-terminal (session:status)
+// listeners and tears down any half-started tunnel + the session itself.
+func (a *App) failSessionConnect(s session.Session, err error) {
+	log.Writef("session %s connect error: %v", s.ID(), err)
+	if a.tunnelService != nil {
+		a.tunnelService.Stop(s.ID())
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+			"id":           s.ID(),
+			"status":       "error",
+			"errorMessage": err.Error(),
+		})
+		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+			"id":   s.ID(),
+			"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
+		})
+	}
+	if a.sessionManager != nil {
+		_ = a.sessionManager.Close(s.ID())
+	}
+}
+
+// setupJumpHostTunnel establishes an SSH jump-host tunnel for the given
+// session config. When config.TunnelSSHConnID is set, it opens a local
+// port-forward through the referenced SSH connection and rewrites
+// config.Host/Port to point at the local listener so the subsequent
+// Connect call rides the tunnel.
+// Returns nil when no tunnel is configured or when setup succeeds.
+func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *session.ConnectionConfig) error {
+	if config.TunnelSSHConnID == "" {
+		return nil
+	}
+	if a.tunnelService == nil || a.connectionStore == nil {
+		return fmt.Errorf("tunnel prerequisites not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return fmt.Errorf("load connections for tunnel: %w", err)
+	}
+	var tunnelSSHConfig *session.ConnectionConfig
+	for _, c := range data.Connections {
+		if c.ID == config.TunnelSSHConnID {
+			tunnelSSHConfig = &c
+			break
+		}
+	}
+	if tunnelSSHConfig == nil {
+		return fmt.Errorf("tunnel SSH connection not found: %s", config.TunnelSSHConnID)
+	}
+
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the jump host to the tunnel service.
+	if tunnelSSHConfig.AuthType == "identity" {
+		m, err := a.materializeIdentity(*tunnelSSHConfig)
+		if err != nil {
+			return err
+		}
+		tunnelSSHConfig = &m
+	}
+
+	// Defensive credential fallback for the jump host: the freshly loaded
+	// config already has passwords filled synchronously (populatePasswords),
+	// but resolve from the keychain anyway if it is somehow still empty.
+	if tunnelSSHConfig.Password == "" && tunnelSSHConfig.ID != "" {
+		if pw, err := a.connectionStore.EnsurePassword(tunnelSSHConfig.ID); err == nil && pw != "" {
+			tunnelSSHConfig.Password = pw
+		}
+	}
+
+	// Apply inline tunnel credentials if the frontend provided them
+	// (e.g. credential prompt "connect" without saving).
+	if config.TunnelSSHUser != "" {
+		tunnelSSHConfig.User = config.TunnelSSHUser
+	}
+	if config.TunnelSSHPassword != "" {
+		tunnelSSHConfig.Password = config.TunnelSSHPassword
+	}
+
+	// VNC/SPICE use libvirt display numbers (port < 100 → 5900+N).
+	targetPort := config.Port
+	if sessionType == "vnc" || sessionType == "spice" {
+		if targetPort <= 0 {
+			targetPort = 5900
+		} else if targetPort < 100 {
+			targetPort += 5900
+		}
+	}
+	localPort, err := a.tunnelService.Start(sessionID, *tunnelSSHConfig, config.Host, targetPort, config.Proxy)
+	if err != nil {
+		return fmt.Errorf("tunnel start: %w", err)
+	}
+	log.Writef("[tunnel] established for session=%s via ssh=%s, localPort=%d",
+		sessionID, config.TunnelSSHConnID, localPort)
+	config.Host = "127.0.0.1"
+	config.Port = localPort
+	config.Proxy = nil // proxy was consumed by the jump-host dial; local dial is direct
+	return nil
+}
+
+// SessionStart triggers the actual Connect() for terminal sessions
+// (ssh, local, telnet, mosh, serial) whose Connect was deferred by
+// CreateSession. The frontend calls this AFTER mounting the xterm
+// terminal and measuring the real cols/rows, so the PTY is created at
+// the correct dimensions from the first byte — no 80x24 default phase
+// where Claude Code can draw tables at the wrong column count.
 func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) error {
 	if a.sessionManager == nil {
 		return fmt.Errorf("session manager not initialized")
@@ -1587,6 +1962,32 @@ func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) er
 	if config.InitialCols > 0 && config.InitialRows > 0 {
 		s.SetPendingSize(config.InitialCols, config.InitialRows)
 	}
+	// Terminal session types defer Connect() until SessionStart, and the
+	// frontend passes a fresh config here. If that fresh config still has
+	// an empty password (e.g. the Pinia store holds a snapshot from before
+	// keychain passwords were filled), resolve it from the OS keychain now
+	// so the user is not prompted for a password that is already stored.
+	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
+		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
+			config.Password = pw
+		}
+	}
+	// Resolve an identity reference into a concrete password/key config
+	// before launching the connect goroutine.
+	if config.AuthType == "identity" {
+		mc, err := a.materializeIdentity(config)
+		if err != nil {
+			return err
+		}
+		config = mc
+	}
+	// Resolve a proxy reference into a concrete proxy config so SSH-family
+	// first-hop dials route through it.
+	mc, err := a.materializeProxy(config)
+	if err != nil {
+		return err
+	}
+	config = mc
 	a.launchConnectGoroutine(s, config.Type, config)
 	return nil
 }
@@ -1917,6 +2318,22 @@ func (a *App) GetAppInfo() AppInfo {
 	}
 }
 
+// RelaunchApp spawns a fresh instance, then quits the current one so settings
+// that are fixed at startup (e.g. the window title bar) can take effect. The
+// new process is started first; a delay lets it finish spawning and raise its
+// own window to the foreground (see bringMainWindowToFront) before this instance
+// exits — while this process is still the foreground process, which is what
+// grants the new one set-foreground permission on Windows.
+func (a *App) RelaunchApp() {
+	if err := a.relaunchProcess(); err != nil {
+		log.Writef("relaunch failed: %v", err)
+	}
+	go func() {
+		time.Sleep(800 * time.Millisecond)
+		runtime.Quit(a.ctx)
+	}()
+}
+
 func (a *App) CheckForUpdate(source string) (*update.UpdateInfo, error) {
 	return update.Check(Version, source)
 }
@@ -2045,12 +2462,6 @@ type aiDoneEvent struct {
 func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string) (string, error) {
 	reqBody["stream"] = true
 
-	// F-303: insert ephemeral cache_control breakpoints on the static
-	// system + tools prefixes so Anthropic reuses the cached tokens
-	// across turns. Without these the prompt-caching beta header is a
-	// no-op — every turn re-ships and re-bills the static prefix.
-	injectCacheControl(reqBody)
-
 	modifiedJSON, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("marshal modified request: %w", err)
@@ -2069,16 +2480,11 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	// F-308: register our cancel in the App-level pointer and only
-	// clear it on the way out if no one replaced us. The previous code
-	// stored a single context.CancelFunc under a mutex and unconditionally
-	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
-	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	// F-308: atomic pointer swap so overlapping ChatCompletion calls
+	// don't clobber each other's cancel function.
 	myCancel := cancel
 	a.chatCancel.Store(&myCancel)
 	defer func() {
-		// CAS the slot back to nil, but only if it still points at our
-		// own cancel — a newer call may have already taken over the slot.
 		a.chatCancel.CompareAndSwap(&myCancel, nil)
 	}()
 
@@ -2092,7 +2498,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 	req.Header.Set("User-Agent", userAgent)
 
-	client := a.llmHTTPClient()
+	client := &http.Client{Timeout: 0}
 	res, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -2103,9 +2509,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		// F-305: cap the error-body read at 64 KiB so a hostile or
-		// buggy upstream returning a multi-GB error body can't OOM
-		// the Go process.
+		// F-305: cap error-body reads at 64 KiB.
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
 		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
 	}
@@ -2115,12 +2519,6 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 	var messageRole string
 	var usage map[string]interface{}
 	currentBlockIndex := -1
-	// F-307: parallel slice of per-block text buffers. Accumulating
-	// text via string + string was O(n²) and paid a fresh alloc per
-	// token; we Write into a *bytes.Buffer instead and flush to a
-	// string once at content_block_stop / message_stop. Empty slots
-	// (non-text blocks) stay nil and are skipped on flush.
-	var blockTextBufs []*bytes.Buffer
 
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -2132,22 +2530,22 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 		}
 		dataStr := line[6:]
 
-		var ev anthropicStreamEvent
-		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
 			continue
 		}
 
-		switch ev.Type {
+		eventType, _ := event["type"].(string)
+
+		switch eventType {
 		case "message_start":
-			var mr anthropicMessageRole
-			if err := json.Unmarshal(ev.Message, &mr); err == nil {
-				messageRole = mr.Role
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				messageRole, _ = msg["role"].(string)
 			}
 
 		case "content_block_start":
 			currentBlockIndex++
-			var block map[string]interface{}
-			if err := json.Unmarshal(ev.ContentBlock, &block); err == nil {
+			if block, ok := event["content_block"].(map[string]interface{}); ok {
 				currentBlock = block
 				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
 					"index":         currentBlockIndex,
@@ -2156,54 +2554,34 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			}
 
 		case "content_block_delta":
-			var delta anthropicDelta
-			if err := json.Unmarshal(ev.Delta, &delta); err != nil {
-				continue
-			}
-			switch delta.Type {
-			case "text_delta":
-				text := delta.Text
+			delta, _ := event["delta"].(map[string]interface{})
+			deltaType, _ := delta["type"].(string)
+
+			if deltaType == "text_delta" {
+				text, _ := delta["text"].(string)
 				if currentBlock != nil {
-					// F-307: append to a per-block *bytes.Buffer
-					// instead of O(n²) string concatenation. The
-					// buffer is flushed to a string exactly once
-					// at content_block_stop; the per-token
-					// String() call is gone.
-					if blockTextBufs[currentBlockIndex] == nil {
-						blockTextBufs = append(blockTextBufs, make([]*bytes.Buffer, currentBlockIndex+1-len(blockTextBufs))...)
-						blockTextBufs[currentBlockIndex] = &bytes.Buffer{}
+					if currentBlock["text"] == nil {
+						currentBlock["text"] = ""
 					}
-					blockTextBufs[currentBlockIndex].WriteString(text)
+					currentBlock["text"] = currentBlock["text"].(string) + text
 				}
-				// F-320: typed struct + dropped unused fields so
-				// the per-token EventsEmit doesn't allocate a
-				// fresh map[string]interface{}. The ai:token payload
-				// carries only text + index.
-				runtime.EventsEmit(a.ctx, "ai:token", aiTokenEvent{
-					Text:  delta.Text,
-					Index: currentBlockIndex,
+				runtime.EventsEmit(a.ctx, "ai:token", map[string]interface{}{
+					"text":  text,
+					"index": currentBlockIndex,
 				})
-			case "input_json_delta":
-				if currentBlock != nil {
-					partial := delta.PartialJSON
-					if currentBlock["input"] == nil || fmt.Sprintf("%T", currentBlock["input"]) != "string" {
-						currentBlock["input"] = ""
-					}
-					if s, ok := currentBlock["input"].(string); ok {
-						currentBlock["input"] = s + partial
-					}
+			}
+			if deltaType == "input_json_delta" && currentBlock != nil {
+				partial, _ := delta["partial_json"].(string)
+				if currentBlock["input"] == nil || fmt.Sprintf("%T", currentBlock["input"]) != "string" {
+					currentBlock["input"] = ""
+				}
+				if s, ok := currentBlock["input"].(string); ok {
+					currentBlock["input"] = s + partial
 				}
 			}
 
 		case "content_block_stop":
 			if currentBlock != nil {
-				// F-307: flush the per-block text buffer exactly
-				// once into currentBlock["text"] so the downstream
-				// contentBlocks / JSON marshal sees a single
-				// string instead of O(n²) per-token copies.
-				if currentBlockIndex >= 0 && currentBlockIndex < len(blockTextBufs) && blockTextBufs[currentBlockIndex] != nil {
-					currentBlock["text"] = blockTextBufs[currentBlockIndex].String()
-				}
 				if blockType, _ := currentBlock["type"].(string); blockType == "tool_use" {
 					if inputStr, ok := currentBlock["input"].(string); ok && inputStr != "" {
 						var inputObj map[string]interface{}
@@ -2217,29 +2595,18 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			}
 
 		case "message_delta":
-			if len(ev.Usage) > 0 {
-				var u map[string]interface{}
-				if err := json.Unmarshal(ev.Usage, &u); err == nil {
-					usage = u
-				}
+			if u, ok := event["usage"].(map[string]interface{}); ok {
+				usage = u
 			}
-			var sd anthropicStopDelta
-			if err := json.Unmarshal(ev.Delta, &sd); err == nil && sd.StopReason != "" {
-				// F-210: marshal the full message once into a pooled
-				// buffer and reuse the bytes for both the ai:done
-				// emit (Wails marshals the args separately) and the
-				// eventual return at message_stop. Previously this
-				// struct was rebuilt + remarshaled twice per turn.
-				fullMessage := map[string]interface{}{
-					"role":    messageRole,
-					"content": contentBlocks,
-				}
-				resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
-				if err == nil {
+			if delta, ok := event["delta"].(map[string]interface{}); ok {
+				if stopReason, ok := delta["stop_reason"].(string); ok {
 					runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
-						"message":     json.RawMessage(resultJSON),
+						"message": map[string]interface{}{
+							"role":    messageRole,
+							"content": contentBlocks,
+						},
 						"usage":       usage,
-						"stop_reason": sd.StopReason,
+						"stop_reason": stopReason,
 					})
 				}
 			}
@@ -2249,18 +2616,16 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, err := json.Marshal(fullMessage)
 			if err != nil {
 				return "", fmt.Errorf("marshal full message: %w", err)
 			}
 			return string(resultJSON), nil
 
 		case "error":
-			var e struct {
-				Message string `json:"message"`
-			}
-			_ = json.Unmarshal(ev.Error, &e)
-			return "", fmt.Errorf("stream error: %s", e.Message)
+			errData, _ := event["error"].(map[string]interface{})
+			errMsg, _ := errData["message"].(string)
+			return "", fmt.Errorf("stream error: %s", errMsg)
 		}
 	}
 
@@ -2273,20 +2638,15 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			"role":    messageRole,
 			"content": contentBlocks,
 		}
-		resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, _ := json.Marshal(fullMessage)
 		return string(resultJSON), nil
 	}
 
 	return "", fmt.Errorf("stream ended without message_stop")
 }
 
-// anthropicToolToOpenAI converts an Anthropic tool definition to OpenAI format.
-// pooled *bytes.Buffer and returns the resulting JSON string. The
-// pool avoids per-turn allocator churn; in a heavy Claude Code session
-// the buffer grows once to ~3 KiB and stays warm. Returns the buffer
-// to the pool via defer in the caller (no — the string escapes the
-// goroutine, so we keep ownership here; the buffer can be reused when
-// the underlying JSON is no longer referenced by Wails).
+// marshalAnthropicFinalMessage encodes a final message using a pooled
+// *bytes.Buffer to avoid per-turn allocator churn in heavy sessions.
 func marshalAnthropicFinalMessage(msg map[string]interface{}) ([]byte, error) {
 	buf := finalMsgPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -2605,7 +2965,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, _ := json.Marshal(fullMessage)
 			return string(resultJSON), nil
 		}
 
@@ -2761,7 +3121,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				"role":    messageRole,
 				"content": contentBlocks,
 			}
-			resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+			resultJSON, _ := json.Marshal(fullMessage)
 			return string(resultJSON), nil
 		}
 	}
@@ -2778,7 +3138,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			"role":    messageRole,
 			"content": contentBlocks,
 		}
-		resultJSON, _ := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, _ := json.Marshal(fullMessage)
 		return string(resultJSON), nil
 	}
 
@@ -3003,7 +3363,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			"role":    "assistant",
 			"content": contentBlocks,
 		}
-		resultJSON, err := marshalAnthropicFinalMessage(fullMessage)
+		resultJSON, err := json.Marshal(fullMessage)
 		if err != nil {
 			return "", fmt.Errorf("marshal final message: %w", err)
 		}
@@ -3682,106 +4042,6 @@ func (a *App) GetDefaultShell() string {
 // ListSerialPorts returns available serial port names.
 func (a *App) ListSerialPorts() ([]string, error) {
 	return session.ListSerialPorts()
-}
-
-// ConnectSerial creates a new serial session and connects asynchronously.
-func (a *App) ConnectSerial(portName string, baudRate int, dataBits int, stopBits float64, parity string) (*session.SessionInfo, error) {
-	if a.sessionManager == nil {
-		return nil, fmt.Errorf("session manager not initialized")
-	}
-
-	// Map JS-friendly strings to serial library constants
-	var sb serial.StopBits
-	switch stopBits {
-	case 1.5:
-		sb = serial.OnePointFiveStopBits
-	case 2:
-		sb = serial.TwoStopBits
-	default:
-		sb = serial.OneStopBit
-	}
-
-	parityMap := map[string]serial.Parity{
-		"none":  serial.NoParity,
-		"odd":   serial.OddParity,
-		"even":  serial.EvenParity,
-		"mark":  serial.MarkParity,
-		"space": serial.SpaceParity,
-	}
-	par, ok := parityMap[strings.ToLower(parity)]
-	if !ok {
-		par = serial.NoParity
-	}
-
-	serialCfg := session.SerialConfig{
-		PortName: portName,
-		BaudRate: baudRate,
-		DataBits: dataBits,
-		StopBits: sb,
-		Parity:   par,
-	}
-
-	config := session.ConnectionConfig{
-		Name: fmt.Sprintf("%s (%d)", portName, baudRate),
-		Type: "serial",
-	}
-
-	s, err := a.sessionManager.Create("serial", config)
-	if err != nil {
-		return nil, err
-	}
-
-	serSess, ok := s.(*session.SerialSession)
-	if !ok {
-		_ = a.sessionManager.Close(s.ID())
-		return nil, fmt.Errorf("internal error: session is not SerialSession")
-	}
-	serSess.SetSerialConfig(serialCfg)
-
-	// Wire callbacks (same pattern as CreateSession)
-	s.SetOnDataCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-			"id":   s.ID(),
-			"data": string(data),
-		})
-	})
-	s.SetOnBinaryCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:binary", map[string]interface{}{
-			"id":   s.ID(),
-			"data": base64.StdEncoding.EncodeToString(data),
-		})
-	})
-	s.SetOnStatusChangeCallback(func(status session.SessionStatus) {
-		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
-			"id":     s.ID(),
-			"status": status,
-		})
-	})
-
-	// Connect asynchronously
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Writef("serial session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
-			}
-		}()
-		if err := s.Connect(config); err != nil {
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
-					"id":   s.ID(),
-					"data": fmt.Sprintf("\r\n\x1b[31m[Serial connection failed: %v]\x1b[0m\r\n", err),
-				})
-			}
-			_ = a.sessionManager.Close(s.ID())
-		}
-	}()
-
-	return &session.SessionInfo{
-		ID:     s.ID(),
-		Type:   s.Type(),
-		Title:  s.Title(),
-		Status: s.Status(),
-	}, nil
 }
 
 // \u2500\u2500 Session output log \u2500\u2500
@@ -4704,6 +4964,30 @@ func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName str
 	return p.DefaultTableQuery(dbName, tableName, limit, offset), nil
 }
 
+func (a *App) DBPagedTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {
+	_, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return p.PagedTableQuery(dbName, tableName, limit, offset), nil
+}
+
+func (a *App) ExecuteSQLScript(sessionID string, dbName string, script string) (*database.ScriptResult, error) {
+	ds, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return database.ExecuteScript(p, ds.DB(), dbName, script)
+}
+
+func (a *App) DumpTable(sessionID string, dbName string, tableName string, withStructure bool, withData bool) (string, error) {
+	ds, p, err := a.dbProvider(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return p.DumpTable(ds.DB(), dbName, tableName, database.DumpOptions{Structure: withStructure, Data: withData})
+}
+
 func (a *App) DBInsertRow(sessionID string, dbName string, tableName string, values map[string]any) error {
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {
@@ -4826,6 +5110,17 @@ func (a *App) K8sConnect(source string, sourceIsPath bool, contextName string,
 	if tunnelSSHConfig == nil {
 		return "", fmt.Errorf("tunnel SSH connection not found: %s", tunnelSSHConnID)
 	}
+
+	// Resolve an identity reference into a concrete password/key config
+	// before the user/password overrides below so those still take precedence.
+	if tunnelSSHConfig.AuthType == "identity" {
+		m, err := a.materializeIdentity(*tunnelSSHConfig)
+		if err != nil {
+			return "", err
+		}
+		tunnelSSHConfig = &m
+	}
+
 	if tunnelSSHUser != "" {
 		tunnelSSHConfig.User = tunnelSSHUser
 	}
@@ -4858,7 +5153,7 @@ func (a *App) K8sConnect(source string, sourceIsPath bool, contextName string,
 	// 用同一个 key 既做 K8s connID 也做 TunnelService 的 sessionID，
 	// 方便 Disconnect 时的 onClose 回调直接 Stop 同名隧道。
 	tunnelKey := uuid.New().String()
-	localPort, err := a.tunnelService.Start(tunnelKey, *tunnelSSHConfig, targetHost, targetPort)
+	localPort, err := a.tunnelService.Start(tunnelKey, *tunnelSSHConfig, targetHost, targetPort, nil)
 	if err != nil {
 		return "", fmt.Errorf("tunnel start: %w", err)
 	}
@@ -5002,6 +5297,16 @@ func (a *App) ContainerConnect(connectionID string) error {
 		return fmt.Errorf("referenced SSH connection missing: %s", cfg.ContainerSSHConnID)
 	}
 
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the SSH runner its connection config.
+	if sshCfg.AuthType == "identity" {
+		m, err := a.materializeIdentity(*sshCfg)
+		if err != nil {
+			return err
+		}
+		sshCfg = &m
+	}
+
 	// 跳板机：被引用连接自身的 tunnel 配置
 	if sshCfg.TunnelSSHConnID != "" && a.tunnelService != nil {
 		var tunnelCfg *session.ConnectionConfig
@@ -5014,7 +5319,14 @@ func (a *App) ContainerConnect(connectionID string) error {
 		if tunnelCfg == nil {
 			return fmt.Errorf("tunnel SSH connection not found: %s", sshCfg.TunnelSSHConnID)
 		}
-		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port)
+		if tunnelCfg.AuthType == "identity" {
+			m, err := a.materializeIdentity(*tunnelCfg)
+			if err != nil {
+				return err
+			}
+			tunnelCfg = &m
+		}
+		localPort, err := a.tunnelService.Start(connectionID, *tunnelCfg, sshCfg.Host, sshCfg.Port, nil)
 		if err != nil {
 			return fmt.Errorf("tunnel start: %w", err)
 		}
@@ -5034,6 +5346,58 @@ func (a *App) ContainerDisconnect(connectionID string) {
 	if a.tunnelService != nil {
 		a.tunnelService.Stop(connectionID) // 无同名隧道时为 no-op
 	}
+}
+
+// X11DesktopConnect starts an x11-desktop session: looks up the saved
+// connection config (which carries its own SSH credentials), opens an
+// SSH connection with X11 forwarding, and runs the chosen desktop
+// command on the remote host. connectionID and sessionID are distinct
+// UUIDs (the connection is the user's saved record; the session is the
+// live runtime object created via CreateSession).
+func (a *App) X11DesktopConnect(connectionID string, sessionID string) error {
+	if a.connectionStore == nil || a.sessionManager == nil {
+		return fmt.Errorf("connection store or session manager not initialized")
+	}
+	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	var cfg *session.ConnectionConfig
+	for i := range data.Connections {
+		if data.Connections[i].ID == connectionID {
+			cfg = &data.Connections[i]
+			break
+		}
+	}
+	if cfg == nil {
+		return fmt.Errorf("connection not found: %s", connectionID)
+	}
+	if cfg.Type != "x11-desktop" {
+		return fmt.Errorf("connection %s is not an x11-desktop", connectionID)
+	}
+
+	// Resolve an identity reference into a concrete password/key config
+	// before handing the connection to the X11 dialer.
+	if cfg.AuthType == "identity" {
+		m, err := a.materializeIdentity(*cfg)
+		if err != nil {
+			return err
+		}
+		cfg = &m
+	}
+
+	sess, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	x11Sess, ok := sess.(*session.X11DesktopSession)
+	if !ok {
+		return fmt.Errorf("session %s is not x11-desktop", sessionID)
+	}
+	if err := x11Sess.ConnectX11Desktop(*cfg); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *App) ContainerList(connectionID string) ([]container.Container, error) {

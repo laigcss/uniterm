@@ -16,7 +16,7 @@
             <div v-for="db in filteredDatabases" :key="db">
               <div
                 class="db-header"
-                :class="{ selected: activeDb === db && !activeCollection }"
+                :class="{ selected: activeTab?.kind === 'query' && activeTab?.dbName === db }"
                 @click="toggleDb(db)"
                 @contextmenu.prevent="onDbContextMenu($event, db)"
               >
@@ -31,8 +31,8 @@
                   v-for="col in (collections[db] || [])"
                   :key="col"
                   class="table-item"
-                  :class="{ selected: highlightedDb === db && highlightedCol === col }"
-                  @dblclick="selectCollection(db, col)"
+                  :class="{ selected: activeTab?.kind === 'collection' && activeTab?.dbName === db && activeTab?.collectionName === col }"
+                  @dblclick="openCollectionTab(db, col)"
                   @click="highlightedDb = db; highlightedCol = col"
                   @contextmenu.prevent="onColContextMenu($event, db, col)"
                 >
@@ -57,172 +57,51 @@
 
       <!-- Right content area -->
       <div class="mongo-right">
-        <!-- Breadcrumb -->
-        <div class="mongo-breadcrumb" v-if="activeDb">
-          <span class="crumb crumb-static">{{ activeDb }}</span>
-          <template v-if="activeCollection">
-            <span class="crumb-sep">/</span>
-            <span class="crumb current">{{ activeCollection }}</span>
-          </template>
-        </div>
-
-        <!-- Sub-tabs -->
-        <div class="mongo-tabs" v-if="activeDb && activeCollection">
-          <button class="mongo-tab" :class="{ active: activeSubTab === 'query' }" @click="activeSubTab = 'query'">
-            {{ t('mongodb.queryTab') }}
-          </button>
-          <button class="mongo-tab" :class="{ active: activeSubTab === 'indexes' }" @click="activeSubTab = 'indexes'; loadIndexes()">
-            {{ t('mongodb.indexesTab') }}
-          </button>
-        </div>
-
-        <!-- Query sub-tab -->
-        <div v-if="activeSubTab === 'query' && activeCollection" class="query-section">
-          <div class="editor-top" :style="{ height: topHeight + 'px' }">
-            <!-- AI natural language input -->
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input
-                v-model="nlInput"
-                class="nl-input"
-                :placeholder="t('mongodb.aiPlaceholder')"
-                @keydown.enter="generateFilter"
-              />
-              <button class="btn btn-default btn-sm" @click="generateFilter" :disabled="aiGenerating || !nlInput.trim()">
-                <Sparkles :size="14" :class="{ 'ai-pulse': aiGenerating }" />
-                {{ aiGenerating ? '...' : 'AI' }}
-              </button>
-            </div>
-            <div class="query-editor-wrap">
-              <textarea
-                ref="queryTextareaRef"
-                v-model="filterText"
-                class="query-textarea"
-                :placeholder="t('mongodb.filter')"
-                @keydown="onQueryKeydown"
-              />
-              <div class="exec-btn-wrapper">
-                <button class="btn btn-primary exec-btn-overlay" @click="executeQuery">
-                  {{ t('mongodb.executeQuery') }}
-                </button>
-                <span class="shortcut-hint">Ctrl+Enter</span>
+        <template v-if="tabs.length">
+          <!-- Tab bar -->
+          <div class="mongo-tab-bar">
+            <div class="mongo-tab-scroll">
+              <div
+                v-for="tab in tabs"
+                :key="tab.id"
+                class="mongo-tab-item"
+                :class="{ active: tab.id === activeTabId }"
+                @click="activateTab(tab.id)"
+                @middleclick.prevent="closeTab(tab.id)"
+              >
+                <component :is="tab.kind === 'collection' ? Layers : Database" :size="12" class="tab-icon" />
+                <span class="tab-title">{{ tabTitle(tab) }}</span>
+                <button class="tab-close" :title="t('db.tabClose')" @click.stop="closeTab(tab.id)">×</button>
               </div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
-              <button class="btn btn-default btn-sm" @click="openNewDocument">
-                <Plus :size="14" /> {{ t('mongodb.newDocument') }}
-              </button>
             </div>
           </div>
 
-          <div class="editor-resizer" @mousedown="onTopResizeStart" />
-
-          <div class="editor-bottom">
-            <!-- Error display -->
-            <div v-if="queryError" class="error-msg">{{ queryError }}</div>
-
-            <!-- Loading overlay -->
-            <div v-if="queryLoading" class="loading-overlay">
-              <div class="loading-box">
-                <div class="spinner" />
-                <span class="loading-text">{{ t('db.loading') }}</span>
-                <button class="btn btn-default" @click="cancelQuery">{{ t('common.cancel') }}</button>
-              </div>
-            </div>
-
-            <!-- Results -->
-            <div v-if="columns.length > 0" class="result-grid">
-              <div class="result-table-wrap">
-                <el-table
-                  :data="tableData"
-                  border
-                  size="small"
-                  style="width:100%"
-                  :empty-text="t('db.noData')"
-                  @row-dblclick="onRowDblClick"
-                >
-                  <el-table-column
-                    v-for="col in columns"
-                    :key="col"
-                    :prop="col"
-                    :label="col"
-                    min-width="120"
-                    show-overflow-tooltip
-                  >
-                    <template #default="{ row }">
-                      <span class="cell-value">{{ formatCellValue(row[col]) }}</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column width="80" fixed="right">
-                    <template #default="{ row }">
-                      <button class="btn btn-ghost btn-icon btn-sm" style="color:var(--text-secondary)" @click="onRowDblClick(row)">
-                        <Pencil :size="14" />
-                      </button>
-                      <button class="btn btn-ghost btn-icon btn-sm" style="color:var(--error)" @click="deleteDocument(row)">
-                        <Trash2 :size="14" />
-                      </button>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-              <div class="pagination">
-                <el-pagination
-                  background
-                  layout="sizes, prev, pager, next, total"
-                  :page-sizes="[10, 20, 50, 100]"
-                  :page-size="queryLimit"
-                  :total="totalDocs"
-                  :current-page="currentPage"
-                  :pager-count="5"
-                  small
-                  @size-change="onPageSizeChange"
-                  @current-change="onPageChange"
-                />
-              </div>
-            </div>
-            <div v-else-if="!queryLoading && activeCollection" class="db-placeholder">
-              <span>{{ t('db.noData') }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Indexes sub-tab -->
-        <div v-if="activeSubTab === 'indexes' && activeCollection" class="indexes-section">
-          <div v-if="indexLoading" class="loading-overlay">
-            <div class="loading-box">
-              <div class="spinner" />
-              <span class="loading-text">{{ t('db.loading') }}</span>
-            </div>
-          </div>
-          <div style="margin-bottom:8px">
-            <button class="btn btn-default btn-sm" @click="openNewIndexDialog">
-              <Plus :size="14" /> {{ t('db.addIndex') }}
-            </button>
-          </div>
-          <el-table :data="indexes" border size="small" style="width:100%" :empty-text="t('db.noData')">
-            <el-table-column prop="name" :label="t('db.colName')" show-overflow-tooltip />
-            <el-table-column label="Fields">
-              <template #default="{ row }">
-                {{ (row as MongoIndexInfo).keys.join(', ') }}
+          <!-- Panels (keep-alive via v-show) -->
+          <div
+            v-for="tab in tabs"
+            :key="tab.id"
+            v-show="tab.id === activeTabId"
+            class="mongo-panel"
+          >
+            <div class="mongo-breadcrumb">
+              <span class="crumb crumb-static">{{ tab.dbName }}</span>
+              <template v-if="tab.collectionName">
+                <span class="crumb-sep">/</span>
+                <span class="crumb current">{{ tab.collectionName }}</span>
               </template>
-            </el-table-column>
-            <el-table-column prop="type" :label="t('db.colType')" />
-            <el-table-column prop="unique" label="Unique" width="80">
-              <template #default="{ row }">
-                {{ row.unique ? '✓' : '' }}
-              </template>
-            </el-table-column>
-            <el-table-column width="60">
-              <template #default="{ row }">
-                <button v-if="row.name !== '_id_'" class="btn btn-ghost btn-icon btn-sm" style="color:var(--error)" @click="dropIndex(row.name)">
-                  <Trash2 :size="14" />
-                </button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-
-        <!-- Empty state -->
-        <div v-if="!activeCollection" class="db-placeholder">
+            </div>
+            <MongoDBCollectionView
+              v-if="tab.kind === 'collection'"
+              :session-id="sessionId"
+              :db-name="tab.dbName"
+              :collection-name="tab.collectionName || ''"
+            />
+            <div v-else class="db-placeholder">
+              <span>{{ t('mongodb.selectHint') }}</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="db-placeholder">
           <span>{{ t('mongodb.selectHint') }}</span>
         </div>
       </div>
@@ -259,25 +138,6 @@
       </template>
     </div>
 
-    <!-- Confirm dialog -->
-    <el-dialog append-to-body
-      v-model="confirmVisible"
-      :title="confirmTitle"
-      width="420px"
-    >
-      <div class="confirm-body">
-        <p class="confirm-text">{{ confirmText }}</p>
-        <p class="confirm-hint">{{ t('mongodb.typeToConfirm', { name: confirmName }) }}</p>
-        <el-input v-model="confirmInput" :placeholder="confirmName" />
-      </div>
-      <template #footer>
-        <button class="btn btn-default" @click="confirmVisible = false">{{ t('common.cancel') }}</button>
-        <button class="btn btn-danger" :disabled="confirmInput !== confirmName" @click="onConfirm">
-          {{ t('common.confirm') }}
-        </button>
-      </template>
-    </el-dialog>
-
     <!-- New Collection dialog -->
     <el-dialog append-to-body
       v-model="newColDialogVisible"
@@ -292,27 +152,6 @@
       <template #footer>
         <button class="btn btn-default" @click="newColDialogVisible = false">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="!newColName.trim()" @click="createCollection">
-          {{ t('common.confirm') }}
-        </button>
-      </template>
-    </el-dialog>
-
-    <!-- Create Index dialog -->
-    <el-dialog append-to-body v-model="newIndexDialogVisible" :title="t('db.addIndex')" width="400px">
-      <el-form label-width="80px">
-        <el-form-item :label="t('db.colName')">
-          <el-input v-model="newIndexName" placeholder="index_name" />
-        </el-form-item>
-        <el-form-item label="Fields">
-          <el-input v-model="newIndexFields" placeholder="field1,-field2" />
-        </el-form-item>
-        <el-form-item label="Unique">
-          <el-switch v-model="newIndexUnique" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <button class="btn btn-default" @click="newIndexDialogVisible = false">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="!newIndexName.trim() || !newIndexFields.trim()" @click="createIndex">
           {{ t('common.confirm') }}
         </button>
       </template>
@@ -335,52 +174,25 @@
         </button>
       </template>
     </el-dialog>
-
-    <!-- Document editor dialog -->
-    <el-dialog append-to-body
-      v-model="docDialogVisible"
-      :title="docDialogMode === 'insert' ? t('mongodb.newDocument') : t('mongodb.editDocument')"
-      width="600px"
-    >
-      <textarea
-        v-model="docEditorText"
-        class="doc-editor-textarea"
-        placeholder="{}"
-        rows="14"
-      />
-      <div v-if="docEditorError" class="error-msg" style="margin-top:8px">{{ docEditorError }}</div>
-      <template #footer>
-        <button class="btn btn-default" @click="docDialogVisible = false">{{ t('settings.cancel') }}</button>
-        <button class="btn btn-primary" @click="saveDocument" :disabled="docSaving">
-          {{ t('redis.save') }}
-        </button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Database, Layers, ChevronRight, ChevronDown, RefreshCw, Plus, Pencil, Trash2, Sparkles } from '@lucide/vue'
+import { Database, Layers, ChevronRight, ChevronDown } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
-import { chat } from '../services/llm'
 import {
   MongoListDatabases,
   MongoListCollections,
-  MongoFind,
-  MongoInsertOne,
-  MongoUpdateOne,
-  MongoDeleteOne,
-  MongoListIndexes,
-  MongoCreateIndex,
-  MongoDropIndex,
   MongoCreateCollection,
   MongoDropCollection,
   MongoDropDatabase,
 } from '../../wailsjs/go/main/App'
-import type { MongoIndexInfo, MongoQueryResult } from '../types/mongodb'
+import MongoDBCollectionView from './MongoDBCollectionView.vue'
+
+defineOptions({ name: 'MongoDBTabContent' })
 
 const { t } = useI18n()
 
@@ -411,39 +223,12 @@ function onResizeEnd() {
   document.removeEventListener('mouseup', onResizeEnd)
 }
 
-// ── Editor resize state ──
-const topHeight = ref(220)
-let topResizeStartY = 0
-let topResizeStartHeight = 0
-let topResizing = false
-
-function onTopResizeStart(e: MouseEvent) {
-  topResizeStartY = e.clientY
-  topResizeStartHeight = topHeight.value
-  topResizing = true
-  document.addEventListener('mousemove', onTopResizeMove)
-  document.addEventListener('mouseup', onTopResizeEnd)
-}
-function onTopResizeMove(e: MouseEvent) {
-  const el = (e.target as HTMLElement).closest('.mongo-right')
-  const maxTop = el ? el.clientHeight - 100 : 400
-  const dy = e.clientY - topResizeStartY
-  topHeight.value = Math.max(80, Math.min(maxTop, topResizeStartHeight + dy))
-}
-function onTopResizeEnd() {
-  topResizing = false
-  document.removeEventListener('mousemove', onTopResizeMove)
-  document.removeEventListener('mouseup', onTopResizeEnd)
-}
-
 // ── Tree state ──
 const databases = ref<string[]>([])
 const collections = ref<Record<string, string[]>>({})
 const expandedDbs = reactive(new Set<string>())
 const treeLoading = ref(false)
 const treeSearchQuery = ref('')
-const activeDb = ref('')
-const activeCollection = ref('')
 const highlightedDb = ref('')
 const highlightedCol = ref('')
 
@@ -453,11 +238,69 @@ const filteredDatabases = computed(() => {
   return databases.value.filter(db => db.toLowerCase().includes(q))
 })
 
+// ── Tabs state ──
+interface MongoTab {
+  id: number
+  kind: 'collection' | 'query'
+  dbName: string
+  collectionName?: string
+}
+
+const tabs = ref<MongoTab[]>([])
+const activeTabId = ref<number | null>(null)
+let nextTabId = 1
+
+const activeTab = computed(() => tabs.value.find(t => t.id === activeTabId.value) || null)
+
+function tabTitle(tab: MongoTab): string {
+  return tab.kind === 'collection' ? (tab.collectionName || '') : tab.dbName
+}
+
+function activateTab(id: number) {
+  activeTabId.value = id
+}
+
+function openCollectionTab(dbName: string, collectionName: string) {
+  const existing = tabs.value.find(t => t.kind === 'collection' && t.dbName === dbName && t.collectionName === collectionName)
+  if (existing) {
+    activeTabId.value = existing.id
+    return
+  }
+  const tab: MongoTab = { id: nextTabId++, kind: 'collection', dbName, collectionName }
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+}
+
+function openQueryTab(dbName: string) {
+  const existing = tabs.value.find(t => t.kind === 'query' && t.dbName === dbName)
+  if (existing) {
+    activeTabId.value = existing.id
+    return
+  }
+  const tab: MongoTab = { id: nextTabId++, kind: 'query', dbName }
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+}
+
+function closeTab(tabId: number) {
+  const idx = tabs.value.findIndex(t => t.id === tabId)
+  if (idx < 0) return
+  tabs.value.splice(idx, 1)
+  if (activeTabId.value === tabId) {
+    if (!tabs.value.length) {
+      activeTabId.value = null
+    } else {
+      const next = tabs.value[Math.min(idx, tabs.value.length - 1)]
+      activeTabId.value = next.id
+    }
+  }
+}
+
 // ── Context menu state ──
 const ctxVisible = ref(false)
 const ctxX = ref(0)
 const ctxY = ref(0)
-const ctxTargetType = ref<'db' | 'col'>('db')
+const ctxTargetType = ref<'db' | 'col' | 'blank'>('db')
 const ctxDbName = ref('')
 const ctxColName = ref('')
 
@@ -483,92 +326,13 @@ function fitContextMenu(x: number, y: number, type: string) {
   return { left, top }
 }
 
-// ── Confirm dialog state ──
-const confirmVisible = ref(false)
-const confirmTitle = ref('')
-const confirmText = ref('')
-const confirmName = ref('')
-const confirmInput = ref('')
-let confirmAction: (() => void) | null = null
-
-function askConfirm(title: string, text: string, name: string, action: () => void) {
-  confirmTitle.value = title
-  confirmText.value = text
-  confirmName.value = name
-  confirmInput.value = ''
-  confirmAction = action
-  confirmVisible.value = true
-}
-
-function onConfirm() {
-  confirmVisible.value = false
-  if (confirmAction) confirmAction()
-}
-
-// ── Query state ──
-const activeSubTab = ref<'query' | 'indexes'>('query')
-const filterText = ref('{}')
-const nlInput = ref('')
-const aiGenerating = ref(false)
-const queryLimit = ref(100)
-const queryLoading = ref(false)
-const queryError = ref('')
-const queryResult = ref<MongoQueryResult | null>(null)
-const currentSkip = ref(0)
-const queryTextareaRef = ref<HTMLTextAreaElement | null>(null)
-
-const totalDocs = computed(() => queryResult.value?.total || 0)
-
-const tableData = computed(() => {
-  if (!queryResult.value) return []
-  return queryResult.value.documents.map(d => {
-    try { return JSON.parse(d) } catch { return {} }
-  })
-})
-
-const columns = computed(() => {
-  const keySet = new Set<string>()
-  for (const row of tableData.value) {
-    for (const key of Object.keys(row)) {
-      keySet.add(key)
-    }
-  }
-  const cols = Array.from(keySet)
-  const idIdx = cols.indexOf('_id')
-  if (idIdx > 0) {
-    cols.splice(idIdx, 1)
-    cols.unshift('_id')
-  }
-  return cols
-})
-
-// ── Index state ──
-const indexes = ref<MongoIndexInfo[]>([])
-const indexLoading = ref(false)
-
-// ── Document editor state ──
-// ── New database dialog ──
-const newDbDialogVisible = ref(false)
-const newDbName = ref('')
-const newDbFirstCol = ref('')
-
-// ── New index dialog ──
-const newIndexDialogVisible = ref(false)
-const newIndexName = ref('')
-const newIndexFields = ref('')
-const newIndexUnique = ref(false)
-
-// ── New collection dialog ──
+// ── Dialog state ──
 const newColDialogVisible = ref(false)
 const newColName = ref('')
 
-// ── Document editor state ──
-const docDialogVisible = ref(false)
-const docDialogMode = ref<'insert' | 'edit'>('insert')
-const docEditorText = ref('{}')
-const docEditorError = ref('')
-const docSaving = ref(false)
-const editingRow = ref<any>(null)
+const newDbDialogVisible = ref(false)
+const newDbName = ref('')
+const newDbFirstCol = ref('')
 
 // ── Tree methods ──
 async function refreshDatabases() {
@@ -579,12 +343,11 @@ async function refreshDatabases() {
     databases.value = allDbs.filter(d => d !== 'config' && d !== 'local')
   } catch (e: any) {
     const err = e?.message || String(e)
-    // Retry once after a brief delay in case session isn't fully ready yet
     if (err.includes('not connected') || err.includes('session not found')) {
       await new Promise(r => setTimeout(r, 300))
       try {
         const allDbs = await MongoListDatabases(props.sessionId)
-    databases.value = allDbs.filter(d => d !== 'config' && d !== 'local')
+        databases.value = allDbs.filter(d => d !== 'config' && d !== 'local')
         treeLoading.value = false
         return
       } catch (_e2: any) {
@@ -612,18 +375,6 @@ async function toggleDb(db: string) {
       }
     }
   }
-}
-
-function selectCollection(db: string, col: string) {
-  activeDb.value = db
-  activeCollection.value = col
-  activeSubTab.value = 'query'
-  filterText.value = '{}'
-  nlInput.value = ''
-  currentSkip.value = 0
-  queryResult.value = null
-  queryError.value = ''
-  executeQuery()
 }
 
 // ── Context menu handlers ──
@@ -658,27 +409,24 @@ function onColContextMenu(e: MouseEvent, db: string, col: string) {
 }
 
 function onCtxOpenQuery() {
-  activeDb.value = ctxDbName.value
-  activeCollection.value = ''
+  openQueryTab(ctxDbName.value)
   ctxVisible.value = false
 }
 
 function onCtxOpenColQuery() {
-  selectCollection(ctxDbName.value, ctxColName.value)
+  openCollectionTab(ctxDbName.value, ctxColName.value)
   ctxVisible.value = false
 }
 
 function onCtxNewColDocument() {
-  activeDb.value = ctxDbName.value
-  activeCollection.value = ctxColName.value
-  openNewDocument()
+  // Open the collection tab; the "New Document" action lives inside it.
+  openCollectionTab(ctxDbName.value, ctxColName.value)
   ctxVisible.value = false
 }
 
 function onCtxViewIndexes() {
-  selectCollection(ctxDbName.value, ctxColName.value)
-  activeSubTab.value = 'indexes'
-  loadIndexes()
+  // Open the collection tab; switch to the indexes sub-tab inside it.
+  openCollectionTab(ctxDbName.value, ctxColName.value)
   ctxVisible.value = false
 }
 
@@ -697,7 +445,6 @@ function onCtxNewDatabase() {
 async function createDatabase() {
   const dbName = newDbName.value.trim()
   if (!dbName) return
-  // Create DB by creating its first collection
   const colName = newDbFirstCol.value.trim() || '_default'
   try {
     await MongoCreateCollection(props.sessionId, dbName, colName)
@@ -714,16 +461,9 @@ function onCtxRefresh() {
   ctxVisible.value = false
 }
 
-function openNewCollection(db: string) {
-  if (!db) return
-  ctxDbName.value = db
+function onCtxNewCollection() {
   newColName.value = ''
   newColDialogVisible.value = true
-}
-
-function onCtxNewCollection() {
-  openNewCollection(ctxDbName.value)
-  ctxVisible.value = false
 }
 
 async function createCollection() {
@@ -733,7 +473,6 @@ async function createCollection() {
     await MongoCreateCollection(props.sessionId, ctxDbName.value, name)
     msg.success(t('mongodb.collectionCreated'))
     newColDialogVisible.value = false
-    // Refresh the collection list for this DB
     const cols = await MongoListCollections(props.sessionId, ctxDbName.value)
     collections.value[ctxDbName.value] = cols.filter(c => !c.startsWith('system.'))
     collections.value = { ...collections.value }
@@ -744,35 +483,31 @@ async function createCollection() {
 
 function onCtxDropDatabase() {
   const db = ctxDbName.value
-  askConfirm(
-    t('mongodb.dropDatabase'),
-    t('mongodb.dropDatabase') + ': ' + db,
-    db,
-    async () => {
+  ElMessageBox.confirm(t('mongodb.dropDatabase') + ': ' + db, t('common.confirm'), { type: 'warning' })
+    .then(async () => {
       try {
         await MongoDropDatabase(props.sessionId, db)
         msg.success(t('mongodb.databaseDropped'))
         databases.value = databases.value.filter(d => d !== db)
-        if (activeDb.value === db) {
-          activeDb.value = ''
-          activeCollection.value = ''
+        // close any tabs belonging to this database
+        const beforeLen = tabs.value.length
+        tabs.value = tabs.value.filter(t => t.dbName !== db)
+        if (tabs.value.length !== beforeLen && !tabs.value.find(t => t.id === activeTabId.value)) {
+          activeTabId.value = tabs.value.length ? tabs.value[tabs.value.length - 1].id : null
         }
       } catch (e: any) {
         msg.error(e?.message || String(e))
       }
-    }
-  )
+    })
+    .catch(() => {})
   ctxVisible.value = false
 }
 
 function onCtxDropCollection() {
   const db = ctxDbName.value
   const col = ctxColName.value
-  askConfirm(
-    t('mongodb.dropCollection'),
-    t('mongodb.dropCollection') + ': ' + col,
-    col,
-    async () => {
+  ElMessageBox.confirm(t('mongodb.dropCollection') + ': ' + col, t('common.confirm'), { type: 'warning' })
+    .then(async () => {
       try {
         await MongoDropCollection(props.sessionId, db, col)
         msg.success(t('mongodb.collectionDropped'))
@@ -780,216 +515,15 @@ function onCtxDropCollection() {
           collections.value[db] = collections.value[db].filter(c => c !== col)
           collections.value = { ...collections.value }
         }
-        if (activeCollection.value === col) {
-          activeCollection.value = ''
-        }
+        // close the tab for this collection
+        const closed = tabs.value.find(t => t.kind === 'collection' && t.dbName === db && t.collectionName === col)
+        if (closed) closeTab(closed.id)
       } catch (e: any) {
         msg.error(e?.message || String(e))
       }
-    }
-  )
-  ctxVisible.value = false
-}
-
-// ── Query methods ──
-function onQueryKeydown(e: KeyboardEvent) {
-  if (e.ctrlKey && e.key === 'Enter') {
-    e.preventDefault()
-    executeQuery()
-  }
-}
-
-async function generateFilter() {
-  const input = nlInput.value.trim()
-  if (!input || !activeDb.value || !activeCollection.value) return
-  aiGenerating.value = true
-  try {
-    // Fetch a sample document for schema context
-    let sample = ''
-    try {
-      const result = await MongoFind(props.sessionId, activeDb.value, activeCollection.value, '{}', 0, 1)
-      if (result.documents.length > 0) {
-        sample = result.documents[0]
-      }
-    } catch {}
-
-    const schemaContext = sample
-      ? `Collection "${activeCollection.value}" in database "${activeDb.value}". Sample document:\n${sample}`
-      : `Collection "${activeCollection.value}" in database "${activeDb.value}".`
-
-    let result = ''
-    await chat({
-      system: `You are a MongoDB query assistant. Convert natural language to MongoDB Extended JSON filter only. Output ONLY the JSON filter (no markdown, no explanation). Use operators like $eq, $gt, $gte, $lt, $lte, $in, $nin, $regex, $exists, $and, $or, $not, $elemMatch. Dates should use ISODate format. ObjectIds should use $oid format.`,
-      messages: [
-        { role: 'user', content: `Schema context:\n${schemaContext}\n\nQuery: ${input}` }
-      ],
-      onChunk: (chunk: string) => { result += chunk },
     })
-    const cleaned = result.trim()
-      .replace(/^```[\w]*\n?/i, '')
-      .replace(/\n?```$/i, '')
-    // Validate it's valid JSON
-    JSON.parse(cleaned)
-    filterText.value = cleaned
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-  aiGenerating.value = false
-}
-
-async function executeQuery() {
-  if (!activeDb.value || !activeCollection.value) return
-  queryLoading.value = true
-  queryError.value = ''
-  try {
-    queryResult.value = await MongoFind(
-      props.sessionId,
-      activeDb.value,
-      activeCollection.value,
-      filterText.value,
-      currentSkip.value,
-      queryLimit.value
-    )
-  } catch (e: any) {
-    queryError.value = e?.message || String(e)
-    queryResult.value = null
-  }
-  queryLoading.value = false
-}
-
-function refreshQuery() {
-  executeQuery()
-}
-
-function cancelQuery() {
-  queryLoading.value = false
-}
-
-const currentPage = computed(() => Math.floor(currentSkip.value / queryLimit.value) + 1)
-
-function onPageChange(page: number) {
-  currentSkip.value = (page - 1) * queryLimit.value
-  executeQuery()
-}
-
-function onPageSizeChange(size: number) {
-  queryLimit.value = size
-  currentSkip.value = 0
-  executeQuery()
-}
-
-// ── Document CRUD ──
-function openNewDocument() {
-  docDialogMode.value = 'insert'
-  docEditorText.value = '{}'
-  docEditorError.value = ''
-  editingRow.value = null
-  docDialogVisible.value = true
-}
-
-function onRowDblClick(row: any) {
-  docDialogMode.value = 'edit'
-  docEditorText.value = JSON.stringify(row, null, 2)
-  docEditorError.value = ''
-  editingRow.value = row
-  docDialogVisible.value = true
-}
-
-async function saveDocument() {
-  try {
-    JSON.parse(docEditorText.value)
-  } catch {
-    docEditorError.value = t('mongodb.invalidJSON')
-    return
-  }
-  docEditorError.value = ''
-  docSaving.value = true
-  try {
-    if (docDialogMode.value === 'insert') {
-      await MongoInsertOne(props.sessionId, activeDb.value, activeCollection.value, docEditorText.value)
-      msg.success(t('mongodb.insertSuccess'))
-    } else {
-      const filter = JSON.stringify({ _id: editingRow.value._id })
-      const updateObj = JSON.parse(docEditorText.value)
-      delete updateObj._id
-      await MongoUpdateOne(props.sessionId, activeDb.value, activeCollection.value, filter, JSON.stringify(updateObj))
-      msg.success(t('mongodb.updateSuccess'))
-    }
-    docDialogVisible.value = false
-    executeQuery()
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-  docSaving.value = false
-}
-
-async function deleteDocument(row: any) {
-  try {
-    await ElMessageBox.confirm(t('mongodb.deleteConfirm'))
-  } catch {
-    return
-  }
-  try {
-    const filter = JSON.stringify({ _id: row._id })
-    await MongoDeleteOne(props.sessionId, activeDb.value, activeCollection.value, filter)
-    msg.success(t('mongodb.deleteSuccess'))
-    executeQuery()
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-}
-
-// ── Indexes ──
-async function loadIndexes() {
-  if (!activeDb.value || !activeCollection.value) return
-  indexLoading.value = true
-  try {
-    indexes.value = await MongoListIndexes(props.sessionId, activeDb.value, activeCollection.value)
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-  indexLoading.value = false
-}
-
-function openNewIndexDialog() {
-  newIndexName.value = ''
-  newIndexFields.value = ''
-  newIndexUnique.value = false
-  newIndexDialogVisible.value = true
-}
-
-async function createIndex() {
-  const name = newIndexName.value.trim()
-  const fields = newIndexFields.value.trim()
-  if (!name || !fields || !activeDb.value || !activeCollection.value) return
-  try {
-    await MongoCreateIndex(
-      props.sessionId, activeDb.value, activeCollection.value,
-      name, fields.split(',').map(s => s.trim()).filter(Boolean),
-      newIndexUnique.value
-    )
-    newIndexDialogVisible.value = false
-    loadIndexes()
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-}
-
-async function dropIndex(name: string) {
-  if (!activeDb.value || !activeCollection.value) return
-  try {
-    await MongoDropIndex(props.sessionId, activeDb.value, activeCollection.value, name)
-    loadIndexes()
-  } catch (e: any) {
-    msg.error(e?.message || String(e))
-  }
-}
-
-// ── Helpers ──
-function formatCellValue(val: any): string {
-  if (val === null || val === undefined) return 'null'
-  if (typeof val === 'object') return JSON.stringify(val)
-  return String(val)
+    .catch(() => {})
+  ctxVisible.value = false
 }
 
 // ── Lifecycle ──
@@ -1005,17 +539,13 @@ onUnmounted(() => {
     document.removeEventListener('mousemove', onResizeMove)
     document.removeEventListener('mouseup', onResizeEnd)
   }
-  if (topResizing) {
-    document.removeEventListener('mousemove', onTopResizeMove)
-    document.removeEventListener('mouseup', onTopResizeEnd)
-  }
   document.removeEventListener('click', closeContextMenu)
 })
 
 watch(() => props.sessionId, () => {
   if (props.sessionId) {
-    activeDb.value = ''
-    activeCollection.value = ''
+    tabs.value = []
+    activeTabId.value = null
     databases.value = []
     collections.value = {}
     expandedDbs.clear()
@@ -1144,9 +674,6 @@ watch(() => props.sessionId, () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.child-list {
-  /* indent is via table-icon-spacer on each item */
-}
 .table-item {
   display: flex;
   align-items: center;
@@ -1185,6 +712,70 @@ watch(() => props.sessionId, () => {
   color: var(--text-muted);
 }
 
+/* ── Tab bar ── */
+.mongo-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+  min-height: 30px;
+}
+.mongo-tab-scroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+}
+.mongo-tab-scroll::-webkit-scrollbar { height: 4px; }
+.mongo-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px 5px 10px;
+  border-right: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.1s ease;
+}
+.mongo-tab-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.mongo-tab-item.active {
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border-bottom: 2px solid var(--accent);
+}
+.tab-icon { flex-shrink: 0; color: var(--text-muted); }
+.tab-title { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.tab-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.tab-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.mongo-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* ── Breadcrumb ── */
 .mongo-breadcrumb {
   display: flex;
@@ -1212,262 +803,6 @@ watch(() => props.sessionId, () => {
   color: var(--text-disabled);
   margin: 0 2px;
   flex-shrink: 0;
-}
-
-/* ── Sub-tabs ── */
-.mongo-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 8px;
-  flex-shrink: 0;
-}
-.mongo-tab {
-  padding: 6px 16px;
-  border: none;
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
-}
-.mongo-tab:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-.mongo-tab.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
-}
-
-/* ── NL input ── */
-.nl-input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.nl-input:focus { border-color: var(--accent); }
-.nl-input::placeholder { color: var(--text-muted); }
-.ai-pulse { animation: fade-pulse 1.2s ease-in-out infinite; }
-@keyframes fade-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-/* ── Query editor ── */
-.query-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-.editor-top {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 8px 0;
-}
-.query-editor-wrap {
-  position: relative;
-  flex: 1;
-  display: flex;
-}
-.query-textarea {
-  flex: 1;
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  background: var(--bg-base);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 8px 80px 36px 8px;
-  resize: none;
-  transition: border-color 0.15s ease;
-}
-.query-textarea:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.exec-btn-wrapper {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  z-index: 1;
-}
-.exec-btn-overlay {
-  padding: 4px 14px;
-  font-size: 12px;
-}
-.shortcut-hint {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.query-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-.query-field label {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-.query-field-input {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  background: var(--bg-base);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
-  resize: none;
-}
-.query-field-input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
-/* ── Editor resizer ── */
-.editor-resizer {
-  height: 4px;
-  cursor: row-resize;
-  background: transparent;
-  flex-shrink: 0;
-  transition: background 0.15s ease;
-}
-.editor-resizer:hover {
-  background: var(--border-subtle);
-}
-
-/* ── Editor bottom (results) ── */
-.editor-bottom {
-  flex: 1;
-  padding: 0 8px 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  position: relative;
-}
-
-/* ── Error ── */
-.error-msg {
-  color: var(--error);
-  padding: 8px;
-  background: var(--error-subtle);
-  border-radius: var(--radius-sm);
-  margin-bottom: 8px;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-/* ── Loading overlay ── */
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: var(--scrim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-.loading-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-subtle);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.loading-text {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-primary);
-}
-
-/* ── Result grid ── */
-.result-grid {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.result-info {
-  padding: 4px 0;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-.result-table-wrap {
-  flex: 1;
-  overflow: auto;
-  min-height: 0;
-}
-.cell-value {
-  font-size: 12px;
-  word-break: break-all;
-  cursor: default;
-}
-.pagination {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-.pagination :deep(.el-pager li.is-active) {
-  background-color: var(--accent);
-  color: var(--on-accent);
-}
-.pagination :deep(.el-pager li:hover) {
-  color: var(--accent);
-}
-.pagination :deep(.el-pagination .el-select .el-input.is-focus .el-input__wrapper) {
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-.pagination :deep(.el-select__input) {
-  color: var(--text-primary);
-}
-
-/* ── Indexes ── */
-.indexes-section {
-  flex: 1;
-  overflow: auto;
-  padding: 8px;
-  position: relative;
 }
 
 /* ── Placeholder ── */
@@ -1510,42 +845,5 @@ watch(() => props.sessionId, () => {
   height: 1px;
   background: var(--border-subtle);
   margin: 4px 0;
-}
-
-/* ── Confirm dialog ── */
-.confirm-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.confirm-text {
-  font-family: var(--font-ui);
-  font-size: 14px;
-  color: var(--text-primary);
-  margin: 0;
-}
-.confirm-hint {
-  font-family: var(--font-ui);
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-/* ── Document editor ── */
-.doc-editor-textarea {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  background: var(--bg-base);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 8px;
-  resize: vertical;
-}
-.doc-editor-textarea:focus {
-  border-color: var(--accent);
-  outline: none;
 }
 </style>

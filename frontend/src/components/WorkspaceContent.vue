@@ -90,7 +90,6 @@ async function onDuplicatePanel(panelId: string) {
     try {
       const config: ConnectionConfig = {
         ...panel.config,
-        deferConnect: true,
         initialCols: 0,
         initialRows: 0,
       }

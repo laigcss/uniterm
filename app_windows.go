@@ -147,6 +147,24 @@ func (a *App) findMainWindow() uintptr {
 	return result
 }
 
+// bringMainWindowToFront raises the main window to the foreground once. After a
+// relaunch the fresh instance can otherwise open behind other windows on Windows:
+// SetForegroundWindow is normally restricted, but a process spawned by the
+// currently-foreground process is one of the documented exceptions, so a single
+// raise works while the old instance (the foreground process) is still alive.
+// No-op when no main window has been created yet.
+func (a *App) bringMainWindowToFront() {
+	hwnd := a.findMainWindow()
+	if hwnd == 0 {
+		return
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	procSetForegroundWindow := user32.NewProc("SetForegroundWindow")
+	procBringWindowToTop := user32.NewProc("BringWindowToTop")
+	procSetForegroundWindow.Call(hwnd)
+	procBringWindowToTop.Call(hwnd)
+}
+
 // emitMoveResize sends a move/resize event to the frontend without blocking.
 // It must never be called from within the WndProc modal resize/move loop.
 func (a *App) emitMoveResize(event string) {

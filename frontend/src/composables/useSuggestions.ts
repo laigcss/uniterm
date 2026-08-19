@@ -350,7 +350,7 @@ export function useSuggestions() {
     }
   }
 
-  async function updateSuggestions(token: string) {
+  async function updateSuggestions(token: string, aiTranscriptionEnabled?: boolean) {
     if (debounceTimer) {
       clearTimeout(debounceTimer)
     }
@@ -364,12 +364,14 @@ export function useSuggestions() {
       const historyItems = getHistorySuggestions(token)
       const quickCommandItems = getQuickCommandSuggestions(token)
       const items: SuggestionItem[] = [...quickCommandItems, ...historyItems]
-      items.push({
-        type: 'ai-preview',
-        label: t('terminal.aiTranscribing'),
-        value: '',
-        description: 'AI',
-      })
+      if (aiTranscriptionEnabled !== false) {
+        items.push({
+          type: 'ai-preview',
+          label: t('terminal.aiTranscribing'),
+          value: '',
+          description: 'AI',
+        })
+      }
       state.value.items = items
       state.value.selectedIndex = -1
       state.value.visible = items.length > 0

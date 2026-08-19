@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -52,6 +53,10 @@ func (p *rqliteProvider) DefaultTableQuery(dbName, tableName string, limit, offs
 		return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
 	}
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
+}
+
+func (p *rqliteProvider) PagedTableQuery(dbName, tableName string, limit, offset int) string {
+	return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
 }
 
 func (p *rqliteProvider) InsertRow(db *sql.DB, dbName, tableName string, values map[string]any) error {
@@ -342,4 +347,149 @@ var rqliteTypes = []string{
 
 var rqliteIntTypes = []string{
 	"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
+}
+
+func (p *rqliteProvider) DumpTable(db *sql.DB, dbName, tableName string, opts DumpOptions) (string, error) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	var b strings.Builder
+	quotedTable := p.Quote(tableName)
+
+	if opts.Structure {
+		var createSQL string
+		kind := tableKindSQLite(conn, tableName)
+		err := conn.QueryRowContext(ctx,
+			"SELECT sql FROM sqlite_master WHERE type=? AND name=? AND name NOT LIKE 'sqlite_%' LIMIT 1",
+			kind, tableName).Scan(&createSQL)
+		if err != nil && err != sql.ErrNoRows {
+			return "", err
+		}
+		if createSQL != "" {
+			b.WriteString("--\n-- Structure for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\nDROP ")
+			if kind == "view" {
+				b.WriteString("VIEW")
+			} else {
+				b.WriteString("TABLE")
+			}
+			b.WriteString(" IF EXISTS ")
+			b.WriteString(quotedTable)
+			b.WriteString(";\n")
+			b.WriteString(createSQL)
+			if !strings.HasSuffix(createSQL, ";") {
+				b.WriteByte(';')
+			}
+			b.WriteString("\n\n")
+		}
+	}
+
+	if opts.Data {
+		cols, derr := sqliteTableColumns(conn, tableName, quotedTable)
+		if derr != nil {
+			return "", derr
+		}
+		if len(cols) > 0 {
+			b.WriteString("--\n-- Data for ")
+			b.WriteString(tableName)
+			b.WriteString("\n--\n")
+			colList := make([]string, len(cols))
+			for i, c := range cols {
+				colList[i] = p.Quote(c)
+			}
+			prefix := "INSERT INTO " + quotedTable + " (" + strings.Join(colList, ", ") + ") VALUES "
+
+			rows, err := conn.QueryContext(ctx, "SELECT "+strings.Join(colList, ", ")+" FROM "+quotedTable)
+			if err != nil {
+				return "", err
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				vals := make([]any, len(cols))
+				ptrs := make([]any, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				if err := rows.Scan(ptrs...); err != nil {
+					return "", err
+				}
+				b.WriteString(prefix)
+				b.WriteByte('(')
+				for i, v := range vals {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(dumpRqliteValue(v))
+				}
+				b.WriteString(");\n")
+			}
+			if err := rows.Err(); err != nil {
+				return "", err
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String(), nil
+}
+
+// tableKindSQLite returns "table" or "view" from sqlite_master.
+func tableKindSQLite(conn *sql.Conn, tableName string) string {
+	var t string
+	err := conn.QueryRowContext(context.Background(),
+		"SELECT type FROM sqlite_master WHERE name=? AND name NOT LIKE 'sqlite_%' LIMIT 1", tableName).Scan(&t)
+	if err == nil && t == "view" {
+		return "view"
+	}
+	return "table"
+}
+
+// sqliteTableColumns returns column names via PRAGMA table_info.
+func sqliteTableColumns(conn *sql.Conn, tableName, quotedTable string) ([]string, error) {
+	rows, err := conn.QueryContext(context.Background(), "PRAGMA table_info("+quotedTable+")")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cols []string
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		cols = append(cols, name)
+	}
+	return cols, rows.Err()
+}
+
+// dumpRqliteValue renders a scanned cell as a SQLite literal. Blobs become
+// x'..' hex literals; booleans and numbers pass through; everything else is
+// a quoted string.
+func dumpRqliteValue(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case []byte:
+		return "x'" + hexLower(val) + "'"
+	case string:
+		return quotedString(val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	default:
+		return scanToString(v)
+	}
 }

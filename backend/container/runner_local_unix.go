@@ -11,6 +11,8 @@ import (
 	"github.com/creack/pty"
 )
 
+func setHideWindow(_ *exec.Cmd) {}
+
 type localPTY struct {
 	cmd  *exec.Cmd
 	ptmx *os.File

@@ -16,13 +16,16 @@ export interface PostLoginExpectStep {
 export interface ConnectionConfig {
   id: string
   name: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'k8s' | 'container'
+  remark?: string
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'sftp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
-  authType: 'password' | 'key' | 'agent'
+  authType: 'password' | 'key' | 'agent' | 'identity'
   password?: string
   keyPath?: string
+  identityId?: string // reference to a vault identity (authType === 'identity')
+  proxyId?: string // reference to a saved outbound proxy (SOCKS5/HTTP)
   groupId?: string
   // RDP-specific
   rdpFixedWidth?: number
@@ -68,12 +71,6 @@ export interface ConnectionConfig {
   // and passes them in CreateSession.
   initialCols?: number
   initialRows?: number
-  // When true, CreateSession returns immediately without connecting.
-  // The frontend calls SessionStart after it has mounted the xterm
-  // terminal and written initialCols/Rows via SetPendingSize — so the
-  // PTY starts at the real xterm size, not the 80x24 default that
-  // would otherwise wrap Claude Code tables at the wrong column count.
-  deferConnect?: boolean
   tunnelSSHUser?: string
   tunnelSSHPassword?: string
   // SFTP max concurrent transfers (0 = unlimited)
@@ -87,12 +84,6 @@ export interface ConnectionConfig {
   // rely on it for self-signed certs — but the toggle now exists so the
   // choice is explicit, and a one-shot session-log warning fires on connect.
   ftpSkipVerify?: boolean
-  // VNC-specific (issue #95).
-  // vncEncryption selects the post-handshake security-type policy.
-  //   "auto"    — accept whatever security type the server offers (noVNC default).
-  //   "require" — disconnect unless the server picks VeNCrypt (TLS).
-  // Empty / unknown values behave as "auto".
-  vncEncryption?: 'auto' | 'require'
   // vncShared is forwarded to noVNC's RFB constructor as `shared`.
   // true (default) — the new client may connect alongside other clients.
   // false — the server will typically disconnect other clients on connect.
@@ -119,9 +110,15 @@ export interface ConnectionConfig {
   // 'bs'   = ASCII BS  (0x08) — Huawei/H3C/Cisco network gear, Windows convention
   // 'vt220'= VT220 Delete (ESC[3~) — H3C / late Cisco IOS
   backspaceKey?: 'del' | 'bs' | 'vt220'
+  // Telnet-specific options
+  telnetNegotiationMode?: 'active' | 'passive'
+  telnetSendMode?: 'character' | 'line'
+  // Shared terminal options
+  localEcho?: boolean
+  newlineMode?: 'cr' | 'crlf'
   // Enable SSH X11 forwarding (ssh -X semantics). Bridges remote X11
   // clients to the local X server at $DISPLAY. Requires a local X server
-  // (XQuartz on macOS, VcXsrv/Xming on Windows). Silent degradation on
+  // (XQuartz on macOS, VcXsrv on Windows). Silent degradation on
   // missing $DISPLAY / xauth — see backend x11_forward.go.
   x11Forwarding?: boolean
   // Enable session output log automatically on first connect. Applies
@@ -145,6 +142,14 @@ export interface ConnectionConfig {
   containerExecConnId?: string
   containerExecContainerId?: string
   containerExecShell?: string
+  // X11 Desktop (type: 'x11-desktop') — carries its own SSH credentials
+  // (host, port, user, authType, password, keyPath) for direct connection.
+  // X11 forwarding is forced on automatically. The actual desktop is
+  // rendered by the local X server (VcXsrv/XQuartz/Xorg), not inside uniTerm.
+  x11DesktopDesktopType?: 'gnome' | 'kde' | 'xfce' | 'mate' | 'cinnamon' | 'openbox' | 'custom'
+  // Custom desktop command (only used when desktopType === 'custom').
+  // Passed to sshd verbatim, so it goes through /bin/sh -c on the remote.
+  x11DesktopCustomCmd?: string
 }
 
 export interface SessionInfo {

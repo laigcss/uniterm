@@ -16,8 +16,7 @@
     <div class="settings-panel">
       <!-- 基础设置 -->
       <div v-if="settingsStore.activeCategory === 'basic'" class="settings-section">
-        <h2 class="section-title">{{ t('settings.basic') }}</h2>
-
+        <h2 class="section-title">{{ t('settings.appearance') }}</h2>
         <div class="settings-group">
           <div class="setting-card">
             <div class="setting-info">
@@ -49,24 +48,6 @@
                 />
                 <el-option :label="t('settings.langSystem')" value="system" />
               </el-select>
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('settings.closeTabPrompt') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-switch v-model="settingsStore.settings.closeTabPrompt" @change="settingsStore.save()" />
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('settings.closeAppPrompt') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-switch v-model="settingsStore.settings.closeAppPrompt" @change="settingsStore.save()" />
             </div>
           </div>
 
@@ -161,12 +142,94 @@
               </div>
             </div>
           </template>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.tabCloseButton') }}</div>
+              <div class="setting-desc">{{ t('settings.tabCloseButtonDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.tabCloseButton" @change="settingsStore.save()">
+                <el-option :label="t('settings.tabCloseButtonLeft')" value="left" />
+                <el-option :label="t('settings.tabCloseButtonRight')" value="right" />
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.closeTabPrompt') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch v-model="settingsStore.settings.closeTabPrompt" @change="settingsStore.save()" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.closeAppPrompt') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch v-model="settingsStore.settings.closeAppPrompt" @change="settingsStore.save()" />
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.storageSecurity') }}</h2>
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('config.dataDir') }}</div>
+              <div class="setting-desc">{{ t('config.dataDirDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <div class="config-value">{{ dataDirTypeLabel }}</div>
+              <el-button size="small" @click="openDataDirChange">{{ t('config.changeDir') }}</el-button>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('config.encryption') }}</div>
+              <div class="setting-desc">{{ t('config.encryptionDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="modeSelect" @change="onModeChange" popper-class="mode-select-popper" style="width: 100%">
+                <el-option v-if="!credStore.status.mode" :label="t('config.notConfigured')" value="" disabled />
+                <el-option :label="t('encrypt.keychain')" value="keychain">
+                  <div class="mode-option">
+                    <div class="mode-option-title">{{ t('encrypt.keychain') }}</div>
+                    <div class="mode-option-desc">{{ t('config.switchKeychainHint') }}</div>
+                  </div>
+                </el-option>
+                <el-option :label="t('encrypt.masterPassword')" value="master-password">
+                  <div class="mode-option">
+                    <div class="mode-option-title">{{ t('encrypt.masterPassword') }}</div>
+                    <div class="mode-option-desc">{{ t('config.switchMasterHint') }}</div>
+                  </div>
+                </el-option>
+              </el-select>
+            </div>
+          </div>
+
+          <div v-if="credStore.status.mode === 'master-password'" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('config.masterPassword') }}</div>
+              <div class="setting-desc">{{ t('config.changePasswordDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-button size="small" @click="openChangePassword">{{ t('config.changePassword') }}</el-button>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- 终端配置 -->
       <div v-if="settingsStore.activeCategory === 'terminal'" class="settings-section">
-        <h2 class="section-title">{{ t('settings.terminal') }}</h2>
+        <h2 class="section-title">{{ t('settings.appearance') }}</h2>
 
         <div class="settings-group">
           <div class="setting-card">
@@ -177,6 +240,7 @@
             <div class="setting-control">
               <div class="theme-select-row">
                 <el-select v-model="settingsStore.settings.terminal.theme" @change="settingsStore.save()" popper-class="theme-select-popper">
+                  <el-option :label="t('settings.followAppTheme')" :value="FOLLOW_APP_THEME" />
                   <el-option-group
                     v-for="group in terminalThemeGroups"
                     :key="group.label"
@@ -207,17 +271,63 @@
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.font') }}</div>
+              <div class="setting-title">{{ t('settings.fontPrimary') }}</div>
               <div class="setting-desc">{{ t('settings.fontDesc') }}</div>
             </div>
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
+                <template #header>
+                  <div style="padding:4px 12px">
+                    <el-checkbox v-model="firstMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+                  </div>
+                </template>
                 <el-option
                   v-for="f in fontOptions"
                   :key="f.value"
                   :label="f.label"
                   :value="f.value"
-                  :style="{ fontFamily: f.value }"
+                  :style="{ fontFamily: formatFontFamily(f.value) }"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.fontFallback') }}</div>
+              <div class="setting-desc">{{ t('settings.fontFallbackDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
+                <template #header>
+                  <div style="padding:4px 12px">
+                    <el-checkbox v-model="secondMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
+                  </div>
+                </template>
+                <el-option value="" :label="t('settings.fontNone')" />
+                <el-option
+                  v-for="f in secondFontOptions"
+                  :key="f.value"
+                  :label="f.label"
+                  :value="f.value"
+                  :style="{ fontFamily: formatFontFamily(f.value) }"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.fontWeight') }}</div>
+              <div class="setting-desc">{{ t('settings.fontWeightDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.fontWeight" @change="settingsStore.save()">
+                <el-option
+                  v-for="w in FONT_WEIGHT_OPTIONS"
+                  :key="w.value"
+                  :label="t(w.labelKey)"
+                  :value="w.value"
                 />
               </el-select>
             </div>
@@ -233,7 +343,6 @@
                 v-model="settingsStore.settings.terminal.fontSize"
                 :min="8"
                 :max="32"
-               
                 @change="settingsStore.save()"
               />
             </div>
@@ -241,21 +350,84 @@
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.defaultLocalShell') }}</div>
-              <div class="setting-desc">{{ t('settings.defaultLocalShellDesc') }}</div>
+              <div class="setting-title">{{ t('settings.highlight') }}</div>
+              <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-select v-model="settingsStore.settings.defaultLocalShell" @change="settingsStore.save()">
-                <el-option
-                  v-for="sh in settingsStore.availableShells"
-                  :key="sh"
-                  :label="getShellLabel(sh)"
-                  :value="sh"
-                />
+              <el-switch :model-value="settingsStore.settings.terminal.cursorBlink ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.cursorBlink = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.cursorStyle') }}</div>
+              <div class="setting-desc">{{ t('settings.cursorStyleDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.cursorStyle" @change="settingsStore.save()">
+                <el-option v-for="opt in cursorStyleOptions" :key="opt.value" :label="t(opt.labelKey)" :value="opt.value" />
               </el-select>
             </div>
           </div>
 
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.terminalContrast') }}</div>
+              <div class="setting-desc">{{ t('settings.terminalContrastDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.minimumContrast" @change="settingsStore.save()">
+                <el-option :label="t('settings.contrastOff')" :value="1" />
+                <el-option :label="t('settings.contrastStandard')" :value="4.5" />
+                <el-option :label="t('settings.contrastHigh')" :value="7" />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.highlight') }}</div>
+              <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.highlightEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.highlightEnabled = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.showLineNumbers') }}</div>
+              <div class="setting-desc">{{ t('settings.showLineNumbersDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.showLineNumbers ?? false" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.showLineNumbers = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.showTimestamps') }}</div>
+              <div class="setting-desc">{{ t('settings.showTimestampsDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.showTimestamps ?? false" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.showTimestamps = v; settingsStore.save() }" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.timestampFormat') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.terminal.timestampFormat" @change="settingsStore.save()">
+                <el-option v-for="opt in TIMESTAMP_FORMATS" :key="opt.value" :label="t(opt.labelKey)" :value="opt.value" />
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
+        <div class="settings-group">
           <div class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.selectionAction') }}</div>
@@ -274,7 +446,7 @@
               <div class="setting-title">{{ t('settings.wordSeparator') }}</div>
               <div class="setting-desc">{{ t('settings.wordSeparatorDesc') }}</div>
             </div>
-            <div class="setting-control setting-control-wide">
+            <div class="setting-control">
               <el-input
                 v-model="settingsStore.settings.terminal.wordSeparator"
                 :placeholder="defaultWordSeparator"
@@ -312,23 +484,6 @@
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.maxHistory') }}</div>
-              <div class="setting-desc">{{ t('settings.maxHistoryDesc') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                v-model="settingsStore.settings.terminal.maxHistoryLines"
-                :min="100"
-                :max="50000"
-                :step="100"
-               
-                @change="settingsStore.save()"
-              />
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
               <div class="setting-title">{{ t('settings.smartCompletion') }}</div>
               <div class="setting-desc">{{ t('settings.smartCompletionDesc') }}</div>
             </div>
@@ -339,21 +494,47 @@
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.highlight') }}</div>
-              <div class="setting-desc">{{ t('settings.highlightDesc') }}</div>
+              <div class="setting-title">{{ t('settings.aiTranscription') }}</div>
+              <div class="setting-desc">{{ t('settings.aiTranscriptionDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-switch :model-value="settingsStore.settings.terminal.highlightEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.highlightEnabled = v; settingsStore.save() }" />
+              <el-switch :model-value="settingsStore.settings.terminal.aiTranscription ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.aiTranscription = v; settingsStore.save() }" />
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.session') }}</h2>
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.defaultLocalShell') }}</div>
+              <div class="setting-desc">{{ t('settings.defaultLocalShellDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.defaultLocalShell" @change="settingsStore.save()">
+                <el-option
+                  v-for="sh in settingsStore.availableShells"
+                  :key="sh"
+                  :label="getShellLabel(sh)"
+                  :value="sh"
+                />
+              </el-select>
             </div>
           </div>
 
           <div class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.cursorBlink') }}</div>
-              <div class="setting-desc">{{ t('settings.cursorBlinkDesc') }}</div>
+              <div class="setting-title">{{ t('settings.maxHistory') }}</div>
+              <div class="setting-desc">{{ t('settings.maxHistoryDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-switch :model-value="settingsStore.settings.terminal.cursorBlink ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.cursorBlink = v; settingsStore.save() }" />
+              <el-input-number
+                v-model="settingsStore.settings.terminal.maxHistoryLines"
+                :min="100"
+                :max="50000"
+                :step="100"
+                @change="settingsStore.save()"
+              />
             </div>
           </div>
 
@@ -362,17 +543,24 @@
               <div class="setting-title">{{ t('settings.sessionLogDir') }}</div>
               <div class="setting-desc">{{ t('settings.sessionLogDirDesc', { path: defaultLogDir }) }}</div>
             </div>
-            <div class="setting-control setting-control-wide">
+            <div class="setting-control">
               <el-input
                 v-model="settingsStore.settings.terminal.sessionLogDir"
                 :placeholder="defaultLogDir"
+                class="dir-input"
                 @change="settingsStore.save()"
                 clearable
-              />
-              <el-button @click="pickLogDir">{{ t('settings.browse') }}</el-button>
+              >
+                <template #append>
+                  <el-tooltip :content="t('settings.browse')" placement="top">
+                    <el-button :aria-label="t('settings.browse')" @click="pickLogDir">
+                      <el-icon><FolderOpen :size="16" /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </template>
+              </el-input>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -461,6 +649,48 @@
             </div>
           </div>
         </template>
+      </div>
+
+      <!-- 密钥库 -->
+      <div v-if="settingsStore.activeCategory === 'identities'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.identities') }}</h2>
+        <p class="section-desc">{{ t('settings.identitiesDesc') }}</p>
+        <el-button type="primary" @click="openIdentityDialog()">{{ t('settings.addIdentity') }}</el-button>
+        <el-table :data="identityStore.identities" size="small" style="margin-top: 12px">
+          <el-table-column prop="name" :label="t('conn.name')" />
+          <el-table-column prop="username" :label="t('conn.user')" />
+          <el-table-column :label="t('conn.authType')">
+            <template #default="{ row }">{{ row.authType === 'password' ? t('conn.password') : t('conn.keyPath') }}</template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="160">
+            <template #default="{ row }">
+              <el-button size="small" @click="openIdentityDialog(row)">{{ t('common.edit') }}</el-button>
+              <el-button size="small" type="danger" @click="removeIdentity(row)">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <IdentityEditDialog v-model:visible="identityDialogVisible" :identity="editingIdentity" @saved="identityStore.load()" />
+      </div>
+
+      <!-- 代理 -->
+      <div v-if="settingsStore.activeCategory === 'proxies'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.proxies') }}</h2>
+        <p class="section-desc">{{ t('settings.proxiesDesc') }}</p>
+        <el-button type="primary" @click="openProxyDialog()">{{ t('settings.addProxy') }}</el-button>
+        <el-table :data="proxyStore.proxies" size="small" style="margin-top: 12px">
+          <el-table-column prop="name" :label="t('conn.name')" />
+          <el-table-column prop="kind" :label="t('conn.proxyType')" width="100" />
+          <el-table-column :label="t('settings.proxyHost')">
+            <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="160">
+            <template #default="{ row }">
+              <el-button size="small" @click="openProxyDialog(row)">{{ t('common.edit') }}</el-button>
+              <el-button size="small" type="danger" @click="removeProxy(row)">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <ProxyEditDialog v-model:visible="proxyDialogVisible" :proxy="editingProxy" @saved="proxyStore.load()" />
       </div>
 
       <!-- 关于 -->
@@ -697,34 +927,95 @@
     <ChangePasswordDialog />
     <DeleteRepoDialog />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
+
+    <!-- Config dialogs -->
+    <DataDirDialog v-model:visible="dataDirVisible" :first-run="false" @done="onDataDirChange" />
+
+    <el-dialog append-to-body v-model="showSetupMaster" :title="t('config.setupMasterTitle')" width="440px">
+      <el-form label-width="100px" class="settings-form" @submit.prevent="doSetupMaster">
+        <el-form-item :label="t('encrypt.password')">
+          <el-input v-model="setupPw" type="password" show-password />
+        </el-form-item>
+        <el-form-item :label="t('encrypt.confirm')">
+          <el-input v-model="setupPw2" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <div v-if="setupError" class="form-error">{{ setupError }}</div>
+      <template #footer>
+        <el-button @click="showSetupMaster = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="setupSubmitting" @click="doSetupMaster">{{ t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog append-to-body v-model="showVerifyMaster" :title="t('config.verifyMasterTitle')" width="440px">
+      <el-form label-width="100px" class="settings-form" @submit.prevent="doVerifyMaster">
+        <el-form-item :label="t('config.verifyCurrentPassword')">
+          <div class="verify-field">
+            <el-input v-model="verifyPw" type="password" show-password />
+            <div class="switch-mode-hint">{{ t('config.verifyCurrentHint') }}</div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <div v-if="verifyError" class="form-error">{{ verifyError }}</div>
+      <template #footer>
+        <el-button @click="showVerifyMaster = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="verifySubmitting" @click="doVerifyMaster">{{ t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog append-to-body v-model="showChangePassword" :title="t('config.changePassword')" width="440px">
+      <el-form label-width="100px" class="settings-form" @submit.prevent="doChangePassword">
+        <el-form-item :label="t('config.oldPassword')">
+          <el-input v-model="oldPw" type="password" show-password />
+        </el-form-item>
+        <el-form-item :label="t('config.newPassword')">
+          <el-input v-model="newPw" type="password" show-password />
+        </el-form-item>
+        <el-form-item :label="t('encrypt.confirm')">
+          <el-input v-model="newPw2" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <div v-if="changePwError" class="form-error">{{ changePwError }}</div>
+      <template #footer>
+        <el-button @click="showChangePassword = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="changePwSubmitting" @click="doChangePassword">{{ t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetSystemFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage } from '../../wailsjs/go/main/App'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { BrowserOpenURL } from '../../wailsjs/runtime'
-import { Quit } from '../../wailsjs/runtime'
-import { ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS } from '../types/settings'
-import { formatFontFamily } from '../utils/formatFontFamily'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS } from '../types/settings'
+import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { uninstallGlobalListener, installGlobalListener } from '../composables/useKeyboardShortcuts'
+import { uninstallGlobalListener, installGlobalListener, formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import AddRepoDialog from './AddRepoDialog.vue'
 import EditRepoDialog from './EditRepoDialog.vue'
 import ChangePasswordDialog from './ChangePasswordDialog.vue'
 import DeleteRepoDialog from './DeleteRepoDialog.vue'
 import CustomThemeEditor from './CustomThemeEditor.vue'
+import DataDirDialog from './DataDirDialog.vue'
+import IdentityEditDialog from './IdentityEditDialog.vue'
+import ProxyEditDialog from './ProxyEditDialog.vue'
+import { useCredentialStore } from '../stores/credentialStore'
+import { useIdentityStore } from '../stores/identityStore'
+import { useProxyStore } from '../stores/proxyStore'
+import type { Identity } from '../types/identity'
+import type { Proxy } from '../types/proxy'
 
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
@@ -733,6 +1024,126 @@ const localStateStore = useLocalStateStore()
 const { t } = useI18n()
 const platform = ref('')
 const isMac = computed(() => platform.value === 'darwin')
+
+// ── Config management (data dir + encryption mode) ──
+const credStore = useCredentialStore()
+const dataDirVisible = ref(false)
+const showSetupMaster = ref(false)
+const showVerifyMaster = ref(false)
+const showChangePassword = ref(false)
+
+const dataDirTypeLabel = computed(() => {
+  if (!credStore.dataDirInfo.dataDir) return t('config.notSet')
+  switch (credStore.dataDirInfo.type) {
+    case 'default': return t('dataDir.default')
+    case 'portable': return t('dataDir.portable')
+    case 'custom': return t('dataDir.custom')
+    default: return t('config.notSet')
+  }
+})
+
+function openDataDirChange() {
+  dataDirVisible.value = true   // reuse DataDirDialog (change mode: migrate checkbox visible)
+}
+function onDataDirChange(restart: boolean) {
+  if (restart) {
+    RelaunchApp()
+  }
+}
+async function openChangePassword() { showChangePassword.value = true }
+
+// Encryption-mode dropdown. The select mirrors the live mode; choosing a
+// different option reverts immediately and opens the matching directional
+// dialog instead. modeSelect only advances after a successful switch (via the
+// watch below), so cancelling a dialog leaves the dropdown unchanged.
+const modeSelect = ref<string>('')
+watch(() => credStore.status.mode, (m) => { modeSelect.value = m || '' }, { immediate: true })
+
+function onModeChange(val: string) {
+  modeSelect.value = credStore.status.mode || ''  // revert until the switch actually lands
+  if (!val || val === credStore.status.mode) return
+  if (credStore.status.mode === '') {
+    // No credentials configured yet: no existing password to verify.
+    if (val === 'keychain') doSetupKeychain()
+    else showSetupMaster.value = true
+    return
+  }
+  if (val === 'master-password') showSetupMaster.value = true
+  else showVerifyMaster.value = true
+}
+
+// keychain → master-password (or first-run master-password): configure a new password.
+const setupPw = ref(''); const setupPw2 = ref('')
+const setupError = ref(''); const setupSubmitting = ref(false)
+watch(showSetupMaster, (v) => { if (v) { setupPw.value = ''; setupPw2.value = ''; setupError.value = '' } })
+
+async function doSetupMaster() {
+  if (setupSubmitting.value) return
+  setupError.value = ''
+  if (!setupPw.value) { setupError.value = t('encrypt.passwordRequired'); return }
+  if (setupPw.value !== setupPw2.value) { setupError.value = t('encrypt.mismatch'); return }
+  setupSubmitting.value = true
+  try {
+    if (credStore.status.mode === '') await credStore.setup('master-password', setupPw.value)
+    else await credStore.switchMode('master-password', setupPw.value)
+    showSetupMaster.value = false
+    msg.success(t('config.switchDone'))
+  } catch (e: any) { setupError.value = e?.message || String(e) }
+  finally { setupSubmitting.value = false }
+}
+
+// master-password → keychain: verify the current master password once.
+const verifyPw = ref('')
+const verifyError = ref(''); const verifySubmitting = ref(false)
+watch(showVerifyMaster, (v) => { if (v) { verifyPw.value = ''; verifyError.value = '' } })
+
+async function doVerifyMaster() {
+  if (verifySubmitting.value) return
+  verifyError.value = ''
+  if (!verifyPw.value) { verifyError.value = t('encrypt.passwordRequired'); return }
+  verifySubmitting.value = true
+  try {
+    await credStore.switchMode('keychain', verifyPw.value)
+    showVerifyMaster.value = false
+    msg.success(t('config.switchDone'))
+  } catch (e: any) { verifyError.value = e?.message || String(e) }
+  finally { verifySubmitting.value = false }
+}
+
+// first-run / unconfigured → keychain: no password needed.
+async function doSetupKeychain() {
+  try {
+    await credStore.setup('keychain', '')
+    msg.success(t('config.switchDone'))
+  } catch (e: any) { msg.error(e?.message || String(e)) }
+}
+
+const oldPw = ref(''); const newPw = ref(''); const newPw2 = ref('')
+const changePwError = ref(''); const changePwSubmitting = ref(false)
+
+// Clear fields each time the dialog opens so a previous password isn't shown.
+watch(showChangePassword, (v) => {
+  if (v) {
+    oldPw.value = ''
+    newPw.value = ''
+    newPw2.value = ''
+    changePwError.value = ''
+  }
+})
+
+async function doChangePassword() {
+  if (changePwSubmitting.value) return
+  changePwError.value = ''
+  if (!oldPw.value || !newPw.value) { changePwError.value = t('config.oldPassword') + ' / ' + t('config.newPassword'); return }
+  if (newPw.value !== newPw2.value) { changePwError.value = t('encrypt.mismatch'); return }
+  changePwSubmitting.value = true
+  try {
+    await credStore.changeMasterPassword(oldPw.value, newPw.value)
+    showChangePassword.value = false
+    msg.success(t('config.changeDone'))
+  } catch (e: any) { changePwError.value = e?.message || String(e) }
+  finally { changePwSubmitting.value = false }
+}
 
 function openEditRepo() {
   syncStore.showEditRepo = true
@@ -764,16 +1175,29 @@ async function handleCheckUpdate() {
 
 syncStore.loadConfig()
 
-// ── System fonts ──
-const systemFonts = ref<{ label: string; value: string }[]>([])
-const fontOptions = computed(() => {
-  if (systemFonts.value.length > 0) {
-    return systemFonts.value
-  }
-  return FONT_OPTIONS
-})
+// ── Terminal fonts ──
+// Single source: GetAllFonts returns every installed family with its mono
+// flag (the bundled JetBrains Mono Variable is pinned first). The per-select
+// "monospace only" checkbox (inside each dropdown) filters this client-side.
+const allFonts = ref<{ Name: string; IsMono: boolean }[]>([])
+const firstMonoOnly = ref(true)
+const secondMonoOnly = ref(true)
+
+const toFontOption = (name: string) => ({ label: name, value: name })
+const fontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !firstMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
+const secondFontOptions = computed(() =>
+  allFonts.value.length > 0
+    ? allFonts.value.filter(f => !secondMonoOnly.value || f.IsMono).map(f => toFontOption(f.Name))
+    : FONT_OPTIONS
+)
 
 const { terminalThemeGroups, isCustomTheme } = useTerminalThemeOptions()
+
+const cursorStyleOptions = CURSOR_STYLES
 
 const themeEditorVisible = ref(false)
 const themeEditorSourceId = ref<string | undefined>(undefined)
@@ -789,9 +1213,19 @@ onMounted(async () => {
     platform.value = ''
   }
   try {
-    const fonts = await GetSystemFonts()
+    const fonts = await GetAllFonts()
     if (fonts && fonts.length > 0) {
-      systemFonts.value = fonts.map(f => ({ label: f, value: formatFontFamily(f) }))
+      allFonts.value = fonts
+      // Migrate a legacy full-stack fontFamily down to its bare family name so
+      // it matches a dropdown option (and the new single-name default) — the
+      // old stored value was a raw CSS stack this picker can't show cleanly.
+      const names = new Set(allFonts.value.map(f => f.Name))
+      const cur = settingsStore.settings.terminal.fontFamily
+      const normalized = normalizeFontFamilyValue(cur, names)
+      if (normalized !== cur) {
+        settingsStore.settings.terminal.fontFamily = normalized
+        settingsStore.save()
+      }
     }
   } catch {
     // Fall back to FONT_OPTIONS
@@ -805,6 +1239,16 @@ onMounted(async () => {
     await refreshBgPreview()
   } catch {
     // Ignore preview errors
+  }
+  try {
+    await identityStore.load()
+  } catch {
+    // Ignore identity load errors
+  }
+  try {
+    await proxyStore.load()
+  } catch {
+    // Ignore proxy load errors
   }
 })
 
@@ -832,7 +1276,7 @@ async function pickLogDir() {
 }
 
 watch(() => settingsStore.openCategory, (cat) => {
-  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard')) {
+  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities' || cat === 'proxies')) {
     settingsStore.activeCategory = cat
     settingsStore.openCategory = null
   }
@@ -844,13 +1288,7 @@ const rebindingAction = ref<ShortcutAction | null>(null)
 function bindingDisplay(action: ShortcutAction): string {
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
-  const parts: string[] = []
-  if (b.ctrl) parts.push('Ctrl')
-  if (b.meta) parts.push(isMac.value ? 'Cmd' : 'Meta')
-  if (b.shift) parts.push('Shift')
-  if (b.alt) parts.push('Alt')
-  parts.push(b.key)
-  return parts.join('+')
+  return formatKeyBinding(b, isMac.value)
 }
 
 function isDefaultBinding(action: ShortcutAction): boolean {
@@ -957,11 +1395,38 @@ const categories = computed(() => {
     { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
+    { key: 'identities', label: t('settings.identities'), icon: Key },
+    { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
   return cats
 })
+
+// ── Identities (密钥库) ──
+const identityStore = useIdentityStore()
+const identityDialogVisible = ref(false)
+const editingIdentity = ref<Identity | null>(null)
+function openIdentityDialog(id?: Identity) {
+  editingIdentity.value = id ?? null
+  identityDialogVisible.value = true
+}
+async function removeIdentity(row: Identity) {
+  await identityStore.remove(row.id)
+  ElMessage.success(t('settings.deleted'))
+}
+
+// ── Proxies (代理) ──
+const proxyStore = useProxyStore()
+const proxyDialogVisible = ref(false)
+const editingProxy = ref<Proxy | null>(null)
+function openProxyDialog(p?: Proxy) {
+  editingProxy.value = p ?? null
+  proxyDialogVisible.value = true
+}
+async function removeProxy(row: Proxy) {
+  await proxyStore.remove(row.id)
+}
 
 const showModelForm = ref(false)
 const modelSuggestions = ref<Array<{ value: string }>>([])
@@ -1149,7 +1614,7 @@ async function onToggleSystemTitleBar(v: boolean) {
   } catch {
     return
   }
-  Quit()
+  await RelaunchApp()
 }
 </script>
 
@@ -1157,10 +1622,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .settings-tab {
   display: flex;
   width: 100%;
-  min-width: 680px;
-  max-width: 960px;
   height: 100%;
-  margin: 0 auto;
   background: var(--bg-base);
   color: var(--text-primary);
 }
@@ -1168,6 +1630,8 @@ async function onToggleSystemTitleBar(v: boolean) {
 .settings-sidebar {
   width: 180px;
   flex-shrink: 0;
+  margin-left: 20px;
+  margin-right: 10px;
   padding: 16px 0;
   border-right: 1px solid var(--border-hover);
 }
@@ -1212,7 +1676,11 @@ async function onToggleSystemTitleBar(v: boolean) {
   flex: 1;
   padding: 24px 32px;
   overflow-y: auto;
-  min-width: 0;
+}
+
+.settings-section {
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .section-title {
@@ -1271,16 +1739,22 @@ async function onToggleSystemTitleBar(v: boolean) {
   min-width: 210px;
 }
 
-.setting-control-wide {
-  display: flex;
-  gap: 8px;
-  min-width: 380px;
-  align-items: center;
+/* The append button's width adds to the input's, so pin the whole group to
+   the 210px the sibling selects render at instead of letting it overflow. */
+.setting-control .dir-input {
+  width: 210px;
 }
 
-.setting-control-wide .el-input {
-  flex: 1;
+.config-value {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
+
+.settings-form { display: flex; flex-direction: column; gap: 4px; }
+.switch-mode-hint { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.verify-field { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+
+.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
 
 .setting-control .el-select,
 .setting-control .el-input-number {

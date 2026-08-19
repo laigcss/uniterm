@@ -52,8 +52,9 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
       // Prompt endings: $ # > ] plus common zsh/oh-my-zsh/powerline glyphs
       const PROMPT_RE = /(.+?[$#>\]❯➜→»λ])(?:\s+|$)(.*)/
       const rows = (terminal as any).rows || 24
-      // Cursor row first: running command lives where the cursor sits.
-      const cursorY = (buffer.y ?? 0) + (buffer.baseY ?? 0)
+      // Scan visible area from bottom to top — always finds the latest
+      // prompt regardless of cursor position. (Cursor-based scanning was
+      // tried in e4d31b7 but proved unreliable for prompt detection.)
       const tryLine = (y: number): string | null => {
         if (y < 0) return null
         const line = buffer.getLine(y)
@@ -63,22 +64,15 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
         const cleanText = stripAnsi(rawText)
         const match = cleanText.match(PROMPT_RE)
         if (!match) return null
-        const promptPart = match[1]
-        const lastChar = promptPart.charAt(promptPart.length - 1)
-        const isUnicodePrompt = /[❯➜→»λ]/.test(lastChar)
-        if (!promptPart.includes('@') && !promptPart.includes('~') &&
-            promptPart !== '$' && promptPart !== '#' && !isUnicodePrompt) return null
         const command = match[2].trim()
         if (command && !command.includes('__AI_DONE_') && command.length <= MAX_COMMAND_LENGTH) {
           return command
         }
         return null
       }
-      const fromCursor = tryLine(cursorY)
-      if (fromCursor !== null) return fromCursor
-      // Walk up until we find a prompt — stop at the first match.
-      for (let dy = 1; dy < rows; dy++) {
-        const y = cursorY - dy
+      const bottomY = (buffer.baseY ?? 0) + rows - 1
+      for (let dy = 0; dy < rows; dy++) {
+        const y = bottomY - dy
         if (y < 0) break
         const hit = tryLine(y)
         if (hit !== null) return hit

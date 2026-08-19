@@ -43,7 +43,7 @@ func initTestRepo(t *testing.T, repoPath string) *GitRepo {
 }
 
 // TestStageAndCommitWhitelist verifies SYNC-P1-9: StageAndCommit only stages
-// the seven whitelisted filenames, never wt.Add("."). A stray file
+// the nine whitelisted filenames, never wt.Add("."). A stray file
 // representing an SSH key (id_rsa) dropped into the sync dir must NOT be
 // committed plaintext.
 func TestStageAndCommitWhitelist(t *testing.T) {
@@ -58,6 +58,8 @@ func TestStageAndCommitWhitelist(t *testing.T) {
 		"ai-sessions.json":   `[]`,
 		"skills.json":        `[]`,
 		"quickCommands.json": `[]`,
+		"identities.json":    `{"identities":[]}`,
+		"proxies.json":       `{"proxies":[]}`,
 		".sync-salt":         base64.StdEncoding.EncodeToString([]byte("0123456789abcdef")),
 		"README.md":          "# sync repo\n",
 	}

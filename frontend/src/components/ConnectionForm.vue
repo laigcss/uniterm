@@ -1,5 +1,5 @@
 <template>
-  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="780px" class="conn-dialog">
+  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="780px" class="conn-dialog" @opened="onDialogOpened">
     <div class="conn-layout">
       <!-- Left sidebar: category icons -->
       <div class="conn-categories">
@@ -35,10 +35,8 @@
         <div class="conn-fields">
           <el-form :model="form" :label-width="formLabelWidth" @submit.prevent="onSave">
             <el-form-item :label="t('conn.name')">
-              <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
-            </el-form-item>
-            <el-form-item :label="t('conn.group')">
-              <div style="display:flex;gap:6px;width:100%">
+              <div class="name-group-row">
+                <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" class="name-input" />
                 <el-tree-select
                   v-model="selectedGroupId"
                   :data="groupTreeData"
@@ -46,9 +44,9 @@
                   check-strictly
                   clearable
                   :placeholder="t('conn.noGroup')"
-                  style="flex:1;min-width:0"
+                  class="group-select"
                 />
-                <el-button style="flex-shrink:0;width:32px;height:32px;padding:0" @click="onGroupSelect('__new__')" :title="t('conn.newGroup')">
+                <el-button class="new-group-btn" @click="onGroupSelect('__new__')" :title="t('conn.newGroup')">
                   <Plus :size="14" />
                 </el-button>
               </div>
@@ -69,20 +67,21 @@
             </template>
             <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
               <div class="host-port-row">
-                <el-input v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
+                <el-input ref="hostInputRef" v-model="form.host" class="host-input" :placeholder="form.type === 's3' ? 'e.g. https://s3.amazonaws.com' : form.type === 'webdav' ? 'https://dav.example.com/dav/' : t('conn.hostPlaceholder')" />
                 <template v-if="form.type !== 's3' && form.type !== 'webdav'">
                   <span class="host-port-sep">:</span>
                   <el-input-number v-model="form.port" :min="0" :max="65535" class="port-input" />
                 </template>
               </div>
             </el-form-item>
-            <el-form-item v-if="form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh'" :label="t('conn.authType')">
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
                 <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
+                <el-radio-button label="identity">{{ t('conn.identity') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
             <template v-if="isElasticsearch">
@@ -108,15 +107,23 @@
                 <el-input v-model="form.esPathPrefix" placeholder="/es" />
               </el-form-item>
             </template>
+            <el-form-item
+              v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')"
+              :label="t('conn.identity')"
+            >
+              <el-select v-model="form.identityId" filterable style="width: 100%">
+                <el-option v-for="id in identityStore.identities" :key="id.id" :label="`${id.name} (${id.username})`" :value="id.id" />
+              </el-select>
+            </el-form-item>
             <template v-if="form.type === 'rdp' && isWindows">
               <el-form-item :label="t('conn.rdpEnableNLA')">
-                <div class="nla-row">
-                  <el-switch v-model="form.rdpEnableNLA" />
-                  <span class="field-hint">{{ form.rdpEnableNLA ? t('conn.rdpEnableNLAOnHint') : t('conn.rdpEnableNLAOffHint') }}</span>
-                </div>
+                <el-select v-model="form.rdpEnableNLA" style="width: 100%">
+                  <el-option :value="true" :label="t('conn.rdpEnableNLAOn')" />
+                  <el-option :value="false" :label="t('conn.rdpEnableNLAOff')" />
+                </el-select>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite') && !isEsApiKey" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
+            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite') && !isEsApiKey" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : ''" />
             </el-form-item>
             <template v-if="isRedisSentinel">
@@ -127,7 +134,7 @@
                 <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
               </el-form-item>
             </template>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPath')">
+            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPath')">
               <el-input v-model="form.keyPath" :placeholder="t('conn.keyPathPlaceholder')">
                 <template #append>
                   <el-tooltip :content="t('conn.selectKeyFile')" placement="top">
@@ -138,7 +145,7 @@
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh')" :label="t('conn.keyPassphrase')">
+            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.keyPassphrasePlaceholder')" />
             </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
@@ -297,16 +304,36 @@
                 <el-switch v-model="form.rdpSmartSizing" />
               </el-form-item>
             </template>
-            <template v-if="form.type === 'vnc'">
-              <el-form-item :label="t('conn.vncEncryptionRequire')">
-                <el-switch v-model="vncRequireTLS" />
+            <template v-if="form.type === 'x11-desktop'">
+              <el-form-item :label="t('conn.x11DesktopDE')" required>
+                <el-select v-model="form.x11DesktopDesktopType">
+                  <el-option label="GNOME" value="gnome" />
+                  <el-option label="KDE" value="kde" />
+                  <el-option label="XFCE" value="xfce" />
+                  <el-option label="MATE" value="mate" />
+                  <el-option label="Cinnamon" value="cinnamon" />
+                  <el-option label="Openbox" value="openbox" />
+                  <el-option :label="t('conn.x11DesktopDECustom')" value="custom" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="form.x11DesktopDesktopType === 'custom'"
+                            :label="t('conn.x11DesktopCustomCmd')" required>
+                <el-input v-model="form.x11DesktopCustomCmd"
+                          :placeholder="t('conn.x11DesktopCustomCmdPlaceholder')" />
+                <div class="field-hint">{{ t('conn.x11DesktopCustomCmdHint') }}</div>
               </el-form-item>
             </template>
+            <el-form-item :label="t('conn.remark')">
+              <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="t('conn.remarkPlaceholder')" />
+            </el-form-item>
             <div v-if="showAdvancedToggle" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
               <el-icon class="advanced-arrow" :class="{ expanded: showAdvanced }"><ChevronRight :size="14" /></el-icon>
               <span>{{ t('conn.advanced') }}</span>
             </div>
             <template v-if="showAdvanced">
+            <el-form-item v-if="form.type === 'database'" :label="t('db.params')">
+              <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
+            </el-form-item>
             <el-form-item v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local'" :label="t('conn.postLoginScript')">
               <div class="post-login-config">
                 <el-radio-group v-model="postLoginMode" size="small">
@@ -374,7 +401,7 @@
               </div>
             </el-form-item>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local'"
               :label="t('conn.encoding')"
             >
               <el-select v-model="form.encoding" placeholder="Unicode (UTF-8)">
@@ -388,6 +415,31 @@
                 <el-option label="Korean (EUC-KR)" value="euc-kr" />
               </el-select>
             </el-form-item>
+            <template v-if="form.type === 'telnet'">
+              <el-form-item :label="t('conn.telnetNegotiationMode')">
+                <el-select v-model="form.telnetNegotiationMode">
+                  <el-option :label="t('conn.telnetNegotiationActive')" value="active" />
+                  <el-option :label="t('conn.telnetNegotiationPassive')" value="passive" />
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="t('conn.telnetSendMode')">
+                <el-select v-model="form.telnetSendMode">
+                  <el-option :label="t('conn.telnetSendModeChar')" value="character" />
+                  <el-option :label="t('conn.telnetSendModeLine')" value="line" />
+                </el-select>
+              </el-form-item>
+            </template>
+            <template v-if="form.type === 'telnet' || form.type === 'serial'">
+              <el-form-item :label="t('conn.localEcho')">
+                <el-switch v-model="form.localEcho" />
+              </el-form-item>
+              <el-form-item :label="t('conn.newlineMode')">
+                <el-select v-model="form.newlineMode">
+                  <el-option label="CR" value="cr" />
+                  <el-option label="CR+LF" value="crlf" />
+                </el-select>
+              </el-form-item>
+            </template>
             <el-form-item
               v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh'"
               :label="t('conn.backspaceKey')"
@@ -403,7 +455,7 @@
             </el-form-item>
             <el-form-item v-if="form.type === 'ssh'" :label="t('conn.x11Forwarding')">
               <el-switch v-model="form.x11Forwarding" />
-              <span class="field-hint" style="margin-left: 12px;">{{ t(x11HintKey) }}</span>
+              <span v-if="x11HintKey" class="field-hint" style="margin-left: 12px;">{{ t(x11HintKey) }}</span>
             </el-form-item>
             <template v-if="form.type === 'ftp'">
               <el-form-item :label="t('conn.ftpEncryption')">
@@ -437,6 +489,16 @@
                 <el-input v-model="form.vncRepeaterID" :placeholder="t('conn.vncRepeaterIDPlaceholder')" />
               </el-form-item>
             </template>
+            <el-form-item v-if="showProxy" :label="t('conn.proxy')">
+              <el-select v-model="form.proxyId" :placeholder="t('conn.proxyPlaceholder')" clearable filterable>
+                <el-option
+                  v-for="p in proxyStore.proxies"
+                  :key="p.id"
+                  :label="`${p.name} (${p.kind} ${p.host}:${p.port})`"
+                  :value="p.id"
+                />
+              </el-select>
+            </el-form-item>
             <el-form-item v-if="showTunnel" :label="t('conn.tunnel')">
               <el-select
                 v-model="form.tunnelSSHConnId"
@@ -466,6 +528,16 @@
     </div>
     <template #footer>
       <el-button @click="visible = false">{{ t('conn.cancel') }}</el-button>
+      <el-button
+        v-if="canTest"
+        :loading="testStatus === 'checking'"
+        :icon="testStatus === 'success' ? CircleCheck : testStatus === 'error' ? CircleX : undefined"
+        :class="{ 'test-success': testStatus === 'success', 'test-error': testStatus === 'error' }"
+        class="test-status-btn"
+        @click="onTest"
+      >
+        {{ t('conn.testConnection') }}
+      </el-button>
       <el-button @click="onSave">{{ t('conn.saveOnly') }}</el-button>
       <el-button type="primary" @click="onConnect">{{ t('conn.saveConnect') }}</el-button>
     </template>
@@ -501,20 +573,30 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, nextTick } from 'vue'
+import { reactive, computed, watch, ref, nextTick, onMounted } from 'vue'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useIdentityStore } from '../stores/identityStore'
+import { useProxyStore } from '../stores/proxyStore'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
-import { OpenFileDialog, GetPlatform, ListSerialPorts } from '../../wailsjs/go/main/App'
-import { ElMessage } from 'element-plus'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, Search, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel } from '@lucide/vue'
+import { OpenFileDialog, GetPlatform, ListSerialPorts, TestConnection } from '../../wailsjs/go/main/App'
+import { ElInput } from 'element-plus'
+import { msg } from '../services/message'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, Search, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 
 const { t } = useI18n()
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
+const identityStore = useIdentityStore()
+const proxyStore = useProxyStore()
+
+onMounted(() => {
+  identityStore.load()
+  proxyStore.load()
+})
 
 // ── Categories & sub-types ──
 interface SubTypeInfo {
@@ -551,6 +633,7 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     ...(isWindows.value ? [{ type: 'rdp', label: 'RDP', icon: Monitor }] : []),
     { type: 'vnc', label: 'VNC', icon: MonitorSmartphone },
     { type: 'spice', label: 'SPICE', icon: MonitorCloud },
+    { type: 'x11-desktop', label: 'X11 Desktop', icon: AppWindow },
   ],
   database: [
     { type: 'database', dbType: 'mysql', label: 'MySQL', icon: Database },
@@ -624,21 +707,21 @@ const isWindows = ref(/windows/i.test(navigator.userAgent))
 const platform = ref<string>('')
 GetPlatform().then(p => { platform.value = p })
 const x11HintKey = computed(() => {
-  if (platform.value === 'windows') return 'conn.x11ForwardingDescWin'
   if (platform.value === 'darwin') return 'conn.x11ForwardingDescMac'
-  return 'conn.x11ForwardingDescLinux'
+  return ''
 })
 const passwordInputKey = ref(0)
 
-// vncEncryption is stored as 'auto' | 'require' in ConnectionConfig (matches
-// the Go side) but exposed in the form as a simple boolean switch: on means
-// "require TLS", off means "auto / whatever the server offers".
-const vncRequireTLS = computed({
-  get: () => form.vncEncryption === 'require',
-  set: (val) => { form.vncEncryption = val ? 'require' : 'auto' },
-})
 const postLoginMode = ref<'script' | 'expect'>('script')
 const showAdvanced = ref(false)
+
+// Connection types that support the "test connection" button (issue #377).
+// local/serial/mosh/vnc/rdp/spice/x11-desktop don't have a non-interactive probe.
+const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container']
+// Test-connection result state: 'checking' shows a spinner; 'success'/'error'
+// keep a colored status icon on the button until the next test or a reopen.
+const testStatus = ref<'idle' | 'checking' | 'success' | 'error'>('idle')
+const canTest = computed(() => TESTABLE_TYPES.includes(form.type))
 
 // Serial port config (separate refs so allow-create doesn't produce strings)
 const serialPorts = ref<string[]>([])
@@ -691,8 +774,11 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v)
 })
 
+const hostInputRef = ref<InstanceType<typeof ElInput> | null>(null)
+
 watch(visible, (val) => {
   if (val) {
+    testStatus.value = 'idle'
     passwordInputKey.value++
     // Apply group on open: the defaultGroupId watch won't fire when the value
     // is unchanged, so restore it here to avoid losing the group on the second
@@ -704,10 +790,18 @@ watch(visible, (val) => {
   }
 })
 
+function onDialogOpened() {
+  // New connections: focus the host field by default. The dialog's @opened
+  // event fires after the open transition, so the host input is mounted.
+  if (!isEdit.value) {
+    nextTick(() => hostInputRef.value?.focus())
+  }
+}
+
 const isEdit = computed(() => !!props.editConfig?.id)
 
 const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'serial']
-const REMOTE_TYPES = ['rdp', 'vnc', 'spice']
+const REMOTE_TYPES = ['rdp', 'vnc', 'spice', 'x11-desktop']
 const FILETRANSFER_TYPES = ['ftp', 'ssh', 'smb', 'webdav', 's3']
 
 const category = computed(() => {
@@ -729,6 +823,7 @@ const TUNNEL_UNSUPPORTED = ['spice', 'mosh', 'local', 'serial', 'container']
 const showTunnel = computed(() =>
   !TUNNEL_UNSUPPORTED.includes(form.type)
 )
+const showProxy = computed(() => ['ssh', 'sftp', 'monitor'].includes(form.type))
 const showAdvancedToggle = computed(() =>
   showTunnel.value || form.type === 'ssh' || form.type === 'telnet' || form.type === 'mosh' || form.type === 'local' || form.type === 'serial' || form.type === 'ftp'
 )
@@ -758,6 +853,7 @@ const defaultParamsHint = computed(() => {
 const form = reactive<ConnectionConfig>({
   id: '',
   name: '',
+  remark: '',
   type: 'ssh',
   host: '',
   port: 22,
@@ -791,11 +887,16 @@ const form = reactive<ConnectionConfig>({
   ftpPassive: true,
   ftpEncoding: 'utf-8',
   ftpSkipVerify: false,
-  vncEncryption: 'auto',
   vncShared: true,
   vncRepeaterID: '',
   encoding: 'utf-8',
   backspaceKey: 'bs',
+  telnetNegotiationMode: 'active' as 'active' | 'passive',
+  telnetLocalEcho: false,
+  telnetSendMode: 'character' as 'character' | 'line',
+  telnetNewlineMode: 'cr' as 'cr' | 'crlf',
+  localEcho: false,
+  newlineMode: 'cr' as 'cr' | 'crlf',
   shellPath: '',
   smbDomain: 'WORKGROUP',
   smbShare: '',
@@ -810,6 +911,9 @@ const form = reactive<ConnectionConfig>({
   containerTransport: 'ssh',
   containerSSHConnId: undefined,
   containerRuntime: 'docker',
+  proxyId: undefined,
+  x11DesktopDesktopType: 'gnome',
+  x11DesktopCustomCmd: '',
 })
 
 const rdpResolutions = [
@@ -823,7 +927,7 @@ const rdpResolutions = [
   { label: '2560 × 1440 (QHD)', w: 2560, h: 1440 },
 ]
 
-const rdpResolution = ref('1280 × 720 (HD)')
+const rdpResolution = ref(t('rdp.fullscreen'))
 
 const selectedGroupId = ref<string | undefined>(undefined)
 
@@ -869,12 +973,10 @@ const hydrating = ref(false)
 
 watch(() => props.editConfig, (config) => {
   if (config) {
-    // If editing an existing connection (has id), merge its full config.
-    // Otherwise (sparse config from quick-new), reset first to avoid stale
-    // data from a previously edited connection leaking in.
-    if (!config.id) {
-      resetForm()
-    }
+    // Always reset first so fields absent from the config (e.g. an empty
+    // password) don't leak values from a previously edited connection. Then
+    // merge the config over the clean defaults.
+    resetForm()
     hydrating.value = true
     Object.assign(form, { ...config, postLoginExpectSteps: cloneExpectSteps(config.postLoginExpectSteps || []) })
     // Existing connections without the field default to NLA off (old behavior).
@@ -896,6 +998,10 @@ watch(() => props.editConfig, (config) => {
     if (config.type === 'container') {
       form.containerTransport = config.containerTransport ?? 'ssh'
       form.containerRuntime = config.containerRuntime ?? 'docker'
+    }
+    if (config.type === 'x11-desktop') {
+      form.x11DesktopDesktopType = config.x11DesktopDesktopType ?? 'gnome'
+      form.x11DesktopCustomCmd = config.x11DesktopCustomCmd ?? ''
     }
     // Sync resolution dropdown to the config's fixed size
     const match = rdpResolutions.find(r => r.w === config.rdpFixedWidth && r.h === config.rdpFixedHeight)
@@ -919,6 +1025,8 @@ watch(() => props.defaultGroupId, (gid) => {
 
 // Auto-switch default port when changing type
 watch(() => form.type, (newType) => {
+  // A result icon for the previous type is stale; clear it.
+  testStatus.value = 'idle'
   if (newType !== 'ssh' && postLoginMode.value === 'expect') {
     postLoginMode.value = 'script'
   }
@@ -926,6 +1034,7 @@ watch(() => form.type, (newType) => {
   if (newType === 'ssh') form.port = 22
   else if (newType === 'telnet') form.port = 23
   else if (newType === 'mosh') form.port = 22
+  else if (newType === 'x11-desktop') form.port = 22
   else if (newType === 'rdp') form.port = 3389
   else if (newType === 'vnc') form.port = 5900
   else if (newType === 'spice') form.port = 5900
@@ -974,9 +1083,15 @@ watch(rdpResolution, (val) => {
   }
 })
 
+// Clear the identity reference when switching away from the identity auth type.
+watch(() => form.authType, (val) => {
+  if (val !== 'identity') form.identityId = ''
+})
+
 function resetForm() {
   form.id = ''
   form.name = ''
+  form.remark = ''
   form.type = 'ssh'
   form.host = ''
   form.port = 22
@@ -984,6 +1099,7 @@ function resetForm() {
   form.authType = 'password'
   form.password = ''
   form.keyPath = ''
+  form.identityId = ''
   form.groupId = undefined
   form.rdpFixedWidth = undefined
   form.rdpFixedHeight = undefined
@@ -1010,11 +1126,16 @@ function resetForm() {
   form.ftpPassive = true
   form.ftpEncoding = 'utf-8'
   form.ftpSkipVerify = false
-  form.vncEncryption = 'auto'
   form.vncShared = true
   form.vncRepeaterID = ''
   form.encoding = 'utf-8'
   form.backspaceKey = 'bs'
+  form.telnetNegotiationMode = 'active'
+  form.telnetLocalEcho = false
+  form.telnetSendMode = 'character'
+  form.telnetNewlineMode = 'cr'
+  form.localEcho = false
+  form.newlineMode = 'cr'
   form.shellPath = ''
   form.serialPort = ''
   form.serialBaudRate = 115200
@@ -1023,6 +1144,7 @@ function resetForm() {
   form.serialParity = 'none'
   serialBaudRateInput.value = ''
   form.tunnelSSHConnId = undefined
+  form.proxyId = undefined
   form.logOnConnect = false
   form.k8sConfigPath = '~/.kube/config'
   form.k8sConfigInline = ''
@@ -1035,7 +1157,9 @@ function resetForm() {
   k8sContexts.value = []
   k8sContextsLoading.value = false
   k8sContextsError.value = ''
-  rdpResolution.value = '1280 × 720 (HD)'
+  rdpResolution.value = t('rdp.fullscreen')
+  form.x11DesktopDesktopType = 'gnome'
+  form.x11DesktopCustomCmd = ''
   selectedGroupId.value = undefined
 }
 
@@ -1209,15 +1333,46 @@ function removeExpectStep(index: number) {
 function validateContainer(): boolean {
   if (form.type !== 'container') return true
   if (form.containerTransport === 'ssh' && !form.containerSSHConnId) {
-    ElMessage.error(t('conn.containerSSHRefRequired'))
+    msg.error(t('conn.containerSSHRefRequired'))
     return false
   }
   if (form.containerTransport === 'ssh' && !sshConnections.value.length) return false
   return true
 }
 
+function validateX11Desktop(): boolean {
+  if (form.type !== 'x11-desktop') return true
+  if (form.x11DesktopDesktopType === 'custom' && !form.x11DesktopCustomCmd?.trim()) {
+    msg.error(t('conn.x11DesktopCustomCmdRequired'))
+    return false
+  }
+  return true
+}
+
+async function onTest() {
+  if (!validateContainer()) return
+  if (!validateX11Desktop()) return
+  let config: ConnectionConfig
+  try {
+    config = normalizeForm()
+  } catch {
+    // Host / required field empty; silently return like onSave/onConnect.
+    return
+  }
+  testStatus.value = 'checking'
+  try {
+    const desc = await TestConnection(config)
+    testStatus.value = 'success'
+    msg.success(desc)
+  } catch (e: any) {
+    testStatus.value = 'error'
+    msg.error(String(e?.message || e), true)
+  }
+}
+
 function onSave() {
   if (!validateContainer()) return
+  if (!validateX11Desktop()) return
   try {
     const config = normalizeForm()
     emit('save', config)
@@ -1232,6 +1387,7 @@ function onSave() {
 
 function onConnect() {
   if (!validateContainer()) return
+  if (!validateX11Desktop()) return
   try {
     const config = normalizeForm()
     emit('connect', config)
@@ -1246,6 +1402,15 @@ function onConnect() {
 </script>
 
 <style scoped>
+/* Color the connection-test status icon (rendered via el-button's `icon` prop,
+   so spacing matches the native loading spinner) by result. */
+.test-status-btn.test-success :deep(.el-icon) {
+  color: var(--success);
+}
+.test-status-btn.test-error :deep(.el-icon) {
+  color: var(--error);
+}
+
 /* ── Layout ── */
 .conn-layout {
   display: flex;
@@ -1363,6 +1528,31 @@ function onConnect() {
   padding-right: 4px;
 }
 
+/* ── Name + group row ── */
+.name-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-select {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.new-group-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
 /* ── Host + port row ── */
 .host-port-row {
   display: flex;
@@ -1383,13 +1573,6 @@ function onConnect() {
 .port-input {
   width: 130px !important;
   flex-shrink: 0;
-}
-
-/* ── NLA toggle row ── */
-.nla-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 /* ── Field hint text ── */

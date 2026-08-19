@@ -43,7 +43,7 @@ Remote terminal (SSH / Telnet / Mosh), local & serial terminal (PowerShell / CMD
 - **Remote Terminal** — SSH / Telnet / Mosh with password or key authentication; includes SSH tunnel port forwarding so any connection can route through an SSH jump host.
 - **Local & Serial Terminal** — PowerShell / CMD / Git Bash / WSL plus serial connections with configurable baud rate, data bits, stop bits, parity, and local echo.
 - **File Transfer** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem with dual-pane browsing and `rz`/`sz` support in SSH terminals.
-- **Remote Desktop** — RDP (Windows Remote Desktop), VNC (Linux remote control), SPICE (KVM/QEMU VMs)
+- **Remote Desktop** — RDP (Windows Remote Desktop), VNC (Linux remote control), SPICE (KVM/QEMU VMs), X11 (X Window forwarding)
 - **Database Client** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB.
 - **Containers** — Kubernetes / Docker / Podman / nerdctl
 - **Server Monitor** — Real-time CPU, memory, disk, network, processes, ports, and network interfaces.
@@ -90,6 +90,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Remote Desktop | RDP | Windows server remote desktop management (Windows only) |
 | Remote Desktop | VNC | Linux server remote control |
 | Remote Desktop | SPICE | KVM/QEMU VM management |
+| Remote Desktop | X11 | X Window forwarding |
 | Database | MySQL | MySQL protocol: MySQL, MariaDB, TiDB, and more |
 | Database | PostgreSQL | PostgreSQL protocol: PostgreSQL, CockroachDB, and more |
 | Database | Oracle Database | Oracle Database connections through a pure Go driver |
@@ -149,7 +150,7 @@ Oracle Database support is implemented with a pure Go driver. uniTerm does not b
 Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-ll/uniterm/releases) or [Gitee Releases](https://gitee.com/ys-l/uniterm/releases):
 
 - **Windows** (amd64 / arm64): installer `uniterm-windows-*-installer-*.exe`, or portable `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-universal-*.dmg`
+- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-*-*.dmg`
 - **Linux** (amd64 / arm64): Download `uniterm-linux-*-*.tar.gz`, `.deb`, or `.rpm`
 
 > **About Windows antivirus false positives**: As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
@@ -226,10 +227,16 @@ wails build                 # Production build
 uniTerm/
 ├── main.go                       # Entry point
 ├── app.go                        # Wails bindings, LLM API proxy, SFTP API
+├── app_*.go                      # Platform-specific implementations
 ├── backend/
-│   ├── session/                  # SSH/SFTP/database session management
+│   ├── session/                  # SSH/Telnet/Serial/SFTP/database session management
 │   ├── database/                 # SQL execution, schema introspection, DSN builders
+│   ├── container/                # Docker/Podman/nerdctl container management
+│   ├── k8s/                      # Kubernetes cluster management
 │   ├── store/                    # Persistent config (connections, AI, settings)
+│   ├── sync/                     # Cloud sync (GitHub/GitLab/Gitee)
+│   ├── update/                   # Auto-update
+│   ├── platform/                 # Platform abstraction layer
 │   └── log/                      # File-based logging
 ├── frontend/
 │   └── src/
@@ -238,7 +245,11 @@ uniTerm/
 │       ├── stores/               # Pinia stores
 │       ├── services/             # AI agent loop, LLM client
 │       ├── i18n/                 # Translations
-│       └── types/                # TypeScript type definitions
+│       ├── types/                # TypeScript type definitions
+│       ├── utils/                # Utility functions
+│       └── vendor/               # Third-party libraries
+├── plugins/                      # Plugin directory
+├── docs/                         # Documentation
 └── wails.json
 ```
 
@@ -257,7 +268,7 @@ If uniTerm is helpful to you, please consider giving it a ⭐ Star — it's the 
 
 This is a personal hobby project maintained in the author's spare time, with no commercialization or sponsorship plans — anyone who shares the same interest is warmly welcome to join, discuss, and build together.
 
-Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome.
+Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome. Due to the wide variety of terminal environments and usage scenarios, the author cannot cover every possible case in testing — if you run into any issues, feel free to fork the project and contribute directly. This project welcomes vibe coding.
 
 Thanks to the following people for contributing code and improvements, and to everyone who reported issues and shared suggestions — you help make uniTerm better ❤️
 
@@ -265,6 +276,7 @@ Thanks to the following people for contributing code and improvements, and to ev
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
 - [@wangxufeng](https://github.com/wangxufeng)
 - [@coderstory](https://github.com/coderstory)
+- [@jiayunora](https://github.com/jiayunora)
 
 ## License
 

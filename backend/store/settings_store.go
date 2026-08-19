@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/ys-ll/uniterm/backend/credentials"
 )
 
 const settingsFileName = "settings.json"
@@ -21,6 +23,7 @@ type TerminalSettings struct {
 	RightClickAction string `json:"rightClickAction"`
 	MaxHistoryLines  int    `json:"maxHistoryLines"`
 	SmartCompletion  *bool  `json:"smartCompletion"`
+	AiTranscription  *bool  `json:"aiTranscription"`
 	HighlightEnabled *bool  `json:"highlightEnabled"`
 	// CursorBlink controls xterm.js's cursor blink. Pointer + omitempty so
 	// settings.json written by older builds (which lack this field) still
@@ -115,6 +118,7 @@ type AppSettings struct {
 	SFTPBookmarks        SFTPBookmarks         `json:"sftpBookmarks"`
 	CustomTerminalThemes []CustomTerminalTheme `json:"customTerminalThemes"`
 	DefaultLocalShell    string                `json:"defaultLocalShell"`
+	TabCloseButton       string                `json:"tabCloseButton"`
 }
 
 type SFTPBookmarks struct {
@@ -128,16 +132,11 @@ type SettingsStore struct {
 	mu            sync.Mutex // serializes Save + Load migration writes (STORE-05/06).
 }
 
-func NewSettingsStore() (*SettingsStore, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
+func NewSettingsStore(configDir string) (*SettingsStore, error) {
+	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, err
 	}
-	appDir := filepath.Join(configDir, "uniTerm")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return nil, err
-	}
-	return &SettingsStore{configDir: appDir}, nil
+	return &SettingsStore{configDir: configDir}, nil
 }
 
 func (s *SettingsStore) SetPasswordStore(ps PasswordStore) {
@@ -156,13 +155,20 @@ func (s *SettingsStore) Save(settings AppSettings) error {
 	models := make([]AIModelConfig, len(settings.AI.Models))
 	copy(models, settings.AI.Models)
 
-	// Extract model apiKeys to keychain before writing JSON
+	// Encrypt model apiKeys in place before writing JSON.
 	for i := range models {
 		m := &models[i]
-		if m.APIKey != "" && s.passwordStore != nil {
-			_ = s.passwordStore.SetModelAPIKey(m.ID, m.APIKey)
+		if m.APIKey == "" || credentials.IsEncrypted(m.APIKey) {
+			continue
 		}
-		m.APIKey = ""
+		if s.passwordStore == nil {
+			continue // no cipher — keep as-is (best effort; never leak is N/A for settings)
+		}
+		enc, err := s.passwordStore.Encrypt(m.APIKey)
+		if err != nil {
+			return err
+		}
+		m.APIKey = enc
 	}
 
 	settings.AI.Models = models
@@ -203,21 +209,21 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 	ps := s.passwordStore
 	s.mu.Unlock()
 
-	// Backfill model apiKeys from keychain; migrate if still in JSON
+	// Decrypt model apiKeys; migrate legacy plaintext to encrypted on save.
 	needsSave := false
 	for i := range settings.AI.Models {
 		m := &settings.AI.Models[i]
-		if ps != nil {
-			// Migration: if JSON still has plaintext apiKey, move to keychain
-			if m.APIKey != "" {
-				_ = ps.SetModelAPIKey(m.ID, m.APIKey)
-				m.APIKey = ""
-				needsSave = true
+		if m.APIKey == "" || ps == nil {
+			continue
+		}
+		if credentials.IsEncrypted(m.APIKey) {
+			ak, err := ps.Decrypt(m.APIKey)
+			if err != nil {
+				return AppSettings{}, err
 			}
-			// Backfill from keychain
-			if ak, err := ps.GetModelAPIKey(m.ID); err == nil && ak != "" {
-				m.APIKey = ak
-			}
+			m.APIKey = ak
+		} else {
+			needsSave = true // legacy plaintext — re-save will encrypt
 		}
 	}
 	// Default autoCheckUpdate to true if not present

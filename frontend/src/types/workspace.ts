@@ -1,4 +1,4 @@
-export type PanelType = 'ssh' | 'telnet' | 'mosh' | 'sftp' | 'settings' | 'rdp' | 'vnc' | 'spice' | 'local' | 'database' | 'monitor' | 'serial' | 'k8s' | 'k8s-exec' | 'container' | 'container-exec' | 'other'
+export type PanelType = 'ssh' | 'telnet' | 'mosh' | 'sftp' | 'settings' | 'rdp' | 'vnc' | 'spice' | 'local' | 'database' | 'monitor' | 'serial' | 'k8s' | 'k8s-exec' | 'container' | 'container-exec' | 'x11-desktop' | 'other'
 export type PanelStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 import type { ConnectionConfig } from './session'
@@ -31,7 +31,7 @@ export type LayoutNode =
 
 // ── Tab types ──
 
-export type Tab = TerminalTab | SettingsTab | WorkspaceTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | StartTab | K8sTab | ContainerTab
+export type Tab = TerminalTab | SettingsTab | WorkspaceTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | StartTab | K8sTab | ContainerTab | X11DesktopTab
 
 export interface TerminalTab {
   type: 'terminal'
@@ -93,6 +93,14 @@ export interface DBTab {
 
 export interface SPICETab {
   type: 'spice'
+  id: string
+  panelId: string
+  name: string
+  locked?: boolean
+}
+
+export interface X11DesktopTab {
+  type: 'x11-desktop'
   id: string
   panelId: string
   name: string

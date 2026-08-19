@@ -6,6 +6,9 @@ ManifestDPIAware true
 !ifndef VERSION
   !define VERSION "dev"
 !endif
+!ifndef VCXSRV_DIR
+  !define VCXSRV_DIR "plugins\vcxsrv"
+!endif
 
 Name "${PRODUCT_NAME}"
 !ifdef ARG_WAILS_AMD64_BINARY
@@ -67,6 +70,9 @@ Section "Install"
 !else
   File "/oname=${BINARY}" "${ARG_WAILS_ARM64_BINARY}"
 !endif
+  SetOutPath "$INSTDIR\plugins\vcxsrv"
+  File /r "${VCXSRV_DIR}\*"
+  SetOutPath "$INSTDIR"
   CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${BINARY}"
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${BINARY}"
@@ -84,6 +90,8 @@ SectionEnd
 Section "Uninstall"
   Delete "$INSTDIR\${BINARY}"
   Delete "$INSTDIR\uninstall.exe"
+  RMDir /r "$INSTDIR\plugins\vcxsrv"
+  RMDir "$INSTDIR\plugins"
   RMDir "$INSTDIR"
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"

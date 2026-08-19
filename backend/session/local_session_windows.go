@@ -19,6 +19,8 @@ import (
 
 	"github.com/UserExistsError/conpty"
 	"golang.org/x/sys/windows"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
 )
 
 const cpUTF8 = 65001
@@ -118,6 +120,14 @@ type LocalSession struct {
 	quit                 chan struct{}
 	disconnectOnce       sync.Once
 	mouseTrackingEnabled atomic.Bool
+
+	mu             sync.RWMutex
+	enc            encoding.Encoding
+	decoder        *encoding.Decoder
+	encoder        *encoding.Encoder
+	decodeLeftover []byte
+	decodeScratch  []byte
+	encScratch     []byte
 }
 
 func NewLocalSession(id string) *LocalSession {
@@ -291,6 +301,75 @@ func shellName(path string) string {
 	return base
 }
 
+// SetEncoding configures the character encoding for this session.
+// name: "" / "utf-8" (passthrough) | "gbk" | "gb2312" | "gb18030" |
+// "big5" | "shift-jis" | "euc-jp" | "euc-kr".
+func (s *LocalSession) SetEncoding(name string) {
+	enc := encodingByName(name)
+	s.mu.Lock()
+	s.enc = enc
+	if enc == nil {
+		s.decoder = nil
+		s.encoder = nil
+	} else {
+		s.decoder = enc.NewDecoder()
+		s.encoder = enc.NewEncoder()
+	}
+	s.decodeLeftover = nil
+	s.mu.Unlock()
+}
+
+// decodeOutput converts a chunk of PTY bytes to UTF-8 using the configured
+// decoder. Partial trailing multibyte sequences are buffered until the next
+// call. Must only be called from the single readLoop goroutine.
+func (s *LocalSession) decodeOutput(data []byte) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.decoder == nil {
+		return data
+	}
+	s.decodeScratch = s.decodeScratch[:0]
+	s.decodeScratch = append(s.decodeScratch, s.decodeLeftover...)
+	s.decodeScratch = append(s.decodeScratch, data...)
+	src := s.decodeScratch
+
+	var out []byte
+	dst := make([]byte, 8192)
+	for {
+		nDst, nSrc, err := s.decoder.Transform(dst, src, false)
+		out = append(out, dst[:nDst]...)
+		src = src[nSrc:]
+		if err == transform.ErrShortDst {
+			continue
+		}
+		break
+	}
+	if len(src) > 0 {
+		s.decodeLeftover = append(s.decodeLeftover[:0], src...)
+	} else {
+		s.decodeLeftover = src[:0]
+	}
+	return out
+}
+
+// encodeInput converts user keystrokes (UTF-8) to the configured encoding
+// before writing to the PTY. Each call handles a complete UTF-8 input.
+func (s *LocalSession) encodeInput(data []byte) []byte {
+	s.mu.RLock()
+	encoder := s.encoder
+	s.mu.RUnlock()
+	if encoder == nil {
+		return data
+	}
+	encoder.Reset()
+	s.encScratch = s.encScratch[:0]
+	nDst, _, err := encoder.Transform(s.encScratch, data, true)
+	if err != nil && err != transform.ErrShortSrc {
+		return data
+	}
+	return s.encScratch[:nDst]
+}
+
 func (s *LocalSession) readLoop() {
 	buf := make([]byte, 4096)
 	for {
@@ -312,7 +391,7 @@ func (s *LocalSession) readLoop() {
 		if n > 0 {
 			s.RecordReadActivity()
 			data := append([]byte(nil), buf[:n]...)
-			s.emitData(data)
+			s.emitData(s.decodeOutput(data))
 			s.updateMouseTrackingState(data)
 		}
 		if err != nil {
@@ -343,11 +422,12 @@ func (s *LocalSession) readLoop() {
 }
 
 func (s *LocalSession) Write(data []byte) error {
+	encoded := s.encodeInput(data)
 	var err error
 	if s.cpty != nil {
-		_, err = s.cpty.Write(data)
+		_, err = s.cpty.Write(encoded)
 	} else if s.stdin != nil {
-		_, err = s.stdin.Write(data)
+		_, err = s.stdin.Write(encoded)
 	} else {
 		return fmt.Errorf("not connected")
 	}
