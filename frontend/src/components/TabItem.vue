@@ -58,7 +58,7 @@
         @click.stop
       >
         <!-- ① 标签类操作 -->
-        <div v-if="canDuplicate" class="menu-item" @click="duplicateTab">
+        <div v-if="canDuplicate" class="menu-item" @click="onDuplicate">
           {{ t('tab.duplicate') }}
           <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
         </div>
@@ -119,22 +119,16 @@ import { useK8sStore } from '../stores/k8sStore'
 import { useContainerStore } from '../stores/containerStore'
 import { useI18n } from '../i18n'
 import {
-  CreateSession,
-  CloseSession,
-  K8sExecSession,
-  ContainerExecSession,
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
-  SessionStart,
 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
-import type { ConnectionConfig } from '../types/session'
-import { waitForTerminalSize } from '../services/terminalManager'
+import { useDuplicateSession } from '../composables/useDuplicateSession'
 import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
@@ -157,6 +151,7 @@ const sessionStore = useSessionStore()
 const k8sStore = useK8sStore()
 const containerStore = useContainerStore()
 const settingsStore = useSettingsStore()
+const { duplicateSession } = useDuplicateSession()
 const { t } = useI18n()
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -435,102 +430,9 @@ async function copyHostAddress() {
   closeContextMenu()
 }
 
-async function duplicateTab() {
+function onDuplicate() {
   closeContextMenu()
-  const tab = props.tab
-  if (!('panelId' in tab)) return
-  const panel = panelStore.getPanel(tab.panelId)
-  if (!panel) return
-
-  // k8s tab has no backend session; it connects itself on mount from
-  // connectionId + namespace. Duplicate = a fresh panel + K8s tab reusing the
-  // same connection (a new independent session), matching other tab types.
-  if (tab.type === 'k8s') {
-    const newPanel = panelStore.createPanel(panel.config, 'k8s')
-    panelStore.updateTitle(newPanel.id, panel.title)
-    const k8sTab = tab as any
-    const newTab = tabStore.createK8sTab(newPanel.title, newPanel.id, k8sTab.connectionId, k8sTab.namespace || '')
-    panelStore.movePanelToTab(newPanel.id, newTab.id)
-    return
-  }
-
-  const newPanel = panelStore.createPanel(panel.config, panel.type)
-  panelStore.updateTitle(newPanel.id, panel.title)
-
-  // Create + bind the session BEFORE mounting the tab, so the terminal has a
-  // sessionId on first mount. Mounting first (empty sessionId) leaves the
-  // shared terminal keyed by '' and bindSession's later id change can't
-  // transfer it (the watch skips when oldId is falsy), so server output is
-  // dropped until an incidental resize rebuilds the reference.
-  let info
-  if (panel.config) {
-    try {
-      if (panel.type === 'k8s-exec' || panel.type === 'container-exec') {
-        // Exec panels can't be rebuilt via CreateSession (no such type); re-dial the exec stream.
-        const c = panel.config
-        info = panel.type === 'k8s-exec'
-          ? await K8sExecSession(c.k8sExecConnId, c.k8sNamespace || '', c.k8sExecPod, c.k8sExecContainer)
-          : await ContainerExecSession(c.containerExecConnId, c.containerExecContainerId, c.containerExecShell || 'sh')
-        panelStore.bindSession(newPanel.id, info.id)
-        sessionStore.initSession(info.id)
-        sessionStore.updateStatus(info.id, 'connected')
-      } else {
-        const sessionType = resolveSessionType(tab.type, panel.config)
-        const config: ConnectionConfig = {
-          ...panel.config,
-          initialCols: 0,
-          initialRows: 0,
-        }
-        info = await CreateSession(sessionType, config)
-        panelStore.bindSession(newPanel.id, info.id)
-        sessionStore.initSession(info.id)
-        if (tab.type === 'terminal') {
-          const size = await waitForTerminalSize(info.id)
-          if (size.cols > 0 && size.rows > 0) {
-            config.initialCols = size.cols
-            config.initialRows = size.rows
-          }
-          await SessionStart(info.id, config).catch((e) => {
-            console.error('Failed to start duplicated session:', e)
-            CloseSession(info.id).catch(() => {})
-          })
-        }
-      }
-    } catch (e) {
-      console.error('Failed to duplicate session:', e)
-      return
-    }
-  }
-
-  let newTab
-  if (tab.type === 'terminal') {
-    newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
-  } else if (tab.type === 'sftp') {
-    newTab = tabStore.createFtpTab(newPanel.title, newPanel.id)
-  } else if (tab.type === 'database' || tab.type === 'mongodb' || tab.type === 'redis') {
-    newTab = tabStore.createDBTab(newPanel.title, newPanel.id)
-    newTab.type = tab.type
-  } else {
-    return
-  }
-  panelStore.movePanelToTab(newPanel.id, newTab.id)
-}
-
-// The session-type argument to CreateSession isn't always panel.config.type:
-// - database panels split into mysql/postgres/redis/mongodb by dbType;
-// - a file-transfer (sftp) tab shares the SSH connection, so its config.type
-//   is 'ssh' but the session must be created as 'sftp' (ftp/smb/webdav/s3
-//   already carry a matching config.type).
-function resolveSessionType(tabType: string, config: any): string {
-  if (tabType === 'database' || tabType === 'mongodb' || tabType === 'redis') {
-    if (config?.dbType === 'redis') return 'redis'
-    if (config?.dbType === 'mongodb') return 'mongodb'
-    return 'database'
-  }
-  if (tabType === 'sftp') {
-    return config?.type === 'ssh' ? 'sftp' : config?.type
-  }
-  return config?.type
+  duplicateSession(props.tab)
 }
 
 function openSftp() {

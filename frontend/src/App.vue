@@ -204,6 +204,7 @@ import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
+import { useDuplicateSession } from './composables/useDuplicateSession'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
 import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../wailsjs/go/main/App'
@@ -257,6 +258,7 @@ const tabStore = useTabStore()
 const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+const { duplicateSession } = useDuplicateSession()
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
@@ -873,39 +875,20 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
   navigatePrev: () => navigatePanel(-1),
   navigateNext: () => navigatePanel(1),
   openSettings: () => openSettings(),
-  duplicateSession: async () => {
-    const pid = tabStore.getActivePanelId()
-    if (!pid) return
-    const panel = panelStore.getPanel(pid)
-    if (!panel?.config) return
-    const newPanel = panelStore.createPanel(
-      { ...panel.config } as ConnectionConfig,
-      panel.type
-    )
-    panelStore.updateTitle(newPanel.id, panel.title)
-    try {
-      const dupConfig: ConnectionConfig = {
-        ...panel.config,
-        initialCols: 0,
-        initialRows: 0,
-      }
-      const info = await CreateSession(panel.config.type, dupConfig)
-      panelStore.bindSession(newPanel.id, info.id)
-      sessionStore.initSession(info.id)
-      const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
-      panelStore.movePanelToTab(newPanel.id, newTab.id)
-      const size = await waitForTerminalSize(info.id)
-      if (size.cols > 0 && size.rows > 0) {
-        dupConfig.initialCols = size.cols
-        dupConfig.initialRows = size.rows
-      }
-      await SessionStart(info.id, dupConfig).catch((e) => {
-        console.error('Failed to start duplicated session:', e)
-        CloseSession(info.id).catch(() => {})
-      })
-    } catch (e) {
-      console.error('Failed to duplicate session:', e)
+  duplicateSession: () => {
+    // Same logic as the tab context menu's "复制会话": delegate to the shared
+    // duplicate routine so both entry points behave identically.
+    const tab = tabStore.activeTab
+    if (!tab) return
+    if (tab.type === 'workspace') {
+      // A workspace holds several panels; the shortcut duplicates the focused
+      // one (a terminal). Feed it to the shared routine as a terminal tab.
+      const pid = tabStore.getActivePanelId()
+      const panel = pid ? panelStore.getPanel(pid) : undefined
+      if (panel) duplicateSession({ type: 'terminal', panelId: pid, title: panel.title })
+      return
     }
+    duplicateSession(tab)
   },
 }
 
