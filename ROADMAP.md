@@ -104,7 +104,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Quick Commands | ✅ | v1.0.1 | Manage and run reusable commands |  |
 | Session Logging | ✅ | v1.4.0 | Log terminal output to file | [@wangxufeng](https://github.com/wangxufeng) |
 | SSH Tunnel Manager | ✅ | v1.4.1 | Local, remote, and dynamic port forwarding | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
-| Connection Import / Export | 🚧 | — | Import and export connection configurations |  |
+| Connection Import / Export | ✅ | v1.8.0 | Import and export connection configurations |  |
 
 ## Contributing
 

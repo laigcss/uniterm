@@ -1,5 +1,115 @@
 # Changelog
 
+## v1.8.0-alpha
+
+### What's Changed
+
+**New Features**
+- Credential: vault (Identities). Save reusable SSH keys and passphrase-protected private keys, then reference them from SSH-family connections.
+- SSH: SOCKS5 / HTTP proxy support.
+- Configuration: encrypted import / export of connection configurations.
+- Configuration: import connection configurations from third-party terminal software, including Xshell, MobaXterm, WindTerm, SecureCRT, and OpenSSH config.
+- Configuration: configurable data directory and dual encryption modes.
+- Credential: master-password encryption mode alongside the system keychain mode, for using the master password to recover saved passwords after switching machines or reinstalling the OS.
+- Terminal: line-number and timestamp gutters, toggled via right-click or keyboard shortcuts.
+- Database: multi-tab panels, open several database sessions at once and switch between connections / schemas quickly. (@surenwuyuwuqiu)
+- Database: table-data pagination, browse large tables page by page instead of loading all rows at once. (@surenwuyuwuqiu)
+- Database: run `.sql` scripts and export table data as `.sql` files for MySQL / PostgreSQL / Oracle / SQL Server / RQLite. (@surenwuyuwuqiu)
+- Connection: "Test Connection" button in the new-connection dialog, to check connection reachability before saving.
+- Connection: open-status indicator with locate-session.
+
+**Improvements**
+- SSH: hardened credential handling with legacy fallback, auto-answer for keyboard-interactive auth using the saved password, and synchronous keychain loading so saved credentials are never lost. (@jiayunora)
+- Connection: improved connection/group form UX and fixed stale-data bugs.
+- Terminal: JetBrains Mono Variable is now the default monospace font for terminal sessions.
+- VNC: connect to RealVNC Server and fix blurry scaled rendering. Note: RealVNC Server must have its "Prefer on" option enabled and the toggle that allows legacy VNC software to connect turned on.
+- Terminal: configurable cursor style, with block / underline / bar selections.
+- Terminal: configurable minimum text contrast, raised by default so text stays readable when foreground and background colors are close.
+- Terminal: font options — a second fallback font, a monospace-only filter, and adjustable font weight, supporting independent configuration of East Asian fonts (e.g. Chinese).
+- Connection: locate-to-connection items in tab/panel context menus.
+- Settings: gear replaced with a dropdown menu for quick access to entries like the keychain and proxies.
+- UI: context menus and header tooltips now show the configured keyboard shortcuts.
+- Settings: new terminal "follow app theme" option, now the default theme setting.
+- Tab: rename menu, repositioned close button, and copy-host-address item.
+- AI: Windows OpenSSH detection so shell guidance and command execution adapt accordingly.
+- SFTP: local download conflict handling — choose overwrite / rename / cancel.
+- Shortcuts: Ctrl+Shift+C / Ctrl+Shift+V are now configurable terminal-scoped shortcuts.
+- Connection: two-level type filter in the sidebar and start page; container connections are now distinguished by runtime (Docker / Podman / nerdctl) in the badge, card subtitle, and filter.
+
+**Bug Fixes**
+- SSH: fixed handshake EOF on older servers by negotiating CTR ciphers before GCM. (@jiayunora)
+- Compatibility: fixed a lookbehind regex that black-screened WKWebView on macOS ≤ 12.3.
+- Database: fixed table-export queries not being scoped to the target schema.
+- Input: fixed numeric fields being overwritten instead of appended to when pasting.
+- Terminal: stopped Ctrl+scroll from jumping to the bottom and re-enabled Shift+Delete. (@surenwuyuwuqiu)
+- Window: fixed the "system title bar" setting not actually relaunching the app. (@surenwuyuwuqiu)
+- Sync: fixed stores not reloading after a startup auto-sync pull.
+- SFTP: fixed connections failing on servers whose login shell prints to the stream in non-interactive sessions (noisy profile/bashrc output) — the client now falls back to exec'ing sftp-server with a marker and skips everything before it, surfacing an actionable hint if the fallback also fails. (@surenwuyuwuqiu)
+- Session: fixed duplicated-session tabs appearing late; the duplicate entries (context menu and keyboard shortcut) now share one routine and the new tab opens immediately.
+- Settings: fixed the settings page leaving large empty side columns on a maximized window; the content area is now sized and centered independently. Raised the window minimum size (400→600 wide, 300→450 tall).
+- Highlight: fixed text highlighting overwriting already-colored spans (e.g. directory colors) — those spans are now skipped.
+- Window: fixed a relaunched window (after toggling the system-title-bar setting) opening in the background on Windows — it is now raised to the front while the old instance is still alive. Tab close-button space is also reserved in right-side mode so hovering/locking no longer shifts the tab.
+- Menu: fixed terminal and sidebar right-click menus clipping at the viewport bottom; they now measure real size and clamp to the window.
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @surenwuyuwuqiu and @jiayunora for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- 凭据：密钥库（身份钥匙）。可保存可复用的 SSH 密钥及带口令保护的私钥，供 SSH 系列连接引用。
+- SSH：连接支持 SOCKS5 / HTTP 代理。
+- 配置：新增加密导入导出连接配置功能。
+- 配置：新增第三方终端软件连接配置导入功能，包括 Xshell、MobaXterm、WindTerm、SecureCRT、OpenSSH 配置。
+- 配置：支持迁移到程序目录或自定义目录，满足便携需求。
+- 凭据：在系统钥匙库加密模式基础上，新增主密码加密模式，便于更换机器或重装系统后使用主密码恢复记录的密码。
+- 终端：新增行号与时间戳侧栏，支持右键开关和快捷键开关。
+- 数据库：多标签面板，可同时打开多个数据库会话，在不同连接 / 数据库之间快速切换。（@surenwuyuwuqiu）
+- 数据库：表数据分页，浏览大表时分页加载与查看，避免一次性拉取全部数据。（@surenwuyuwuqiu）
+- 数据库：支持导入导出并运行 `.sql` 脚本，导入导出表数据为 `.sql` 文件（适配 MySQL / PostgreSQL / Oracle / SQL Server / RQLite）。（@surenwuyuwuqiu）
+- 连接：新建连接对话框新增「测试连接」按钮，支持在创建时提前检查连接可达性。
+- 连接：新增打开会话状态展示与定位会话功能。
+
+**改进**
+- SSH：加固凭据处理并加入旧版回退，自动用已保存密码应答 keyboard-interactive 认证。（@jiayunora）
+- 连接：优化连接/分组表单体验，修复编辑残留数据问题。
+- 终端：JetBrains Mono Variable 字体作为默认等宽字体。
+- VNC：支持连接 RealVNC Server，修复缩放后渲染模糊的问题。注意：RealVNC Server 需开启「Prefer on」，并开启允许旧版（legacy）VNC 软件连接的开关。
+- 终端：新增光标样式配置，支持方块、下划线、竖线样式选择。
+- 终端：新增高对比度文本配置，默认调高对比度，解决前景背景色相近时难以识别的问题。
+- 终端：新增字体选项：第二字体、仅等宽字体过滤、可调字体粗细，支持中文等东亚字体单独配置需求。
+- 连接：标签/面板右键菜单新增「定位到连接」。
+- 设置：入口由齿轮图标改为下拉菜单，便于钥匙库、代理等入口快速进入。
+- 界面：右键菜单与标题栏 tooltip 现在展示已配置的快捷键。
+- 设置：终端新增「跟随应用主题」选项，作为默认主题设置。
+- 标签：重命名菜单、关闭按钮位置调整、复制主机地址。
+- AI：检测到 Windows OpenSSH 时，shell 指引与命令执行会自动适配。
+- SFTP：本地下载冲突支持选择覆盖 / 重命名 / 取消。
+- 快捷键：Ctrl+Shift+C / Ctrl+Shift+V 改为可配置的终端作用域快捷键。
+- 连接：侧边栏与起始页新增两级类型筛选（分类 → 具体类型）；容器连接在徽标、卡片副标题与筛选中按运行时区分（Docker / Podman / nerdctl）。
+
+**Bug 修复**
+- SSH：修复旧服务器握手 EOF 问题：先协商 CTR 加密算法再协商 GCM。（@jiayunora）
+- 兼容性：修复文本高亮中一处 lookbehind 正则导致 macOS ≤ 12.3 WKWebView 黑屏的问题。
+- 数据库：修复表导出时查询未限定到目标数据库 schema 的问题。
+- 输入框：修复数字输入框粘贴时覆盖替换而不是追加的问题。
+- 终端：停止 Ctrl+滚轮跳到底部，恢复 Shift+Delete。（@surenwuyuwuqiu）
+- 窗口：修复「系统标题栏」设置切换后未真正重启应用的问题。（@surenwuyuwuqiu）
+- 同步：修复启动时自动同步拉取后 store 未重载的问题。
+- SFTP：修复服务端非交互会话中登录脚本输出（如 profile/bashrc 打印）污染协议流导致连接失败的问题：现改为带标记 fallback exec sftp-server，并跳过标记之前的输出；若 fallback 也失败则给出可操作的提示。（@surenwuyuwuqiu）
+- 会话：修复右键菜单 / 快捷键复制会话时新标签显示延迟的问题；复制入口统一为同一套逻辑，新标签立即打开。
+- 设置：修复窗口最大化时设置页左右空白过大的问题：内容区改为独立缩放并居中。同时提高窗口最小尺寸（宽 400→600，高 300→450）。
+- 高亮：修复文本高亮覆盖已着色 span（如目录颜色）的问题，现跳过已着色 span。
+- 窗口：修复 Windows 上切换「系统标题栏」设置重启后新窗口落到后台的问题，改为在旧实例仍存活时置顶新窗口。右侧关闭按钮模式下也预留关闭按钮空间，悬停/锁定时不再导致标签位移。
+- 菜单：修复终端与侧边栏右键菜单在视口底部被裁剪的问题，现会测量实际尺寸并限制在窗口内。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @surenwuyuwuqiu 和 @jiayunora 对本版本的贡献。
+
 ## v1.7.0
 
 ### What's Changed
