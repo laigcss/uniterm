@@ -299,6 +299,16 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	// Restore window position and size from last session
 	a.restoreWindow(a.ctx)
 
+	// Raise the window to the foreground once, shortly after launch. On Windows a
+	// relaunched instance can otherwise land behind other windows; the short delay
+	// keeps this one-shot raise inside the window where the old (foreground)
+	// process is still alive, which is what grants the set-foreground permission
+	// (see RelaunchApp). No-op on other platforms.
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		a.bringMainWindowToFront()
+	}()
+
 	// Drain any non-fatal init failures and surface them to the frontend so
 	// the user sees a banner instead of getting an NPE on the first store
 	// call. Additive only — stores that failed to init are still nil and
@@ -2285,14 +2295,16 @@ func (a *App) GetAppInfo() AppInfo {
 
 // RelaunchApp spawns a fresh instance, then quits the current one so settings
 // that are fixed at startup (e.g. the window title bar) can take effect. The
-// new process is started first; a short delay lets it finish spawning before
-// this instance exits, keeping the overlap window minimal.
+// new process is started first; a delay lets it finish spawning and raise its
+// own window to the foreground (see bringMainWindowToFront) before this instance
+// exits — while this process is still the foreground process, which is what
+// grants the new one set-foreground permission on Windows.
 func (a *App) RelaunchApp() {
 	if err := a.relaunchProcess(); err != nil {
 		log.Writef("relaunch failed: %v", err)
 	}
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(800 * time.Millisecond)
 		runtime.Quit(a.ctx)
 	}()
 }
