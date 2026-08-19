@@ -387,10 +387,13 @@ function getRowClassName({ row }: { row: FileItem }): string {
 
 function onDragStart(event: DragEvent, row: FileItem) {
   if (event.dataTransfer) {
+    // Carry the whole selection when the dragged row is part of it, so
+    // ctrl/shift multi-selection drags up/ down more than one item.
+    const inSelection = selectedItems.value.some(s => s.name === row.name)
+    const dragged = (inSelection ? selectedItems.value : [row]).filter(i => i.name !== '..')
     event.dataTransfer.setData('application/sftp-file', JSON.stringify({
       mode: props.mode,
-      name: row.name,
-      isDir: row.isDir
+      items: dragged.map(i => ({ name: i.name, isDir: i.isDir }))
     }))
   }
 }

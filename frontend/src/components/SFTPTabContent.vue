@@ -1534,38 +1534,108 @@ function onChmod(item: FileItem) {
   )
 }
 
+// Read a directory entry's children in full. readEntries() returns batches,
+// so keep pulling until an empty batch signals end of the directory.
+function readAllEntries(entry: any): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const reader = entry.createReader()
+    const all: any[] = []
+    const readBatch = () => {
+      try {
+        reader.readEntries((batch: any[]) => {
+          if (!batch || batch.length === 0) { resolve(all); return }
+          all.push(...batch)
+          readBatch()
+        }, () => { if (all.length) resolve(all); else reject(new Error('readEntries failed')) })
+      } catch (e) { reject(e) }
+    }
+    readBatch()
+  })
+}
+
+// Upload a single dropped file entry's content via the temp-file round trip.
+function uploadFileEntryContent(sid: string, fileEntry: any, remotePath: string) {
+  fileEntry.file((f: File) => readAndUpload(f, remotePath), () => msg.error('Failed to read dropped file'))
+}
+
+// Recursively upload an entry tree rooted at `entry` into `remoteBase`.
+// Directories are mkdir'd on the remote side; files upload their content.
+// Internal name conflicts default to overwrite/merge (no nested prompts).
+async function uploadEntryTree(sid: string, entry: any, remoteBase: string) {
+  if (entry.isFile) {
+    uploadFileEntryContent(sid, entry, remoteBase)
+    return
+  }
+  try {
+    await SftpMakeDir(sid, remoteBase)
+  } catch { /* directory may already exist — merge */ }
+  const children = await readAllEntries(entry)
+  for (const child of children) {
+    await uploadEntryTree(sid, child, remoteBase + '/' + child.name)
+  }
+}
+
+// Entry point for OS drops (desktop / file explorer). Captures dataTransfer
+// synchronously because it becomes unreadable after the first await, then
+// uploads files by content and folders by walking the entry tree.
+async function handleExternalDrop(e: DragEvent) {
+  const dt = e.dataTransfer
+  if (!dt) return
+  const sid = panel.value?.sessionId
+  if (!sid) return
+
+  // Synchronously snapshot the drop before any await.
+  const topLevel: any[] = []
+  const plainFiles: File[] = []
+  const items = dt.items
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.kind === 'file' && typeof (it as any)?.webkitGetAsEntry === 'function') {
+        let entry: any = null
+        try { entry = it.webkitGetAsEntry() } catch { entry = null }
+        if (entry) topLevel.push(entry)
+      }
+    }
+  }
+  if (topLevel.length === 0 && dt.files) {
+    for (let i = 0; i < dt.files.length; i++) plainFiles.push(dt.files[i])
+  }
+
+  // Top-level conflict check only.
+  const names = topLevel.length ? topLevel.map(en => en.name) : plainFiles.map(f => f.name)
+  const action = await checkRemoteConflicts(names)
+  if (action === 'cancel') return
+  const existingNames = remoteFiles.value.map(f => f.name)
+
+  if (topLevel.length) {
+    for (const entry of topLevel) {
+      let name = entry.name
+      if (action === 'rename' && existingNames.includes(entry.name)) {
+        name = autoRename(entry.name, existingNames)
+      }
+      existingNames.push(name)
+      await uploadEntryTree(sid, entry, cwd.value + '/' + name)
+    }
+  } else {
+    for (const f of plainFiles) {
+      let name = f.name
+      if (action === 'rename' && existingNames.includes(f.name)) {
+        name = autoRename(f.name, existingNames)
+      }
+      existingNames.push(name)
+      readAndUpload(f, cwd.value + '/' + name)
+    }
+  }
+}
+
 async function onDocumentDrop(e: DragEvent) {
   if (!dragDroppedInternally) {
-    // If drop didn't fire on a pane but files are available, handle as external upload
-    const files = e.dataTransfer?.files
-    if (files && files.length > 0 && dragSource.value === null) {
+    const dt = e.dataTransfer
+    const hasExternal = dt && dragSource.value === null && (dt.files?.length > 0 || (dt.items?.length ?? 0) > 0)
+    if (hasExternal) {
       e.preventDefault()
-      const sid = panel.value?.sessionId
-      if (sid) {
-        const fileNames: string[] = []
-        for (let i = 0; i < files.length; i++) {
-          fileNames.push(files[i].name)
-        }
-        const action = await checkRemoteConflicts(fileNames)
-        if (action === 'cancel') return
-
-        const existingNames = remoteFiles.value.map(f => f.name)
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i]
-          let resolvedName = f.name
-          if (action === 'rename' && existingNames.includes(f.name)) {
-            resolvedName = autoRename(f.name, existingNames)
-          }
-          existingNames.push(resolvedName)
-          const remotePath = cwd.value + '/' + resolvedName
-          const nativePath = (f as any).path
-          if (nativePath) {
-            SftpPut(sid, nativePath, remotePath, false)
-          } else {
-            readAndUpload(f, remotePath)
-          }
-        }
-      }
+      await handleExternalDrop(e)
     }
   }
 }
@@ -1649,18 +1719,21 @@ async function onDropLocal(e: DragEvent) {
   const data = e.dataTransfer?.getData('application/sftp-file')
   if (!data) return
   try {
-    const item = JSON.parse(data)
-    if (item.mode === 'remote') {
-      const sid = panel.value?.sessionId
-      if (!sid) return
-      const action = await checkLocalConflicts([item.name])
-      if (action === 'cancel') return
-
+    const parsed = JSON.parse(data)
+    const items = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
+    if (items.length === 0 || parsed.mode !== 'remote') return
+    const sid = panel.value?.sessionId
+    if (!sid) return
+    const fileNames = items.map((i: any) => i.name)
+    const action = await checkLocalConflicts(fileNames)
+    if (action === 'cancel') return
+    const existingNames = localFiles.value.map(f => f.name)
+    for (const item of items) {
       let resolvedName = item.name
-      if (action === 'rename') {
-        const existingNames = localFiles.value.map(f => f.name)
+      if (action === 'rename' && existingNames.includes(item.name)) {
         resolvedName = autoRename(item.name, existingNames)
       }
+      existingNames.push(resolvedName)
       const remotePath = joinPath(cwd.value, item.name)
       const localPath = joinPath(localCwd.value, resolvedName).replace(/\\/g, '/')
       SftpGet(sid, remotePath, localPath, item.isDir)
@@ -1672,36 +1745,16 @@ async function onDropRemote(e: DragEvent) {
   e.preventDefault()
   dragDroppedInternally = true
   clearDragState()
-  const sid = panel.value?.sessionId
-  if (!sid) return
 
-  // External files from desktop / file explorer
-  const files = e.dataTransfer?.files
-  if (files && files.length > 0) {
-    const fileNames: string[] = []
-    for (let i = 0; i < files.length; i++) {
-      fileNames.push(files[i].name)
-    }
-    const action = await checkRemoteConflicts(fileNames)
-    if (action === 'cancel') return
-
-    const existingNames = remoteFiles.value.map(f => f.name)
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i]
-      let resolvedName = f.name
-      if (action === 'rename' && existingNames.includes(f.name)) {
-        resolvedName = autoRename(f.name, existingNames)
-      }
-      existingNames.push(resolvedName)
-      const remotePath = cwd.value + '/' + resolvedName
-      // Try native path first (WebView2 may expose it), fall back to reading content
-      const nativePath = (f as any).path
-      if (nativePath) {
-        SftpPut(sid, nativePath, remotePath, false)
-      } else {
-        readAndUpload(f, remotePath)
-      }
-    }
+  // Detect an OS drop (desktop / file explorer) synchronously — the webview
+  // clears DataTransfer once the handler awaits, so snapshot entries up front.
+  // Use item.kind === 'file' to tell OS drops apart from internal element drags,
+  // which carry a 'string' item (webkitGetAsEntry exists on string items too).
+  const dt = e.dataTransfer
+  const hasFileItems = !!(dt && dt.items && [...dt.items].some(it => it.kind === 'file'))
+  const hasRawFiles = !!(dt && dt.files && dt.files.length > 0)
+  if (hasFileItems || hasRawFiles) {
+    await handleExternalDrop(e)
     return
   }
 
@@ -1709,16 +1762,19 @@ async function onDropRemote(e: DragEvent) {
   const data = e.dataTransfer?.getData('application/sftp-file')
   if (!data) return
   try {
-    const item = JSON.parse(data)
-    if (item.mode === 'local') {
-      const action = await checkRemoteConflicts([item.name])
-      if (action === 'cancel') return
-
+    const parsed = JSON.parse(data)
+    const items = parsed.items ? parsed.items : (parsed.name ? [{ name: parsed.name, isDir: !!parsed.isDir }] : [])
+    if (items.length === 0 || parsed.mode !== 'local') return
+    const fileNames = items.map((i: any) => i.name)
+    const action = await checkRemoteConflicts(fileNames)
+    if (action === 'cancel') return
+    const existingNames = remoteFiles.value.map(f => f.name)
+    for (const item of items) {
       let resolvedName = item.name
-      if (action === 'rename') {
-        const existingNames = remoteFiles.value.map(f => f.name)
+      if (action === 'rename' && existingNames.includes(item.name)) {
         resolvedName = autoRename(item.name, existingNames)
       }
+      existingNames.push(resolvedName)
       const localPath = joinPath(localCwd.value, item.name)
       const remotePath = cwd.value + '/' + resolvedName
       SftpPut(panel.value?.sessionId!, localPath, remotePath, item.isDir)
