@@ -1622,10 +1622,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .settings-tab {
   display: flex;
   width: 100%;
-  min-width: 680px;
-  max-width: 960px;
   height: 100%;
-  margin: 0 auto;
   background: var(--bg-base);
   color: var(--text-primary);
 }
@@ -1633,6 +1630,8 @@ async function onToggleSystemTitleBar(v: boolean) {
 .settings-sidebar {
   width: 180px;
   flex-shrink: 0;
+  margin-left: 20px;
+  margin-right: 10px;
   padding: 16px 0;
   border-right: 1px solid var(--border-hover);
 }
@@ -1677,7 +1676,11 @@ async function onToggleSystemTitleBar(v: boolean) {
   flex: 1;
   padding: 24px 32px;
   overflow-y: auto;
-  min-width: 0;
+}
+
+.settings-section {
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .section-title {

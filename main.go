@@ -14,9 +14,9 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/ys-ll/uniterm/backend/log"
@@ -126,8 +126,8 @@ func main() {
 		Title:     "uniTerm",
 		Width:     1200,
 		Height:    800,
-		MinWidth:  400,
-		MinHeight: 300,
+		MinWidth:  700,
+		MinHeight: 450,
 		MaxWidth:  maxW,
 		MaxHeight: maxH,
 		Frameless: runtime.GOOS != "darwin" && !systemTitleBar,
