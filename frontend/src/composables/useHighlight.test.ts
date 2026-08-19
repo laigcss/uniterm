@@ -60,6 +60,25 @@ describe('highlight()', () => {
     expect(highlight(input)).toBe(input)
   })
 
+  it('skips already-colored spans (issue #587) instead of fragmenting them', () => {
+    // `ls` colors a directory blue; the app must NOT re-color its digits.
+    const input = '\x1b[01;34mchatGLM2-6B\x1b[0m\n'
+    expect(highlight(input)).toBe(input)
+  })
+
+  it('skips an extended-256-color span like a plain one', () => {
+    const input = '\x1b[38;5;39mport8-api\x1b[0m\n'
+    expect(highlight(input)).toBe(input)
+  })
+
+  it('still highlights default-colored text after and around a colored span', () => {
+    // The digit "6" sits outside the colored span, so it must still be styled.
+    const input = '\x1b[32mOK\x1b[0m 6\n'
+    const out = highlight(input)
+    expect(out).toContain('\x1b[96m6')
+    expect(out).toContain('\x1b[32mOK\x1b[0m ')
+  })
+
   it('handles multiple fences interleaved with prose', () => {
     const input = 'before {x}\n```\n{inside}\n```\nafter {y}\n'
     const out = highlight(input)

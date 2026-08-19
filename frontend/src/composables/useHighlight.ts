@@ -2,6 +2,9 @@
 // color intact. Using \x1b[0m (full reset) would clear vim's visual selection
 // background and other SGR attributes set by terminal applications.
 const ANSI_RESET = '\x1b[24;39m'
+// Matches a single SGR color sequence (`CSI …m`). Any other CSI sequence
+// (cursor movement, erase, private modes…) does not change the foreground.
+const SGR_SEQ = /^\x1b\[[\d;]*m$/
 // Match ANSI escape sequences: CSI (ESC [ ... letter) and OSC (ESC ] ... BEL/ST)
 const ANSI_RE = /(\x1b\[[\x20-\x3F]*[\x40-\x7E]|\x1b[\]PX^_][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[\x20-\x2F][\x30-\x7E]|\x1b[\x30-\x7E])/g
 
@@ -71,45 +74,90 @@ const PATTERNS: { sgr: string; regexes: RegExp[] }[] = [
   { sgr: C.number,  regexes: [/\d+/g] },
 ]
 
+// Report how an SGR sequence affects the foreground color:
+//  - 'set'  a non-default foreground color is now active (30-37, 90-97, 38…)
+//  - 'clear' foreground reset to default (0, 39)
+//  - 'unchanged' leaves the foreground untouched (bold, underline, 48… bg…)
+// Sequences are evaluated in order, so e.g. `0;34` is 'set' and `34;0` 'clear'.
+function sgrFgEffect(seq: string): 'set' | 'clear' | 'unchanged' {
+  const body = seq.slice(2, -1)  // strip \x1b[ and trailing m
+  const params = body === '' ? [0] : body.split(';').map((s) => (s === '' ? 0 : parseInt(s, 10)))
+  let effect: 'set' | 'clear' | 'unchanged' = 'unchanged'
+  for (let i = 0; i < params.length; i++) {
+    const p = params[i]
+    if (p === 0 || p === 39) {
+      effect = 'clear'
+    } else if ((p >= 30 && p <= 37) || (p >= 90 && p <= 97)) {
+      effect = 'set'
+    } else if (p === 38) {
+      // Extended foreground: 38;5;N or 38;2;R;G;B
+      const kind = params[i + 1]
+      if (kind === 5) {
+        effect = 'set'
+        i += 2
+      } else if (kind === 2) {
+        effect = 'set'
+        i += 4
+      }
+    }
+  }
+  return effect
+}
+
+function highlightPlainSegment(text: string): string {
+  type MatchEntry = { start: number; end: number; sgr: string }
+  const allMatches: MatchEntry[] = []
+  for (const { sgr, regexes } of PATTERNS) {
+    for (const regex of regexes) {
+      regex.lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = regex.exec(text)) !== null) {
+        allMatches.push({ start: m.index, end: m.index + m[0].length, sgr })
+        if (allMatches.length > 200) break
+      }
+      if (allMatches.length > 200) break
+    }
+    if (allMatches.length > 200) break
+  }
+  if (allMatches.length > 200) {
+    return text  // pass through unchanged
+  }
+  allMatches.sort((a, b) => a.start - b.start || b.end - a.end)
+  const filtered: MatchEntry[] = []
+  for (const match of allMatches) {
+    const last = filtered[filtered.length - 1]
+    if (!last || match.start >= last.end) {
+      filtered.push(match)
+    }
+  }
+  let highlighted = text
+  for (let i = filtered.length - 1; i >= 0; i--) {
+    const { start, end, sgr } = filtered[i]
+    highlighted = highlighted.slice(0, start) + sgr + highlighted.slice(start, end) + ANSI_RESET + highlighted.slice(end)
+  }
+  return highlighted
+}
+
 function highlightPlainText(text: string): string {
   const segments = segmentText(text)
   let result = ''
+  // Track whether the upstream application already set a non-default
+  // foreground color (e.g. `ls` coloring a directory name blue). Our keyword
+  // highlighting must skip such spans — re-coloring digits/braces inside an
+  // already-colored token would fragment the app's own color (issue #587).
+  // Only text still in the default foreground gets styled by us.
+  let colored = false
   for (const seg of segments) {
     if (seg.isCSI) {
+      if (SGR_SEQ.test(seg.text)) {
+        const effect = sgrFgEffect(seg.text)
+        if (effect !== 'unchanged') colored = effect === 'set'
+      }
       result += seg.text
+    } else if (!colored) {
+      result += highlightPlainSegment(seg.text)
     } else {
-      type MatchEntry = { start: number; end: number; sgr: string }
-      const allMatches: MatchEntry[] = []
-      for (const { sgr, regexes } of PATTERNS) {
-        for (const regex of regexes) {
-          regex.lastIndex = 0
-          let m: RegExpExecArray | null
-          while ((m = regex.exec(seg.text)) !== null) {
-            allMatches.push({ start: m.index, end: m.index + m[0].length, sgr })
-            if (allMatches.length > 200) break
-          }
-          if (allMatches.length > 200) break
-        }
-        if (allMatches.length > 200) break
-      }
-      if (allMatches.length > 200) {
-        result += seg.text  // pass through unchanged
-        continue
-      }
-      allMatches.sort((a, b) => a.start - b.start || b.end - a.end)
-      const filtered: MatchEntry[] = []
-      for (const match of allMatches) {
-        const last = filtered[filtered.length - 1]
-        if (!last || match.start >= last.end) {
-          filtered.push(match)
-        }
-      }
-      let highlighted = seg.text
-      for (let i = filtered.length - 1; i >= 0; i--) {
-        const { start, end, sgr } = filtered[i]
-        highlighted = highlighted.slice(0, start) + sgr + highlighted.slice(start, end) + ANSI_RESET + highlighted.slice(end)
-      }
-      result += highlighted
+      result += seg.text
     }
   }
   return result
