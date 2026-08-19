@@ -1,6 +1,8 @@
 name: Build Linux WebKit40 (Kylin/RHEL)
 
-# Standalone package for Kylin / RHEL / openEuler (webkit2gtk3 = ABI 4.0).
+# Standalone package for Kylin V10 / RHEL 8 / openEuler (webkit2gtk3 = ABI 4.0).
+# Built inside Rocky Linux 8 so the binary links against glibc 2.28
+# (Ubuntu 22.04 builds require glibc 2.34 and will not run on Kylin V10).
 # Manual only — does not run the full multi-platform Build matrix.
 
 on:
@@ -17,9 +19,26 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:8
 
     steps:
+      - name: Install build dependencies
+        run: |
+          dnf -y install epel-release
+          dnf -y install \
+            gcc gcc-c++ make pkgconfig which curl ca-certificates tar gzip unzip \
+            gtk3-devel webkit2gtk3-devel \
+            git
+          # UPX (optional compression)
+          UPX_VER="4.2.4"
+          curl -sSfL -o /tmp/upx.tar.xz \
+            "https://github.com/upx/upx/releases/download/v${UPX_VER}/upx-${UPX_VER}-amd64_linux.tar.xz"
+          tar -xJf /tmp/upx.tar.xz -C /tmp
+          install -m 755 /tmp/upx-*/upx /usr/local/bin/upx
+          upx --version
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -31,12 +50,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev upx
+          node-version: '20'
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -55,9 +69,17 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          # Verify builder glibc (expect 2.28 on Rocky 8)
+          ldd --version | head -1
           BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\" -tags webkit2_40"
           echo "BUILD_ARGS=$BUILD_ARGS"
           eval wails build $BUILD_ARGS
+          # Sanity: binary must not require glibc newer than 2.28
+          if command -v objdump >/dev/null; then
+            echo "GLIBC symbols required by binary:"
+            objdump -T build/bin/uniTerm 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -5 || true
+          fi
 
       - name: Package
         run: |
@@ -82,7 +104,7 @@ jobs:
           platform: linux
           version: ${VERSION}
           maintainer: uniTerm <uniTerm@example.com>
-          description: Lightweight all-in-one terminal emulator with built-in AI Agent (WebKit 4.0 / Kylin)
+          description: Lightweight all-in-one terminal emulator (WebKit 4.0 / glibc 2.28 / Kylin)
           homepage: https://uniterm.net
           license: Proprietary
           depends:
@@ -126,11 +148,12 @@ jobs:
           draft: true
           prerelease: true
           body: |
-            Preview build for **Kylin / RHEL / openEuler** (WebKit2GTK 4.0 / `webkit2gtk3`).
+            Preview build for **Kylin V10 / RHEL 8 / openEuler** (WebKit2GTK 4.0 + **glibc 2.28**).
 
             ```bash
             sudo yum install -y gtk3 webkit2gtk3
-            sudo rpm -ivh uniterm-linux-amd64-webkit40-*.rpm
+            sudo rpm -Uvh uniterm-linux-amd64-webkit40-*.rpm
+            uniterm
             ```
           files: |
             uniterm-linux-amd64-webkit40-*.tar.gz

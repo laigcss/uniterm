@@ -34,12 +34,8 @@ jobs:
             slug: linux-arm64
             artifact: uniTerm
             webkit: '41'
-          # Kylin / RHEL / openEuler: webkit2gtk3 = ABI 4.0
-          - os: ubuntu-22.04
-            platform: linux/amd64
-            slug: linux-amd64-webkit40
-            artifact: uniTerm
-            webkit: '40'
+          # Kylin/RHEL webkit40+glibc2.28 builds: use workflow build-linux-webkit40.yml
+          # (Ubuntu runners link glibc 2.34 and will not run on Kylin V10.)
           - os: macos-latest
             platform: darwin
             slug: darwin
