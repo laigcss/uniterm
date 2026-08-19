@@ -233,6 +233,12 @@ async function handleSend(
 
 const CHUNK = 8192
 const READ_CHUNK = CHUNK * 16
+// Download writes are batched to this size. ZMODEM delivers file bytes in
+// ~1KB subpackets; writing each one to disk through the Wails bridge (one
+// open/stat/write/close round-trip per call) melts the CPU and makes disk
+// commit lag far behind network receipt. Buffering to a larger block pulls
+// commit back toward network speed.
+const DOWNLOAD_BATCH = 64 * 1024
 
 async function sendFileChunks(
   xfer: any, path: string, size: number, chunkSize: number,
@@ -279,7 +285,16 @@ async function handleReceive(
   let done!: () => void
   const donePromise = new Promise<void>(r => { done = r; abortCtl.done = r })
   let idleTimer: ReturnType<typeof setTimeout> | null = null
-  function resetIdle() { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(done, 2000) }
+  // Every file's disk-write drain promise. The idle watchdog resolves done
+  // only after all of them settle, so it can never report completion (or
+  // "cancelled") while buffered bytes are still being written to disk.
+  const pendingSettles = new Set<Promise<void>>()
+  function resetIdle() {
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      Promise.all([...pendingSettles]).then(done)
+    }, 2000)
+  }
 
   try {
     const sep = saveDir.includes('\\') ? '\\' : '/'
@@ -302,25 +317,42 @@ async function handleReceive(
         direction: 'download', status: 'transferring', speed: 0,
         savePath: finalSavePath,
       })
+
+      // Buffered, batched writes. on_input only appends to `buffer`; the
+      // buffer is flushed to disk in DOWNLOAD_BATCH chunks (and once more when
+      // the offer ends). A single serialized chain drains every batch so write
+      // offsets stay contiguous with AppendFileBase64's append-offset guard.
       let received = 0
-      let writeChain = Promise.resolve()
+      let buffer: number[] = []
+      let bufferOffset = 0
+      let pendingWrites: Promise<void> = Promise.resolve()
       let writeError: unknown = null
+
+      const flush = () => {
+        while (buffer.length > 0) {
+          const take = Math.min(DOWNLOAD_BATCH, buffer.length)
+          const bytes = buffer.splice(0, take)
+          const offset = bufferOffset
+          bufferOffset += bytes.length
+          pendingWrites = pendingWrites
+            .then(() => AppendFileBase64(finalSavePath, arrayBufferToBase64(Uint8Array.from(bytes)), offset))
+            .catch((err) => { writeError = err })
+          pendingSettles.add(pendingWrites)
+        }
+      }
+
       const onInput = (payload: number[]) => {
-        const offset = received
-        const chunk = Uint8Array.from(payload)
-        received += chunk.length
+        for (const b of payload) buffer.push(b)
+        received += payload.length
         resetIdle()
         store.updateTransfer(sessionId, transferId, { transferred: received })
-        writeChain = writeChain.then(async () => {
-          if (writeError) return
-          await AppendFileBase64(finalSavePath, arrayBufferToBase64(chunk), offset)
-        }).catch((err) => {
-          writeError = err
-        })
+        if (buffer.length >= DOWNLOAD_BATCH) flush()
       }
+
       try {
         await offer.accept({ on_input: onInput })
-        await writeChain
+        flush()  // flush whatever remains buffered below the batch size
+        await pendingWrites
         if (writeError) throw writeError
         store.updateTransfer(sessionId, transferId, {
           status: 'completed', transferred: received,
