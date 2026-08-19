@@ -1,0 +1,140 @@
+name: Build Linux WebKit40 (Kylin/RHEL)
+
+# Standalone package for Kylin / RHEL / openEuler (webkit2gtk3 = ABI 4.0).
+# Manual only — does not run the full multi-platform Build matrix.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_release:
+        description: 'Attach artifacts to a draft GitHub Release'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev upx
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Set version
+        shell: bash
+        run: |
+          SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "VERSION=dev-${SHORT}" >> $GITHUB_ENV
+
+      - name: Install and build frontend
+        env:
+          VITE_VERSION: ${{ env.VERSION }}
+        run: cd frontend && npm install && npm run build
+
+      - name: Build
+        shell: bash
+        run: |
+          BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\" -tags webkit2_40"
+          echo "BUILD_ARGS=$BUILD_ARGS"
+          eval wails build $BUILD_ARGS
+
+      - name: Package
+        run: |
+          ARCH=amd64
+          NFPM_ARCH=x86_64
+          PKG_SUFFIX="${ARCH}-webkit40"
+
+          cd build/bin
+          chmod +x uniTerm
+          tar czf ../../uniterm-linux-${PKG_SUFFIX}-${VERSION}.tar.gz uniTerm
+          cd ../..
+
+          NFPM_VER="2.46.3"
+          curl -sSfL -o /tmp/nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VER}/nfpm_${NFPM_VER}_Linux_${NFPM_ARCH}.tar.gz"
+          tar xf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
+          chmod +x /usr/local/bin/nfpm
+
+          cat > nfpm.yaml << EOF
+          name: uniterm
+          arch: ${ARCH}
+          platform: linux
+          version: ${VERSION}
+          maintainer: uniTerm <uniTerm@example.com>
+          description: Lightweight all-in-one terminal emulator with built-in AI Agent (WebKit 4.0 / Kylin)
+          homepage: https://uniterm.net
+          license: Proprietary
+          depends:
+            - libgtk-3-0
+            - libwebkit2gtk-4.0-37
+          overrides:
+            rpm:
+              depends:
+                - gtk3
+                - webkit2gtk3
+          contents:
+            - src: build/bin/uniTerm
+              dst: /usr/bin/uniterm
+            - src: build/linux/uniterm.desktop
+              dst: /usr/share/applications/uniterm.desktop
+            - src: build/appicon.png
+              dst: /usr/share/icons/hicolor/128x128/apps/uniterm.png
+          EOF
+
+          nfpm package --config nfpm.yaml --packager deb \
+            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.deb"
+          nfpm package --config nfpm.yaml --packager rpm \
+            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.rpm"
+          ls -la uniterm-linux-${PKG_SUFFIX}-*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: uniTerm-linux-amd64-webkit40
+          path: |
+            uniterm-linux-amd64-webkit40-*.tar.gz
+            uniterm-linux-amd64-webkit40-*.deb
+            uniterm-linux-amd64-webkit40-*.rpm
+
+      - name: Create draft release
+        if: inputs.upload_release == true
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: webkit40-${{ env.VERSION }}
+          name: WebKit40 / Kylin ${{ env.VERSION }}
+          draft: true
+          prerelease: true
+          body: |
+            Preview build for **Kylin / RHEL / openEuler** (WebKit2GTK 4.0 / `webkit2gtk3`).
+
+            ```bash
+            sudo yum install -y gtk3 webkit2gtk3
+            sudo rpm -ivh uniterm-linux-amd64-webkit40-*.rpm
+            ```
+          files: |
+            uniterm-linux-amd64-webkit40-*.tar.gz
+            uniterm-linux-amd64-webkit40-*.deb
+            uniterm-linux-amd64-webkit40-*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
