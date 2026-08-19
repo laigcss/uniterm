@@ -1,8 +1,9 @@
 name: Build Linux WebKit40 (Kylin/RHEL)
 
-# Standalone package for Kylin V10 / RHEL 8 / openEuler (webkit2gtk3 = ABI 4.0).
-# Built inside Rocky Linux 8 so the binary links against glibc 2.28
-# (Ubuntu 22.04 builds require glibc 2.34 and will not run on Kylin V10).
+# Standalone package for Kylin V10 / RHEL 8 / openEuler:
+# - Built in Rocky Linux 8 → glibc 2.28
+# - Links webkit2gtk-4.0 (package webkit2gtk3) WITHOUT -tags webkit2_40
+#   (that tag forces runtime WebKit >= 2.40, which old Kylin repos often lack)
 # Manual only — does not run the full multi-platform Build matrix.
 
 on:
@@ -72,8 +73,14 @@ jobs:
           export PATH="$(go env GOPATH)/bin:$PATH"
           # Verify builder glibc (expect 2.28 on Rocky 8)
           ldd --version 2>&1 | awk 'NR==1{print; exit}' || true
-          BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\" -tags webkit2_40"
+          # IMPORTANT: do NOT use -tags webkit2_40 here.
+          # That tag means "require WebKit *version* >= 2.40 at runtime",
+          # which Kylin V10's older webkit2gtk3 cannot satisfy.
+          # Default/legacy build still links webkit2gtk-4.0 (ABI) via pkg-config
+          # and accepts older WebKit minor versions (MinMinorVersion=0).
+          BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\""
           echo "BUILD_ARGS=$BUILD_ARGS"
+          pkg-config --modversion webkit2gtk-4.0 || true
           eval wails build $BUILD_ARGS
           # Sanity: binary must not require glibc newer than 2.28
           if command -v objdump >/dev/null && [ -f build/bin/uniTerm ]; then
