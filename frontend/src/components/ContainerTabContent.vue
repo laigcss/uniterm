@@ -318,8 +318,25 @@ function shortId(id: string) {
   return raw.length > 12 ? raw.slice(0, 12) : raw
 }
 
-onMounted(() => store.open(props.tab))
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.tab.panelId) reconnect()
+}
+
+// Force-reconnect: close the current container connection, then re-open it
+// (open() re-initializes loading/error state and reconnects the client).
+async function reconnect() {
+  try { store.close(props.tab.id) } catch (_) {}
+  await store.open(props.tab)
+}
+
+onMounted(() => {
+  store.open(props.tab)
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this tab.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
   pullHandle?.stop()
   store.close(props.tab.id)
 })

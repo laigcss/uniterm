@@ -603,9 +603,20 @@ function onNewListDragOver(idx: number) {
 function onNewListDrop(_idx: number) { newDragIdx = -1 }
 
 // --- Init ---
-let initialised = false
+// Re-scan whenever the session id changes: on first mount AND on reconnect
+// (a fresh session bound to the panel). Clear the cached keyspace/navigation
+// state before loading the new connection's keys.
+let lastSessionId: string | null = null
 watch(() => props.sessionId, async (newId) => {
-  if (newId && !initialised) { initialised = true; await fetchDBSize(); await doScan(0) }
+  if (!newId || newId === lastSessionId) return
+  lastSessionId = newId
+  keys.value = []
+  cursorStack.value = []
+  currentPage.value = 1
+  nextCursor.value = 0
+  hasMore.value = false
+  await fetchDBSize()
+  await doScan(0)
 })
 </script>
 

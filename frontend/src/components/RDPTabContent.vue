@@ -172,11 +172,20 @@ onMounted(() => {
       status.value = 'error'
     }
   })
+
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
 })
+
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.panelId) reconnect()
+}
 
 onUnmounted(() => {
   unsubStatus?.()
   unsubData?.()
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
   clearConnectTimer()
 })
 

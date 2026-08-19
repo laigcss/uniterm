@@ -104,6 +104,8 @@
   "window.maximize": "Maximieren",
   "window.close": "Schließen",
   "tab.duplicate": "Duplizieren",
+  "tab.reconnect": "Neu verbinden",
+  "tab.reconnectFailed": "Neuverbindung fehlgeschlagen: {error}",
   "tab.copyHostAddress": "Hostadresse kopieren",
   "tab.hostCopied": "Hostadresse kopiert: {host}",
   "tab.rename": "Umbenennen",

@@ -134,6 +134,11 @@ async function reconnect() {
   await start()
 }
 
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.panelId) reconnect()
+}
+
 onMounted(() => {
   if (props.sessionId) {
     currentSessionId.value = props.sessionId
@@ -157,10 +162,14 @@ onMounted(() => {
         break
     }
   })
+
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
 })
 
 onBeforeUnmount(() => {
   unsubStatus?.()
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
   if (currentSessionId.value) {
     try { CloseSession(currentSessionId.value) } catch (_) {}
     panelStore.bindSession(props.panelId, '')

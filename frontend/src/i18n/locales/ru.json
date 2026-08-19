@@ -104,6 +104,8 @@
   "window.maximize": "Развернуть",
   "window.close": "Закрыть",
   "tab.duplicate": "Дублировать",
+  "tab.reconnect": "Переподключиться",
+  "tab.reconnectFailed": "Не удалось переподключиться: {error}",
   "tab.copyHostAddress": "Скопировать адрес хоста",
   "tab.hostCopied": "Адрес хоста скопирован: {host}",
   "tab.rename": "Переименовать",

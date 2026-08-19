@@ -259,6 +259,11 @@ function onPaste(e: ClipboardEvent) {
   }
 }
 
+function onReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (panelId && panelId === props.panelId) reconnect()
+}
+
 onMounted(() => {
   if (props.sessionId) {
     currentSessionId.value = props.sessionId
@@ -319,12 +324,16 @@ onMounted(() => {
         break
     }
   })
+
+  // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
+  window.addEventListener('panel:reconnect', onReconnectEvent)
 })
 
 onBeforeUnmount(() => {
   themeObserver?.disconnect()
   themeObserver = null
   unsubStatus?.()
+  window.removeEventListener('panel:reconnect', onReconnectEvent)
 
   if (rfb && vncContainer.value && vncContainer.value.childElementCount > 0) {
     const container = document.createElement('div')
