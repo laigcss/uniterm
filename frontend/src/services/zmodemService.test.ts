@@ -57,54 +57,148 @@ vi.mock('../stores/zmodemStore', () => ({
 
 import { startZmodemService } from './zmodemService'
 
+const BATCH = 64 * 1024
+
+async function sleepTicks() {
+  for (let i = 0; i < 100; i++) {
+    await Promise.resolve()
+  }
+}
+
+function base64ToBytes(b64: string): number[] {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return Array.from(out)
+}
+
+// Builds a fake zmodem 'receive' session + offer for a download of the given
+// byte chunks. Returns handles the test can drive.
+function makeDownload(chunks: number[][]) {
+  const state: {
+    offerHandler?: (offer: any) => void | Promise<void>
+    accept?: any
+    zsession: any
+  } = {} as any
+  const offer = {
+    get_details: () => ({ name: 'large.bin', size: chunks.flat().length }),
+    accept: vi.fn(async (options?: { on_input?: (payload: number[]) => void }) => {
+      state.accept = { options }
+      for (const c of chunks) options?.on_input?.(c)
+    }),
+    skip: vi.fn(),
+  }
+  const zsession = {
+    type: 'receive',
+    on: vi.fn((event: string, handler: (offer: any) => void | Promise<void>) => {
+      if (event === 'offer') state.offerHandler = handler
+    }),
+    // The real session's start() resolves when the ZMODEM protocol ends (all
+    // file data received), which is decoupled from our disk writes. We fire
+    // the offer handler in the background and resolve immediately, mirroring
+    // that: on_input runs synchronously, but its writes may still be pending
+    // on disk.
+    start: vi.fn(() => {
+      state.offerHandler?.(offer)
+      return Promise.resolve()
+    }),
+    abort: vi.fn(),
+    close: vi.fn(),
+  }
+  state.zsession = zsession
+  return state
+}
+
 describe('startZmodemService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sentryInstances.length = 0
     mockOpenDirectoryDialog.mockResolvedValue('C:\\Downloads')
+    mockAppendFileBase64.mockResolvedValue(undefined)
   })
 
-  it('streams sz download chunks to disk without buffering the full file', async () => {
+  it('buffers small sz chunks into a single batched disk write', async () => {
     vi.useFakeTimers()
-    const chunks = [
-      new Uint8Array([1, 2, 3]),
-      new Uint8Array([4, 5]),
-    ]
-    let offerHandler: ((offer: any) => void | Promise<void>) | undefined
-    const offer = {
-      get_details: () => ({ name: 'large.bin', size: 5 }),
-      accept: vi.fn(async (options?: { on_input?: (payload: number[]) => void }) => {
-        options?.on_input?.(Array.from(chunks[0]))
-        options?.on_input?.(Array.from(chunks[1]))
-      }),
-      skip: vi.fn(),
-    }
-    const zsession = {
-      type: 'receive',
-      on: vi.fn((event: string, handler: (offer: any) => void | Promise<void>) => {
-        if (event === 'offer') offerHandler = handler
-      }),
-      start: vi.fn(async () => {
-        await offerHandler?.(offer)
-      }),
-      abort: vi.fn(),
-      close: vi.fn(),
-    }
+    const s = makeDownload([
+      [1, 2, 3],
+      [4, 5],
+    ])
     const onComplete = vi.fn()
     startZmodemService({ sessionId: 's1', onComplete })
 
-    sentryInstances[0].on_detect({ confirm: () => zsession })
-    await Promise.resolve()
-    await Promise.resolve()
-
+    sentryInstances[0].on_detect({ confirm: () => s.zsession })
+    await sleepTicks()
     await vi.runOnlyPendingTimersAsync()
     vi.useRealTimers()
 
-    expect(offer.accept).toHaveBeenCalledWith({ on_input: expect.any(Function) })
-    expect(mockAppendFileBase64).toHaveBeenCalledTimes(2)
-    expect(mockAppendFileBase64).toHaveBeenNthCalledWith(1, 'C:\\Downloads\\large.bin', 'AQID', 0)
-    expect(mockAppendFileBase64).toHaveBeenNthCalledWith(2, 'C:\\Downloads\\large.bin', 'BAU=', 3)
+    // Only a single batched Write — not one per tiny chunk.
+    expect(mockAppendFileBase64).toHaveBeenCalledTimes(1)
+    expect(mockAppendFileBase64).toHaveBeenNthCalledWith(1, 'C:\\Downloads\\large.bin', 'AQIDBAU=', 0)
     expect(mockWriteFileBase64).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledWith(['C:\\Downloads\\large.bin'])
+    expect(mockSessionEndZmodem).toHaveBeenCalledWith('s1')
+  })
+
+  it('flushes an in-flight batch once the buffer exceeds the batch size', async () => {
+    vi.useFakeTimers()
+    // 3 × 30KB = 90KB total → first flush at 64KB boundary, remainder at end.
+    const make = (v: number, len: number) => Array.from({ length: len }, () => v)
+    const s = makeDownload([
+      make(1, 30000),
+      make(2, 30000),
+      make(3, 30000),
+    ])
+    const onComplete = vi.fn()
+    startZmodemService({ sessionId: 's1', onComplete })
+
+    sentryInstances[0].on_detect({ confirm: () => s.zsession })
+    await sleepTicks()
+    await vi.runOnlyPendingTimersAsync()
+    vi.useRealTimers()
+
+    expect(mockAppendFileBase64).toHaveBeenCalledTimes(2)
+    const c0 = mockAppendFileBase64.mock.calls[0]
+    const c1 = mockAppendFileBase64.mock.calls[1]
+    expect(c0[2]).toBe(0)
+    expect(c1[2]).toBe(BATCH)
+    // Reassembled file content equals the source bytes, in order.
+    const reassembled = base64ToBytes(c0[1]).concat(base64ToBytes(c1[1]))
+    expect(reassembled.length).toBe(90000)
+    expect(reassembled[0]).toBe(1)
+    expect(reassembled[65536]).toBe(3)
+    expect(reassembled[89999]).toBe(3)
+  })
+
+  it('waits for the final disk write before completing the download', async () => {
+    vi.useFakeTimers()
+    const s = makeDownload([[1, 2, 3, 4, 5]])
+    const onComplete = vi.fn()
+
+    // Simulate a slow disk: the append write stays pending until we resolve it.
+    const appendResolvers: (() => void)[] = []
+    mockAppendFileBase64.mockImplementation(
+      () => new Promise<void>((res) => appendResolvers.push(res)),
+    )
+
+    startZmodemService({ sessionId: 's1', onComplete })
+
+    sentryInstances[0].on_detect({ confirm: () => s.zsession })
+    await sleepTicks()
+
+    // Let the 2s idle watchdog fire while the disk write is still pending.
+    await vi.runOnlyPendingTimersAsync()
+
+    // BUG: the old code completed here (files empty → "Zmodem transfer
+    // cancelled"). The fix must not call onComplete until the write drains.
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(mockAppendFileBase64).toHaveBeenCalledTimes(1)
+
+    // Now the disk catches up.
+    appendResolvers[0]()
+    await sleepTicks()
+    await vi.runOnlyPendingTimersAsync()
+    vi.useRealTimers()
+
     expect(onComplete).toHaveBeenCalledWith(['C:\\Downloads\\large.bin'])
     expect(mockSessionEndZmodem).toHaveBeenCalledWith('s1')
   })
