@@ -11,6 +11,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/ys-ll/uniterm/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/ys-ll/uniterm/backend/sync"
 )
@@ -55,7 +56,9 @@ func (a *App) SetDataDir(kind, customDir string, migrate bool) error {
 	// On first run: init stores at the target and return.
 	if a.dataDir == "" {
 		a.dataDir = target
-		_ = store.WriteBootstrap(kind, customDir)
+		if err := store.WriteBootstrap(kind, customDir); err != nil {
+			log.Writef("bootstrap write failed (data dir pointer): %v", err)
+		}
 		a.initStores(target, false)
 		runtime.EventsEmit(a.ctx, "app:dataDirReady", target)
 		return nil
@@ -84,7 +87,9 @@ func (a *App) SetDataDir(kind, customDir string, migrate bool) error {
 	} else if !dirUnlockable(target) {
 		return errors.New("cannot unlock credentials in the target directory")
 	}
-	_ = store.WriteBootstrap(kind, customDir)
+	if err := store.WriteBootstrap(kind, customDir); err != nil {
+		log.Writef("bootstrap write failed (migrate pointer): %v", err)
+	}
 	// Remove the source only after bootstrap points at the target; any earlier
 	// failure leaves the old dir intact so the user can retry without loss.
 	if migrate {

@@ -327,8 +327,18 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	cred := credentials.New(dataDir, sync.NewKeychain())
 
 	if upgrade {
+		// Only this once (the upgrade migration) is worth logging; ordinary
+		// starts share the same AutoUnlock path and would be noise.
+		m, _ := credentials.ReadMeta(dataDir)
+		if m != nil {
+			log.Writef("[upgrade] existing credentials.meta mode=%q", m.Mode)
+		} else {
+			log.Writef("[upgrade] no credentials.meta → auto-setup keychain")
+		}
 		// Existing user: silently auto-upgrade to default + keychain mode.
-		_ = store.WriteBootstrap("default", "")
+		if err := store.WriteBootstrap("default", ""); err != nil {
+			log.Writef("bootstrap write failed (default pointer): %v", err)
+		}
 		// Idempotency (review Critical #1): Setup generates a NEW random key and
 		// overwrites the keychain entry. If a prior upgrade already ran but
 		// bootstrap.json was lost (deleted / <exe>/data unwritable / portable zip
@@ -359,6 +369,12 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	}
 
 	a.credentialStore = cred
+	// Only log when startup lands in a state that prompts a credential dialog
+	// (setup/keychain-lost), so a normal unlocked start stays silent.
+	if st := cred.Status(); st.NeedsSetup || st.KeychainLost {
+		log.Writef("[cred-dialog] mode=%q unlocked=%v keychainLost=%v needsSetup=%v",
+			st.Mode, st.Unlocked, st.KeychainLost, st.NeedsSetup)
+	}
 	if a.connectionStore != nil {
 		a.connectionStore.SetPasswordStore(cred)
 		// Fall back to the pre-enc:v1 keychain (conn/<id>) so passwords from

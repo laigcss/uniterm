@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"errors"
 	"sync"
 	"testing"
 )
@@ -17,7 +18,7 @@ func (f *fakeKeychain) Get(key string) (string, error) {
 	if v, ok := f.store[key]; ok {
 		return v, nil
 	}
-	return "", keychainErrNotFound
+	return "", ErrKeychainNotFound
 }
 func (f *fakeKeychain) Set(key, value string) error {
 	f.mu.Lock()
@@ -32,11 +33,13 @@ func (f *fakeKeychain) Delete(key string) error {
 	return nil
 }
 
-var keychainErrNotFound = &notFoundError{}
+// transientKeychain reports a non-notfound error on reads, simulating e.g. a
+// temporarily denied macOS keychain permission.
+type transientKeychain struct{}
 
-type notFoundError struct{}
-
-func (*notFoundError) Error() string { return "not found" }
+func (transientKeychain) Get(string) (string, error)  { return "", errors.New("keychain temporarily unavailable") }
+func (transientKeychain) Set(string, string) error    { return nil }
+func (transientKeychain) Delete(string) error         { return nil }
 
 func TestSetupKeychainMode(t *testing.T) {
 	dir := t.TempDir()
