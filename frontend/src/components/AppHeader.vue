@@ -5,7 +5,7 @@
     @dblclick="onDblClick"
   >
     <!-- macOS: spacer for native traffic lights -->
-    <div v-if="platform === 'darwin'" class="mac-traffic-light-spacer" />
+    <div v-if="platform === 'darwin' && !localStateStore.state.systemTitleBar" class="mac-traffic-light-spacer" />
 
     <!-- Connections button (icon only, leftmost) -->
     <button class="header-btn" @click="emit('toggle-sidebar')" :title="t('header.connections') + shortcutSuffix('toggleSidebar')">
@@ -14,7 +14,7 @@
 
 
     <!-- Tabs list -->
-    <div class="header-tabs" :class="{ 'tabs-centered': platform === 'darwin' }">
+    <div class="header-tabs">
       <TabsList
         @close-tab="(id: string) => emit('close-tab', id)"
         @close-tab-batch="(ids: string[]) => emit('close-tab-batch', ids)"
@@ -428,10 +428,6 @@ onUnmounted(() => {
   overflow: hidden;
   justify-content: flex-start;
   align-items: center;
-}
-
-.header-tabs.tabs-centered {
-  justify-content: center;
 }
 
 .header-btn {
