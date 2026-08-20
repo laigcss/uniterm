@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.8.0-alpha
+## v1.8.0
 
 ### What's Changed
 
