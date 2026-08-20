@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 const bootstrapFileName = "bootstrap.json"
@@ -46,28 +48,78 @@ func bootstrapPath() (string, error) {
 	return filepath.Join(dir, "data", bootstrapFileName), nil
 }
 
+// userConfigBootstrapPath returns the bootstrap path in the user config dir
+// (<UserConfigDir>/uniTerm/bootstrap.json). Unlike the exe/data location it is
+// writable for installs under a read-only Program Files / Applications, which
+// is where default and custom data dirs (and their bootstrap pointer) belong.
+func userConfigBootstrapPath() (string, error) {
+	def, err := DefaultDataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(def, bootstrapFileName), nil
+}
+
+// bootstrapTargetPaths decides where a bootstrap of the given kind is written
+// and which stale location to remove afterwards.
+//
+//	portable → lives with the exe (exe/data) so it follows a USB stick.
+//	everything else → lives in the user config dir (writable even from a
+//	read-only install dir).
+//
+// To keep only one valid pointer on disk (a mode switch must not silently
+// shadow one another at read time) the stale location is the other one.
+func bootstrapTargetPaths(kind, exe, userCfg string) (primary, stale string) {
+	exePath := filepath.Join(exe, "data", bootstrapFileName)
+	userPath := filepath.Join(userCfg, bootstrapFileName)
+	if kind == "portable" {
+		return exePath, userPath
+	}
+	return userPath, exePath
+}
+
+// bootstrapSearchOrder returns the candidate paths read at startup, newest
+// preference first: the user-config bootstrap (authoritative for installs),
+// then the exe/data one (portable fallback). Each is validated as it is read.
+func bootstrapSearchOrder(exe, userCfg string) []string {
+	exePath := filepath.Join(exe, "data", bootstrapFileName)
+	userPath := filepath.Join(userCfg, bootstrapFileName)
+	if exePath == userPath {
+		return []string{exePath}
+	}
+	return []string{userPath, exePath}
+}
+
 // ResolveDataDir determines where config files live.
-//   - Valid bootstrap.json → resolve its path.
-//   - No bootstrap + default dir has config files → Upgrade (existing user).
+//   - Valid bootstrap.json in (user-config, then exe/data) → resolve its path.
+//   - No valid bootstrap + default dir has config files → Upgrade (existing user).
 //   - Otherwise → FirstRun.
 func ResolveDataDir() (DataDir, error) {
-	bp, err := bootstrapPath()
+	exe, err := exeDir()
 	if err != nil {
 		return DataDir{}, err
 	}
-	if b, err := readBootstrap(bp); err == nil && b != nil {
-		if dir, err := resolvePath(b); err == nil && dir != "" && pathExists(dir) {
-			return DataDir{Path: dir, Type: b.Type}, nil
+	userCfg, err := userConfigBootstrapPath()
+	if err != nil {
+		return DataDir{}, err
+	}
+	for _, bp := range bootstrapSearchOrder(exe, userCfg) {
+		if b, err := readBootstrap(bp); err == nil && b != nil {
+			if dir, err := resolvePath(b); err == nil && dir != "" && pathExists(dir) {
+				return DataDir{Path: dir, Type: b.Type}, nil
+			}
+			// Invalid or missing path → try next location.
 		}
-		// Invalid or missing path → fall through.
 	}
 	def, err := DefaultDataDir()
 	if err != nil {
 		return DataDir{}, err
 	}
 	if hasConfigFiles(def) {
+		log.Writef("no valid bootstrap; default dir has config → upgrade dataDir=%s", def)
 		return DataDir{Path: def, Type: "default", Upgrade: true}, nil
 	}
+	log.Writef("no valid bootstrap and no config in default dir → first run")
 	return DataDir{FirstRun: true}, nil
 }
 
@@ -103,16 +155,20 @@ func resolvePath(b *bootstrap) (string, error) {
 	}
 }
 
-// WriteBootstrap writes <exe_dir>/data/bootstrap.json with the given kind.
+// WriteBootstrap writes the bootstrap pointer for the given kind to the
+// canonical location (user config dir for default/custom, exe/data for
+// portable) and removes the stale location so only one pointer exists.
 func WriteBootstrap(kind, customDir string) error {
-	dir, err := exeDir()
+	exe, err := exeDir()
 	if err != nil {
 		return err
 	}
-	dataDir := filepath.Join(dir, "data")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	userCfg, err := userConfigBootstrapPath()
+	if err != nil {
 		return err
 	}
+	primary, stale := bootstrapTargetPaths(kind, exe, userCfg)
+
 	b := bootstrap{Type: kind}
 	if kind == "custom" {
 		b.DataDir = customDir
@@ -121,7 +177,17 @@ func WriteBootstrap(kind, customDir string) error {
 	if err != nil {
 		return err
 	}
-	return atomicWriteFile(filepath.Join(dataDir, bootstrapFileName), data, 0600)
+	if err := os.MkdirAll(filepath.Dir(primary), 0755); err != nil {
+		return err
+	}
+	if err := atomicWriteFile(primary, data, 0600); err != nil {
+		return err
+	}
+	// A mode switch must not leave a second, shadowing pointer behind.
+	if stale != primary {
+		_ = os.Remove(stale)
+	}
+	return nil
 }
 
 func pathExists(path string) bool {

@@ -1,11 +1,13 @@
 package credentials
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	stdsync "sync"
 
@@ -79,14 +81,21 @@ func (s *Store) AutoUnlock() error {
 	var key []byte
 	switch meta.Mode {
 	case ModeKeychain:
-		k, ok := s.getKey("keychain-key/" + h)
-		if !ok {
+		k, err := s.getKey("keychain-key/" + h)
+		if err != nil {
+			// Transient read failure (e.g. macOS keychain permission was
+			// temporarily denied). NOT the same as a lost key: surfacing it
+			// avoids the KeychainLost→reset flow that would wipe stored
+			// passwords.
+			return err
+		}
+		if k == nil {
 			s.set(meta.Mode, meta.Salt, nil)
-			return nil // KeychainLost
+			return nil // KeychainLost (truly missing)
 		}
 		key = k
 	case ModeMasterPassword:
-		if k, ok := s.getKey("master-key/" + h); ok {
+		if k, err := s.getKey("master-key/" + h); err == nil && k != nil {
 			key = k
 		}
 	default:
@@ -97,18 +106,34 @@ func (s *Store) AutoUnlock() error {
 }
 
 // Setup establishes a NEW mode. Used on first run and after reset.
+// It must NEVER orphan existing enc:v1 ciphertext: if the data dir already
+// holds encrypted secrets, a bare key swap would make them undecryptable.
+//   - keychain: reuse a surviving keychain key when one exists; otherwise only
+//     allow a fresh key when there is no existing ciphertext.
+//   - master-password: refuse when existing ciphertext is present (the correct
+//     path is SwitchCredentialMode, which re-encrypts).
 func (s *Store) Setup(mode, masterPassword string) error {
+	hasSecrets := s.storeHasSecrets()
 	var key, salt []byte
 	switch mode {
 	case ModeKeychain:
-		var err error
-		key, err = randomKey()
-		if err != nil {
-			return err
+		existing, err := s.getKey("keychain-key/" + s.DirHash())
+		if err == nil && existing != nil {
+			key = existing // reuse the surviving key so existing ciphertext stays readable
+		} else if hasSecrets {
+			return errors.New("existing encrypted data but no keychain key; refusing to overwrite")
+		} else {
+			key, err = randomKey()
+			if err != nil {
+				return err
+			}
 		}
 	case ModeMasterPassword:
 		if masterPassword == "" {
 			return errors.New("master password required")
+		}
+		if hasSecrets {
+			return errors.New("existing encrypted data; use switch-credential-mode to re-encrypt instead of setup")
 		}
 		var err error
 		salt, err = unitsync.GenerateSalt()
@@ -211,16 +236,48 @@ func (s *Store) set(mode string, salt, key []byte) {
 	s.mu.Unlock()
 }
 
-func (s *Store) getKey(name string) ([]byte, bool) {
+// ErrKeychainNotFound marks a keychain entry that is truly absent (as opposed
+// to a transient read failure), so callers can distinguish "key lost" from
+// "keychain temporarily unreadable" — the latter must not trigger the
+// KeychainLost→reset flow that would wipe stored passwords.
+var ErrKeychainNotFound = errors.New("keychain entry not found")
+
+// getKey returns the decoded key for a keychain entry.
+//   - (nil, nil)         → no entry (ErrKeychainNotFound / empty value)
+//   - ([]byte, nil)      → entry found and decoded
+//   - (nil, other error) → transient read/parse failure
+func (s *Store) getKey(name string) ([]byte, error) {
 	v, err := s.keychain.Get(name)
-	if err != nil || v == "" {
-		return nil, false
+	if err != nil {
+		if errors.Is(err, ErrKeychainNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if v == "" {
+		return nil, nil
 	}
 	b, err := hex.DecodeString(v)
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
-	return b, true
+	return b, nil
+}
+
+// storeHasSecrets reports whether any config file in the data dir already
+// contains in-place enc:v1 ciphertext. A bare Setup on such a dir would
+// orphan the existing ciphertext, so it must be guarded.
+func (s *Store) storeHasSecrets() bool {
+	for _, name := range []string{"connections.json", "settings.json", "identities.json", "proxies.json"} {
+		data, err := os.ReadFile(filepath.Join(s.dataDir, name))
+		if err != nil {
+			continue
+		}
+		if bytes.Contains(data, []byte(Prefix)) {
+			return true
+		}
+	}
+	return false
 }
 
 func randomKey() ([]byte, error) {
