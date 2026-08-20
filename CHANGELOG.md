@@ -12,7 +12,7 @@
 - Configuration: configurable data directory and dual encryption modes.
 - Credential: master-password encryption mode alongside the system keychain mode, for using the master password to recover saved passwords after switching machines or reinstalling the OS.
 - Terminal: line-number and timestamp gutters, toggled via right-click or keyboard shortcuts.
-- Database: multi-tab panels, open several database sessions at once and switch between connections / schemas quickly. (@surenwuyuwuqiu)
+- Database: multi-tab panels, open several database sessions at once and switch quickly between different databases / schemas within the same connection. (@surenwuyuwuqiu)
 - Database: table-data pagination, browse large tables page by page instead of loading all rows at once. (@surenwuyuwuqiu)
 - Database: import table data by running `.sql` scripts for MySQL / PostgreSQL / Oracle / SQL Server / RQLite. (@surenwuyuwuqiu)
 - Database: export table data as `.sql` files for MySQL / PostgreSQL / Oracle / SQL Server / RQLite. (@surenwuyuwuqiu)
@@ -73,7 +73,7 @@ Thanks to @surenwuyuwuqiu and @jiayunora for their contributions to this release
 - 配置：支持迁移到程序目录或自定义目录，满足便携需求。
 - 凭据：在系统钥匙库加密模式基础上，新增主密码加密模式，便于更换机器或重装系统后使用主密码恢复记录的密码。
 - 终端：新增行号与时间戳侧栏，支持右键开关和快捷键开关。
-- 数据库：多标签面板，可同时打开多个数据库会话，在不同连接 / 数据库之间快速切换。（@surenwuyuwuqiu）
+- 数据库：多标签面板，可同时打开多个数据库会话，在同一连接的不同库 / 表之间快速切换。（@surenwuyuwuqiu）
 - 数据库：表数据分页，浏览大表时分页加载与查看，避免一次性拉取全部数据。（@surenwuyuwuqiu）
 - 数据库：支持运行 `.sql` 脚本导入表数据（适配 MySQL / PostgreSQL / Oracle / SQL Server / RQLite）。（@surenwuyuwuqiu）
 - 数据库：支持导出表数据为 `.sql` 文件（适配 MySQL / PostgreSQL / Oracle / SQL Server / RQLite）。（@surenwuyuwuqiu）
