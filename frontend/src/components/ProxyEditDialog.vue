@@ -44,7 +44,9 @@ import { useProxyStore } from '../stores/proxyStore'
 import type { Proxy } from '../types/proxy'
 
 const props = defineProps<{ visible: boolean; proxy: Proxy | null }>()
-const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'saved'): void }>()
+// `saved` carries the persisted entity so callers (e.g. the connection form's
+// "+" button) can select the just-created item. Settings' handler ignores it.
+const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'saved', entity: Proxy): void }>()
 const { t } = useI18n()
 const store = useProxyStore()
 
@@ -63,10 +65,11 @@ watch(() => props.visible, (v) => {
 async function save() {
   if (!form.name.trim()) { ElMessage.warning(t('settings.proxyNameRequired')); return }
   if (!form.host.trim()) { ElMessage.warning(t('settings.proxyHostRequired')); return }
-  if (props.proxy) await store.update({ ...form })
-  else await store.add({ ...form })
+  const entity = { ...form }
+  if (props.proxy) await store.update(entity)
+  else await store.add(entity)
   ElMessage.success(t('settings.saved'))
-  emit('saved')
+  emit('saved', entity)
   emit('update:visible', false)
 }
 </script>

@@ -56,7 +56,9 @@ import { useIdentityStore } from '../stores/identityStore'
 import type { Identity } from '../types/identity'
 
 const props = defineProps<{ visible: boolean; identity: Identity | null }>()
-const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'saved'): void }>()
+// `saved` carries the persisted entity so callers (e.g. the connection form's
+// "+" button) can select the just-created item. Settings' handler ignores it.
+const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'saved', entity: Identity): void }>()
 const { t } = useI18n()
 const store = useIdentityStore()
 
@@ -83,10 +85,11 @@ async function selectKeyFile() {
 
 async function save() {
   if (!form.name.trim()) { ElMessage.warning(t('settings.identityNameRequired')); return }
-  if (props.identity) await store.update({ ...form })
-  else await store.add({ ...form })
+  const entity = { ...form }
+  if (props.identity) await store.update(entity)
+  else await store.add(entity)
   ElMessage.success(t('settings.saved'))
-  emit('saved')
+  emit('saved', entity)
   emit('update:visible', false)
 }
 </script>
