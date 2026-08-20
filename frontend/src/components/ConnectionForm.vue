@@ -85,9 +85,14 @@
               v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')"
               :label="t('conn.identity')"
             >
-              <el-select v-model="form.identityId" filterable style="width: 100%">
-                <el-option v-for="id in identityStore.identities" :key="id.id" :label="`${id.name} (${id.username})`" :value="id.id" />
-              </el-select>
+              <div class="inline-add-row">
+                <el-select v-model="form.identityId" filterable style="flex: 1; min-width: 0">
+                  <el-option v-for="id in identityStore.identities" :key="id.id" :label="`${id.name} (${id.username})`" :value="id.id" />
+                </el-select>
+                <el-button class="inline-add-btn" :title="t('conn.newIdentity')" @click="openNewIdentityDialog">
+                  <Plus :size="14" />
+                </el-button>
+              </div>
             </el-form-item>
             <template v-if="form.type === 'rdp' && isWindows">
               <el-form-item :label="t('conn.rdpEnableNLA')">
@@ -298,7 +303,7 @@
               </el-form-item>
             </template>
             <el-form-item :label="t('conn.remark')">
-              <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="t('conn.remarkPlaceholder')" />
+              <el-input v-model="form.remark" type="textarea" :rows="3" />
             </el-form-item>
             <div v-if="showAdvancedToggle" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
               <el-icon class="advanced-arrow" :class="{ expanded: showAdvanced }"><ChevronRight :size="14" /></el-icon>
@@ -464,14 +469,19 @@
               </el-form-item>
             </template>
             <el-form-item v-if="showProxy" :label="t('conn.proxy')">
-              <el-select v-model="form.proxyId" :placeholder="t('conn.proxyPlaceholder')" clearable filterable>
-                <el-option
-                  v-for="p in proxyStore.proxies"
-                  :key="p.id"
-                  :label="`${p.name} (${p.kind} ${p.host}:${p.port})`"
-                  :value="p.id"
-                />
-              </el-select>
+              <div class="inline-add-row">
+                <el-select v-model="form.proxyId" :placeholder="t('conn.proxyPlaceholder')" clearable filterable style="flex: 1; min-width: 0">
+                  <el-option
+                    v-for="p in proxyStore.proxies"
+                    :key="p.id"
+                    :label="`${p.name} (${p.kind} ${p.host}:${p.port})`"
+                    :value="p.id"
+                  />
+                </el-select>
+                <el-button class="inline-add-btn" :title="t('conn.newProxy')" @click="openNewProxyDialog">
+                  <Plus :size="14" />
+                </el-button>
+              </div>
             </el-form-item>
             <el-form-item v-if="showTunnel" :label="t('conn.tunnel')">
               <el-select
@@ -544,6 +554,11 @@
       <el-button type="primary" @click="confirmNewGroup">{{ t('conn.save') }}</el-button>
     </template>
   </el-dialog>
+
+  <!-- New identity / keychain dialog (reuses the settings one) -->
+  <IdentityEditDialog v-model:visible="identityDialogVisible" :identity="null" @saved="onIdentitySaved" />
+  <!-- New proxy dialog (reuses the settings one) -->
+  <ProxyEditDialog v-model:visible="proxyDialogVisible" :proxy="null" @saved="onProxySaved" />
 </template>
 
 <script setup lang="ts">
@@ -560,6 +575,10 @@ import { msg } from '../services/message'
 import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
+import IdentityEditDialog from './IdentityEditDialog.vue'
+import ProxyEditDialog from './ProxyEditDialog.vue'
+import type { Identity } from '../types/identity'
+import type { Proxy } from '../types/proxy'
 
 const { t } = useI18n()
 const connectionStore = useConnectionStore()
@@ -921,6 +940,29 @@ const selectedGroupName = computed(() => {
 const showNewGroupDialog = ref(false)
 const newGroupName = ref('')
 const newGroupParentId = ref<string | undefined>(undefined)
+
+// New identity / proxy dialogs (reuse the settings ones, in "create" mode)
+const identityDialogVisible = ref(false)
+const proxyDialogVisible = ref(false)
+
+function openNewIdentityDialog() {
+  identityDialogVisible.value = true
+}
+
+function openNewProxyDialog() {
+  proxyDialogVisible.value = true
+}
+
+// After creating an item from the "+" button, select it immediately so the
+// user keeps typing. The stores are already up to date (the dialogs add via
+// the same stores), so no explicit reload is needed.
+function onIdentitySaved(id: Identity) {
+  form.identityId = id.id
+}
+
+function onProxySaved(p: Proxy) {
+  form.proxyId = p.id
+}
 
 // ── K8s state ──
 const k8sSourceMode = ref<'file' | 'inline'>('inline')
@@ -1658,6 +1700,20 @@ function onConnect() {
   align-items: center;
 }
 .add-group-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+/* ── Inline select + "+" rows (identity / proxy) ── */
+.inline-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.inline-add-btn {
   flex-shrink: 0;
   width: 32px;
   height: 32px;
