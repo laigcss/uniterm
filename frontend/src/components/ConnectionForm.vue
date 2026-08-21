@@ -77,7 +77,6 @@
             <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
-                <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
                 <el-radio-button label="identity">{{ t('conn.identity') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
@@ -116,20 +115,6 @@
                 <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
               </el-form-item>
             </template>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPath')">
-              <el-input v-model="form.keyPath" :placeholder="t('conn.keyPathPlaceholder')">
-                <template #append>
-                  <el-tooltip :content="t('conn.selectKeyFile')" placement="top">
-                    <el-button :aria-label="t('conn.selectKeyFile')" @click="selectKeyFile">
-                      <el-icon><FolderOpen :size="16" /></el-icon>
-                    </el-button>
-                  </el-tooltip>
-                </template>
-              </el-input>
-            </el-form-item>
-            <el-form-item v-if="form.authType === 'key' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
-              <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.keyPassphrasePlaceholder')" />
-            </el-form-item>
             <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
               <el-input v-model="form.dbName" :placeholder="t('db.databases')" />
             </el-form-item>
@@ -1184,15 +1169,6 @@ async function confirmNewGroup() {
   newGroupName.value = ''
   form.groupId = group.id
   selectedGroupId.value = group.id
-}
-
-async function selectKeyFile() {
-  try {
-    const selected = await OpenFileDialog()
-    if (selected) form.keyPath = selected
-  } catch (e) {
-    console.error('select key file:', e)
-  }
 }
 
 async function reloadK8sContexts() {
