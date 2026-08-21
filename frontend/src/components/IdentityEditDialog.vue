@@ -20,7 +20,7 @@
         <el-input v-model="form.username" />
       </el-form-item>
       <el-form-item v-if="form.authType === 'password'" :label="t('conn.password')">
-        <el-input v-model="form.password" type="password" show-password />
+        <el-input v-model="passwordInput" type="password" show-password />
       </el-form-item>
       <template v-else>
         <el-form-item :label="t('conn.keyPath')">
@@ -35,7 +35,7 @@
           </el-input>
         </el-form-item>
         <el-form-item :label="t('conn.keyPassphrase')">
-          <el-input v-model="form.password" type="password" show-password :placeholder="t('conn.keyPassphrasePlaceholder')" />
+          <el-input v-model="passphraseInput" type="password" show-password :placeholder="t('conn.keyPassphrasePlaceholder')" />
         </el-form-item>
       </template>
     </el-form>
@@ -70,9 +70,20 @@ function newId(): string {
 
 const form = reactive<Identity>({ id: '', name: '', username: '', authType: 'password', password: '', keyPath: '' })
 
+// The persisted Identity carries a single `password` field that doubles as the
+// login password (authType "password") and the private-key passphrase
+// (authType "key"). Binding both inputs to it made them move together, so each
+// mode gets its own local state and only the active one is written on save.
+const passwordInput = ref('')
+const passphraseInput = ref('')
+
 watch(() => props.visible, (v) => {
   if (v) {
     Object.assign(form, props.identity ?? { id: newId(), name: '', username: '', authType: 'password', password: '', keyPath: '' })
+    // Hydrate only the field matching the stored authType; the other mode
+    // starts empty rather than echoing an unrelated secret.
+    passwordInput.value = form.authType === 'password' ? (form.password ?? '') : ''
+    passphraseInput.value = form.authType === 'key' ? (form.password ?? '') : ''
   }
 })
 
@@ -85,7 +96,10 @@ async function selectKeyFile() {
 
 async function save() {
   if (!form.name.trim()) { ElMessage.warning(t('settings.identityNameRequired')); return }
-  const entity = { ...form }
+  const entity: Identity = {
+    ...form,
+    password: form.authType === 'key' ? passphraseInput.value : passwordInput.value,
+  }
   if (props.identity) await store.update(entity)
   else await store.add(entity)
   ElMessage.success(t('settings.saved'))
