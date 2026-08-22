@@ -75,6 +75,9 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	case "mongodb":
 		s = NewMongoSession(config.ID)
 
+	case "elasticsearch":
+		s = NewElasticsearchSession(config.ID)
+
 	case "x11-desktop":
 		s = NewX11DesktopSession(config.ID)
 

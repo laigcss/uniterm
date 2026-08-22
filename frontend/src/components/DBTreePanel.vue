@@ -16,7 +16,7 @@
           :data-db-row="db.name"
           :class="{ selected: selectedDb === db.name && !selectedTable }"
           @click="onDbClick(db.name)"
-          @dblclick="emit('openDatabase', db.name)"
+          @dblclick="onDbActivate(db.name)"
           @contextmenu.prevent="onDbContextMenu($event, db.name)"
         >
           <span class="db-arrow" @click.stop="onToggleDb(db.name)">
@@ -55,8 +55,9 @@
       @click.stop
     >
       <template v-if="ctxTargetType === 'db'">
-        <div class="ctx-item" @click="onCtxQueryDatabase">{{ t('db.dataQuery') }}</div>
+        <div class="ctx-item" @click="onCtxQueryDatabase">{{ t('db.openData') }}</div>
         <div class="ctx-item" @click="onCtxListDatabase">{{ t('db.tableList') }}</div>
+        <div class="ctx-item" @click="onCtxNewQuery">{{ t('db.newQuery') }}</div>
         <div class="ctx-sep" />
         <div v-if="canCreateDatabase" class="ctx-item" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</div>
         <div class="ctx-item" @click="onCtxNewTable">{{ t('db.newTable') }}</div>
@@ -65,7 +66,7 @@
         <div class="ctx-item" @click="onCtxRefresh">{{ t('db.refreshTables') }}</div>
       </template>
       <template v-else-if="ctxTargetType === 'table'">
-        <div class="ctx-item" @click="onCtxViewData">{{ t('db.dataQuery') }}</div>
+        <div class="ctx-item" @click="onCtxViewData">{{ t('db.openData') }}</div>
         <div v-if="ctxTableType !== 'view'" class="ctx-item" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</div>
         <div class="ctx-sep" />
         <div class="ctx-item" @click="onCtxCopyName">{{ t('db.copyName') }}</div>
@@ -82,6 +83,7 @@
         </template>
       </template>
       <template v-else-if="ctxTargetType === 'blank'">
+        <div class="ctx-item" @click="onCtxNewQueryBlank">{{ t('db.newQuery') }}</div>
         <div v-if="canCreateDatabase" class="ctx-item" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</div>
         <div class="ctx-item" @click="onCtxRefreshDatabases">{{ t('db.refreshDatabases') }}</div>
       </template>
@@ -180,6 +182,8 @@ const emit = defineEmits<{
   selectTable: [dbName: string, tableName: string, isView?: boolean]
   openDatabase: [dbName: string, tab?: 'query' | 'objects']
   viewStructure: [dbName: string, tableName: string]
+  newQuery: [dbName?: string]
+  objectRemoved: [payload: { dbName: string; tableName?: string; kind: 'table' | 'view' | 'database' }]
 }>()
 
 const databases = ref<DbEntry[]>([])
@@ -199,19 +203,27 @@ async function loadTree() {
     // entry in the list. For databases where the configured "dbName" is not a
     // browsable namespace (e.g. Oracle's service name), it won't match and we
     // just list the available schemas collapsed.
+    let autoOpen = ''
     if (props.defaultDbName && dbs.includes(props.defaultDbName)) {
       const tables = await GetTables(props.sessionId, props.defaultDbName)
       databases.value = [{ name: props.defaultDbName, tables, loaded: true }]
       expandedDbs.value = new Set([props.defaultDbName])
+      autoOpen = props.defaultDbName
     } else if (dbs.length === 1) {
       // Single schema/db (e.g. Oracle showing only the current schema) — expand it.
       const only = dbs[0]
       const tables = await GetTables(props.sessionId, only)
       databases.value = [{ name: only, tables, loaded: true }]
       expandedDbs.value = new Set([only])
+      autoOpen = only
     } else {
       databases.value = dbs.map((db: string) => ({ name: db, tables: [], loaded: false }))
       expandedDbs.value = new Set()
+    }
+    if (autoOpen) {
+      selectedDb.value = autoOpen
+      selectedTable.value = ''
+      emit('openDatabase', autoOpen, 'objects')
     }
   } catch (e) {
     console.error('Failed to load tree:', e)
@@ -255,35 +267,51 @@ function scrollActiveIntoView() {
   el?.scrollIntoView({ block: 'nearest' })
 }
 
-function onDbClick(dbName: string) {
-  selectedDb.value = dbName
-  selectedTable.value = ''
-}
-
-async function onToggleDb(dbName: string) {
-  if (expandedDbs.value.has(dbName)) {
-    expandedDbs.value.delete(dbName)
-  } else {
-    expandedDbs.value.add(dbName)
-    const db = databases.value.find(d => d.name === dbName)
-    if (db && !db.loaded) {
-      try {
-        db.tables = await GetTables(props.sessionId, dbName)
-        db.loaded = true
-      } catch (e) {
-        console.error('Failed to load tables:', e)
-      }
+async function ensureDbExpanded(dbName: string) {
+  if (expandedDbs.value.has(dbName)) return
+  expandedDbs.value.add(dbName)
+  const db = databases.value.find(d => d.name === dbName)
+  if (db && !db.loaded) {
+    try {
+      db.tables = await GetTables(props.sessionId, dbName)
+      db.loaded = true
+    } catch (e) {
+      console.error('Failed to load tables:', e)
     }
   }
   expandedDbs.value = new Set(expandedDbs.value)
 }
 
+async function onDbActivate(dbName: string) {
+  selectedDb.value = dbName
+  selectedTable.value = ''
+  await ensureDbExpanded(dbName)
+  emit('openDatabase', dbName, 'objects')
+}
+
+async function onDbClick(dbName: string) {
+  await onDbActivate(dbName)
+}
+
+async function onToggleDb(dbName: string) {
+  if (expandedDbs.value.has(dbName)) {
+    expandedDbs.value.delete(dbName)
+    expandedDbs.value = new Set(expandedDbs.value)
+    return
+  }
+  await ensureDbExpanded(dbName)
+}
+
 function onTableClick(dbName: string, tableName: string) {
+  const table = databases.value.find(d => d.name === dbName)?.tables.find(t => t.name === tableName)
   selectedDb.value = dbName
   selectedTable.value = tableName
+  emit('selectTable', dbName, tableName, table?.type === 'view')
 }
 
 function onTableDblClick(dbName: string, table: TableInfo) {
+  selectedDb.value = dbName
+  selectedTable.value = table.name
   emit('selectTable', dbName, table.name, table.type === 'view')
 }
 
@@ -326,7 +354,7 @@ function closeContextMenu() {
 }
 
 function fitContextMenu(x: number, y: number, type: string) {
-  const heights: Record<string, number> = { db: 210, table: 180, blank: 60 }
+  const heights: Record<string, number> = { db: 250, table: 180, blank: 100 }
   const menuW = 160
   const menuH = heights[type] || 150
 
@@ -354,6 +382,10 @@ function onDbContextMenu(e: MouseEvent, dbName: string) {
 }
 
 function onTableContextMenu(e: MouseEvent, dbName: string, table: TableInfo) {
+  selectedDb.value = dbName
+  selectedTable.value = table.name
+  // 右键表节点时直接切换到该表数据页，同时弹出菜单
+  emit('selectTable', dbName, table.name, table.type === 'view')
   ctxTargetType.value = 'table'
   ctxDbName.value = dbName
   ctxTableName.value = table.name
@@ -377,12 +409,22 @@ function onTreeContextMenu(e: MouseEvent) {
 }
 
 function onCtxQueryDatabase() {
-  emit('openDatabase', ctxDbName.value, 'query')
+  emit('openDatabase', ctxDbName.value, 'objects')
   ctxVisible.value = false
 }
 
 function onCtxListDatabase() {
   emit('openDatabase', ctxDbName.value, 'objects')
+  ctxVisible.value = false
+}
+
+function onCtxNewQuery() {
+  emit('newQuery', ctxDbName.value)
+  ctxVisible.value = false
+}
+
+function onCtxNewQueryBlank() {
+  emit('newQuery')
   ctxVisible.value = false
 }
 
@@ -466,29 +508,43 @@ async function onConfirm() {
 }
 
 function onCtxDropDatabase() {
+  const dbName = ctxDbName.value
   showConfirm(
     t('db.dropDatabase'),
-    t('db.dropDatabaseConfirm', { name: ctxDbName.value }),
-    ctxDbName.value,
-    async () => { await DropDatabase(props.sessionId, ctxDbName.value) }
+    t('db.dropDatabaseConfirm', { name: dbName }),
+    dbName,
+    async () => {
+      await DropDatabase(props.sessionId, dbName)
+      emit('objectRemoved', { dbName, kind: 'database' })
+    }
   )
 }
 
 function onCtxDropTable() {
+  const dbName = ctxDbName.value
+  const tableName = ctxTableName.value
   showConfirm(
     t('db.dropTable'),
-    t('db.dropTableConfirm', { name: ctxTableName.value }),
-    ctxTableName.value,
-    async () => { await DropTable(props.sessionId, ctxDbName.value, ctxTableName.value) }
+    t('db.dropTableConfirm', { name: tableName }),
+    tableName,
+    async () => {
+      await DropTable(props.sessionId, dbName, tableName)
+      emit('objectRemoved', { dbName, tableName, kind: 'table' })
+    }
   )
 }
 
 function onCtxDropView() {
+  const dbName = ctxDbName.value
+  const tableName = ctxTableName.value
   showConfirm(
     t('db.dropView'),
-    t('db.dropViewConfirm', { name: ctxTableName.value }),
-    ctxTableName.value,
-    async () => { await DropView(props.sessionId, ctxDbName.value, ctxTableName.value) }
+    t('db.dropViewConfirm', { name: tableName }),
+    tableName,
+    async () => {
+      await DropView(props.sessionId, dbName, tableName)
+      emit('objectRemoved', { dbName, tableName, kind: 'view' })
+    }
   )
 }
 
@@ -722,8 +778,10 @@ onUnmounted(() => {
 /* Context menu */
 .ctx-menu {
   position: fixed;
-  z-index: 1000;
-  background: var(--bg-elevated);
+  z-index: 10000;
+  background-color: var(--bg-surface) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 4px 0;

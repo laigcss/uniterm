@@ -130,8 +130,9 @@ import {
 import { msg } from '../services/message'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
+import type { ConnectionConfig } from '../types/session'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Search, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -193,10 +194,11 @@ const tabIcon = computed(() => {
   if (t.type === 'vnc') return MonitorSmartphone
   if (t.type === 'spice') return MonitorCloud
   if (t.type === 'x11-desktop') return AppWindow
-  if (t.type === 'database' || t.type === 'mongodb') {
+  if (t.type === 'database' || t.type === 'mongodb' || t.type === 'elasticsearch') {
     const panel = panelStore.getPanel(t.panelId)
     if (panel?.config?.dbType === 'redis') return DatabaseZap
     if (panel?.config?.dbType === 'mongodb') return Layers
+    if (panel?.config?.dbType === 'elasticsearch') return Search
     return Database
   }
   if (t.type === 'monitor') return Activity
@@ -270,7 +272,7 @@ const supportsOutputLog = computed(() => {
 // terminals, file transfer, database (incl. mongodb/redis variants), and k8s.
 const canDuplicate = computed(() => {
   const type = props.tab.type
-  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'k8s'
+  return type === 'terminal' || type === 'sftp' || type === 'database' || type === 'mongodb' || type === 'redis' || type === 'elasticsearch' || type === 'k8s'
 })
 
 // Reconnectable panels — terminal types that Panel.vue can re-initiate.

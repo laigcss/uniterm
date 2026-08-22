@@ -1,6 +1,7 @@
 export interface TableInfo {
   name: string
   type?: string  // "table" or "view"
+  comment?: string
 }
 
 export interface ColumnInfo {

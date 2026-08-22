@@ -17,6 +17,8 @@ export function AddIndex(arg1:string,arg2:string,arg3:string,arg4:database.Index
 
 export function AppendFileBase64(arg1:string,arg2:string,arg3:number):Promise<void>;
 
+export function AppendTempUpload(arg1:string,arg2:string):Promise<void>;
+
 export function ApplyImport(arg1:session.ConnectionStoreData):Promise<void>;
 
 export function CancelChatStream():Promise<void>;
@@ -73,7 +75,9 @@ export function CreateSkill(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateTable(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string):Promise<string>;
+export function CreateTempUpload(arg1:string):Promise<string>;
+
+export function DBDefaultTableQuery(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<string>;
 
 export function DBDeleteRow(arg1:string,arg2:string,arg3:string,arg4:Record<string, any>):Promise<void>;
 
@@ -104,6 +108,40 @@ export function DropView(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function DumpTable(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<string>;
 
 export function EnableSessionOutputLog(arg1:string,arg2:string):Promise<string>;
+
+export function EsCloseIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsClusterHealth(arg1:string):Promise<session.EsClusterHealth>;
+
+export function EsClusterInfo(arg1:string):Promise<session.EsClusterInfo>;
+
+export function EsCreateIndex(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function EsDeleteDoc(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function EsDeleteIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsGetDoc(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function EsGetMapping(arg1:string,arg2:string):Promise<string>;
+
+export function EsGetSettings(arg1:string,arg2:string):Promise<string>;
+
+export function EsIndexDoc(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function EsListIndices(arg1:string):Promise<Array<session.EsIndexInfo>>;
+
+export function EsNodesStats(arg1:string):Promise<Array<session.EsNodeSummary>>;
+
+export function EsOpenIndex(arg1:string,arg2:string):Promise<void>;
+
+export function EsPing(arg1:string):Promise<void>;
+
+export function EsRest(arg1:string,arg2:string,arg3:string,arg4:string):Promise<session.EsRestResult>;
+
+export function EsSearch(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<session.EsSearchResult>;
+
+export function EsUpdateDoc(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function ExecuteQuery(arg1:string,arg2:string,arg3:string):Promise<database.QueryResult>;
 
@@ -452,6 +490,8 @@ export function SftpPauseTransfer(arg1:string,arg2:string):Promise<void>;
 export function SftpPut(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<string>;
 
 export function SftpPutContent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function SftpQuickRemove(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function SftpRemove(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 

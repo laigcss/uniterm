@@ -8,6 +8,7 @@ import { WindowSetTitle } from '../wailsjs/runtime'
 import App from './App.vue'
 import './style.css'
 import { useSettingsStore } from './stores/settingsStore'
+import { setupVxe } from './plugins/vxe'
 
 WindowSetTitle('uniTerm')
 
@@ -20,6 +21,7 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(ElementPlus)
+setupVxe(app)
 
 const settingsStore = useSettingsStore()
 await settingsStore.init()

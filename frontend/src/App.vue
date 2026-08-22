@@ -4,6 +4,8 @@
     <div v-if="bgVisible" class="app-bg" :style="bgStyle"></div>
     <AppHeader
       @toggle-ai="aiStore.toggle"
+      @toggle-files="companionStore.toggleFiles"
+      @toggle-monitor="companionStore.toggleMonitor"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
       @open-settings="openSettings"
       @close-tab="closeTab"
@@ -80,6 +82,11 @@
               :key="activeTab.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
             />
+            <ElasticsearchTabContent
+              v-else-if="activeTab.type === 'elasticsearch'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
             <MonitorTabContent
               v-else-if="activeTab.type === 'monitor'"
               :key="activeTab.id"
@@ -112,6 +119,8 @@
           </KeepAlive>
         </template>
       </div>
+      <FileSidebar />
+      <MonitorOverviewSidebar />
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
     <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
@@ -172,12 +181,15 @@ import X11DesktopTabContent from './components/X11DesktopTabContent.vue'
 import DBTabContent from './components/DBTabContent.vue'
 import RedisTabContent from './components/RedisTabContent.vue'
 import MongoDBTabContent from './components/MongoDBTabContent.vue'
+import ElasticsearchTabContent from './components/ElasticsearchTabContent.vue'
 import MonitorTabContent from './components/MonitorTabContent.vue'
 import K8sTabContent from './components/K8sTabContent.vue'
 import ContainerTabContent from './components/ContainerTabContent.vue'
 import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
+import FileSidebar from './components/FileSidebar.vue'
+import MonitorOverviewSidebar from './components/MonitorOverviewSidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
 import DataDirDialog from './components/DataDirDialog.vue'
 import EncryptionModeDialog from './components/EncryptionModeDialog.vue'
@@ -191,6 +203,7 @@ import { useTabStore } from './stores/tabStore'
 import { usePanelStore } from './stores/panelStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useAIStore } from './stores/aiStore'
+import { useCompanionStore } from './stores/companionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
 import { useSkillStore } from './stores/skillStore'
@@ -260,6 +273,7 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const { duplicateSession } = useDuplicateSession()
 const aiStore = useAIStore()
+const companionStore = useCompanionStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
 const containerStore = useContainerStore()
@@ -848,9 +862,18 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     if (t.locked) return
     if (t.type === 'workspace' && t.panelIds.length > 1) {
       const panelId = t.activePanelId || t.panelIds[t.panelIds.length - 1]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
       tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
     } else if (t.type === 'workspace' && t.panelIds.length === 1) {
-      tabStore.removePanelFromWorkspaceTab(t.id, t.panelIds[0])
+      const panelId = t.panelIds[0]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
+      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
     } else {
       closeTab(t.id)
     }
@@ -1031,7 +1054,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
     }
   }
   // Close redis session
-  if (tab && (tab.type === 'redis' || tab.type === 'mongodb')) {
+  if (tab && (tab.type === 'redis' || tab.type === 'mongodb' || tab.type === 'elasticsearch')) {
     const p = panelStore.getPanel(tab.panelId)
     if (p?.sessionId) {
       try { await CloseSession(p.sessionId) } catch (_) {}
@@ -1056,6 +1079,15 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       try { await CloseSession(p.sessionId) } catch (_) {}
     }
   }
+  // Workspace: close each panel session
+  if (tab && tab.type === 'workspace') {
+    for (const pid of tab.panelIds) {
+      const p = panelStore.getPanel(pid)
+      if (p?.sessionId) {
+        try { await CloseSession(p.sessionId) } catch (_) {}
+      }
+    }
+  }
   // X11 desktop session cleanup
   if (tab && tab.type === 'x11-desktop') {
     const p = panelStore.getPanel(tab.panelId)
@@ -1064,6 +1096,8 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
     }
   }
   const panelIds = tabStore.closeTab(tabId)
+  // Dispose SSH companion sidebars (sftp/monitor) bound to these panels
+  companionStore.disposeForPanels(panelIds).catch(() => {})
   panelIds.forEach(pid => panelStore.removePanel(pid))
   nextTick(() => {
     if (tabStore.tabs.length === 0) {
@@ -1651,6 +1685,8 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
     tab.type = 'redis'
   } else if (config.dbType === 'mongodb') {
     tab.type = 'mongodb'
+  } else if (config.dbType === 'elasticsearch') {
+    tab.type = 'elasticsearch'
   }
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
@@ -1661,6 +1697,8 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
       sessionType = 'redis'
     } else if (config.dbType === 'mongodb') {
       sessionType = 'mongodb'
+    } else if (config.dbType === 'elasticsearch') {
+      sessionType = 'elasticsearch'
     } else {
       sessionType = 'database'
     }
@@ -1913,7 +1951,7 @@ watch(
   opacity: var(--bg-mask-opacity, 0.6);
 }
 .app-container.has-bg .main-content,
-.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *))),
+.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground))),
 .app-container.has-bg .app-header,
 .app-container.has-bg :deep(.app-header *) {
   background-color: transparent !important;
@@ -1945,6 +1983,7 @@ watch(
 .app-container.has-bg .main-content :deep(.start-context-menu),
 .app-container.has-bg .main-content :deep(.tn-context-menu),
 .app-container.has-bg .main-content :deep(.ctx-menu),
+.app-container.has-bg .main-content :deep(.doc-ctx-menu),
 .app-container.has-bg .main-content :deep(.panel-more-menu),
 .app-container.has-bg .main-content :deep(.shell-submenu),
 .app-container.has-bg .main-content :deep(.hash-dropdown),
@@ -1953,6 +1992,19 @@ watch(
 .app-container.has-bg .main-content :deep(.bookmark-dropdown),
 .app-container.has-bg .main-content :deep(.type-filter-menu) {
   background-color: var(--bg-surface) !important;
+}
+/* CodeMirror 选区：覆盖 has-bg 通配透明，保证 SQL/语法编辑器选中可见 */
+.app-container.has-bg .main-content :deep(.cm-selectionBackground),
+.app-container.has-bg .main-content :deep(.cm-focused .cm-selectionBackground) {
+  background-color: rgba(64, 158, 255, 0.45) !important;
+}
+/* Teleport 到 body 的菜单不在 .main-content 内，单独强制不透明 */
+body > .doc-ctx-menu,
+body > .tab-context-menu,
+body > .ctx-menu {
+  background-color: var(--bg-surface) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
 }
 /* 设置左侧选中分类：保留强调色高亮（* 规则会清掉）*/
 .app-container.has-bg .main-content :deep(.settings-category.active) {
@@ -2000,7 +2052,8 @@ watch(
 }
 /* 边栏毛玻璃 */
 .app-container.has-bg .main-content :deep(.sidebar),
-.app-container.has-bg .main-content :deep(.ai-sidebar) {
+.app-container.has-bg .main-content :deep(.ai-sidebar),
+.app-container.has-bg .main-content :deep(.companion-sidebar) {
   backdrop-filter: blur(8px);
 }
 /* 开始页卡片、按钮毛玻璃 */
@@ -2023,8 +2076,16 @@ watch(
 .app-container.has-bg .main-content :deep(.el-table__fixed),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
-.app-container.has-bg .main-content :deep(.k8s-action-cell) {
+.app-container.has-bg .main-content :deep(.k8s-action-cell),
+.app-container.has-bg .main-content :deep(.db-action-cell),
+.app-container.has-bg .main-content :deep(.vxe-table--fixed-left-wrapper),
+.app-container.has-bg .main-content :deep(.vxe-table--fixed-right-wrapper),
+.app-container.has-bg .main-content :deep(.vxe-body--column.col--fixed),
+.app-container.has-bg .main-content :deep(.vxe-header--column.col--fixed) {
+  background-color: var(--bg-surface) !important;
   backdrop-filter: blur(8px);
+  pointer-events: auto !important;
+  z-index: 3 !important;
 }
 /* 划出面板（K8sDetailDrawer / MonitorTabContent 等）：背景图模式下同样被透明规则抹掉背景，
    加毛玻璃保证内容在背景图上清晰。 */

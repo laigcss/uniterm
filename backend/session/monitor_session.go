@@ -16,11 +16,20 @@ import (
 )
 
 type monitorState struct {
-	lastCpuTotal uint64
-	lastCpuIdle  uint64
-	lastNetRx    uint64
-	lastNetTx    uint64
-	hasPrev      bool
+	lastCpuTotal  uint64
+	lastCpuIdle   uint64
+	lastCpuUser   uint64
+	lastCpuSystem uint64
+	lastCpuIowait uint64
+	lastNetRx     uint64
+	lastNetTx     uint64
+	hasPrev       bool
+
+	// Separate counters for collectProcesses so overview mode
+	// (performance + processes each tick) cannot corrupt deltas.
+	lastProcCpuTotal uint64
+	lastProcCpuIdle  uint64
+	hasProcPrev      bool
 }
 
 type PortInfo struct {
@@ -174,7 +183,7 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 	}
 	defer session.Close()
 
-	script := `cat /etc/os-release 2>/dev/null | grep -E '^(PRETTY_NAME|VERSION_ID)=' || true; echo "---"; uname -r; echo "---"; hostname; echo "---"; readlink -f /etc/localtime 2>/dev/null | sed 's|/usr/share/zoneinfo/||' || date +%Z; echo "---"; uname -m; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 || true; echo "---"; nproc; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'cpu MHz' | head -1 || true; echo "---"; awk '/MemTotal:/{print $2}' /proc/meminfo; echo "---"; df -h / 2>/dev/null | awk 'NR==2{print $2}'; echo "---"; ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+'`
+	script := `cat /etc/os-release 2>/dev/null | grep -E '^(PRETTY_NAME|VERSION_ID)=' || true; echo "---"; uname -r; echo "---"; hostname; echo "---"; readlink -f /etc/localtime 2>/dev/null | sed 's|/usr/share/zoneinfo/||' || date +%Z; echo "---"; uname -m; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 || true; echo "---"; nproc; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'cpu MHz' | head -1 || true; echo "---"; awk '/MemTotal:/{print $2}' /proc/meminfo; echo "---"; df -h / 2>/dev/null | awk 'NR==2{print $2}'; echo "---"; ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+'; echo "---"; cat /proc/uptime 2>/dev/null | awk '{print int($1)}'; echo "---"; whoami 2>/dev/null || true`
 	out, err := session.CombinedOutput(script)
 	if err != nil {
 		return nil
@@ -198,6 +207,9 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 	memTotalKB, _ := strconv.ParseFloat(memTotalKBStr, 64)
 	diskTotal := strings.TrimSpace(safeIndex(parts, 9))
 	localIP := strings.TrimSpace(safeIndex(parts, 10))
+	uptimeSecStr := strings.TrimSpace(safeIndex(parts, 11))
+	uptimeSec, _ := strconv.ParseInt(uptimeSecStr, 10, 64)
+	loginUser := strings.TrimSpace(safeIndex(parts, 12))
 
 	osName := "Linux"
 	versionID := ""
@@ -223,6 +235,8 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 		"memTotal":  roundFloat(memTotalKB/1024/1024, 2),
 		"diskTotal": diskTotal,
 		"localIP":   localIP,
+		"uptimeSec": uptimeSec,
+		"user":      loginUser,
 	}
 }
 
@@ -251,6 +265,12 @@ func (s *MonitorSession) pollLoop() {
 				if !paused {
 					s.collectProcesses()
 				}
+			case "overview":
+				// Compact sidebar: gauges/network + process list in one poll tick.
+				s.collectPerformance()
+				if !paused {
+					s.collectProcesses()
+				}
 			}
 		}
 	}
@@ -265,8 +285,11 @@ func (s *MonitorSession) collectPerformance() {
 
 	script := `exec 2>/dev/null
 cpu_line=$(head -1 /proc/stat)
+cpu_user=$(echo "$cpu_line" | awk '{print $2+$3}')
+cpu_system=$(echo "$cpu_line" | awk '{print $4}')
+cpu_idle=$(echo "$cpu_line" | awk '{print $5}')
+cpu_iowait=$(echo "$cpu_line" | awk '{print $6}')
 cpu_total=$(echo "$cpu_line" | awk '{print $2+$3+$4+$5+$6+$7+$8+$9}')
-cpu_idle=$(echo "$cpu_line" | awk '{print $5+$6}')
 
 mem_total=$(awk '/MemTotal:/{print $2}' /proc/meminfo)
 mem_avail=$(awk '/MemAvailable:/{print $2}' /proc/meminfo)
@@ -275,13 +298,18 @@ mem_cached=$(awk '/^Cached:/{print $2}' /proc/meminfo)
 [ -z "$mem_cached" ] && mem_cached=0
 mem_buffers=$(awk '/^Buffers:/{print $2}' /proc/meminfo)
 [ -z "$mem_buffers" ] && mem_buffers=0
+swap_total=$(awk '/SwapTotal:/{print $2}' /proc/meminfo)
+swap_free=$(awk '/SwapFree:/{print $2}' /proc/meminfo)
+[ -z "$swap_total" ] && swap_total=0
+[ -z "$swap_free" ] && swap_free=0
 
 disk_total=$(df -h / | awk 'NR==2{print $2}')
 disk_used=$(df -h / | awk 'NR==2{print $3}')
 disk_usage=$(df -h / | awk 'NR==2{gsub(/%/,""); print $5}')
 
-net_rx=$(awk '/^[ ]*[^ ]+:/ && !/lo:/{print $2; exit}' /proc/net/dev)
-net_tx=$(awk '/^[ ]*[^ ]+:/ && !/lo:/{print $10; exit}' /proc/net/dev)
+# Sum all non-lo interfaces
+net_rx=$(awk '/^[ ]*[^ ]+:/ && !/lo:/{rx+=$2; tx+=$10} END{print rx+0}' /proc/net/dev)
+net_tx=$(awk '/^[ ]*[^ ]+:/ && !/lo:/{rx+=$2; tx+=$10} END{print tx+0}' /proc/net/dev)
 [ -z "$net_rx" ] && net_rx=0
 [ -z "$net_tx" ] && net_tx=0
 
@@ -296,9 +324,10 @@ cores=$(nproc || echo 1)
 loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1,$2,$3}')
 [ -z "$loadavg" ] && loadavg="0 0 0"
 
-printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"mem_avail":%s,"mem_cached":%s,"mem_buffers":%s,"disk_total":"%s","disk_used":"%s","disk_usage":%s,"net_rx":%s,"net_tx":%s,"handles":%s,"load1":%s,"load5":%s,"load15":%s}\n' \
-  "$cpu_total" "$cpu_idle" "$cores" "$proc_count" \
+printf '{"cpu_total":%s,"cpu_idle":%s,"cpu_user":%s,"cpu_system":%s,"cpu_iowait":%s,"cores":%s,"processes":%s,"mem_total":%s,"mem_avail":%s,"mem_cached":%s,"mem_buffers":%s,"swap_total":%s,"swap_free":%s,"disk_total":"%s","disk_used":"%s","disk_usage":%s,"net_rx":%s,"net_tx":%s,"handles":%s,"load1":%s,"load5":%s,"load15":%s}\n' \
+  "$cpu_total" "$cpu_idle" "$cpu_user" "$cpu_system" "$cpu_iowait" "$cores" "$proc_count" \
   "$mem_total" "$mem_avail" "$mem_cached" "$mem_buffers" \
+  "$swap_total" "$swap_free" \
   "${disk_total:-}" "${disk_used:-}" "${disk_usage:-0}" \
   "$net_rx" "$net_tx" "$handles" \
   $loadavg`
@@ -311,12 +340,17 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"
 	type rawMetrics struct {
 		CpuTotal   uint64  `json:"cpu_total"`
 		CpuIdle    uint64  `json:"cpu_idle"`
+		CpuUser    uint64  `json:"cpu_user"`
+		CpuSystem  uint64  `json:"cpu_system"`
+		CpuIowait  uint64  `json:"cpu_iowait"`
 		Cores      int     `json:"cores"`
 		Processes  int     `json:"processes"`
 		MemTotal   uint64  `json:"mem_total"`
 		MemAvail   uint64  `json:"mem_avail"`
 		MemCached  uint64  `json:"mem_cached"`
 		MemBuffers uint64  `json:"mem_buffers"`
+		SwapTotal  uint64  `json:"swap_total"`
+		SwapFree   uint64  `json:"swap_free"`
 		DiskTotal  string  `json:"disk_total"`
 		DiskUsed   string  `json:"disk_used"`
 		DiskUsage  int     `json:"disk_usage"`
@@ -333,12 +367,26 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"
 		return
 	}
 
-	// CPU usage: need delta between two samples
+	// CPU usage: need delta between two samples (guard against uint64 underflow)
 	cpuUsage := 0.0
-	if s.state.hasPrev && m.CpuTotal > s.state.lastCpuTotal {
-		totalDiff := m.CpuTotal - s.state.lastCpuTotal
-		idleDiff := m.CpuIdle - s.state.lastCpuIdle
-		cpuUsage = float64(totalDiff-idleDiff) / float64(totalDiff) * 100
+	cpuUserPct := 0.0
+	cpuSystemPct := 0.0
+	cpuIowaitPct := 0.0
+	if s.state.hasPrev {
+		if totalDiff, ok := uintDelta(m.CpuTotal, s.state.lastCpuTotal); ok && totalDiff > 0 {
+			if idleDiff, ok := uintDelta(m.CpuIdle, s.state.lastCpuIdle); ok {
+				cpuUsage = clampPct((float64(totalDiff) - float64(idleDiff)) / float64(totalDiff) * 100)
+			}
+			if userDiff, ok := uintDelta(m.CpuUser, s.state.lastCpuUser); ok {
+				cpuUserPct = clampPct(float64(userDiff) / float64(totalDiff) * 100)
+			}
+			if sysDiff, ok := uintDelta(m.CpuSystem, s.state.lastCpuSystem); ok {
+				cpuSystemPct = clampPct(float64(sysDiff) / float64(totalDiff) * 100)
+			}
+			if ioDiff, ok := uintDelta(m.CpuIowait, s.state.lastCpuIowait); ok {
+				cpuIowaitPct = clampPct(float64(ioDiff) / float64(totalDiff) * 100)
+			}
+		}
 	}
 
 	// Network rate (bytes per second, since we poll every 1s)
@@ -363,10 +411,27 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"
 	memCachedGB := float64(m.MemCached) / 1024 / 1024
 	memBuffersGB := float64(m.MemBuffers) / 1024 / 1024
 
+	swapTotalGB := float64(m.SwapTotal) / 1024 / 1024
+	swapUsedGB := float64(m.SwapTotal-m.SwapFree) / 1024 / 1024
+	swapUsage := 0.0
+	if m.SwapTotal > 0 {
+		swapUsage = float64(m.SwapTotal-m.SwapFree) / float64(m.SwapTotal) * 100
+	}
+
+	// "Total CPU" style metric ≈ usage × cores (as HexHub shows)
+	cpuTotalPct := cpuUsage
+	if m.Cores > 0 {
+		cpuTotalPct = cpuUsage * float64(m.Cores)
+	}
+
 	payload := map[string]interface{}{
 		"type": "performance",
 		"cpu": map[string]interface{}{
 			"usage":     roundFloat(cpuUsage, 1),
+			"total":     roundFloat(cpuTotalPct, 1),
+			"user":      roundFloat(cpuUserPct, 1),
+			"system":    roundFloat(cpuSystemPct, 1),
+			"iowait":    roundFloat(cpuIowaitPct, 1),
 			"cores":     m.Cores,
 			"processes": m.Processes,
 			"handles":   m.Handles,
@@ -382,14 +447,21 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"
 			"cached":  roundFloat(memCachedGB, 2),
 			"buffers": roundFloat(memBuffersGB, 2),
 		},
+		"swap": map[string]interface{}{
+			"total": roundFloat(swapTotalGB, 2),
+			"used":  roundFloat(swapUsedGB, 2),
+			"usage": roundFloat(swapUsage, 1),
+		},
 		"disk": map[string]interface{}{
 			"total": m.DiskTotal,
 			"used":  m.DiskUsed,
 			"usage": m.DiskUsage,
 		},
 		"network": map[string]interface{}{
-			"rx": netRxRate,
-			"tx": netTxRate,
+			"rx":      netRxRate,
+			"tx":      netTxRate,
+			"rxTotal": m.NetRx,
+			"txTotal": m.NetTx,
 		},
 	}
 
@@ -399,6 +471,9 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"processes":%s,"mem_total":%s,"
 	// Save state for next delta calculation
 	s.state.lastCpuTotal = m.CpuTotal
 	s.state.lastCpuIdle = m.CpuIdle
+	s.state.lastCpuUser = m.CpuUser
+	s.state.lastCpuSystem = m.CpuSystem
+	s.state.lastCpuIowait = m.CpuIowait
 	s.state.lastNetRx = m.NetRx
 	s.state.lastNetTx = m.NetTx
 	s.state.hasPrev = true
@@ -414,7 +489,7 @@ func (s *MonitorSession) collectProcesses() {
 	script := `exec 2>/dev/null
 cpu_line=$(head -1 /proc/stat)
 cpu_total=$(echo "$cpu_line" | awk '{print $2+$3+$4+$5+$6+$7+$8+$9}')
-cpu_idle=$(echo "$cpu_line" | awk '{print $5+$6}')
+cpu_idle=$(echo "$cpu_line" | awk '{print $5}')
 mem_total=$(awk '/MemTotal:/{print $2}' /proc/meminfo)
 mem_avail=$(awk '/MemAvailable:/{print $2}' /proc/meminfo)
 [ -z "$mem_avail" ] && mem_avail=$(awk '/MemFree:/{print $2}' /proc/meminfo)
@@ -461,12 +536,14 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"proc_count":%s,"mem_total":%s,
 			Load15     float64 `json:"load15"`
 		}
 		if err := json.Unmarshal([]byte(summaryJSON), &rawSummary); err == nil {
-			// CPU usage: need delta between two samples
+			// Use dedicated process-tab counters — never touch performance state.
 			cpuUsage := 0.0
-			if s.state.hasPrev && rawSummary.CpuTotal > s.state.lastCpuTotal {
-				totalDiff := rawSummary.CpuTotal - s.state.lastCpuTotal
-				idleDiff := rawSummary.CpuIdle - s.state.lastCpuIdle
-				cpuUsage = float64(totalDiff-idleDiff) / float64(totalDiff) * 100
+			if s.state.hasProcPrev {
+				if totalDiff, ok := uintDelta(rawSummary.CpuTotal, s.state.lastProcCpuTotal); ok && totalDiff > 0 {
+					if idleDiff, ok := uintDelta(rawSummary.CpuIdle, s.state.lastProcCpuIdle); ok {
+						cpuUsage = clampPct((float64(totalDiff) - float64(idleDiff)) / float64(totalDiff) * 100)
+					}
+				}
 			}
 
 			memTotalGB := float64(rawSummary.MemTotal) / 1024 / 1024
@@ -494,10 +571,9 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cores":%s,"proc_count":%s,"mem_total":%s,
 				"buffers": roundFloat(float64(rawSummary.MemBuffers)/1024/1024, 2),
 			}
 
-			// Save state for next delta calculation
-			s.state.lastCpuTotal = rawSummary.CpuTotal
-			s.state.lastCpuIdle = rawSummary.CpuIdle
-			s.state.hasPrev = true
+			s.state.lastProcCpuTotal = rawSummary.CpuTotal
+			s.state.lastProcCpuIdle = rawSummary.CpuIdle
+			s.state.hasProcPrev = true
 		}
 	}
 
@@ -1354,6 +1430,27 @@ done`
 func roundFloat(v float64, prec int) float64 {
 	p := math.Pow(10, float64(prec))
 	return math.Round(v*p) / p
+}
+
+// uintDelta returns cur-prev when counters moved forward; false on wrap/reset.
+func uintDelta(cur, prev uint64) (uint64, bool) {
+	if cur < prev {
+		return 0, false
+	}
+	return cur - prev, true
+}
+
+func clampPct(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 func formatBytes(bytes uint64) string {

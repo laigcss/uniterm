@@ -345,6 +345,24 @@ func (s *SFTPSession) requireClient() error {
 }
 
 func (s *SFTPSession) ListRemote(dir string) (FileListResult, error) {
+	type outcome struct {
+		res FileListResult
+		err error
+	}
+	ch := make(chan outcome, 1)
+	go func() {
+		res, err := s.listRemoteUnlocked(dir)
+		ch <- outcome{res, err}
+	}()
+	select {
+	case out := <-ch:
+		return out.res, out.err
+	case <-time.After(25 * time.Second):
+		return FileListResult{}, fmt.Errorf("list remote timeout")
+	}
+}
+
+func (s *SFTPSession) listRemoteUnlocked(dir string) (FileListResult, error) {
 	if err := s.requireClient(); err != nil {
 		return FileListResult{}, err
 	}
@@ -814,6 +832,65 @@ func (s *SFTPSession) GetContent(remotePath string) ([]byte, error) {
 // shellEscape returns a safely single-quoted string for shell commands.
 func shellEscape(str string) string {
 	return "'" + strings.ReplaceAll(str, "'", "'\\''") + "'"
+}
+
+// QuickRemove deletes remote paths via shell `rm -rf` (FinalShell-style).
+// Much faster than SFTP recursive remove for large trees; falls back to
+// SFTP Remove when no SSH client is available.
+func (s *SFTPSession) QuickRemove(paths []string) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+
+	abs := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if !path.IsAbs(p) {
+			p = path.Join(s.cwd, p)
+		}
+		cleaned := path.Clean(p)
+		if cleaned == "/" || cleaned == "." || cleaned == "" {
+			return fmt.Errorf("refusing to quick-delete path: %s", p)
+		}
+		abs = append(abs, cleaned)
+	}
+
+	if s.sshClient == nil {
+		for _, p := range abs {
+			if err := s.Remove(p, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	args := make([]string, len(abs))
+	for i, p := range abs {
+		args[i] = shellEscape(p)
+	}
+	session, err := s.sshClient.NewSession()
+	if err != nil {
+		// Fall back to SFTP remove
+		for _, p := range abs {
+			if err := s.Remove(p, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	defer session.Close()
+	cmd := "rm -rf -- " + strings.Join(args, " ")
+	if err := session.Run(cmd); err != nil {
+		// Some servers lack a shell rm; fall back to SFTP
+		for _, p := range abs {
+			if e := s.Remove(p, true); e != nil {
+				return fmt.Errorf("quick delete failed (%v); sftp fallback: %w", err, e)
+			}
+		}
+	}
+	return nil
 }
 
 // Copy copies a file or directory on the remote server.

@@ -25,6 +25,7 @@ defineOptions({ name: 'WorkspaceContent' })
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useCompanionStore } from '../stores/companionStore'
 import type { WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { waitForTerminalSize } from '../services/terminalManager'
@@ -40,6 +41,7 @@ const props = defineProps<{
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+const companionStore = useCompanionStore()
 const { t } = useI18n()
 
 async function closePanel(panelId: string) {
@@ -59,6 +61,7 @@ async function closePanel(panelId: string) {
   if (panel?.sessionId) {
     try { await CloseSession(panel.sessionId) } catch (_) {}
   }
+  companionStore.disposeForPanel(panelId).catch(() => {})
   tabStore.removePanelFromWorkspaceTab(props.tab.id, panelId)
   if (panel) {
     panelStore.removePanel(panel.id)

@@ -33,6 +33,13 @@
               <span v-if="row.defaultType === 'auto'">AI</span>
             </template>
           </el-table-column>
+          <el-table-column
+            v-if="caps?.['supportsComment']"
+            prop="comment"
+            :label="t('db.colComment')"
+            min-width="120"
+            show-overflow-tooltip
+          />
           <el-table-column :label="t('db.actions')" width="80">
             <template #default="{ row }">
               <button v-if="caps?.['supportsModifyColumn']" class="btn btn-ghost btn-icon btn-sm" title="Edit" @click="startEditColumn(row)"><Pencil :size="14" /></button>

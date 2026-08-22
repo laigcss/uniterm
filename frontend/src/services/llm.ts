@@ -1,4 +1,5 @@
 import { ChatCompletion } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export interface ChatOptions {
@@ -71,6 +72,17 @@ export async function chat(options: ChatOptions): Promise<void> {
   const requestJSON = JSON.stringify(requestBody)
 
   let responseText: string
+  // Streamed tokens are emitted via Wails events. Some protocol paths (notably
+  // OpenAI before the text-buffer flush fix) returned empty content[].text in
+  // the final JSON while still emitting ai:token — so callers that only read
+  // onChunk from the final payload (DB/Mongo assistants) saw empty results.
+  // Accumulate tokens as a fallback; do NOT forward them to onChunk here (the
+  // agent already listens to ai:token and would double-append).
+  let streamedText = ''
+  const unsubToken = EventsOn('ai:token', (data: any) => {
+    const text = typeof data === 'string' ? data : (data?.text ?? data?.Text ?? '')
+    if (text) streamedText += text
+  })
   try {
     responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON, protocol, userAgent)
   } catch (e: any) {
@@ -82,6 +94,8 @@ export async function chat(options: ChatOptions): Promise<void> {
       throw new ChatTimeoutError()
     }
     throw new Error(formatAPIError(raw))
+  } finally {
+    unsubToken?.()
   }
 
   let json: any
@@ -108,12 +122,11 @@ export async function chat(options: ChatOptions): Promise<void> {
   }
 
   // Dispatch text and tool_use blocks.
-  // When streaming, most text already arrived via ai:token events from the Go backend.
-  // This final dispatch covers any remaining blocks (e.g., tool_use) and non-streaming fallback.
+  let finalText = ''
   for (const block of rawContent) {
     switch (block.type) {
       case 'text':
-        options.onChunk?.(block.text || '')
+        finalText += block.text || ''
         break
       case 'tool_use':
         options.onToolUse?.({
@@ -123,6 +136,10 @@ export async function chat(options: ChatOptions): Promise<void> {
         })
         break
     }
+  }
+  const textOut = finalText || streamedText
+  if (textOut) {
+    options.onChunk?.(textOut)
   }
 }
 

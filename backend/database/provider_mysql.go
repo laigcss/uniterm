@@ -60,7 +60,10 @@ func (p *mysqlProvider) PrepareExec(db execer, dbName string) error {
 	return err
 }
 
-func (p *mysqlProvider) DefaultTableQuery(dbName, tableName string, limit int) string {
+func (p *mysqlProvider) DefaultTableQuery(dbName, tableName string, limit, offset int) string {
+	if offset > 0 {
+		return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
+	}
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
 }
 
@@ -159,30 +162,25 @@ func (p *mysqlProvider) GetDatabases(db *sql.DB) ([]string, error) {
 }
 
 func (p *mysqlProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, error) {
-	q, err := SafeMyIdent(dbName)
-	if err != nil {
-		return nil, err
-	}
-	results, err := queryStrings(db, "SHOW FULL TABLES FROM "+q)
+	results, err := queryStrings(db,
+		`SELECT TABLE_NAME, TABLE_TYPE, IFNULL(TABLE_COMMENT, '') AS TABLE_COMMENT
+		 FROM information_schema.TABLES
+		 WHERE TABLE_SCHEMA = ?
+		 ORDER BY TABLE_NAME`, dbName)
 	if err != nil {
 		return nil, fmt.Errorf("get tables: %w", err)
 	}
 	infos := make([]TableInfo, 0, len(results))
 	for _, row := range results {
-		var name, tp string
-		for key, val := range row {
-			if strings.HasPrefix(key, "Tables_in_") {
-				name = val
-			} else {
-				tp = val
-			}
-		}
-		if tp == "BASE TABLE" {
-			tp = "table"
-		} else if tp == "VIEW" {
+		tp := "table"
+		if row["TABLE_TYPE"] == "VIEW" {
 			tp = "view"
 		}
-		infos = append(infos, TableInfo{Name: name, Type: tp})
+		infos = append(infos, TableInfo{
+			Name:    row["TABLE_NAME"],
+			Type:    tp,
+			Comment: row["TABLE_COMMENT"],
+		})
 	}
 	return infos, nil
 }

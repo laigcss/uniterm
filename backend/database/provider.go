@@ -50,8 +50,9 @@ type Provider interface {
 	GetTables(db *sql.DB, dbName string) ([]TableInfo, error)
 	GetTableSchema(db *sql.DB, dbName, tableName string) (*SchemaResult, error)
 
-	// DefaultTableQuery returns the default SELECT statement used when opening a table.
-	DefaultTableQuery(dbName, tableName string, limit int) string
+	// DefaultTableQuery returns the default SELECT used when browsing a table.
+	// offset is 0-based; limit is the page size.
+	DefaultTableQuery(dbName, tableName string, limit, offset int) string
 
 	// PagedTableQuery returns a SELECT with LIMIT/OFFSET for paginated browsing.
 	PagedTableQuery(dbName, tableName string, limit, offset int) string
