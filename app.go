@@ -3740,24 +3740,7 @@ func (a *App) SftpRemove(sessionID, path string, recursive bool) error {
 	return fs.Remove(path, recursive)
 }
 
-// SftpQuickRemove deletes remote paths using shell `rm -rf` when possible
-// (much faster for large files/directories), with SFTP fallback.
-func (a *App) SftpQuickRemove(sessionID string, paths []string) error {
-	fs, err := a.getSftp(sessionID)
-	if err != nil {
-		return err
-	}
-	if q, ok := fs.(interface{ QuickRemove([]string) error }); ok {
-		return q.QuickRemove(paths)
-	}
-	for _, p := range paths {
-		if err := fs.Remove(p, true); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
+// SftpRename renames a remote file or directory.
 func (a *App) SftpRename(sessionID, oldPath, newPath string) error {
 	fs, err := a.getSftp(sessionID)
 	if err != nil {

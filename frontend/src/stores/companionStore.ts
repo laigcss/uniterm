@@ -17,12 +17,34 @@ export interface CompanionEntry {
 const DEFAULT_FILES_WIDTH = 300
 const DEFAULT_MONITOR_WIDTH = 320
 
+// Per-SSH-panel caches of the companion views, so switching between terminal
+// tabs restores the previously loaded file listing / monitor graphs instead of
+// re-fetching them. Keyed by the SSH panel id.
+export interface FileViewCache {
+  cwd: string
+  files: unknown[]
+}
+export interface MonitorViewCache {
+  systemInfo: Record<string, any> | null
+  cpu: Record<string, any>
+  mem: Record<string, any>
+  swap: Record<string, any>
+  net: Record<string, any>
+  processList: unknown[]
+  cpuHistory: number[]
+  memHistory: number[]
+  netRxHistory: number[]
+  netTxHistory: number[]
+}
+
 export const useCompanionStore = defineStore('companion', () => {
   const filesVisible = ref(false)
   const monitorVisible = ref(false)
   const filesWidth = ref(DEFAULT_FILES_WIDTH)
   const monitorWidth = ref(DEFAULT_MONITOR_WIDTH)
   const entries = ref<Record<string, CompanionEntry>>({})
+  const fileViewCache = ref<Record<string, FileViewCache>>({})
+  const monitorViewCache = ref<Record<string, MonitorViewCache>>({})
 
   const panelStore = usePanelStore()
   const sessionStore = useSessionStore()
@@ -213,6 +235,13 @@ export const useCompanionStore = defineStore('companion', () => {
 
   async function disposeForPanel(sshPanelId: string) {
     const entry = entries.value[sshPanelId]
+    // Drop companion view caches together with the panel's sessions.
+    if (fileViewCache.value[sshPanelId]) {
+      delete fileViewCache.value[sshPanelId]
+    }
+    if (monitorViewCache.value[sshPanelId]) {
+      delete monitorViewCache.value[sshPanelId]
+    }
     if (!entry) return
     const sftpId = entry.sftpSessionId
     const monitorId = entry.monitorSessionId
@@ -237,6 +266,22 @@ export const useCompanionStore = defineStore('companion', () => {
     monitorWidth.value = Math.min(Math.max(w, 260), 560)
   }
 
+  function getFileViewCache(sshPanelId: string): FileViewCache | undefined {
+    return fileViewCache.value[sshPanelId]
+  }
+
+  function setFileViewCache(sshPanelId: string, cache: FileViewCache) {
+    fileViewCache.value = { ...fileViewCache.value, [sshPanelId]: cache }
+  }
+
+  function getMonitorViewCache(sshPanelId: string): MonitorViewCache | undefined {
+    return monitorViewCache.value[sshPanelId]
+  }
+
+  function setMonitorViewCache(sshPanelId: string, cache: MonitorViewCache) {
+    monitorViewCache.value = { ...monitorViewCache.value, [sshPanelId]: cache }
+  }
+
   return {
     filesVisible,
     monitorVisible,
@@ -258,5 +303,9 @@ export const useCompanionStore = defineStore('companion', () => {
     setFilesWidth,
     setMonitorWidth,
     getActiveSshPanelId,
+    getFileViewCache,
+    setFileViewCache,
+    getMonitorViewCache,
+    setMonitorViewCache,
   }
 })

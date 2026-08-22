@@ -4,8 +4,6 @@
     <div v-if="bgVisible" class="app-bg" :style="bgStyle"></div>
     <AppHeader
       @toggle-ai="aiStore.toggle"
-      @toggle-files="companionStore.toggleFiles"
-      @toggle-monitor="companionStore.toggleMonitor"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
       @open-settings="openSettings"
       @close-tab="closeTab"
@@ -119,8 +117,6 @@
           </KeepAlive>
         </template>
       </div>
-      <FileSidebar />
-      <MonitorOverviewSidebar />
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
     <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
@@ -188,8 +184,6 @@ import ContainerTabContent from './components/ContainerTabContent.vue'
 import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
-import FileSidebar from './components/FileSidebar.vue'
-import MonitorOverviewSidebar from './components/MonitorOverviewSidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
 import DataDirDialog from './components/DataDirDialog.vue'
 import EncryptionModeDialog from './components/EncryptionModeDialog.vue'
@@ -2077,11 +2071,7 @@ body > .ctx-menu {
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--right),
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
 .app-container.has-bg .main-content :deep(.k8s-action-cell),
-.app-container.has-bg .main-content :deep(.db-action-cell),
-.app-container.has-bg .main-content :deep(.vxe-table--fixed-left-wrapper),
-.app-container.has-bg .main-content :deep(.vxe-table--fixed-right-wrapper),
-.app-container.has-bg .main-content :deep(.vxe-body--column.col--fixed),
-.app-container.has-bg .main-content :deep(.vxe-header--column.col--fixed) {
+.app-container.has-bg .main-content :deep(.db-action-cell) {
   background-color: var(--bg-surface) !important;
   backdrop-filter: blur(8px);
   pointer-events: auto !important;

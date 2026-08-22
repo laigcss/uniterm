@@ -42,8 +42,8 @@
           />
           <el-table-column :label="t('db.actions')" width="80">
             <template #default="{ row }">
-              <button v-if="caps?.['supportsModifyColumn']" class="btn btn-ghost btn-icon btn-sm" title="Edit" @click="startEditColumn(row)"><Pencil :size="14" /></button>
-              <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="onDropColumn(row.name)"><Trash2 :size="14" /></button>
+              <button v-if="caps?.['supportsModifyColumn']" class="btn btn-ghost btn-icon btn-sm" :title="t('common.edit')" @click="startEditColumn(row)"><Pencil :size="14" /></button>
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropColumn(row.name)"><Trash2 :size="14" /></button>
             </template>
           </el-table-column>
         </el-table>
@@ -63,14 +63,14 @@
           </el-table-column>
           <el-table-column :label="t('db.idxType')" width="100">
             <template #default="{ row }">
-              <span v-if="row.isPrimary" class="idx-type idx-type-pk">PRIMARY</span>
-              <span v-else-if="row.unique" class="idx-type idx-type-uq">UNIQUE</span>
-              <span v-else class="idx-type idx-type-idx">INDEX</span>
+              <span v-if="row.isPrimary" class="idx-type idx-type-pk">{{ t('db.primary') }}</span>
+              <span v-else-if="row.unique" class="idx-type idx-type-uq">{{ t('db.unique') }}</span>
+              <span v-else class="idx-type idx-type-idx">{{ t('db.index') }}</span>
             </template>
           </el-table-column>
           <el-table-column :label="t('db.actions')" width="80">
             <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="onDropIndex(row)"><Trash2 :size="14" /></button>
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('common.delete')" @click="onDropIndex(row)"><Trash2 :size="14" /></button>
             </template>
           </el-table-column>
         </el-table>

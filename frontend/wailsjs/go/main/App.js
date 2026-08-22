@@ -962,10 +962,6 @@ export function SftpPutContent(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SftpPutContent'](arg1, arg2, arg3, arg4);
 }
 
-export function SftpQuickRemove(arg1, arg2) {
-  return window['go']['main']['App']['SftpQuickRemove'](arg1, arg2);
-}
-
 export function SftpRemove(arg1, arg2, arg3) {
   return window['go']['main']['App']['SftpRemove'](arg1, arg2, arg3);
 }
