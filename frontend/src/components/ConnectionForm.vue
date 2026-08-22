@@ -80,7 +80,6 @@
             <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" :label="t('conn.authType')">
               <el-radio-group v-model="form.authType">
                 <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
-                <el-radio-button label="key">{{ t('conn.keyPath') }}</el-radio-button>
                 <el-radio-button label="identity">{{ t('conn.identity') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
@@ -1234,15 +1233,6 @@ async function confirmNewGroup() {
   newGroupName.value = ''
   form.groupId = group.id
   selectedGroupId.value = group.id
-}
-
-async function selectKeyFile() {
-  try {
-    const selected = await OpenFileDialog()
-    if (selected) form.keyPath = selected
-  } catch (e) {
-    console.error('select key file:', e)
-  }
 }
 
 async function reloadK8sContexts() {
