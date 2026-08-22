@@ -11,9 +11,12 @@
         <div v-if="dragOverLocal" class="drop-overlay">
           <span>{{ t('sftp.dropHere') }}</span>
         </div>
-        <SFTPPathBreadcrumb :path="localCwd" :drives="localDrives" bookmark-mode="local" :saved-paths="settingsStore.sftpBookmarks.localPaths" @navigate="onLocalNavigate" @save-bookmark="onSaveBookmark('local', $event)" @remove-bookmark="onRemoveBookmark('local', $event)" />
         <SFTPFileList
           mode="local"
+          breadcrumb-mode="local"
+          :breadcrumb-path="localCwd"
+          :breadcrumb-drives="localDrives"
+          :breadcrumb-saved-paths="settingsStore.sftpBookmarks.localPaths"
           :files="localFiles"
           :loading="loadingLocal"
           :paste-loading="pasteLoadingLocal"
@@ -35,6 +38,8 @@
           @clear-clipboard="onLocalClearClipboard"
           @open="onLocalEditFile"
           @cancel-load="onCancelLoadLocal"
+          @save-bookmark="onSaveBookmark('local', $event)"
+          @remove-bookmark="onRemoveBookmark('local', $event)"
         />
       </div>
       <div
@@ -47,9 +52,11 @@
         <div v-if="dragOverRemote" class="drop-overlay">
           <span>{{ t('sftp.dropHere') }}</span>
         </div>
-        <SFTPPathBreadcrumb :path="cwd" bookmark-mode="remote" :saved-paths="settingsStore.sftpBookmarks.remotePaths" @navigate="onRemoteNavigate" @save-bookmark="onSaveBookmark('remote', $event)" @remove-bookmark="onRemoveBookmark('remote', $event)" />
         <SFTPFileList
           mode="remote"
+          breadcrumb-mode="remote"
+          :breadcrumb-path="cwd"
+          :breadcrumb-saved-paths="settingsStore.sftpBookmarks.remotePaths"
           :files="remoteFiles"
           :loading="loadingRemote"
           :paste-loading="pasteLoadingRemote"
@@ -60,7 +67,6 @@
           @send-to-other="onSendToLocal"
           @rename="(item: FileItem) => { dialogMode = 'remote'; onRename(item) }"
           @delete="(items: FileItem[]) => { dialogMode = 'remote'; onDelete(items) }"
-          @quick-delete="(items: FileItem[]) => { dialogMode = 'remote'; onQuickDelete(items) }"
           @refresh="onRefreshRemote"
           @mkdir="() => { dialogMode = 'remote'; onMkdir() }"
           @chmod="(item: FileItem) => { dialogMode = 'remote'; onChmod(item) }"
@@ -75,6 +81,8 @@
           @cancel-paste="onCancelPaste"
           @open="onEditFile"
           @cancel-load="onCancelLoadRemote"
+          @save-bookmark="onSaveBookmark('remote', $event)"
+          @remove-bookmark="onRemoveBookmark('remote', $event)"
         />
       </div>
     </div>
@@ -88,7 +96,7 @@
       :close-on-click-modal="false"
       @closed="onDialogClosed"
     >
-      <template v-if="dialogType === 'delete' || dialogType === 'quickDelete'">
+      <template v-if="dialogType === 'delete'">
         <p>{{ dialogMessage }}</p>
       </template>
       <template v-else-if="dialogType === 'chmod'">
@@ -229,7 +237,7 @@ import { useI18n } from '../i18n'
 import {
   SftpListRemote, SftpListLocal, SftpListLocalDrives,
   SftpChangeRemoteDir, SftpChangeLocalDir,
-  SftpMakeDir, SftpRemove, SftpRename, SftpChmod, SftpQuickRemove,
+  SftpMakeDir, SftpRemove, SftpRename, SftpChmod,
   SftpLocalRemove, SftpLocalRename, SftpLocalMkdir,
   SftpLocalGetContent, SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
   SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
@@ -237,7 +245,6 @@ import {
   OpenMultipleFilesDialog, OpenDirectoryDialog,
 } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime'
-import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
 import SFTPFileList from './SFTPFileList.vue'
 import SFTPTransferProgress from './SFTPTransferProgress.vue'
 import type { FileItem } from './SFTPFileList.vue'
@@ -387,7 +394,7 @@ function toBase64(str: string): string {
 
 // Dialog state
 const dialogVisible = ref(false)
-const dialogType = ref<'rename' | 'mkdir' | 'chmod' | 'delete' | 'quickDelete'>('rename')
+const dialogType = ref<'rename' | 'mkdir' | 'chmod' | 'delete'>('rename')
 const dialogTitle = ref('')
 const dialogMessage = ref('')
 const dialogInput = ref('')
@@ -1415,7 +1422,7 @@ async function onNewFileCreate() {
 
 // Dialog helpers
 function openDialog(
-  type: 'rename' | 'mkdir' | 'chmod' | 'delete' | 'quickDelete',
+  type: 'rename' | 'mkdir' | 'chmod' | 'delete',
   title: string,
   inputValue: string = '',
   placeholder: string = '',
@@ -1495,22 +1502,6 @@ async function onDialogConfirm() {
         onRefreshRemote()
       }
       break
-    case 'quickDelete': {
-      const paths = dialogItems.value
-        .filter(i => i.name !== '..')
-        .map(i => joinPath(baseDir, i.name))
-      // Optimistic remove from remote list
-      const names = new Set(dialogItems.value.map(i => i.name))
-      remoteFiles.value = remoteFiles.value.filter(f => !names.has(f.name))
-      try {
-        await SftpQuickRemove(sid, paths)
-      } catch (e) {
-        console.error('quick delete:', e)
-        msg.error(String(e))
-      }
-      onRefreshRemote()
-      break
-    }
   }
 }
 
@@ -1536,17 +1527,6 @@ function onDelete(items: FileItem[]) {
     msg = t('sftp.dialog.deleteConfirmFile', { count: items.length })
   }
   openDialog('delete', t('sftp.dialog.deleteTitle'), '', '', msg)
-}
-function onQuickDelete(items: FileItem[]) {
-  dialogItems.value = items.filter(i => i.name !== '..')
-  if (!dialogItems.value.length) return
-  openDialog(
-    'quickDelete',
-    t('sftp.dialog.quickDeleteTitle'),
-    '',
-    '',
-    t('sftp.dialog.quickDeleteConfirm', { count: dialogItems.value.length })
-  )
 }
 function onMkdir() {
   openDialog('mkdir', t('sftp.dialog.mkdirTitle'), '', t('sftp.dialog.mkdirPrompt'))

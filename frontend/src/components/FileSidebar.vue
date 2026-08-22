@@ -1,32 +1,7 @@
 <template>
   <div
-    ref="sidebarEl"
     class="companion-sidebar file-sidebar"
-    :class="{ collapsed: !companionStore.filesVisible, resizing: isResizing }"
-    :style="{ width: companionStore.filesWidth + 'px' }"
   >
-    <div class="resize-handle" @mousedown="onResizeStart" />
-    <div class="companion-header">
-      <span>{{ t('companion.files') }}</span>
-      <div class="companion-actions">
-        <button
-          class="companion-action-btn transfer-btn"
-          :class="{ active: showTransfers }"
-          :title="t('companion.transfers')"
-          @click="showTransfers = !showTransfers"
-        >
-          <el-icon><ArrowDownUp :size="14" /></el-icon>
-          <span v-if="activeTransferCount > 0" class="transfer-badge">{{ activeTransferCount }}</span>
-        </button>
-        <button class="companion-action-btn" :title="t('sftp.refresh')" @click="onRefresh">
-          <el-icon><RefreshCw :size="14" /></el-icon>
-        </button>
-        <button class="companion-action-btn" :title="t('sidebar.collapse')" @click="companionStore.filesVisible = false">
-          <el-icon><X :size="14" /></el-icon>
-        </button>
-      </div>
-    </div>
-
     <div v-if="!sessionId" class="companion-empty">
       <span v-if="connecting">{{ t('companion.connecting') }}</span>
       <span v-else-if="connectError">{{ connectError }}</span>
@@ -47,42 +22,11 @@
           <span>{{ preparingUpload ? t('companion.preparingUpload') : t('sftp.dropHere') }}</span>
         </div>
 
-        <!-- Transfer history / progress panel -->
-        <div v-if="showTransfers" class="transfer-panel">
-          <div class="transfer-panel-head">
-            <span>{{ t('companion.transfers') }}</span>
-            <div class="transfer-panel-actions">
-              <button
-                class="companion-action-btn"
-                :disabled="!transferTasks.length"
-                :title="t('companion.clearTransfers')"
-                @click="clearFinishedTransfers"
-              >{{ t('companion.clearTransfers') }}</button>
-              <button class="companion-action-btn" :title="t('sidebar.collapse')" @click="showTransfers = false">
-                <el-icon><X :size="14" /></el-icon>
-              </button>
-            </div>
-          </div>
-          <div v-if="!transferTasks.length" class="transfer-empty">{{ t('companion.noTransfers') }}</div>
-          <SFTPTransferProgress
-            v-else
-            :tasks="transferTasks"
-            @cancel="onCancelTransfer"
-            @pause="onPauseTransfer"
-            @resume="onResumeTransfer"
-          />
-        </div>
-
-        <SFTPPathBreadcrumb
-          :path="cwd"
-          bookmark-mode="remote"
-          :saved-paths="settingsStore.sftpBookmarks.remotePaths"
-          @navigate="onNavigate"
-          @save-bookmark="onSaveBookmark"
-          @remove-bookmark="onRemoveBookmark"
-        />
         <SFTPFileList
           mode="remote"
+          breadcrumb-mode="remote"
+          :breadcrumb-path="cwd"
+          :breadcrumb-saved-paths="settingsStore.sftpBookmarks.remotePaths"
           :files="files"
           :loading="loading"
           :paste-loading="false"
@@ -94,7 +38,6 @@
           @download-to="onDownloadTo"
           @rename="onRename"
           @delete="onDelete"
-          @quick-delete="onQuickDelete"
           @mkdir="onMkdir"
           @chmod="onChmod"
           @send-to-other="onDownloadTo"
@@ -107,13 +50,32 @@
           @cancel-paste="() => {}"
           @open="onEditFile"
           @cancel-load="onCancelLoad"
+          @save-bookmark="onSaveBookmark"
+          @remove-bookmark="onRemoveBookmark"
         />
-        <div class="file-footer">
-          {{ t('companion.fileSummary', { files: fileCount, folders: folderCount }) }}
-          <span v-if="activeTransferCount > 0" class="footer-transfer" @click="showTransfers = true">
-            · {{ t('companion.transferring', { n: activeTransferCount }) }}
-          </span>
+      </div>
+
+      <!-- Transfer history / progress panel (pinned at the sidebar bottom) -->
+      <div class="transfer-panel">
+        <div class="transfer-panel-head">
+          <span>{{ t('companion.transfers') }}</span>
+          <div class="transfer-panel-actions">
+            <button
+              class="companion-action-btn"
+              :disabled="!transferTasks.length"
+              :title="t('companion.clearTransfers')"
+              @click="clearFinishedTransfers"
+            >{{ t('companion.clearTransfers') }}</button>
+          </div>
         </div>
+        <div v-if="!transferTasks.length" class="transfer-empty">{{ t('companion.noTransfers') }}</div>
+        <SFTPTransferProgress
+          v-else
+          :tasks="transferTasks"
+          @cancel="onCancelTransfer"
+          @pause="onPauseTransfer"
+          @resume="onResumeTransfer"
+        />
       </div>
     </template>
 
@@ -164,7 +126,6 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { RefreshCw, X, ArrowDownUp } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
@@ -174,12 +135,11 @@ import { useSettingsStore } from '../stores/settingsStore'
 import {
   SftpListRemote, SftpChangeRemoteDir,
   SftpMakeDir, SftpRemove, SftpRename, SftpChmod, SftpPutContent, SftpGetContent,
-  SftpGet, SftpPut, WriteTempFile, CreateTempUpload, AppendTempUpload, SftpQuickRemove,
+  SftpGet, SftpPut, WriteTempFile, CreateTempUpload, AppendTempUpload,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer,
   OpenMultipleFilesDialog, OpenDirectoryDialog, ListSessions,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, OnFileDrop, OnFileDropOff } from '../../wailsjs/runtime'
-import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
 import SFTPFileList from './SFTPFileList.vue'
 import type { FileItem } from './SFTPFileList.vue'
 import SFTPTransferProgress from './SFTPTransferProgress.vue'
@@ -190,15 +150,12 @@ const companionStore = useCompanionStore()
 const panelStore = usePanelStore()
 const settingsStore = useSettingsStore()
 
-const sidebarEl = ref<HTMLElement | null>(null)
-const isResizing = ref(false)
 const connecting = ref(false)
 const connectError = ref('')
-const cwd = ref('/')
+const cwd = ref('')
 const files = ref<FileItem[]>([])
 const loading = ref(false)
 const dragOver = ref(false)
-const showTransfers = ref(false)
 const preparingUpload = ref(false)
 let dragEnterCount = 0
 let loadVersion = 0
@@ -274,7 +231,7 @@ async function onRefresh() {
   loading.value = true
   try {
     const result = await withTimeout(
-      SftpListRemote(sid, cwd.value || '/'),
+      SftpListRemote(sid, cwd.value || ''),
       LIST_TIMEOUT_MS,
       'list',
     )
@@ -348,8 +305,7 @@ async function onUpload() {
     const action = await resolveConflicts(names)
     if (action === 'cancel') return
     const existing = files.value.map(f => f.name)
-    showTransfers.value = true
-    for (let i = 0; i < localFiles.length; i++) {
+        for (let i = 0; i < localFiles.length; i++) {
       let name = names[i]
       if (action === 'rename' && existing.includes(name)) {
         name = autoRename(name, existing)
@@ -489,8 +445,7 @@ async function uploadLocalPaths(localPaths: string[]) {
   const action = await resolveConflicts(names)
   if (action === 'cancel') return
   const existing = files.value.map(f => f.name)
-  showTransfers.value = true
-  for (let i = 0; i < localPaths.length; i++) {
+    for (let i = 0; i < localPaths.length; i++) {
     let name = names[i]
     if (action === 'rename' && existing.includes(name)) {
       name = autoRename(name, existing)
@@ -539,8 +494,7 @@ async function onDropUpload(e: DragEvent) {
 
   const existing = files.value.map(f => f.name)
   preparingUpload.value = true
-  showTransfers.value = true
-  try {
+    try {
     for (const f of fileList) {
       let resolvedName = f.name
       if (action === 'rename' && existing.includes(f.name)) {
@@ -593,8 +547,7 @@ async function onDownloadTo(items: FileItem[]) {
   try {
     const dir = await OpenDirectoryDialog()
     if (!dir) return
-    showTransfers.value = true
-    for (const item of items) {
+        for (const item of items) {
       if (item.name === '..') continue
       const remotePath = joinPath(cwd.value, item.name)
       const localPath = (dir + '/' + item.name).replace(/\\/g, '/')
@@ -666,43 +619,6 @@ async function onDelete(items: FileItem[]) {
       }
     }
     scheduleRefresh(300)
-  } catch { /* cancelled */ }
-}
-
-async function onQuickDelete(items: FileItem[]) {
-  const sid = sessionId.value
-  if (!sid) return
-  const targets = items.filter(i => i.name !== '..')
-  if (!targets.length) return
-  try {
-    await ElMessageBox.confirm(
-      t('sftp.dialog.quickDeleteConfirm', { count: targets.length }),
-      t('sftp.dialog.quickDeleteTitle'),
-      { type: 'warning', confirmButtonText: t('sftp.dialog.confirm'), cancelButtonText: t('sftp.dialog.cancel') }
-    )
-    const names = new Set(targets.map(i => i.name))
-    for (const task of [...transferTasks.value]) {
-      if ((task.status === 'running' || task.status === 'paused') && names.has(task.name)) {
-        try { await SftpCancelTransfer(sid, task.id) } catch { /* ignore */ }
-        task.status = 'cancelled'
-      }
-    }
-    files.value = files.value.filter(f => !names.has(f.name))
-    const paths = targets.map(i => joinPath(cwd.value, i.name))
-    try {
-      await withTimeout(SftpQuickRemove(sid, paths), REMOVE_TIMEOUT_MS, 'quick-remove')
-    } catch (e: any) {
-      const err = e?.toString?.() || String(e)
-      if (!/no such file|not found|timeout/i.test(err)) {
-        msg.error(err)
-        scheduleRefresh(100)
-        return
-      }
-      if (/timeout/i.test(err)) {
-        msg.warning(t('companion.deleteTimeout'))
-      }
-    }
-    scheduleRefresh(200)
   } catch { /* cancelled */ }
 }
 
@@ -1031,8 +947,7 @@ function bindListeners() {
           // Cap history length
           while (tasks.length > 80) tasks.shift()
         }
-        showTransfers.value = true
-      } else if (m.event === 'progress') {
+              } else if (m.event === 'progress') {
         const existing = tasks.find(t => t.id === m.taskId)
         if (existing) {
           existing.total = m.total || existing.total
@@ -1064,9 +979,25 @@ function bindListeners() {
   })
 }
 
+/** Restore this panel's cached listing; returns true if a non-empty cache existed. */
+function restoreCache(): boolean {
+  const pid = companionStore.activeSshPanelId
+  const cached = pid ? companionStore.getFileViewCache(pid) : null
+  if (!cached || !cached.files.length) return false
+  cwd.value = cached.cwd
+  files.value = cached.files as FileItem[]
+  return true
+}
+
 watch(sessionId, async (sid) => {
+  // Re-entering an already-visited tab: restore its cached listing instead of
+  // re-fetching it, so switching back shows the previous content instantly.
+  if (restoreCache()) {
+    if (sid) bindListeners()
+    return
+  }
   files.value = []
-  cwd.value = '/'
+  cwd.value = ''
   if (!sid) return
   bindListeners()
   try {
@@ -1077,6 +1008,13 @@ watch(sessionId, async (sid) => {
   } catch {
     scheduleRefreshRetry()
   }
+})
+
+// Persist the current listing per SSH panel so a later switch-back can restore it.
+watch([files, cwd], () => {
+  const pid = companionStore.activeSshPanelId
+  if (!pid) return
+  companionStore.setFileViewCache(pid, { cwd: cwd.value, files: files.value })
 })
 
 watch(() => companionStore.filesVisible, (v) => {
@@ -1092,29 +1030,11 @@ watch(() => companionStore.activeSshPanelId, () => {
   if (companionStore.filesVisible) ensureConnected()
 })
 
-function onResizeStart(e: MouseEvent) {
-  isResizing.value = true
-  const el = sidebarEl.value
-  if (!el) return
-  const startX = e.clientX
-  const startWidth = el.offsetWidth
-  window.dispatchEvent(new CustomEvent('split:resize-start'))
-  function onMove(ev: MouseEvent) {
-    const delta = startX - ev.clientX
-    companionStore.setFilesWidth(startWidth + delta)
-  }
-  function onUp() {
-    isResizing.value = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-    window.dispatchEvent(new CustomEvent('split:resize-end'))
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
 onMounted(() => {
   bindListeners()
+  // Re-mounting after the view was hidden (e.g. switching files<->monitor):
+  // restore this panel's cached listing since the session didn't change.
+  restoreCache()
   if (companionStore.filesVisible) {
     ensureConnected()
     bindFileDrop()
@@ -1131,30 +1051,15 @@ onUnmounted(() => {
 
 <style scoped>
 .companion-sidebar {
-  background: var(--bg-elevated);
+  background: transparent;
   display: flex;
   flex-direction: column;
   position: relative;
-  flex-shrink: 0;
+  flex: 1 1 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--border-subtle);
-}
-.companion-sidebar.collapsed {
-  width: 0 !important;
-  border-left: none;
-  overflow: hidden;
-}
-.companion-sidebar.resizing {
-  transition: none;
-}
-.resize-handle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 10;
 }
 .companion-header {
   display: flex;
@@ -1256,7 +1161,7 @@ onUnmounted(() => {
   max-height: 42%;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface, var(--bg-elevated));
   min-height: 0;
 }

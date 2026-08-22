@@ -7,16 +7,26 @@
        
         clearable
       />
-      <el-button @click="emit('refresh')" :title="t('sftp.refresh')">
+      <button class="filter-icon-btn" @click="emit('refresh')" :title="t('sftp.refresh')">
         <el-icon><RefreshCw :size="14" /></el-icon>
-      </el-button>
-      <el-button @click="showHidden = !showHidden" :type="showHidden ? 'primary' : undefined" :title="showHidden ? t('sftp.hideHidden') : t('sftp.showHidden')">
+      </button>
+      <button class="filter-icon-btn" :class="{ active: showHidden }" @click="showHidden = !showHidden" :title="showHidden ? t('sftp.hideHidden') : t('sftp.showHidden')">
         <el-icon><Eye :size="14" /></el-icon>
-      </el-button>
-      <el-button v-if="mode === 'remote'" type="primary" @click="emit('upload')" :title="t('sftp.upload')">
+      </button>
+      <button v-if="mode === 'remote'" class="filter-icon-btn" @click="emit('upload')" :title="t('sftp.upload')">
         <el-icon><Upload :size="14" /></el-icon>
-      </el-button>
+      </button>
     </div>
+    <SFTPPathBreadcrumb
+      v-if="breadcrumbMode"
+      :path="breadcrumbPath || ''"
+      :drives="breadcrumbDrives"
+      :bookmark-mode="breadcrumbMode"
+      :saved-paths="breadcrumbSavedPaths"
+      @navigate="(p: string) => emit('navigate', p)"
+      @save-bookmark="(p: string) => emit('saveBookmark', p)"
+      @remove-bookmark="(p: string) => emit('removeBookmark', p)"
+    />
     <div v-if="clipboardCount" class="clipboard-bar">
       <span class="clipboard-info">{{ clipboardMode === 'cut' ? t('sftp.cut') : t('sftp.copy') }} ({{ clipboardCount }})</span>
       <el-button type="primary" @click="emit('paste')">{{ t('sftp.paste') }}</el-button>
@@ -88,7 +98,6 @@
           <div class="menu-divider" />
           <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
         </template>
         <template v-else-if="menuType === 'dir'">
@@ -104,7 +113,6 @@
           <div class="menu-divider" />
           <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
         </template>
         <template v-else-if="menuType === 'batch'">
@@ -118,7 +126,6 @@
           <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.renameDisabled') }}</div>
           <div v-if="mode === 'local'" class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
           <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item danger" @click="doQuickDelete">{{ t('sftp.quickDelete') }}</div>
           <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.chmodDisabled') }}</div>
         </template>
         <template v-else-if="menuType === 'empty'">
@@ -136,6 +143,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Folder, File, Link, RefreshCw, Eye, Upload } from '@lucide/vue'
 import { useI18n } from '../i18n'
+import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
 
 export interface FileItem {
   name: string
@@ -156,6 +164,10 @@ const props = defineProps<{
   cutItemNames?: string[]
   clipboardCount?: number
   clipboardMode?: 'copy' | 'cut'
+  breadcrumbMode?: 'local' | 'remote'
+  breadcrumbPath?: string
+  breadcrumbSavedPaths?: string[]
+  breadcrumbDrives?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -164,7 +176,6 @@ const emit = defineEmits<{
   sendToOther: [items: FileItem[]]
   rename: [item: FileItem]
   delete: [items: FileItem[]]
-  quickDelete: [items: FileItem[]]
   refresh: []
   mkdir: []
   chmod: [item: FileItem]
@@ -178,6 +189,8 @@ const emit = defineEmits<{
   cutToClipboard: [items: FileItem[]]
   paste: []
   clearClipboard: []
+  saveBookmark: [path: string]
+  removeBookmark: [path: string]
 }>()
 
 const { t, locale } = useI18n()
@@ -372,7 +385,6 @@ function doSendToOther() { emit('sendToOther', [...selectedItems.value]); closeM
 function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); closeMenu() }
 function doRename() { emit('rename', selectedItems.value[0]); closeMenu() }
 function doDelete() { emit('delete', [...selectedItems.value]); closeMenu() }
-function doQuickDelete() { emit('quickDelete', [...selectedItems.value]); closeMenu() }
 function doChmod() { emit('chmod', selectedItems.value[0]); closeMenu() }
 function doEdit() { emit('edit', selectedItems.value[0]); closeMenu() }
 function doNewFile() { emit('newFile'); closeMenu() }
@@ -414,15 +426,39 @@ function onDragStart(event: DragEvent, row: FileItem) {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 2px;
+  padding-top: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--border-subtle);
 }
 .filter-bar .el-input {
   flex: 1;
 }
-.filter-bar .el-button + .el-button {
-  margin-left: 2px;
+/* Match the sidebar's tab / close icon-button style (transparent, 26px, muted) */
+.filter-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+.filter-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.filter-icon-btn.active {
+  color: var(--accent);
+  background: var(--accent-subtle);
 }
 .clipboard-bar {
   display: flex;

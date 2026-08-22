@@ -1,23 +1,7 @@
 <template>
   <div
-    ref="sidebarEl"
     class="companion-sidebar monitor-sidebar"
-    :class="{ collapsed: !companionStore.monitorVisible, resizing: isResizing }"
-    :style="{ width: companionStore.monitorWidth + 'px' }"
   >
-    <div class="resize-handle" @mousedown="onResizeStart" />
-    <div class="companion-header">
-      <span>{{ t('companion.monitor') }}</span>
-      <div class="companion-actions">
-        <button class="companion-action-btn" :title="t('companion.openFullMonitor')" @click="openFullMonitor">
-          <el-icon><ExternalLink :size="14" /></el-icon>
-        </button>
-        <button class="companion-action-btn" :title="t('sidebar.collapse')" @click="companionStore.monitorVisible = false">
-          <el-icon><X :size="14" /></el-icon>
-        </button>
-      </div>
-    </div>
-
     <div v-if="!sessionId" class="companion-empty">
       <span v-if="connecting">{{ t('companion.connecting') }}</span>
       <span v-else-if="connectError">{{ connectError }}</span>
@@ -81,7 +65,7 @@
             <span class="cpu-num accent">{{ fmtPct(cpu.total, false) }}</span>
           </div>
           <div class="cpu-stat">
-            <span class="cpu-label">Load</span>
+            <span class="cpu-label">{{ t('companion.cpuLoad') }}</span>
             <span class="cpu-num small">{{ fmtLoad(cpu.load1) }}</span>
           </div>
           <div class="cpu-stat">
@@ -134,7 +118,7 @@
         <div class="chart-legend">
           <span class="leg">
             <span class="swatch" :style="{ background: SERIES.cpu }" />
-            <span class="leg-name" :style="{ color: SERIES.cpu }">CPU</span>
+            <span class="leg-name" :style="{ color: SERIES.cpu }">{{ t('monitor.cpu') }}</span>
           </span>
           <span class="leg">
             <span class="swatch" :style="{ background: SERIES.mem }" />
@@ -161,8 +145,8 @@
         <div class="proc-list">
           <div class="proc-row proc-header">
             <span class="c-name">{{ t('monitor.processName') }}</span>
-            <span class="c-pid">PID</span>
-            <span class="c-cpu">CPU</span>
+            <span class="c-pid">{{ t('companion.pid') }}</span>
+            <span class="c-cpu">{{ t('monitor.cpu') }}</span>
             <span class="c-mem">{{ t('monitor.mem') }}</span>
             <span class="c-act"></span>
           </div>
@@ -178,13 +162,19 @@
           <div v-if="!filteredProcesses.length" class="proc-empty">{{ t('companion.noProcesses') }}</div>
         </div>
       </div>
+
+      <!-- Open full monitor (pinned at the bottom) -->
+      <button class="full-monitor-btn" @click="openFullMonitor">
+        <ExternalLink :size="14" />
+        <span>{{ t('companion.openFullMonitor') }}</span>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { X, ExternalLink, Square, User, Clock, Globe, Monitor } from '@lucide/vue'
+import { ExternalLink, Square, User, Clock, Globe, Monitor } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useCompanionStore } from '../stores/companionStore'
@@ -196,8 +186,6 @@ const { t } = useI18n()
 const companionStore = useCompanionStore()
 const panelStore = usePanelStore()
 
-const sidebarEl = ref<HTMLElement | null>(null)
-const isResizing = ref(false)
 const connecting = ref(false)
 const connectError = ref('')
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
@@ -447,7 +435,35 @@ function bindListeners() {
   })
 }
 
+/** Restore this panel's cached monitor data; returns true if a cache existed. */
+function restoreCache(): boolean {
+  const pid = companionStore.activeSshPanelId
+  const cached = pid ? companionStore.getMonitorViewCache(pid) : null
+  if (!cached) return false
+  systemInfo.value = cached.systemInfo
+  cpu.value = { ...cached.cpu }
+  mem.value = { ...cached.mem }
+  swap.value = { ...cached.swap }
+  net.value = { ...cached.net }
+  processList.value = [...cached.processList]
+  cpuHistory.value = [...cached.cpuHistory]
+  memHistory.value = [...cached.memHistory]
+  netRxHistory.value = [...cached.netRxHistory]
+  netTxHistory.value = [...cached.netTxHistory]
+  nextTick(drawChart)
+  return true
+}
+
 watch(sessionId, (sid) => {
+  // Re-entering an already-visited tab: restore its cached graphs instead of
+  // resetting, so switching back shows the previous content instantly.
+  if (restoreCache()) {
+    if (sid) {
+      bindListeners()
+      SetMonitorActiveTab(sid, 'overview').catch(() => {})
+    }
+    return
+  }
   systemInfo.value = null
   processList.value = []
   cpuHistory.value = []
@@ -458,6 +474,28 @@ watch(sessionId, (sid) => {
   bindListeners()
   SetMonitorActiveTab(sid, 'overview').catch(() => {})
 })
+
+// Persist the current graphs per SSH panel so a later switch-back can restore them.
+watch(
+  [systemInfo, cpu, mem, swap, net, processList, cpuHistory, memHistory, netRxHistory, netTxHistory],
+  () => {
+    const pid = companionStore.activeSshPanelId
+    if (!pid) return
+    companionStore.setMonitorViewCache(pid, {
+      systemInfo: systemInfo.value ? { ...systemInfo.value } : null,
+      cpu: { ...cpu.value },
+      mem: { ...mem.value },
+      swap: { ...swap.value },
+      net: { ...net.value },
+      processList: [...processList.value],
+      cpuHistory: [...cpuHistory.value],
+      memHistory: [...memHistory.value],
+      netRxHistory: [...netRxHistory.value],
+      netTxHistory: [...netTxHistory.value],
+    })
+  },
+  { deep: true },
+)
 
 watch(() => companionStore.monitorVisible, (v) => {
   if (v) {
@@ -470,29 +508,11 @@ watch(() => companionStore.activeSshPanelId, () => {
   if (companionStore.monitorVisible) ensureConnected()
 })
 
-function onResizeStart(e: MouseEvent) {
-  isResizing.value = true
-  const el = sidebarEl.value
-  if (!el) return
-  const startX = e.clientX
-  const startWidth = el.offsetWidth
-  window.dispatchEvent(new CustomEvent('split:resize-start'))
-  function onMove(ev: MouseEvent) {
-    companionStore.setMonitorWidth(startWidth + (startX - ev.clientX))
-  }
-  function onUp() {
-    isResizing.value = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-    window.dispatchEvent(new CustomEvent('split:resize-end'))
-    nextTick(drawChart)
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
 onMounted(() => {
   bindListeners()
+  // Re-mounting after the view was hidden (e.g. switching files<->monitor):
+  // restore this panel's cached data since the session didn't change.
+  restoreCache()
   if (companionStore.monitorVisible) ensureConnected()
   window.addEventListener('resize', drawChart)
 })
@@ -505,52 +525,15 @@ onUnmounted(() => {
 
 <style scoped>
 .companion-sidebar {
-  background: var(--bg-elevated);
+  background: transparent;
   display: flex;
   flex-direction: column;
   position: relative;
   flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--border-subtle);
-}
-.companion-sidebar.collapsed {
-  width: 0 !important;
-  border-left: none;
-  overflow: hidden;
-}
-.companion-sidebar.resizing { transition: none; }
-.resize-handle {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 10;
-}
-.companion-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-.companion-actions { display: flex; gap: 2px; }
-.companion-action-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-}
-.companion-action-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 .companion-empty {
   flex: 1;
@@ -570,6 +553,33 @@ onUnmounted(() => {
   gap: 10px;
   padding: 10px;
   min-height: 0;
+}
+
+.full-monitor-btn {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.full-monitor-btn:hover {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent-subtle) inset;
 }
 
 .sys-grid {

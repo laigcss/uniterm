@@ -8,7 +8,8 @@
     <div class="resize-handle" @mousedown="onResizeStart" />
     <div class="sidebar-header">
       <button class="sidebar-tab" :class="{ active: activeView === 'connections' }" @click="activeView = 'connections'" :title="t('header.connections')"><el-icon><Network :size="14" /></el-icon></button>
-      <button class="sidebar-tab" :class="{ active: activeView === 'tunnels' }" @click="activeView = 'tunnels'" :title="t('tunnels.tunnelsTab')"><el-icon><ArrowRightLeft :size="14" /></el-icon></button>
+      <button class="sidebar-tab" :class="{ active: activeView === 'files' }" @click="onFilesTabClick" :title="t('header.files')"><el-icon><FolderTree :size="14" /></el-icon></button>
+      <button class="sidebar-tab" :class="{ active: activeView === 'monitor' }" @click="onMonitorTabClick" :title="t('header.monitor')"><el-icon><Activity :size="14" /></el-icon></button>
       <button class="sidebar-tab" :class="{ active: activeView === 'quickCommands' }" @click="activeView = 'quickCommands'" :title="t('quickCommands.quickCommandsTab')"><el-icon><Zap :size="14" /></el-icon></button>
       <button class="sidebar-tab" :class="{ active: activeView === 'history' }" @click="activeView = 'history'" :title="t('quickCommands.historyTab')"><el-icon><Clock :size="14" /></el-icon></button>
       <button class="sidebar-tab" :class="{ active: activeView === 'personalization' }" @click="activeView = 'personalization'" :title="t('sidebar.personalization')"><el-icon><Palette :size="14" /></el-icon></button>
@@ -191,9 +192,12 @@
 
     <QuickCommandsPanel v-if="activeView === 'quickCommands'" />
 
-    <TunnelsPanel v-if="activeView === 'tunnels'" />
-
+    
     <HistoryPanel v-if="activeView === 'history'" />
+
+    <FileSidebar v-if="activeView === 'files'" />
+
+    <MonitorOverviewSidebar v-if="activeView === 'monitor'" />
 
     <template v-if="activeView === 'personalization'">
       <div class="personalization-panel">
@@ -480,7 +484,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, ArrowRightLeft, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -493,8 +497,10 @@ import ConnectionForm from './ConnectionForm.vue'
 import ExportDialog from './ExportDialog.vue'
 import ImportDialog from './ImportDialog.vue'
 import QuickCommandsPanel from './QuickCommandsPanel.vue'
-import TunnelsPanel from './TunnelsPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
+import FileSidebar from './FileSidebar.vue'
+import MonitorOverviewSidebar from './MonitorOverviewSidebar.vue'
+import { useCompanionStore } from '../stores/companionStore'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
 import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
@@ -514,6 +520,7 @@ const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const panelStore = usePanelStore()
 const tabStore = useTabStore()
+const companionStore = useCompanionStore()
 const { t } = useI18n()
 
 // Connection ids that currently have an open panel/session (panel.config.id).
@@ -529,7 +536,33 @@ const showForm = ref(false)
 const showExportDialog = ref(false)
 const showImportDialog = ref(false)
 const editConfig = ref<ConnectionConfig | undefined>(undefined)
-const activeView = ref<'connections' | 'quickCommands' | 'tunnels' | 'history' | 'personalization'>('connections')
+const activeView = ref<'connections' | 'quickCommands' | 'history' | 'personalization' | 'files' | 'monitor'>('connections')
+
+// ── SSH companion: files / monitor folded into this sidebar ──
+function onFilesTabClick() {
+  activeView.value = 'files'
+  // Always open the files view (shows an idle/"need SSH" empty state when no
+  // active SSH panel). If there is an active SSH panel, (re)establish the
+  // companion SFTP session. Closing happens via the panel's X button, which
+  // clears filesVisible and the watch below falls back to connections.
+  companionStore.filesVisible = true
+  const pid = companionStore.getActiveSshPanelId()
+  if (pid) companionStore.ensureSftp(pid).catch(() => {})
+}
+function onMonitorTabClick() {
+  activeView.value = 'monitor'
+  companionStore.monitorVisible = true
+  const pid = companionStore.getActiveSshPanelId()
+  if (pid) companionStore.ensureMonitor(pid).catch(() => {})
+}
+// If the companion panel hides itself (collapse button), fall back to connections view.
+watch(
+  () => [companionStore.filesVisible, companionStore.monitorVisible],
+  ([filesVisible, monitorVisible]) => {
+    if (!filesVisible && activeView.value === 'files') activeView.value = 'connections'
+    if (!monitorVisible && activeView.value === 'monitor') activeView.value = 'connections'
+  },
+)
 
 // ── Personalization panel ──
 // Single source: GetAllFonts returns every installed family with its mono

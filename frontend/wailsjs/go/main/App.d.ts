@@ -491,8 +491,6 @@ export function SftpPut(arg1:string,arg2:string,arg3:string,arg4:boolean):Promis
 
 export function SftpPutContent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function SftpQuickRemove(arg1:string,arg2:Array<string>):Promise<void>;
-
 export function SftpRemove(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function SftpRename(arg1:string,arg2:string,arg3:string):Promise<void>;

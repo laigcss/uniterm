@@ -113,11 +113,17 @@
           :actions-label="t('db.actions')"
           :edit-label="t('common.edit')"
           :delete-label="t('common.delete')"
-          @cell-commit="onCellCommit"
+          @pending-change="onPendingChange"
           @edit-row="startEditRowByRow"
           @delete-row="onDeleteRowByRow"
-          @sort-change="onVxeSortChange"
+          @sort-change="onSortChange"
         />
+      </div>
+
+      <div v-if="queryResult && canEditRows && pendingCount > 0" class="save-bar">
+        <span class="save-hint">{{ pendingCount }} {{ t('db.unsavedChanges') }}</span>
+        <button class="btn btn-default btn-sm" :disabled="savingRows" @click="onUndoEdits">{{ t('db.undo') }}</button>
+        <button class="btn btn-primary btn-sm" :disabled="savingRows" @click="onSaveEdits">{{ t('common.save') }}</button>
       </div>
 
       <div v-if="queryResult && tableName && !isView" class="insert-row-bar">
@@ -546,46 +552,58 @@ async function onPageSizeChange(size: number) {
   await onExecute()
 }
 
-function onVxeSortChange(payload: { field: string; order: 'asc' | 'desc' | null }) {
+function onSortChange(payload: { field: string; order: 'asc' | 'desc' | null }) {
   sortProp.value = payload.field || ''
   sortOrder.value = payload.order === 'asc' ? 'ascending' : payload.order === 'desc' ? 'descending' : null
 }
 
 const resultGridRef = ref<InstanceType<typeof DBResultGrid> | null>(null)
 
-async function onCellCommit(payload: {
-  row: Record<string, any>
-  field: string
-  newValue: any
-  oldValue: any
-}) {
-  const pks = resolvedPrimaryKeys.value
-  if (!props.tableName || !pks.length) {
-    resultGridRef.value?.revertCell(payload.row, payload.field, payload.oldValue)
-    error.value = t('db.noPrimaryKey')
-    return
-  }
+/** Number of unsaved inline cell edits staged in the result grid. */
+const pendingCount = ref(0)
+const savingRows = ref(false)
 
-  const where: Record<string, any> = {}
-  for (const pk of pks) {
-    where[pk] = pk === payload.field ? payload.oldValue : (payload.row[pk] ?? null)
-  }
+function onPendingChange(count: number) {
+  pendingCount.value = count
+}
 
+/** Persist every staged cell edit via UPDATE ... WHERE original primary keys. */
+async function onSaveEdits() {
+  const edits = resultGridRef.value?.getPendingEdits() || []
+  if (!edits.length || savingRows.value) return
+  savingRows.value = true
+  let ok = true
   try {
-    await DBUpdateRow(
-      props.sessionId,
-      props.dbName || '',
-      props.tableName,
-      { [payload.field]: payload.newValue },
-      where,
-    )
-    payload.row[payload.field] = payload.newValue
-    error.value = ''
-    emit('cellUpdated')
-  } catch (e: any) {
-    resultGridRef.value?.revertCell(payload.row, payload.field, payload.oldValue)
-    error.value = e?.message || String(e)
+    for (const ed of edits) {
+      try {
+        await DBUpdateRow(
+          props.sessionId,
+          props.dbName || '',
+          props.tableName,
+          { [ed.field]: ed.newValue },
+          ed.where,
+        )
+        resultGridRef.value?.markCommitted(ed.row, ed.field)
+      } catch (e: any) {
+        ok = false
+        resultGridRef.value?.revertRow(ed.row)
+        const m = e?.message || String(e)
+        error.value = m
+        msg.error(m)
+        break
+      }
+    }
+    if (ok) {
+      error.value = ''
+      emit('cellUpdated')
+    }
+  } finally {
+    savingRows.value = false
   }
+}
+
+function onUndoEdits() {
+  resultGridRef.value?.revertAll()
 }
 
 function rowIndexOf(row: Record<string, any>): number {
@@ -1073,6 +1091,18 @@ function onEditRowCancel() {
   white-space: nowrap;
 }
 .insert-row-bar { padding: 4px 0; flex-shrink: 0; }
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+.save-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-right: auto;
+}
 .insert-row-form {
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);

@@ -23,28 +23,6 @@
       />
     </div>
 
-    <!-- SSH companion: remote files -->
-    <button
-      class="header-btn"
-      :class="{ active: companionStore.filesVisible }"
-      :disabled="!companionStore.canToggle && !companionStore.filesVisible"
-      @click="emit('toggle-files')"
-      :title="t('header.files')"
-    >
-      <el-icon><FolderTree :size="14" /></el-icon>
-    </button>
-
-    <!-- SSH companion: server overview -->
-    <button
-      class="header-btn"
-      :class="{ active: companionStore.monitorVisible }"
-      :disabled="!companionStore.canToggle && !companionStore.monitorVisible"
-      @click="emit('toggle-monitor')"
-      :title="t('header.monitor')"
-    >
-      <el-icon><Activity :size="14" /></el-icon>
-    </button>
-
     <!-- AI button -->
     <button class="header-btn" @click="emit('toggle-ai')" :title="t('header.ai') + shortcutSuffix('focusAI')">
       <el-icon><Bot :size="14" /></el-icon>
@@ -111,6 +89,9 @@
           <div class="settings-menu-item" @click="openCategory('proxies')">
             <span class="settings-menu-label">{{ t('settings.proxies') }}</span>
           </div>
+          <div class="settings-menu-item" @click="openCategory('tunnels')">
+            <span class="settings-menu-label">{{ t('settings.tunnels') }}</span>
+          </div>
 
           <div class="settings-menu-sep"></div>
 
@@ -141,7 +122,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
-import { Settings, PanelLeft, Bot, FolderTree, Activity, ChevronRight } from '@lucide/vue'
+import { Settings, PanelLeft, Bot, ChevronRight } from '@lucide/vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useTabStore } from '../stores/tabStore'
@@ -150,7 +131,6 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import { useLocalStateStore } from '../stores/localStateStore'
-import { useCompanionStore } from '../stores/companionStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { LANGUAGE_OPTIONS } from '../types/settings'
 import type { AppSettings } from '../types/settings'
@@ -178,7 +158,6 @@ const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
-const companionStore = useCompanionStore()
 
 // ── Settings dropdown menu ──
 const updateCheck = useUpdateCheck()
@@ -260,8 +239,6 @@ const hasActiveConnections = computed(() =>
 
 const emit = defineEmits<{
   'toggle-ai': []
-  'toggle-files': []
-  'toggle-monitor': []
   'toggle-sidebar': []
   'open-settings': [category?: string]
   'close-tab': [id: string]

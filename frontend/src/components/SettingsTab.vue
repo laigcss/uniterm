@@ -693,6 +693,38 @@
         <ProxyEditDialog v-model:visible="proxyDialogVisible" :proxy="editingProxy" @saved="proxyStore.load()" />
       </div>
 
+      <!-- 隧道 -->
+      <div v-if="settingsStore.activeCategory === 'tunnels'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.tunnels') }}</h2>
+        <p class="section-desc">{{ t('settings.tunnelsDesc') }}</p>
+        <el-button type="primary" @click="openTunnelDialog()">{{ t('tunnels.addTunnel') }}</el-button>
+        <el-table :data="tunnelStore.tunnels" size="small" style="margin-top: 12px">
+          <el-table-column prop="name" :label="t('tunnels.name')" />
+          <el-table-column :label="t('tunnels.modeCol')" width="100">
+            <template #default="{ row }">{{ modeName(row.mode) }}</template>
+          </el-table-column>
+          <el-table-column :label="t('tunnels.listenCol')" width="120">
+            <template #default="{ row }">:{{ effPort(row) }}</template>
+          </el-table-column>
+          <el-table-column :label="t('tunnels.statusCol')" width="120">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="statusOf(row.id) === 'running'"
+                @change="toggleRun(row)"
+                :loading="togglingTunnelId === row.id"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('common.actions')" width="160">
+            <template #default="{ row }">
+              <el-button size="small" @click="openTunnelDialog(row)">{{ t('common.edit') }}</el-button>
+              <el-button size="small" type="danger" @click="removeTunnel(row)">{{ t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <TunnelEditDialog v-model="tunnelDialogVisible" :editing-id="editingTunnelId" />
+      </div>
+
       <!-- 关于 -->
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
@@ -986,7 +1018,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../wailsjs/go/main/App'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -1011,9 +1043,12 @@ import CustomThemeEditor from './CustomThemeEditor.vue'
 import DataDirDialog from './DataDirDialog.vue'
 import IdentityEditDialog from './IdentityEditDialog.vue'
 import ProxyEditDialog from './ProxyEditDialog.vue'
+import TunnelEditDialog from './TunnelEditDialog.vue'
 import { useCredentialStore } from '../stores/credentialStore'
 import { useIdentityStore } from '../stores/identityStore'
 import { useProxyStore } from '../stores/proxyStore'
+import { useTunnelStore } from '../stores/tunnelStore'
+import type { Tunnel, TunnelMode } from '../stores/tunnelStore'
 import type { Identity } from '../types/identity'
 import type { Proxy } from '../types/proxy'
 
@@ -1250,6 +1285,11 @@ onMounted(async () => {
   } catch {
     // Ignore proxy load errors
   }
+  try {
+    await tunnelStore.load()
+  } catch {
+    // Ignore tunnel load errors
+  }
 })
 
 // Session log directory: shown as placeholder when the setting is
@@ -1276,7 +1316,7 @@ async function pickLogDir() {
 }
 
 watch(() => settingsStore.openCategory, (cat) => {
-  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities' || cat === 'proxies')) {
+  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities' || cat === 'proxies' || cat === 'tunnels')) {
     settingsStore.activeCategory = cat
     settingsStore.openCategory = null
   }
@@ -1397,6 +1437,7 @@ const categories = computed(() => {
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
     { key: 'identities', label: t('settings.identities'), icon: Key },
     { key: 'proxies', label: t('settings.proxies'), icon: Network },
+    { key: 'tunnels', label: t('settings.tunnels'), icon: ArrowRightLeft },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
@@ -1426,6 +1467,36 @@ function openProxyDialog(p?: Proxy) {
 }
 async function removeProxy(row: Proxy) {
   await proxyStore.remove(row.id)
+}
+
+// ── Tunnels (隧道) ──
+const tunnelStore = useTunnelStore()
+const tunnelDialogVisible = ref(false)
+const editingTunnelId = ref<string | undefined>(undefined)
+const togglingTunnelId = ref<string | undefined>(undefined)
+function openTunnelDialog(t?: Tunnel) {
+  editingTunnelId.value = t?.id
+  tunnelDialogVisible.value = true
+}
+async function removeTunnel(row: Tunnel) {
+  await tunnelStore.deleteTunnel(row.id)
+}
+const modeName = (m: TunnelMode) => m.charAt(0).toUpperCase() + m.slice(1)
+const effPort = (t: Tunnel) => tunnelStore.states[t.id]?.localPort || t.listenPort
+const statusOf = (id: string) => tunnelStore.statusOf(id)
+async function toggleRun(row: Tunnel) {
+  if (statusOf(row.id) === 'running') {
+    togglingTunnelId.value = row.id
+    await tunnelStore.stop(row.id)
+    togglingTunnelId.value = undefined
+  } else {
+    togglingTunnelId.value = row.id
+    const st = await tunnelStore.start(row.id)
+    togglingTunnelId.value = undefined
+    if (st.status === 'error') {
+      msg.error(st.error || t('tunnels.startFailed'))
+    }
+  }
 }
 
 const showModelForm = ref(false)
