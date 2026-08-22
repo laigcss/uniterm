@@ -48,7 +48,10 @@ func (p *rqliteProvider) PrepareExec(db execer, dbName string) error {
 	return nil
 }
 
-func (p *rqliteProvider) DefaultTableQuery(dbName, tableName string, limit int) string {
+func (p *rqliteProvider) DefaultTableQuery(dbName, tableName string, limit, offset int) string {
+	if offset > 0 {
+		return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
+	}
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
 }
 

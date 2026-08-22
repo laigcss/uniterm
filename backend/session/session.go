@@ -64,9 +64,15 @@ type ConnectionConfig struct {
 	SerialStopBits float64 `json:"serialStopBits,omitempty"`
 	SerialParity   string  `json:"serialParity,omitempty"`
 	// Database-specific fields
-	DBType   string `json:"dbType,omitempty"`   // "mysql", "postgres", "rqlite", "oracle", "sqlserver"
+	DBType   string `json:"dbType,omitempty"`   // "mysql", "postgres", "rqlite", "oracle", "sqlserver", "redis", "mongodb", "elasticsearch"
 	DBName   string `json:"dbName,omitempty"`   // default database name
 	DBParams string `json:"dbParams,omitempty"` // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
+	// Elasticsearch / OpenSearch fields
+	EsAuthType   string `json:"esAuthType,omitempty"`   // "basic"(default) | "apikey"
+	EsApiKey     string `json:"esApiKey,omitempty"`     // API key id:key or encoded key
+	EsUseSSL     bool   `json:"esUseSsl,omitempty"`     // use HTTPS
+	EsPathPrefix string `json:"esPathPrefix,omitempty"` // optional path prefix, e.g. "/es"
+	EsSkipVerify bool   `json:"esSkipVerify,omitempty"` // insecureSkipVerify for self-signed certs
 	// Redis Sentinel fields (only used when RedisMode == "sentinel")
 	RedisMode        string `json:"redisMode,omitempty"`        // ""/"standalone"(default) | "sentinel"
 	RedisMasterName  string `json:"redisMasterName,omitempty"`  // Sentinel primary group name, e.g. "mymaster"

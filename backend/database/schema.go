@@ -4,8 +4,9 @@ package database
 // ── Shared types ──
 
 type TableInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // "table" or "view"
+	Name    string `json:"name"`
+	Type    string `json:"type"` // "table" or "view"
+	Comment string `json:"comment"`
 }
 
 type ColumnInfo struct {

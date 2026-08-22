@@ -1,0 +1,288 @@
+<template>
+  <div ref="hostRef" class="syntax-editor" :class="{ compact }" />
+</template>
+
+<script setup lang="ts">
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, StreamLanguage } from '@codemirror/language'
+import { oneDark } from '@codemirror/theme-one-dark'
+import { json } from '@codemirror/lang-json'
+import { javascript } from '@codemirror/lang-javascript'
+import { html } from '@codemirror/lang-html'
+import { css } from '@codemirror/lang-css'
+import { xml } from '@codemirror/lang-xml'
+import { markdown } from '@codemirror/lang-markdown'
+import { python } from '@codemirror/lang-python'
+import { sql } from '@codemirror/lang-sql'
+import { yaml } from '@codemirror/lang-yaml'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { properties } from '@codemirror/legacy-modes/mode/properties'
+import { toml } from '@codemirror/legacy-modes/mode/toml'
+import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
+import { nginx } from '@codemirror/legacy-modes/mode/nginx'
+
+const props = defineProps<{
+  modelValue: string
+  filePath?: string
+  compact?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  execute: []
+}>()
+
+const hostRef = ref<HTMLElement | null>(null)
+let view: EditorView | null = null
+let applyingExternal = false
+let resizeObserver: ResizeObserver | null = null
+
+function extOf(path: string): string {
+  const base = path.replace(/\\/g, '/').split('/').pop() || ''
+  const lower = base.toLowerCase()
+  if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) return 'dockerfile'
+  if (lower === 'makefile' || lower === 'gnumakefile') return 'makefile'
+  if (lower === '.bashrc' || lower === '.zshrc' || lower === '.profile' || lower === '.bash_profile') return 'sh'
+  if (lower === '.gitignore' || lower === '.dockerignore' || lower === '.env' || lower.endsWith('.env')) return 'conf'
+  if (lower === 'nginx.conf' || lower.endsWith('.nginx')) return 'nginx'
+  const i = lower.lastIndexOf('.')
+  return i >= 0 ? lower.slice(i + 1) : ''
+}
+
+function languageExtension(path: string) {
+  const ext = extOf(path || '')
+  switch (ext) {
+    case 'json':
+    case 'jsonc':
+    case 'json5':
+      return json()
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+    case 'jsx':
+    case 'ts':
+    case 'tsx':
+      return javascript({ typescript: ext === 'ts' || ext === 'tsx', jsx: ext === 'jsx' || ext === 'tsx' })
+    case 'html':
+    case 'htm':
+    case 'vue':
+      return html()
+    case 'css':
+    case 'scss':
+    case 'less':
+      return css()
+    case 'xml':
+    case 'svg':
+    case 'plist':
+      return xml()
+    case 'md':
+    case 'markdown':
+      return markdown()
+    case 'py':
+      return python()
+    case 'sql':
+      return sql()
+    case 'yml':
+    case 'yaml':
+      return yaml()
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+    case 'ksh':
+    case 'fish':
+      return StreamLanguage.define(shell)
+    case 'conf':
+    case 'cfg':
+    case 'ini':
+    case 'properties':
+    case 'service':
+    case 'desktop':
+      return StreamLanguage.define(properties)
+    case 'toml':
+      return StreamLanguage.define(toml)
+    case 'dockerfile':
+      return StreamLanguage.define(dockerFile)
+    case 'nginx':
+      return StreamLanguage.define(nginx)
+    default:
+      if (/\.conf(\.|$)/i.test(path || '') || /\/conf\//i.test(path || '')) {
+        return StreamLanguage.define(properties)
+      }
+      return []
+  }
+}
+
+function buildExtensions(path: string) {
+  return [
+    lineNumbers(),
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
+    drawSelection(),
+    history(),
+    foldGutter(),
+    bracketMatching(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    oneDark,
+    languageExtension(path),
+    keymap.of([
+      {
+        key: 'Mod-Enter',
+        run: () => {
+          emit('execute')
+          return true
+        },
+      },
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...foldKeymap,
+      indentWithTab,
+    ]),
+    EditorView.updateListener.of((update) => {
+      if (!update.docChanged || applyingExternal) return
+      emit('update:modelValue', update.state.doc.toString())
+    }),
+    EditorView.theme({
+      '&': {
+        height: '100%',
+        width: '100%',
+        maxWidth: '100%',
+        fontSize: '13px',
+        outline: 'none',
+      },
+      '&.cm-editor': {
+        height: '100%',
+        width: '100%',
+      },
+      '&.cm-editor.cm-focused': { outline: 'none' },
+      '.cm-scroller': {
+        fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)',
+        overflow: 'auto',
+        width: '100%',
+        minWidth: '0',
+      },
+      '.cm-content': { minHeight: '100%', width: '100%', boxSizing: 'border-box' },
+      '.cm-gutters': { backgroundColor: 'transparent', border: 'none' },
+      // Strong selection highlight — oneDark default is too subtle, and has-bg
+      // mode can further wash it out via global transparent rules.
+      '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
+      '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
+      '.cm-content ::selection': {
+        backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
+      },
+    }),
+    EditorView.lineWrapping,
+  ]
+}
+
+function requestMeasure() {
+  view?.requestMeasure()
+}
+
+function createEditor() {
+  if (!hostRef.value) return
+  view?.destroy()
+  view = new EditorView({
+    parent: hostRef.value,
+    state: EditorState.create({
+      doc: props.modelValue || '',
+      extensions: buildExtensions(props.filePath || ''),
+    }),
+  })
+  requestMeasure()
+}
+
+function setDoc(text: string) {
+  if (!view) return
+  const cur = view.state.doc.toString()
+  if (cur === text) return
+  applyingExternal = true
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: text },
+  })
+  applyingExternal = false
+}
+
+watch(() => props.modelValue, (v) => {
+  setDoc(v ?? '')
+})
+
+watch(() => props.filePath, async () => {
+  const text = view?.state.doc.toString() ?? props.modelValue
+  await nextTick()
+  createEditor()
+  if (text !== props.modelValue) setDoc(text)
+})
+
+onMounted(() => {
+  createEditor()
+  if (hostRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => requestMeasure())
+    resizeObserver.observe(hostRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  view?.destroy()
+  view = null
+})
+
+defineExpose({
+  focus: () => view?.focus(),
+  getValue: () => view?.state.doc.toString() ?? props.modelValue,
+  getSelectedOrAll: () => {
+    if (!view) return props.modelValue
+    const { from, to } = view.state.selection.main
+    if (from !== to) return view.state.sliceDoc(from, to)
+    return view.state.doc.toString()
+  },
+})
+</script>
+
+<style scoped>
+.syntax-editor {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 55vh;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #282c34;
+  box-sizing: border-box;
+}
+.syntax-editor.compact {
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-self: stretch;
+  border-radius: var(--radius-sm);
+}
+.syntax-editor :deep(.cm-editor) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+}
+.syntax-editor :deep(.cm-scroller) {
+  min-width: 0 !important;
+}
+.syntax-editor :deep(.cm-focused) {
+  outline: none;
+}
+.syntax-editor :deep(.cm-selectionBackground),
+.syntax-editor :deep(.cm-focused .cm-selectionBackground),
+.syntax-editor :deep(.cm-content ::selection) {
+  background-color: rgba(64, 158, 255, 0.45) !important;
+}
+</style>

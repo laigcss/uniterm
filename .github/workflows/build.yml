@@ -28,10 +28,14 @@ jobs:
             platform: linux/amd64
             slug: linux-amd64
             artifact: uniTerm
+            webkit: '41'
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             slug: linux-arm64
             artifact: uniTerm
+            webkit: '41'
+          # Kylin/RHEL webkit40+glibc2.28 builds: use workflow build-linux-webkit40.yml
+          # (Ubuntu runners link glibc 2.34 and will not run on Kylin V10.)
           - os: macos-latest
             platform: darwin
             slug: darwin
@@ -81,7 +85,11 @@ jobs:
         if: startsWith(matrix.platform, 'linux')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx
+          if [ "${{ matrix.webkit }}" = "40" ]; then
+            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev upx
+          else
+            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx
+          fi
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -121,13 +129,17 @@ jobs:
             BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
 
             if [ "${PLATFORM%/*}" = "linux" ]; then
-              BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\" -tags webkit2_41"
+              BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\""
+              WEBKIT_TAG="webkit2_41"
+              if [ "${{ matrix.webkit }}" = "40" ]; then
+                WEBKIT_TAG="webkit2_40"
+              fi
+              BUILD_ARGS="$BUILD_ARGS -tags $WEBKIT_TAG"
             fi
 
             echo "BUILD_ARGS=$BUILD_ARGS"
             eval wails build $BUILD_ARGS
           fi
-
       - name: Package (macOS)
         if: startsWith(matrix.platform, 'darwin')
         run: |
@@ -205,12 +217,23 @@ jobs:
         run: |
           ARCH=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
           NFPM_ARCH=${{ matrix.platform == 'linux/amd64' && 'x86_64' || 'arm64' }}
+          WEBKIT="${{ matrix.webkit }}"
+          # Distinguish Kylin/RHEL (webkit40) artifacts from default webkit41 builds
+          if [ "$WEBKIT" = "40" ]; then
+            PKG_SUFFIX="${ARCH}-webkit40"
+            DEB_WEBKIT_DEP="libwebkit2gtk-4.0-37"
+            RPM_WEBKIT_DEP="webkit2gtk3"
+          else
+            PKG_SUFFIX="${ARCH}"
+            DEB_WEBKIT_DEP="libwebkit2gtk-4.1-0"
+            RPM_WEBKIT_DEP="webkit2gtk4.1"
+          fi
 
           cd build/bin
           chmod +x uniTerm
 
           # tar.gz
-          tar czf ../../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
+          tar czf ../../uniterm-linux-${PKG_SUFFIX}-${VERSION}.tar.gz uniTerm
 
           # nfpm for deb + rpm
           cd ../..
@@ -232,12 +255,12 @@ jobs:
           license: Proprietary
           depends:
             - libgtk-3-0
-            - libwebkit2gtk-4.1-0
+            - ${DEB_WEBKIT_DEP}
           overrides:
             rpm:
               depends:
                 - gtk3
-                - webkit2gtk4.1
+                - ${RPM_WEBKIT_DEP}
           contents:
             - src: build/bin/uniTerm
               dst: /usr/bin/uniterm
@@ -248,9 +271,9 @@ jobs:
           EOF
 
           nfpm package --config nfpm.yaml --packager deb \
-            --target "uniterm-linux-${ARCH}-${VERSION}.deb"
+            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.deb"
           nfpm package --config nfpm.yaml --packager rpm \
-            --target "uniterm-linux-${ARCH}-${VERSION}.rpm"
+            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.rpm"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

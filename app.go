@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.bug.st/serial"
 	"io"
 	"net"
 	"net/http"
@@ -24,10 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
+	"go.bug.st/serial"
+
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/database"
@@ -39,6 +38,8 @@ import (
 	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/ys-ll/uniterm/backend/sync"
 	"github.com/ys-ll/uniterm/backend/update"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 type App struct {
@@ -71,7 +72,7 @@ type App struct {
 	credentialStore *credentials.Store
 	storesReady     bool
 	chatCancel      atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
-	moveResizeCh         chan string        // defer EventsEmit from WndProc
+	moveResizeCh    chan string                        // defer EventsEmit from WndProc
 	// F-043: foreground flag — true while the window is visible and the
 	// user is interacting; background goroutines (keepalive, output_log
 	// flush, k8s watches, auto-sync) should consult IsForeground before
@@ -126,7 +127,7 @@ func NewApp(webviewDataPath string) *App {
 		sessionToPanel:     make(map[string]string),
 		panelAutoTriggered: make(map[string]bool),
 		k8sManager:         k8s.NewManager(),
-containerManager:   container.NewManager(),
+		containerManager:   container.NewManager(),
 		errCh:              make(chan error, 16),
 	}
 }
@@ -528,10 +529,10 @@ func (a *App) SetAppVisibility(visible bool) {
 // changed connection (or all connections on first emit) crosses the
 // bridge instead of the full store blob. See F-204.
 type connDelta struct {
-	Kind string                    `json:"kind"`             // "upsert" | "remove" | "replace"
-	ID   string                    `json:"id,omitempty"`     // for upsert/remove
-	Conn *session.ConnectionConfig `json:"connection,omitempty"`
-	All  *session.ConnectionStoreData `json:"all,omitempty"`  // for replace (first emit)
+	Kind string                       `json:"kind"`         // "upsert" | "remove" | "replace"
+	ID   string                       `json:"id,omitempty"` // for upsert/remove
+	Conn *session.ConnectionConfig    `json:"connection,omitempty"`
+	All  *session.ConnectionStoreData `json:"all,omitempty"` // for replace (first emit)
 }
 
 // F-205: typed event shapes + pooled buffer so session:data emits
@@ -620,6 +621,27 @@ func (a *App) llmHTTPClient() *http.Client {
 		a.httpClient = &http.Client{Transport: tr}
 	})
 	return a.httpClient
+}
+
+// injectCacheControl adds ephemeral cache_control breakpoints on the
+// static system prompt and tools array so Anthropic's prompt caching
+// beta actually caches them across turns. Without this the
+// prompt-caching-2024-07-31 header is sent but the request body has
+// no breakpoints, so every turn re-ships and re-bills the static
+// prefix (~3 KB in typical Claude Code sessions). F-303.
+func injectCacheControl(reqBody map[string]interface{}) {
+	if sys, ok := reqBody["system"].(string); ok && sys != "" {
+		reqBody["system"] = []map[string]interface{}{{
+			"type":          "text",
+			"text":          sys,
+			"cache_control": map[string]string{"type": "ephemeral"},
+		}}
+	}
+	if tools, ok := reqBody["tools"].([]interface{}); ok && len(tools) > 0 {
+		if last, ok := tools[len(tools)-1].(map[string]interface{}); ok {
+			last["cache_control"] = map[string]string{"type": "ephemeral"}
+		}
+	}
 }
 
 // which don't fire the JS visibilitychange event (Cmd+H on macOS before
@@ -1126,6 +1148,7 @@ func (a *App) triggerAutoSync() {
 		runtime.EventsEmit(a.ctx, "sync:completed")
 	}()
 }
+
 // waitSyncReady briefly blocks on the async NewSyncService's Ready()
 // channel so callers that arrive during the ~ms-scale startup window
 // don't fail with "sync service not initialized" (F-407). Returns
@@ -1825,7 +1848,9 @@ func (a *App) launchConnectGoroutine(s session.Session, sessionType string, conf
 		// RDP TCP pre-check: fail fast before creating the ActiveX window.
 		if sessionType == "rdp" {
 			port := config.Port
-			if port <= 0 { port = 3389 }
+			if port <= 0 {
+				port = 3389
+			}
 			addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
 			tcpConn, tcpErr := net.DialTimeout("tcp", addr, 5*time.Second)
 			if tcpErr != nil {
@@ -2315,7 +2340,7 @@ type AppInfo struct {
 
 func (a *App) GetAppInfo() AppInfo {
 	return AppInfo{
-		Name:    "uniTerm",
+		Name:    "Carrear's Terminal",
 		Version: Version,
 	}
 }
@@ -2646,6 +2671,33 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 
 	return "", fmt.Errorf("stream ended without message_stop")
 }
+
+// marshalAnthropicFinalMessage encodes a final message using a pooled
+// *bytes.Buffer to avoid per-turn allocator churn in heavy sessions.
+func marshalAnthropicFinalMessage(msg map[string]interface{}) ([]byte, error) {
+	buf := finalMsgPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer finalMsgPool.Put(buf)
+	enc := json.NewEncoder(buf)
+	if err := enc.Encode(msg); err != nil {
+		return nil, err
+	}
+	// json.Encoder always appends a trailing newline; trim it.
+	out := buf.Bytes()
+	if n := len(out); n > 0 && out[n-1] == '\n' {
+		out = out[:n-1]
+	}
+	return out, nil
+}
+
+var finalMsgPool = stdsync.Pool{
+	New: func() any {
+		b := &bytes.Buffer{}
+		b.Grow(4 * 1024)
+		return b
+	},
+}
+
 func anthropicToolToOpenAI(t map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "function",
@@ -2884,6 +2936,18 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	flushCurrentTextBlock := func() {
+		if currentBlock == nil {
+			return
+		}
+		if t, _ := currentBlock["type"].(string); t == "text" && currentTextBuf.Len() > 0 {
+			currentBlock["text"] = currentTextBuf.String()
+		}
+		contentBlocks = append(contentBlocks, currentBlock)
+		currentBlock = nil
+		currentTextBuf.Reset()
+	}
+
 	// Emit message_start at the beginning
 	// F-320: typed payload (frontend reads event.message.role).
 	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
@@ -2900,11 +2964,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		if strings.TrimSpace(dataStr) == "[DONE]" {
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
-				contentBlocks = append(contentBlocks, currentBlock)
+				flushCurrentTextBlock()
 				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
-				currentBlock = nil
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
@@ -2948,7 +3011,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if currentBlock == nil || currentBlock["type"] != "text" {
 				// Close previous block if any
 				if currentBlock != nil {
-					contentBlocks = append(contentBlocks, currentBlock)
+					flushCurrentTextBlock()
 					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
@@ -2984,11 +3047,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if _, exists := activeToolCalls[idx]; !exists {
 				// Close current text block if open
 				if currentBlock != nil {
-					contentBlocks = append(contentBlocks, currentBlock)
+					flushCurrentTextBlock()
 					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
-					currentBlock = nil
 				}
 				currentBlockIndex++
 				activeToolCalls[idx] = map[string]interface{}{
@@ -3032,11 +3094,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		if finishReason != "" && finishReason != "null" {
 			// Close any open text block
 			if currentBlock != nil {
-				contentBlocks = append(contentBlocks, currentBlock)
+				flushCurrentTextBlock()
 				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
-				currentBlock = nil
 			}
 			// Close tool_use blocks and parse their input JSON
 			for idx, tc := range activeToolCalls {
@@ -3203,9 +3264,9 @@ func convertAnthropicMessageToResponses(msg map[string]interface{}) []map[string
 // decoded lazily per branch so we skip the ~99% of fields the loop
 // discards.
 type responsesStreamItem struct {
-	Type    string `json:"type"`
-	CallID  string `json:"call_id"`
-	Name    string `json:"name"`
+	Type   string `json:"type"`
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
 }
 
 type responsesStreamEvent struct {
@@ -3679,6 +3740,24 @@ func (a *App) SftpRemove(sessionID, path string, recursive bool) error {
 	return fs.Remove(path, recursive)
 }
 
+// SftpQuickRemove deletes remote paths using shell `rm -rf` when possible
+// (much faster for large files/directories), with SFTP fallback.
+func (a *App) SftpQuickRemove(sessionID string, paths []string) error {
+	fs, err := a.getSftp(sessionID)
+	if err != nil {
+		return err
+	}
+	if q, ok := fs.(interface{ QuickRemove([]string) error }); ok {
+		return q.QuickRemove(paths)
+	}
+	for _, p := range paths {
+		if err := fs.Remove(p, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *App) SftpRename(sessionID, oldPath, newPath string) error {
 	fs, err := a.getSftp(sessionID)
 	if err != nil {
@@ -3801,6 +3880,13 @@ func (a *App) SftpResumeTransfer(sessionID, taskID string) error {
 }
 
 func (a *App) SftpPut(sessionID, localPath, remotePath string, recursive bool) (string, error) {
+	// Auto-detect directories so drag-dropping a folder works even when
+	// the caller passes recursive=false (single-file upload API).
+	if !recursive {
+		if info, err := os.Stat(localPath); err == nil && info.IsDir() {
+			recursive = true
+		}
+	}
 	fs, err := a.getSftp(sessionID)
 	if err != nil {
 		return "", err
@@ -3882,6 +3968,46 @@ func (a *App) WriteTempFile(fileName, contentBase64 string) (string, error) {
 		return "", err
 	}
 	return dst, nil
+}
+
+// CreateTempUpload creates an empty temp file for chunked drag-drop uploads.
+func (a *App) CreateTempUpload(fileName string) (string, error) {
+	dir := filepath.Join(os.TempDir(), "uniterm")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	safe := filepath.Base(fileName)
+	if safe == "" || safe == "." || safe == ".." {
+		safe = "upload.bin"
+	}
+	dst := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), safe))
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return "", err
+	}
+	_ = f.Close()
+	return dst, nil
+}
+
+// AppendTempUpload appends a base64 chunk to a temp upload created by CreateTempUpload.
+func (a *App) AppendTempUpload(path, chunkBase64 string) error {
+	tmpDir := filepath.Clean(filepath.Join(os.TempDir(), "uniterm"))
+	clean := filepath.Clean(path)
+	rel, err := filepath.Rel(tmpDir, clean)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("path not in temp directory")
+	}
+	content, err := base64.StdEncoding.DecodeString(chunkBase64)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(clean, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(content)
+	return err
 }
 
 // RemoveTempFile removes a file created by WriteTempFile.
@@ -4277,6 +4403,18 @@ func (a *App) mongoSession(sessionID string) (*session.MongoSession, error) {
 	return ms, nil
 }
 
+func (a *App) esSession(sessionID string) (*session.ElasticsearchSession, error) {
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+	es, ok := s.(*session.ElasticsearchSession)
+	if !ok {
+		return nil, fmt.Errorf("session is not an elasticsearch session: %s (type=%s)", sessionID, s.Type())
+	}
+	return es, nil
+}
+
 // ── Redis methods ──
 
 func (a *App) RedisPing(sessionID string) error {
@@ -4601,6 +4739,144 @@ func (a *App) MongoDropIndex(sessionID string, dbName string, collection string,
 	return ms.DropIndex(dbName, collection, name)
 }
 
+// ── Elasticsearch methods ──
+
+func (a *App) EsPing(sessionID string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.Ping()
+}
+
+func (a *App) EsClusterInfo(sessionID string) (*session.EsClusterInfo, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ClusterInfo()
+}
+
+func (a *App) EsClusterHealth(sessionID string) (*session.EsClusterHealth, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ClusterHealth()
+}
+
+func (a *App) EsNodesStats(sessionID string) ([]session.EsNodeSummary, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.NodesStats()
+}
+
+func (a *App) EsListIndices(sessionID string) ([]session.EsIndexInfo, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.ListIndices()
+}
+
+func (a *App) EsGetMapping(sessionID string, index string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetMapping(index)
+}
+
+func (a *App) EsGetSettings(sessionID string, index string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetSettings(index)
+}
+
+func (a *App) EsSearch(sessionID string, index string, bodyJSON string, from int, size int) (*session.EsSearchResult, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.Search(index, bodyJSON, from, size)
+}
+
+func (a *App) EsGetDoc(sessionID string, index string, id string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.GetDoc(index, id)
+}
+
+func (a *App) EsIndexDoc(sessionID string, index string, id string, docJSON string) (string, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return es.IndexDoc(index, id, docJSON)
+}
+
+func (a *App) EsUpdateDoc(sessionID string, index string, id string, docJSON string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.UpdateDoc(index, id, docJSON)
+}
+
+func (a *App) EsDeleteDoc(sessionID string, index string, id string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.DeleteDoc(index, id)
+}
+
+func (a *App) EsCreateIndex(sessionID string, index string, bodyJSON string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.CreateIndex(index, bodyJSON)
+}
+
+func (a *App) EsDeleteIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.DeleteIndex(index)
+}
+
+func (a *App) EsOpenIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.OpenIndex(index)
+}
+
+func (a *App) EsCloseIndex(sessionID string, index string) error {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return err
+	}
+	return es.CloseIndex(index)
+}
+
+func (a *App) EsRest(sessionID string, method string, path string, bodyJSON string) (*session.EsRestResult, error) {
+	es, err := a.esSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return es.Rest(method, path, bodyJSON)
+}
+
 func (a *App) GetDatabases(sessionID string) ([]string, error) {
 	ds, p, err := a.dbProvider(sessionID)
 	if err != nil {
@@ -4701,12 +4977,18 @@ func (a *App) ExecuteStatement(sessionID string, dbName string, sql string) (*da
 	return database.ExecuteStatement(p, ds.DB(), dbName, sql)
 }
 
-func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName string) (string, error) {
+func (a *App) DBDefaultTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {
 	_, p, err := a.dbProvider(sessionID)
 	if err != nil {
 		return "", err
 	}
-	return p.DefaultTableQuery(dbName, tableName, 100), nil
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return p.DefaultTableQuery(dbName, tableName, limit, offset), nil
 }
 
 func (a *App) DBPagedTableQuery(sessionID string, dbName string, tableName string, limit int, offset int) (string, error) {

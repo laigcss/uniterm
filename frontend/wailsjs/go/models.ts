@@ -459,6 +459,7 @@ export namespace database {
 	export class TableInfo {
 	    name: string;
 	    type: string;
+	    comment: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TableInfo(source);
@@ -468,6 +469,7 @@ export namespace database {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.type = source["type"];
+	        this.comment = source["comment"];
 	    }
 	}
 
@@ -700,6 +702,11 @@ export namespace session {
 	    dbType?: string;
 	    dbName?: string;
 	    dbParams?: string;
+	    esAuthType?: string;
+	    esApiKey?: string;
+	    esUseSsl?: boolean;
+	    esPathPrefix?: string;
+	    esSkipVerify?: boolean;
 	    redisMode?: string;
 	    redisMasterName?: string;
 	    redisSentinels?: string;
@@ -776,6 +783,11 @@ export namespace session {
 	        this.dbType = source["dbType"];
 	        this.dbName = source["dbName"];
 	        this.dbParams = source["dbParams"];
+	        this.esAuthType = source["esAuthType"];
+	        this.esApiKey = source["esApiKey"];
+	        this.esUseSsl = source["esUseSsl"];
+	        this.esPathPrefix = source["esPathPrefix"];
+	        this.esSkipVerify = source["esSkipVerify"];
 	        this.redisMode = source["redisMode"];
 	        this.redisMasterName = source["redisMasterName"];
 	        this.redisSentinels = source["redisSentinels"];
@@ -919,6 +931,138 @@ export namespace session {
 	        this.uuid = source["uuid"];
 	        this.vendor = source["vendor"];
 	        this.model = source["model"];
+	    }
+	}
+	export class EsClusterHealth {
+	    clusterName: string;
+	    status: string;
+	    numberOfNodes: number;
+	    numberOfDataNodes: number;
+	    activePrimaryShards: number;
+	    activeShards: number;
+	    relocatingShards: number;
+	    initializingShards: number;
+	    unassignedShards: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsClusterHealth(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clusterName = source["clusterName"];
+	        this.status = source["status"];
+	        this.numberOfNodes = source["numberOfNodes"];
+	        this.numberOfDataNodes = source["numberOfDataNodes"];
+	        this.activePrimaryShards = source["activePrimaryShards"];
+	        this.activeShards = source["activeShards"];
+	        this.relocatingShards = source["relocatingShards"];
+	        this.initializingShards = source["initializingShards"];
+	        this.unassignedShards = source["unassignedShards"];
+	    }
+	}
+	export class EsClusterInfo {
+	    name: string;
+	    clusterName: string;
+	    clusterUUID: string;
+	    version: string;
+	    tagline: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsClusterInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.clusterName = source["clusterName"];
+	        this.clusterUUID = source["clusterUUID"];
+	        this.version = source["version"];
+	        this.tagline = source["tagline"];
+	    }
+	}
+	export class EsIndexInfo {
+	    name: string;
+	    health: string;
+	    status: string;
+	    docsCount: number;
+	    storeSize: string;
+	    pri: number;
+	    rep: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsIndexInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.health = source["health"];
+	        this.status = source["status"];
+	        this.docsCount = source["docsCount"];
+	        this.storeSize = source["storeSize"];
+	        this.pri = source["pri"];
+	        this.rep = source["rep"];
+	    }
+	}
+	export class EsNodeSummary {
+	    name: string;
+	    ip: string;
+	    nodeRole: string;
+	    heapPercent: string;
+	    ramPercent: string;
+	    cpu: string;
+	    load1m: string;
+	    master: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsNodeSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.ip = source["ip"];
+	        this.nodeRole = source["nodeRole"];
+	        this.heapPercent = source["heapPercent"];
+	        this.ramPercent = source["ramPercent"];
+	        this.cpu = source["cpu"];
+	        this.load1m = source["load1m"];
+	        this.master = source["master"];
+	    }
+	}
+	export class EsRestResult {
+	    status: number;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsRestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.body = source["body"];
+	    }
+	}
+	export class EsSearchResult {
+	    hits: string[];
+	    total: number;
+	    from: number;
+	    size: number;
+	    took: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new EsSearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hits = source["hits"];
+	        this.total = source["total"];
+	        this.from = source["from"];
+	        this.size = source["size"];
+	        this.took = source["took"];
 	    }
 	}
 	export class FieldEntry {

@@ -62,7 +62,10 @@ func (p *postgresProvider) PrepareExec(db execer, dbName string) error {
 	return nil
 }
 
-func (p *postgresProvider) DefaultTableQuery(dbName, tableName string, limit int) string {
+func (p *postgresProvider) DefaultTableQuery(dbName, tableName string, limit, offset int) string {
+	if offset > 0 {
+		return fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", p.Quote(tableName), limit, offset)
+	}
 	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", p.Quote(tableName), limit)
 }
 
@@ -172,8 +175,15 @@ func (p *postgresProvider) GetDatabases(db *sql.DB) ([]string, error) {
 }
 
 func (p *postgresProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, error) {
-	results, err := queryStrings(db,
-		"SELECT table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_name")
+	results, err := queryStrings(db, `
+		SELECT c.relname AS table_name,
+		       CASE WHEN c.relkind = 'v' THEN 'VIEW' ELSE 'BASE TABLE' END AS table_type,
+		       COALESCE(obj_description(c.oid, 'pg_class'), '') AS table_comment
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'p', 'v')
+		  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		ORDER BY c.relname`)
 	if err != nil {
 		return nil, fmt.Errorf("get tables: %w", err)
 	}
@@ -183,7 +193,11 @@ func (p *postgresProvider) GetTables(db *sql.DB, dbName string) ([]TableInfo, er
 		if row["table_type"] == "VIEW" {
 			tp = "view"
 		}
-		infos = append(infos, TableInfo{Name: row["table_name"], Type: tp})
+		infos = append(infos, TableInfo{
+			Name:    row["table_name"],
+			Type:    tp,
+			Comment: row["table_comment"],
+		})
 	}
 	return infos, nil
 }
@@ -202,7 +216,15 @@ func (p *postgresProvider) GetTableSchema(db *sql.DB, dbName, tableName string) 
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
 		r, err := queryStrings(db,
-			"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position",
+			`SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+			        COALESCE(pgd.description, '') AS column_comment
+			 FROM information_schema.columns c
+			 LEFT JOIN pg_catalog.pg_statio_all_tables st
+			   ON c.table_schema = st.schemaname AND c.table_name = st.relname
+			 LEFT JOIN pg_catalog.pg_description pgd
+			   ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position
+			 WHERE c.table_name = $1
+			 ORDER BY c.ordinal_position`,
 			tableName,
 		)
 		if err != nil {
@@ -255,6 +277,7 @@ func (p *postgresProvider) GetTableSchema(db *sql.DB, dbName, tableName string) 
 			DefaultVal:  defVal,
 			DefaultType: defaultType,
 			IsPrimary:   false,
+			Comment:     row["column_comment"],
 		})
 	}
 
