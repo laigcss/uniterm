@@ -270,7 +270,15 @@ const emit = defineEmits<{
   'tab-dragstart': [e: DragEvent, tabId: string]
 }>()
 
-const platform = ref<'windows' | 'darwin' | 'linux'>('windows')
+// Detect synchronously so the layout is correct on first render,
+// even if the Wails Environment() call is slow or fails.
+function detectPlatformSync(): 'windows' | 'darwin' | 'linux' {
+  const ua = navigator.userAgent
+  if (/Mac|iPhone|iPad/.test(ua)) return 'darwin'
+  if (/Linux/.test(ua)) return 'linux'
+  return 'windows'
+}
+const platform = ref<'windows' | 'darwin' | 'linux'>(detectPlatformSync())
 const isMaximised = ref(false)
 
 // On Windows/Linux the app draws its own window controls — but not when the
