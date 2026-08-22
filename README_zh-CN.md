@@ -277,6 +277,7 @@ uniTerm/
 - [@wangxufeng](https://github.com/wangxufeng)
 - [@coderstory](https://github.com/coderstory)
 - [@jiayunora](https://github.com/jiayunora)
+- [@iCarrear](https://github.com/iCarrear)
 
 ## 开源协议
 
