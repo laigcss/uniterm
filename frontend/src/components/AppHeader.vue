@@ -31,83 +31,50 @@
     <!-- Settings button opens a dropdown menu with common settings items -->
     <div class="settings-wrap">
       <button ref="settingsBtnRef" class="header-btn" @click.stop="toggleSettingsMenu" :title="t('header.menu') + shortcutSuffix('openSettings')">
-        <el-icon><Menu :size="14" /></el-icon>
+        <el-icon><MenuIcon :size="14" /></el-icon>
       </button>
 
       <!-- Settings dropdown (theme / language / ai / identities / proxies / settings / check update) -->
-      <Teleport to="body">
-        <div
-          v-show="showSettingsMenu"
-          class="header-settings-menu"
-          :style="settingsMenuStyle"
-          @mouseleave="activeSub = ''"
-          @mouseover="onMenuMouseOver"
-        >
-          <!-- 主题 -->
-          <div class="settings-menu-item submenu-wrap" @mouseenter="activeSub = 'theme'">
-            <span class="settings-menu-label">{{ t('settings.theme') }}</span>
-            <el-icon class="sub-arrow"><ChevronRight :size="13" /></el-icon>
-            <div v-show="activeSub === 'theme'" class="settings-submenu" @mouseleave="activeSub = ''">
-              <div
-                v-for="opt in themeOptions"
-                :key="opt.value"
-                class="settings-submenu-item"
-                :class="{ 'is-active': settingsStore.settings.theme === opt.value }"
-                @click="applyTheme(opt.value)"
-              >{{ opt.label }}</div>
-            </div>
-          </div>
+      <Menu ref="settingsMenuRef" align="end" v-model:visible="showSettingsMenu">
+        <!-- 主题 -->
+        <MenuSubmenu :label="t('settings.theme')">
+          <MenuItem
+            v-for="opt in themeOptions"
+            :key="opt.value"
+            :class="{ active: settingsStore.settings.theme === opt.value }"
+            @click="applyTheme(opt.value)"
+          >{{ opt.label }}</MenuItem>
+        </MenuSubmenu>
 
-          <!-- 语言 -->
-          <div class="settings-menu-item submenu-wrap" @mouseenter="activeSub = 'language'">
-            <span class="settings-menu-label">{{ t('settings.language') }}</span>
-            <el-icon class="sub-arrow"><ChevronRight :size="13" /></el-icon>
-            <div v-show="activeSub === 'language'" class="settings-submenu" @mouseleave="activeSub = ''">
-              <div
-                v-for="lang in LANGUAGE_OPTIONS"
-                :key="lang.value"
-                class="settings-submenu-item"
-                :class="{ 'is-active': settingsStore.settings.language === lang.value }"
-                @click="applyLanguage(lang.value)"
-              >{{ lang.native }}</div>
-              <div
-                class="settings-submenu-item"
-                :class="{ 'is-active': settingsStore.settings.language === 'system' }"
-                @click="applyLanguage('system')"
-              >{{ t('settings.langSystem') }}</div>
-            </div>
-          </div>
+        <!-- 语言 -->
+        <MenuSubmenu :label="t('settings.language')">
+          <MenuItem
+            v-for="lang in LANGUAGE_OPTIONS"
+            :key="lang.value"
+            :class="{ active: settingsStore.settings.language === lang.value }"
+            @click="applyLanguage(lang.value)"
+          >{{ lang.native }}</MenuItem>
+          <MenuItem
+            :class="{ active: settingsStore.settings.language === 'system' }"
+            @click="applyLanguage('system')"
+          >{{ t('settings.langSystem') }}</MenuItem>
+        </MenuSubmenu>
 
-          <div class="settings-menu-sep"></div>
+        <MenuDivider />
 
-          <!-- AI模型 / 密钥库 / 代理 -->
-          <div class="settings-menu-item" @click="openCategory('ai')">
-            <span class="settings-menu-label">{{ t('settings.ai') }}</span>
-          </div>
-          <div class="settings-menu-item" @click="openCategory('identities')">
-            <span class="settings-menu-label">{{ t('settings.identities') }}</span>
-          </div>
-          <div class="settings-menu-item" @click="openCategory('proxies')">
-            <span class="settings-menu-label">{{ t('settings.proxies') }}</span>
-          </div>
-          <div class="settings-menu-item" @click="openCategory('tunnels')">
-            <span class="settings-menu-label">{{ t('settings.tunnels') }}</span>
-          </div>
+        <!-- AI模型 / 密钥库 / 代理 -->
+        <MenuItem @click="openCategory('ai')">{{ t('settings.ai') }}</MenuItem>
+        <MenuItem @click="openCategory('identities')">{{ t('settings.identities') }}</MenuItem>
+        <MenuItem @click="openCategory('proxies')">{{ t('settings.proxies') }}</MenuItem>
+        <MenuItem @click="openCategory('tunnels')">{{ t('settings.tunnels') }}</MenuItem>
 
-          <div class="settings-menu-sep"></div>
+        <MenuDivider />
 
-          <!-- 设置 / 关于 / 检查更新 -->
-          <div class="settings-menu-item" @click="openCategory('basic')">
-            <span class="settings-menu-label">{{ t('settings.title') }}</span>
-          </div>
-          <div class="settings-menu-item" @click="openCategory('about')">
-            <span class="settings-menu-label">{{ t('settings.about') }}</span>
-          </div>
-          <div class="settings-menu-item" @click="checkUpdate">
-            <span class="settings-menu-label">{{ t('settings.checkUpdate') }}</span>
-          </div>
-        </div>
-      </Teleport>
+        <!-- 设置 / 关于 / 检查更新 -->
+        <MenuItem @click="openCategory('basic')">{{ t('settings.title') }}</MenuItem>
+        <MenuItem @click="openCategory('about')">{{ t('settings.about') }}</MenuItem>
+        <MenuItem @click="checkUpdate">{{ t('settings.checkUpdate') }}</MenuItem>
+      </Menu>
     </div>
 
     <!-- Windows/Linux: window controls right (hidden when using system title bar) -->
@@ -123,7 +90,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
-import { Menu, PanelLeft, Bot, ChevronRight } from '@lucide/vue'
+import { Menu as MenuIcon, PanelLeft, Bot } from '@lucide/vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useTabStore } from '../stores/tabStore'
@@ -137,6 +104,10 @@ import { LANGUAGE_OPTIONS } from '../types/settings'
 import type { AppSettings } from '../types/settings'
 import WindowControls from './WindowControls.vue'
 import TabsList from './TabsList.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuSubmenu from './MenuSubmenu.vue'
+import MenuDivider from './MenuDivider.vue'
 import {
   Environment,
   WindowMinimise,
@@ -163,9 +134,8 @@ const localStateStore = useLocalStateStore()
 // ── Settings dropdown menu ──
 const updateCheck = useUpdateCheck()
 const showSettingsMenu = ref(false)
-const activeSub = ref<'theme' | 'language' | ''>('')
 const settingsBtnRef = ref<HTMLElement | null>(null)
-const settingsMenuStyle = ref({ top: '-9999px', left: '-9999px' })
+const settingsMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 const themeOptions = computed(() => [
   { value: 'dark' as const, label: t('settings.themeDark') },
@@ -174,31 +144,12 @@ const themeOptions = computed(() => [
   { value: 'system' as const, label: t('settings.themeSystem') },
 ])
 
-function positionSettingsMenu() {
-  const el = settingsBtnRef.value
-  if (!el) return
-  const r = el.getBoundingClientRect()
-  settingsMenuStyle.value = { top: `${r.bottom + 4}px`, left: `${r.right}px` }
-}
-
 function toggleSettingsMenu() {
-  showSettingsMenu.value = !showSettingsMenu.value
-  if (showSettingsMenu.value) positionSettingsMenu()
-}
-
-// Hovering anywhere outside a submenu-wrap or its flyout closes any open
-// submenu (theme/language). Delegated on the menu container so plain items
-// and separators also collapse the open flyout instead of leaving it lingering.
-function onMenuMouseOver(e: MouseEvent) {
-  const t = e.target as HTMLElement
-  if (!t.closest('.submenu-wrap') && !t.closest('.settings-submenu')) {
-    activeSub.value = ''
-  }
+  settingsMenuRef.value?.toggle(settingsBtnRef.value!)
 }
 
 function closeSettingsMenu() {
   showSettingsMenu.value = false
-  activeSub.value = ''
 }
 
 function applyTheme(value: AppSettings['theme']) {
@@ -214,10 +165,6 @@ function applyLanguage(value: AppSettings['language']) {
 function openCategory(category?: string) {
   emit('open-settings', category)
   closeSettingsMenu()
-}
-
-function onSettingsMenuDocClick() {
-  showSettingsMenu.value = false
 }
 
 function checkUpdate() {
@@ -397,12 +344,10 @@ onMounted(async () => {
   }
   updateMaximisedState()
   window.addEventListener('resize', onWindowResize)
-  document.addEventListener('click', onSettingsMenuDocClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', onWindowResize)
-  document.removeEventListener('click', onSettingsMenuDocClick)
 })
 </script>
 
@@ -526,88 +471,6 @@ onUnmounted(() => {
   position: relative;
   flex-shrink: 0;
   --wails-draggable: no-drag;
-}
-
-.header-settings-menu {
-  position: fixed;
-  z-index: 3000;
-  min-width: 160px;
-  padding: 5px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  transform: translateX(-100%);
-}
-
-.settings-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  position: relative;
-  white-space: nowrap;
-}
-
-.settings-menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.settings-menu-label {
-  color: inherit;
-}
-
-.sub-arrow {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin-left: 10px;
-}
-
-.settings-submenu {
-  position: absolute;
-  right: calc(100% + 4px);
-  top: -5px;
-  min-width: 140px;
-  padding: 5px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 3001;
-}
-
-.settings-submenu-item {
-  padding: 7px 10px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-
-.settings-submenu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.settings-submenu-item.is-active {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.settings-menu-sep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border-subtle);
 }
 
 </style>

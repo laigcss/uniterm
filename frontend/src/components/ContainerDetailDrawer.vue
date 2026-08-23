@@ -49,16 +49,14 @@
         <el-button size="small" @click="logLines = []">{{ t('k8s.logClear') }}</el-button>
         <el-button size="small" @click="logPaused = !logPaused">{{ logPaused ? t('k8s.logResume') : t('k8s.logPause') }}</el-button>
       </div>
-      <div ref="logBody" class="logs-body" :class="{ 'logs-nowrap': !logWrap }" @contextmenu="copyMenu.onContextMenu">
+      <div ref="logBody" class="logs-body" :class="{ 'logs-nowrap': !logWrap }" @contextmenu="onCopyContextMenu">
         <div v-for="(l, i) in logLines" :key="i" class="log-line"><span class="log-ts">{{ l.ts }}</span>{{ l.msg }}</div>
       </div>
     </div>
 
-    <Teleport to="body">
-      <div v-show="copyMenu.visible.value" class="text-copy-menu" :style="copyMenu.style.value" @click.stop>
-        <div class="menu-item" @click="copyMenu.copy">{{ t('container.copy') }}</div>
-      </div>
-    </Teleport>
+    <Menu ref="copyMenuRef" v-model:visible="copyMenuVisible">
+      <MenuItem @click="onCopyMenu">{{ t('container.copy') }}</MenuItem>
+    </Menu>
   </div>
 </template>
 
@@ -69,8 +67,10 @@ import { Close } from '@element-plus/icons-vue'
 import { useContainerStore } from '../stores/containerStore'
 import * as client from '../services/containerClient'
 import type { StreamHandle } from '../services/containerClient'
-import { useTextCopyMenu } from '../composables/useTextCopyMenu'
 import { useI18n } from '../i18n'
+import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 import type { ContainerDetail, ContainerInfo, InspectResult } from '../types/container'
 
 const props = defineProps<{ mode: 'detail' | 'logs' | null; tabId: string; target: ContainerInfo | null }>()
@@ -78,7 +78,27 @@ defineEmits<{ (e: 'close'): void }>()
 
 const { t } = useI18n()
 const store = useContainerStore()
-const copyMenu = useTextCopyMenu()
+
+// Right-click "复制" on selectable log text — shows only when something is
+// selected; positioned at the pointer (Menu.openAt, viewport-adaptive).
+const copyMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const copyMenuVisible = ref(false)
+
+function onCopyContextMenu(e: MouseEvent) {
+  const sel = window.getSelection()?.toString() || ''
+  if (!sel) return
+  e.preventDefault()
+  e.stopPropagation()
+  copyMenuRef.value?.openAt(e.clientX, e.clientY)
+}
+
+async function onCopyMenu() {
+  const sel = window.getSelection()?.toString() || ''
+  if (sel) {
+    try { await ClipboardSetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
+  }
+  copyMenuVisible.value = false
+}
 
 // Drawer width (draggable). Logs mode widens; not persisted.
 const drawerWidth = ref(420)
@@ -372,33 +392,6 @@ onBeforeUnmount(stopLogs)
   flex: 1;
   user-select: text;
   cursor: text;
-}
-
-/* Right-click copy menu — styles copied from TabItem.vue (.tab-context-menu/.menu-item) */
-.text-copy-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 90px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-.text-copy-menu .menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-.text-copy-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 .logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

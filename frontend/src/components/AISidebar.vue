@@ -7,20 +7,23 @@
         <button class="ai-action-btn" @click="onNewSession" :title="t('ai.newSession')">
           <el-icon><MessageSquarePlus :size="14" /></el-icon>
         </button>
-        <el-dropdown v-if="aiStore.sessions.length > 0" trigger="click" @command="onSessionCommand">
-          <button class="ai-action-btn" :title="t('ai.recentSessions')">
-            <el-icon><History :size="14" /></el-icon>
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu class="dark-dropdown">
-              <el-dropdown-item v-for="s in aiStore.sessions" :key="s.id" :command="s.id" :class="{ active: s.id === aiStore.currentSessionId }">
-                <span class="session-item-name">{{ s.name }}</span>
-                <span class="session-time">{{ formatRelativeTime(s.updatedAt) }}</span>
-                <el-icon class="session-delete" @click.stop="aiStore.deleteSession(s.id)"><Trash2 :size="14" /></el-icon>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget)" >
+          <el-icon><History :size="14" /></el-icon>
+        </button>
+        <Menu ref="sessionMenuRef" v-model:visible="sessionMenuVisible">
+          <MenuItem
+            v-for="s in aiStore.sessions"
+            :key="s.id"
+            :class="{ active: s.id === aiStore.currentSessionId }"
+            @click="onSessionSelect(s.id)"
+          >
+            <span class="session-item-name">{{ s.name }}</span>
+            <span class="session-time">{{ formatRelativeTime(s.updatedAt) }}</span>
+            <template #trailing>
+              <el-icon class="session-delete" @click.stop="aiStore.deleteSession(s.id); closeMenus()"><Trash2 :size="14" /></el-icon>
+            </template>
+          </MenuItem>
+        </Menu>
         <button class="ai-action-btn" @click="searchVisible = !searchVisible" :title="t('ai.search')">
           <el-icon><Search :size="14" /></el-icon>
         </button>
@@ -74,16 +77,10 @@
     </div>
 
     <!-- AI messages context menu -->
-    <div
-      v-show="aiMenuVisible"
-      ref="aiMenuRef"
-      class="ai-context-menu"
-      :style="aiMenuStyle"
-      @click.stop
-    >
-      <div class="ai-menu-item" @click="aiCopySelection">{{ t('terminal.copy') }}</div>
-      <div class="ai-menu-item" @click="aiAskSelection">{{ t('terminal.askAI') }}</div>
-    </div>
+    <Menu ref="aiMenuRef" v-model:visible="aiMenuVisible">
+      <MenuItem @click="aiCopySelection">{{ t('terminal.copy') }}</MenuItem>
+      <MenuItem @click="aiAskSelection">{{ t('terminal.askAI') }}</MenuItem>
+    </Menu>
 
     <div class="ai-input">
       <!-- Panel tags area -->
@@ -102,22 +99,18 @@
               <button class="panel-tag-close" @click="onRemovePanelTag(pid)">&times;</button>
             </span>
           </template>
-          <el-dropdown trigger="click" @command="onAddPanelTag">
-            <button class="panel-tag-add-btn" :title="t('ai.addTerminal')">+</button>
-            <template #dropdown>
-              <el-dropdown-menu class="dark-dropdown">
-                <el-dropdown-item
-                  v-for="p in availableTerminalPanels"
-                  :key="p.id"
-                  :command="p.id"
-                  :class="{ selected: lockedPanels.includes(p.id) }"
-                >
-                  <span>{{ getPanelDisplayName(p.id) }}</span>
-                  <span class="panel-shell-hint">{{ getPanelShellHint(p.id) }}</span>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <button class="panel-tag-add-btn" :title="t('ai.addTerminal')" @click.stop="addTagMenuRef?.toggle($event.currentTarget)">+</button>
+            <Menu ref="addTagMenuRef" v-model:visible="addTagMenuVisible">
+              <MenuItem
+                v-for="p in availableTerminalPanels"
+                :key="p.id"
+                :class="{ active: lockedPanels.includes(p.id) }"
+                @click="onAddPanelTagSelect(p.id)"
+              >
+                <span>{{ getPanelDisplayName(p.id) }}</span>
+                <span class="panel-shell-hint">{{ getPanelShellHint(p.id) }}</span>
+              </MenuItem>
+            </Menu>
         </div>
       </div>
 
@@ -186,50 +179,44 @@
             <button class="ghost-btn hash-btn" title="Skill / 命令" @click="onSlashButtonClick">
               <span class="hash-btn-icon">/</span>
             </button>
-            <el-dropdown trigger="click" @command="onModelChange" v-if="settingsStore.settings.ai.models.length > 0">
-              <button class="ghost-btn model-btn" :title="currentModelName">{{ currentModelName }}</button>
-              <template #dropdown>
-                <el-dropdown-menu class="dark-dropdown">
-                  <el-dropdown-item
-                    v-for="m in settingsStore.settings.ai.models"
-                    :key="m.id"
-                    :command="m.id"
-                    :class="{ active: m.id === settingsStore.settings.ai.activeModelId }"
-                  >
-                    {{ m.name }}
-                  </el-dropdown-item>
-                  <el-dropdown-item class="add-model-item" command="__add_model__" :divided="true">
-                    <Plus :size="14" class="add-model-icon" />
-                    <span>{{ t('settings.addModel') }}</span>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <template v-if="settingsStore.settings.ai.models.length > 0">
+              <button class="ghost-btn model-btn" :title="currentModelName" @click.stop="modelMenuRef?.toggle($event.currentTarget)">{{ currentModelName }}</button>
+              <Menu ref="modelMenuRef" v-model:visible="modelMenuVisible">
+                <MenuItem
+                  v-for="m in settingsStore.settings.ai.models"
+                  :key="m.id"
+                  :class="{ active: m.id === settingsStore.settings.ai.activeModelId }"
+                  @click="onModelSelect(m.id)"
+                >
+                  <span>{{ m.name }}</span>
+                </MenuItem>
+                <MenuDivider />
+                <MenuItem iconic :icon="Plus" @click="onModelSelect('__add_model__')">
+                  {{ t('settings.addModel') }}
+                </MenuItem>
+              </Menu>
+            </template>
             <button v-else class="ghost-btn model-btn add-model-btn" @click="onModelChange('__add_model__')">
             <Plus :size="14" />
             <span>{{ t('settings.addModel') }}</span>
           </button>
           </div>
           <div class="input-actions-right">
-            <el-dropdown trigger="click" @command="onModeChange">
-              <button class="ghost-btn mode-btn" :title="modeLabel">{{ modeLabel }}</button>
-              <template #dropdown>
-                <el-dropdown-menu class="dark-dropdown">
-                  <el-dropdown-item command="confirm_all">
-                    <span class="mode-option mode-confirm">{{ t('ai.confirmAll') }}</span>
-                  </el-dropdown-item>
-                  <el-dropdown-item command="confirm_write">
-                    <span class="mode-option mode-write">{{ t('ai.confirmWrite') }}</span>
-                  </el-dropdown-item>
-                  <el-dropdown-item command="confirm_dangerous">
-                    <span class="mode-option mode-warning">{{ t('ai.confirmDangerous') }}</span>
-                  </el-dropdown-item>
-                  <el-dropdown-item command="bypass">
-                    <span class="mode-option mode-auto">{{ t('ai.bypass') }}</span>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <button class="ghost-btn mode-btn" :title="modeLabel" @click.stop="modeMenuRef?.toggle($event.currentTarget)">{{ modeLabel }}</button>
+            <Menu ref="modeMenuRef" v-model:visible="modeMenuVisible">
+              <MenuItem @click="onModeSelect('confirm_all')">
+                <span class="mode-option mode-confirm">{{ t('ai.confirmAll') }}</span>
+              </MenuItem>
+              <MenuItem @click="onModeSelect('confirm_write')">
+                <span class="mode-option mode-write">{{ t('ai.confirmWrite') }}</span>
+              </MenuItem>
+              <MenuItem @click="onModeSelect('confirm_dangerous')">
+                <span class="mode-option mode-warning">{{ t('ai.confirmDangerous') }}</span>
+              </MenuItem>
+              <MenuItem @click="onModeSelect('bypass')">
+                <span class="mode-option mode-auto">{{ t('ai.bypass') }}</span>
+              </MenuItem>
+            </Menu>
             <button
               v-if="!(busy && !inputText.trim())"
               class="send-btn"
@@ -266,6 +253,9 @@ import { CancelChatStream } from '../../wailsjs/go/main/App'
 import { ClipboardGetText } from '../../wailsjs/runtime'
 import type { ExecutionMode } from '../types/ai'
 import AIMessage from './AIMessage.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
@@ -485,7 +475,6 @@ const statusText = computed(() => {
 })
 
 const messagesRef = ref<HTMLDivElement>()
-const aiMenuRef = ref<HTMLDivElement>()
 const sidebarWidth = ref(360)
 const isResizing = ref(false)
 const isMaximized = ref(false)
@@ -513,7 +502,23 @@ function onClose() {
 }
 const sidebarEl = ref<HTMLDivElement>()
 const aiMenuVisible = ref(false)
-const aiMenuStyle = ref({ left: '0px', top: '0px' })
+const aiMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+
+// ── Trigger menus (Menu.vue teleported .conn-context-menu) ──
+const sessionMenuVisible = ref(false)
+const addTagMenuVisible = ref(false)
+const modelMenuVisible = ref(false)
+const modeMenuVisible = ref(false)
+
+const sessionMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const addTagMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const modelMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const modeMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+
+function onSessionSelect(id: string) { closeMenus(); onSessionCommand(id) }
+function onAddPanelTagSelect(id: string) { closeMenus(); onAddPanelTag(id) }
+function onModelSelect(id: string) { closeMenus(); onModelChange(id) }
+function onModeSelect(mode: string) { closeMenus(); onModeChange(mode) }
 const isAtBottom = ref(true)
 let editableObserver: MutationObserver | null = null
 let messagesObserver: MutationObserver | null = null
@@ -1092,24 +1097,18 @@ function autoScrollToBottom() {
   }
 }
 
-function closeAIMenu() {
+function closeMenus() {
   aiMenuVisible.value = false
+  sessionMenuVisible.value = false
+  addTagMenuVisible.value = false
+  modelMenuVisible.value = false
+  modeMenuVisible.value = false
 }
 
 function onAIContextMenu(e: MouseEvent) {
   e.preventDefault()
-  e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  aiMenuStyle.value = fitMenuPosition(e.clientX, e.clientY, 120, 76)
-  aiMenuVisible.value = true
-}
-
-function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
-  let left = x
-  let top = y
-  if (x + menuW > window.innerWidth) left = x - menuW
-  if (y + menuH > window.innerHeight) top = y - menuH
-  return { left: left + 'px', top: top + 'px' }
+  // Position at the pointer; Menu.openAt is viewport-clamped + single-open.
+  aiMenuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 function aiCopySelection() {
@@ -1117,7 +1116,7 @@ function aiCopySelection() {
   if (selection && selection.toString()) {
     navigator.clipboard.writeText(selection.toString())
   }
-  closeAIMenu()
+  aiMenuVisible.value = false
 }
 
 function aiAskSelection() {
@@ -1130,7 +1129,7 @@ function aiAskSelection() {
       aiStore.visible = true
     }
   }
-  closeAIMenu()
+  aiMenuVisible.value = false
 }
 
 function onNewSession() {
@@ -1394,8 +1393,6 @@ function onAskAI(e: Event) {
 
 onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
-  window.addEventListener('global:close-context-menus', closeAIMenu)
-  document.addEventListener('click', closeAIMenu)
   skillStore.load()
   commandStore.load()
 
@@ -1413,8 +1410,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('ai:ask', onAskAI)
-  window.removeEventListener('global:close-context-menus', closeAIMenu)
-  document.removeEventListener('click', closeAIMenu)
 
   if (messagesRef.value) {
     messagesRef.value.removeEventListener('scroll', onMessagesScroll)
@@ -1574,49 +1569,13 @@ defineExpose({ focusInput })
 }
 .session-delete {
   margin-left: 8px;
-  opacity: 0;
-  transition: opacity 0.15s;
   color: var(--text-muted);
 }
 .session-delete:hover {
   color: var(--text-primary);
 }
-:deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-:deep(.el-dropdown-menu__item:hover .session-delete) {
-  opacity: 1;
-}
-:deep(.el-dropdown-menu__item.active) {
-  background: var(--success-subtle);
-  color: var(--success);
-}
-
-:deep(.dark-dropdown) {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-:deep(.dark-dropdown .el-dropdown-menu__item) {
-  color: var(--text-secondary);
-}
-:deep(.dark-dropdown .el-dropdown-menu__item.is-disabled) {
-  color: var(--text-disabled);
-}
-:deep(.dark-dropdown .el-dropdown-menu__item:not(.is-disabled):hover) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-:deep(.dark-dropdown .el-dropdown-menu__item.divided) {
-  border-top: 1px solid var(--border-subtle);
-}
-:deep(.dark-dropdown .el-dropdown-menu__item.divided::before) {
-  background-color: var(--border-subtle);
-}
+/* Row layout + hover reveal for the #trailing zone now live in MenuItem.vue
+   (.menu-item.has-trailing / .menu-trailing). */
 .ai-search-bar {
   display: flex;
   align-items: center;
@@ -1835,33 +1794,6 @@ defineExpose({ focusInput })
   color: var(--warning);
 }
 
-.ai-context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 120px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-
-.ai-menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-
-.ai-menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
 .ai-panel-tags {
   padding: 4px 12px;
   background: var(--bg-overlay);

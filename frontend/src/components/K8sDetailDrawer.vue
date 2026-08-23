@@ -70,17 +70,15 @@
         ref="logBody"
         class="k8s-yaml-drawer-body logs-body"
         :class="{ 'logs-hide-ts': !logTimestamps, 'logs-nowrap': !logWrap }"
-        @contextmenu="copyMenu.onContextMenu"
+        @contextmenu="onCopyContextMenu"
       >
         <div v-for="(l, i) in logLines" :key="i" class="log-line"><span class="log-ts">{{ l.ts }}</span>{{ l.msg }}</div>
       </div>
     </div>
 
-    <Teleport to="body">
-      <div v-show="copyMenu.visible.value" class="text-copy-menu" :style="copyMenu.style.value" @click.stop>
-        <div class="menu-item" @click="copyMenu.copy">{{ t('k8s.copy') }}</div>
-      </div>
-    </Teleport>
+    <Menu ref="copyMenuRef" v-model:visible="copyMenuVisible">
+      <MenuItem @click="onCopyMenu">{{ t('k8s.copy') }}</MenuItem>
+    </Menu>
   </div>
 </template>
 
@@ -91,14 +89,36 @@ import { Close } from '@element-plus/icons-vue'
 import { dump, load } from 'js-yaml'
 import { getResource, genericDetailSections, type DetailSection } from '../services/k8sResources'
 import { requestJSON, startLogStream, type LogHandle } from '../services/k8sClient'
-import { useTextCopyMenu } from '../composables/useTextCopyMenu'
 import { useI18n } from '../i18n'
+import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 
 const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string; initialTab?: 'detail' | 'yaml' }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 
 const { t } = useI18n()
-const copyMenu = useTextCopyMenu()
+
+// Right-click "复制" on selectable log text — shows only when something is
+// selected; positioned at the pointer (Menu.openAt, viewport-adaptive).
+const copyMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const copyMenuVisible = ref(false)
+
+function onCopyContextMenu(e: MouseEvent) {
+  const sel = window.getSelection()?.toString() || ''
+  if (!sel) return
+  e.preventDefault()
+  e.stopPropagation()
+  copyMenuRef.value?.openAt(e.clientX, e.clientY)
+}
+
+async function onCopyMenu() {
+  const sel = window.getSelection()?.toString() || ''
+  if (sel) {
+    try { await ClipboardSetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
+  }
+  copyMenuVisible.value = false
+}
 
 // Drawer width (draggable). Defaults widen for logs mode; not persisted.
 const drawerWidth = ref(420)
@@ -433,33 +453,6 @@ onBeforeUnmount(stopLogs)
 .yaml-actions { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
 .yaml-edit { width: 100%; box-sizing: border-box; resize: none; background: transparent; color: var(--text-primary); border: none; outline: none; }
 .yaml-error { color: var(--el-color-danger, #f56); padding: 8px 12px; font-size: 12px; }
-
-/* Right-click copy menu — styles copied from TabItem.vue (.tab-context-menu/.menu-item) */
-.text-copy-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 90px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-.text-copy-menu .menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-.text-copy-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
 
 .detail-drawer.wide { width: 640px; }
 .logs-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

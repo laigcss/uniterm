@@ -394,8 +394,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
 }
-.k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon),
-.k8s-list-table :deep(.k8s-action-cell .el-dropdown) {
+.k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
   margin-left: 4px;
 }
 

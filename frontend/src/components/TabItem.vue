@@ -50,67 +50,55 @@
       :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
-    <Teleport to="body">
-      <div
-        v-show="contextMenuVisible"
-        ref="menuRef"
-        class="tab-context-menu"
-        :style="contextMenuStyle"
-        @click.stop
-      >
-        <!-- ① 标签类操作 -->
-        <div v-if="canDuplicate" class="menu-item" @click="onDuplicate">
-          {{ t('tab.duplicate') }}
-          <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
-        </div>
-        <div v-if="canReconnect" class="menu-item" @click="onReconnect">{{ t('tab.reconnect') }}</div>
-        <div v-if="hasServerHost" class="menu-item" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="toggleAiLock">
-          {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
-          <span class="menu-shortcut">{{ menuShortcut('lockAI') }}</span>
-        </div>
-        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
-        <div v-if="hasLocatableConnection" class="menu-item" @click="locateHost">{{ t('tab.locate') }}</div>
-        <div v-if="tab.type !== 'start' && tab.type !== 'settings'" class="menu-item" @click="toggleLock">
-          {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
-        </div>
+    <Menu ref="ctxMenuRef" root-class="right-shortcuts" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <!-- ① 标签类操作 -->
+      <MenuItem v-if="canDuplicate" :shortcut="menuShortcut('duplicateSession')" @click="onDuplicate">
+        {{ t('tab.duplicate') }}
+      </MenuItem>
+      <MenuItem v-if="canReconnect" @click="onReconnect">{{ t('tab.reconnect') }}</MenuItem>
+      <MenuItem v-if="hasServerHost" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</MenuItem>
+      <MenuItem v-if="tab.type === 'terminal'" :shortcut="menuShortcut('lockAI')" @click="toggleAiLock">
+        {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
+      </MenuItem>
+      <MenuItem v-if="tab.type !== 'start' && tab.type !== 'settings'" @click="startEdit">{{ t('tab.rename') }}</MenuItem>
+      <MenuItem v-if="hasLocatableConnection" @click="locateHost">{{ t('tab.locate') }}</MenuItem>
+      <MenuItem v-if="tab.type !== 'start' && tab.type !== 'settings'" @click="toggleLock">
+        {{ tab.locked ? t('tab.unlock') : t('tab.lock') }}
+      </MenuItem>
 
-        <!-- ② 会话文本操作 -->
-        <div v-if="showGroupTab && showGroupText" class="menu-divider" />
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerSearch">
-          {{ t('terminal.searchText') }}
-          <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
-        </div>
-        <div v-if="tab.type === 'terminal'" class="menu-item" @click="triggerExport">{{ t('terminal.export') }}</div>
-        <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
-          {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
-        </div>
-        <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
-          {{ t('session.openLogDir') }}
-        </div>
+      <!-- ② 会话文本操作 -->
+      <MenuDivider />
+      <MenuItem v-if="tab.type === 'terminal'" :shortcut="menuShortcut('terminalSearch')" @click="triggerSearch">
+        {{ t('terminal.searchText') }}
+      </MenuItem>
+      <MenuItem v-if="tab.type === 'terminal'" @click="triggerExport">{{ t('terminal.export') }}</MenuItem>
+      <MenuItem v-if="supportsOutputLog" @click="toggleOutputLog">
+        {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
+      </MenuItem>
+      <MenuItem v-if="supportsOutputLog && isOutputLogOn" @click="openLogDir">
+        {{ t('session.openLogDir') }}
+      </MenuItem>
 
-        <!-- ③ 连接功能（ssh / rdp） -->
-        <div v-if="showGroupConn && (showGroupTab || showGroupText)" class="menu-divider" />
-        <div v-if="tab.type === 'rdp'" class="menu-item" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</div>
-        <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
-        <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
-        <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
+      <!-- ③ 连接功能（ssh / rdp） -->
+      <MenuDivider />
+      <MenuItem v-if="tab.type === 'rdp'" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="openSftp">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
 
-        <!-- ④ 关闭标签操作 -->
-        <div v-if="showGroupTab || showGroupText || showGroupConn" class="menu-divider" />
-        <div class="menu-item" :class="{ 'menu-item-disabled': tab.locked }" @click="tab.locked ? null : closeTab()">
-          {{ t('tab.close') }}
-          <span class="menu-shortcut">{{ menuShortcut('closePanel') }}</span>
-        </div>
-        <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
-        <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
-      </div>
-    </Teleport>
+      <!-- ④ 关闭标签操作 -->
+      <MenuDivider />
+      <MenuItem :class="{ disabled: tab.locked }" :shortcut="menuShortcut('closePanel')" @click="tab.locked ? null : closeTab()">
+        {{ t('tab.close') }}
+      </MenuItem>
+      <MenuItem @click="closeOther">{{ t('tab.closeOther') }}</MenuItem>
+      <MenuItem @click="closeRight">{{ t('tab.closeRight') }}</MenuItem>
+    </Menu>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -132,6 +120,9 @@ import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
@@ -169,8 +160,8 @@ function menuShortcut(action: ShortcutAction): string {
 }
 
 const hovered = ref(false)
-const contextMenuVisible = ref(false)
-const contextMenuStyle = ref({ left: '0px', top: '0px' })
+const ctxMenuVisible = ref(false)
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 // Whether the tab close (X) button sits on the right of the tab name,
 // per the appearance setting ("tab close button position").
@@ -305,14 +296,8 @@ const isSsh = computed(() => {
 })
 
 // Visibility of each menu group, used to place dividers strictly between
-// the groups that actually have items for the current tab type.
-const showGroupTab = computed(() =>
-  canDuplicate.value ||
-  props.tab.type === 'terminal' ||
-  (props.tab.type !== 'start' && props.tab.type !== 'settings'),
-)
-const showGroupText = computed(() => props.tab.type === 'terminal')
-const showGroupConn = computed(() => props.tab.type === 'rdp' || isSsh.value)
+// Group-enable flags moved into MenuDivider's own sibling detection, so no
+// longer needed here.
 
 // True when the tab's panel is backed by a saved connection (has a config id),
 // so the "定位到连接" item can locate it in the sidebar's connection list.
@@ -352,9 +337,7 @@ function onDragStart(e: DragEvent) {
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  contextMenuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
-  contextMenuVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, props.tab)
   if (supportsOutputLog.value) {
     refreshOutputLogState()
   }
@@ -379,10 +362,10 @@ async function refreshOutputLogState() {
 }
 
 function closeContextMenu() {
-  contextMenuVisible.value = false
+  ctxMenuVisible.value = false
 }
 
-watch(contextMenuVisible, (val) => {
+watch(ctxMenuVisible, (val) => {
   window.dispatchEvent(new CustomEvent(val ? 'rdp:overlay-push' : 'rdp:overlay-pop'))
 })
 
@@ -558,16 +541,9 @@ function triggerExport() {
 }
 
 onMounted(async () => {
-  window.addEventListener('global:close-context-menus', closeContextMenu)
-  document.addEventListener('click', closeContextMenu)
   if (supportsOutputLog.value) {
     await refreshOutputLogState()
   }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('global:close-context-menus', closeContextMenu)
-  document.removeEventListener('click', closeContextMenu)
 })
 </script>
 
@@ -715,60 +691,5 @@ onUnmounted(() => {
 }
 .tab-close-right-ghost {
   visibility: hidden;
-}
-</style>
-
-<style>
-.tab-context-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 180px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-.tab-context-menu .menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-  white-space: nowrap;
-}
-.tab-context-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.tab-context-menu .menu-shortcut {
-  color: var(--text-muted, var(--text-disabled));
-  font-size: 11px;
-  font-family: var(--font-mono);
-  opacity: 0.8;
-}
-.tab-context-menu .menu-item-disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.tab-context-menu .menu-item-disabled .menu-shortcut {
-  opacity: 0.4;
-}
-.tab-context-menu .menu-item-icon {
-  margin-right: 6px;
-  vertical-align: middle;
-}
-.tab-context-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
 }
 </style>

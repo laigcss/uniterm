@@ -39,22 +39,16 @@
             <button class="doc-tab-new" :title="t('db.newQuery')" @click="onNewQuery()">+</button>
           </div>
 
-          <Teleport to="body">
-            <div
-              v-if="ctxVisible"
-              class="doc-ctx-menu"
-              :style="{ left: ctxX + 'px', top: ctxY + 'px' }"
-              @click.stop
-              @contextmenu.prevent
-            >
-              <div class="doc-ctx-item" @click="onCtxClose">{{ t('tab.close') }}</div>
-              <div class="doc-ctx-item" :class="{ disabled: !canCloseOthers }" @click="onCtxCloseOthers">{{ t('tab.closeOther') }}</div>
-              <div class="doc-ctx-item" :class="{ disabled: !canCloseLeft }" @click="onCtxCloseLeft">{{ t('tab.closeLeft') }}</div>
-              <div class="doc-ctx-item" :class="{ disabled: !canCloseRight }" @click="onCtxCloseRight">{{ t('tab.closeRight') }}</div>
-              <div class="doc-ctx-sep" />
-              <div class="doc-ctx-item" @click="onCtxCloseAll">{{ t('tab.closeAll') }}</div>
-            </div>
-          </Teleport>
+          <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+            <template v-if="current">
+              <MenuItem @click="onCtxClose(current)">{{ t('tab.close') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseOthersOf(current) }" @click="onCtxCloseOthers(current)">{{ t('tab.closeOther') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseLeftOf(current) }" @click="onCtxCloseLeft(current)">{{ t('tab.closeLeft') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseRightOf(current) }" @click="onCtxCloseRight(current)">{{ t('tab.closeRight') }}</MenuItem>
+              <MenuDivider />
+              <MenuItem @click="onCtxCloseAll">{{ t('tab.closeAll') }}</MenuItem>
+            </template>
+          </Menu>
 
           <div
             v-for="doc in docs"
@@ -162,8 +156,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from '../i18n'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import DBTreePanel from './DBTreePanel.vue'
 import DBTableStructure from './DBTableStructure.vue'
 import DBQueryEditor from './DBQueryEditor.vue'
@@ -236,78 +233,74 @@ function closeDoc(id: string) {
   }
 }
 
-const ctxVisible = ref(false)
-const ctxX = ref(0)
-const ctxY = ref(0)
-const ctxDocId = ref('')
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const ctxMenuVisible = ref(false)
 
-const ctxIndex = computed(() => docs.value.findIndex(d => d.id === ctxDocId.value))
-const canCloseOthers = computed(() => docs.value.length > 1)
-const canCloseLeft = computed(() => ctxIndex.value > 0)
-const canCloseRight = computed(() => ctxIndex.value >= 0 && ctxIndex.value < docs.value.length - 1)
-
-function closeContextMenu() {
-  ctxVisible.value = false
+function ctxIndexFor(id: string) {
+  return docs.value.findIndex(d => d.id === id)
+}
+function canCloseOthersOf() {
+  return docs.value.length > 1
+}
+function canCloseLeftOf(id: string) {
+  return ctxIndexFor(id) > 0
+}
+function canCloseRightOf(id: string) {
+  const idx = ctxIndexFor(id)
+  return idx >= 0 && idx < docs.value.length - 1
 }
 
 function onDocTabContextMenu(e: MouseEvent, id: string) {
   e.stopPropagation()
-  ctxDocId.value = id
   const doc = docs.value.find(d => d.id === id)
   if (doc?.kind === 'table') {
     doc.subTab = 'data'
   }
   activateDoc(id)
-  const menuW = 180
-  const menuH = 180
-  let left = e.clientX
-  let top = e.clientY
-  if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 4
-  if (top + menuH > window.innerHeight) top = window.innerHeight - menuH - 4
-  ctxX.value = Math.max(4, left)
-  ctxY.value = Math.max(4, top)
-  ctxVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, id)
 }
 
-function onCtxClose() {
-  if (ctxDocId.value) closeDoc(ctxDocId.value)
-  closeContextMenu()
+function onCtxClose(id: string) {
+  closeDoc(id)
+  ctxMenuVisible.value = false
 }
 
-function onCtxCloseOthers() {
-  if (!canCloseOthers.value) return
-  const keep = ctxDocId.value
-  docs.value = docs.value.filter(d => d.id === keep)
-  activeDocId.value = keep
-  closeContextMenu()
-}
-
-function onCtxCloseLeft() {
-  const idx = ctxIndex.value
-  if (idx <= 0) return
-  const keepId = activeDocId.value
-  docs.value = docs.value.filter((_, i) => i >= idx)
-  if (!docs.value.find(d => d.id === keepId)) {
-    activeDocId.value = docs.value[0]?.id || ''
+function onCtxCloseOthers(id: string) {
+  if (docs.value.length > 1) {
+    docs.value = docs.value.filter(d => d.id === id)
+    activeDocId.value = id
   }
-  closeContextMenu()
+  ctxMenuVisible.value = false
 }
 
-function onCtxCloseRight() {
-  const idx = ctxIndex.value
-  if (idx < 0 || idx >= docs.value.length - 1) return
-  const keepId = activeDocId.value
-  docs.value = docs.value.filter((_, i) => i <= idx)
-  if (!docs.value.find(d => d.id === keepId)) {
-    activeDocId.value = docs.value[docs.value.length - 1]?.id || ''
+function onCtxCloseLeft(id: string) {
+  const idx = ctxIndexFor(id)
+  if (idx > 0) {
+    const keepId = activeDocId.value
+    docs.value = docs.value.filter((_, i) => i >= idx)
+    if (!docs.value.find(d => d.id === keepId)) {
+      activeDocId.value = docs.value[0]?.id || ''
+    }
   }
-  closeContextMenu()
+  ctxMenuVisible.value = false
+}
+
+function onCtxCloseRight(id: string) {
+  const idx = ctxIndexFor(id)
+  if (idx >= 0 && idx < docs.value.length - 1) {
+    const keepId = activeDocId.value
+    docs.value = docs.value.filter((_, i) => i <= idx)
+    if (!docs.value.find(d => d.id === keepId)) {
+      activeDocId.value = docs.value[docs.value.length - 1]?.id || ''
+    }
+  }
+  ctxMenuVisible.value = false
 }
 
 function onCtxCloseAll() {
   docs.value = []
   activeDocId.value = ''
-  closeContextMenu()
+  ctxMenuVisible.value = false
 }
 
 function findTableDoc(dbName: string, tableName: string) {
@@ -464,18 +457,6 @@ function onResizeEnd() {
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
 }
-
-onMounted(() => {
-  document.addEventListener('click', closeContextMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeContextMenu)
-  if (resizing) {
-    document.removeEventListener('mousemove', onResizeMove)
-    document.removeEventListener('mouseup', onResizeEnd)
-  }
-})
 </script>
 
 <style scoped>
@@ -581,37 +562,6 @@ onUnmounted(() => {
 .doc-tab-new:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
-}
-.doc-ctx-menu {
-  position: fixed;
-  z-index: 10000;
-  min-width: 160px;
-  padding: 4px 0;
-  background-color: var(--bg-surface) !important;
-  opacity: 1 !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-}
-.doc-ctx-item {
-  padding: 6px 12px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.doc-ctx-item:hover:not(.disabled) {
-  background: var(--bg-hover);
-}
-.doc-ctx-item.disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.doc-ctx-sep {
-  height: 1px;
-  margin: 4px 0;
-  background: var(--border-subtle);
 }
 .doc-pane {
   flex: 1;

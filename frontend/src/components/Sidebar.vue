@@ -26,53 +26,34 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <el-dropdown ref="typeFilterDropdownRef" trigger="click" placement="bottom-end" popper-class="type-filter-popper">
-              <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop>
-                <el-icon><Filter :size="14" /></el-icon>
-              </span>
-              <template #dropdown>
-                <TypeFilterMenuContent
-                  :model-value="selectedTypeFilter"
-                  :all-label="t('sidebar.filterAll')"
-                  :groups="filterGroups"
-                  @update:model-value="onFilterSelect"
-                />
-              </template>
-            </el-dropdown>
+            <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
+              <el-icon><Filter :size="14" /></el-icon>
+            </span>
+            <Menu ref="filterMenuRef" align="end" v-model:visible="showFilterMenu">
+              <MenuItem :class="{ active: selectedTypeFilter === 'all' }" @click="onFilterSelect('all')">{{ t('sidebar.filterAll') }}</MenuItem>
+              <MenuSubmenu v-for="grp in filterGroups" :key="grp.key" :label="grp.label">
+                <MenuItem
+                  v-for="it in grp.items"
+                  :key="it.key"
+                  :class="{ active: selectedTypeFilter === it.key }"
+                  @click="onFilterSelect(it.key)"
+                >{{ it.label }}</MenuItem>
+              </MenuSubmenu>
+            </Menu>
           </template>
         </el-input>
-        <el-dropdown trigger="click" placement="bottom-end" :teleported="false" popper-class="new-conn-popper" @command="onNewConnCommand" @visible-change="onNewConnVisibleChange">
-          <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop>
-            <Plus :size="15" />
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="new-connection">{{ t('header.newConnection') }}</el-dropdown-item>
-              <el-dropdown-item command="new-group">{{ t('conn.newGroupTitle') }}</el-dropdown-item>
-              <el-dropdown-item command="import" divided>{{ t('importExport.import') }}</el-dropdown-item>
-              <el-dropdown-item command="export">{{ t('importExport.export') }}</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget)">
+          <Plus :size="15" />
+        </button>
+        <!-- New-connection menu — Menu.vue, teleported + anchored right-edge (align=end). -->
+        <Menu ref="newConnMenuRef" align="end" v-model:visible="showNewConnMenu">
+          <MenuItem @click="onNewConnSelect('new-connection')">{{ t('header.newConnection') }}</MenuItem>
+          <MenuItem @click="onNewConnSelect('new-group')">{{ t('conn.newGroupTitle') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="onNewConnSelect('import')">{{ t('importExport.import') }}</MenuItem>
+          <MenuItem @click="onNewConnSelect('export')">{{ t('importExport.export') }}</MenuItem>
+        </Menu>
       </div>
-      <Teleport to="body">
-        <div
-          v-show="showShellSubmenu"
-          class="shell-submenu"
-          :style="shellSubmenuStyle"
-          @mouseenter="showShellSubmenu = true"
-          @mouseleave="showShellSubmenu = false"
-        >
-          <div
-            v-for="sh in settingsStore.availableShells"
-            :key="sh"
-            class="shell-item"
-            @click="onShellSelect(sh)"
-          >
-            {{ getShellLabel(sh) }}
-          </div>
-        </div>
-      </Teleport>
 
     <div class="connection-list" tabindex="0" @keydown="onListKeydown" @contextmenu.prevent="onEmptyAreaContextMenu">
       <!-- Nested group tree -->
@@ -309,76 +290,58 @@
     <ImportDialog v-model:visible="showImportDialog" />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
 
-    <!-- Connection context menu (kept inside sidebar to avoid native RDP occlusion) -->
-    <div
-      v-show="menuVisible"
-      ref="menuRef"
-      class="conn-context-menu"
-      :style="menuStyle"
-      @click.stop
-    >
+    <!-- Connection context menu -->
+    <Menu ref="menuRef" v-model:visible="menuVisible" @contextmenu.stop>
       <!-- Terminal -->
-      <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnect">{{ t('sidebar.connectSSH') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'telnet'" class="menu-item" @click="doConnect">{{ t('sidebar.connectTelnet') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'mosh'" class="menu-item" @click="doConnect">{{ t('sidebar.connectMosh') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'local'" class="menu-item" @click="doConnect">{{ t('sidebar.connectLocal') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'serial'" class="menu-item" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</div>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnect">{{ t('sidebar.connectSSH') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'telnet'" @click="doConnect">{{ t('sidebar.connectTelnet') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'mosh'" @click="doConnect">{{ t('sidebar.connectMosh') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'local'" @click="doConnect">{{ t('sidebar.connectLocal') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'serial'" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</MenuItem>
       <!-- File Transfer -->
-      <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectSFTP">{{ t('sidebar.connectSftp') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'ftp'" class="menu-item" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'smb'" class="menu-item" @click="doConnectSMB">{{ t('sidebar.connectSmb') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 's3'" class="menu-item" @click="doConnectS3">{{ t('sidebar.connectS3') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'webdav'" class="menu-item" @click="doConnectWebDAV">{{ t('sidebar.connectWebdav') }}</div>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'ftp'" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'smb'" @click="doConnectSMB">{{ t('sidebar.connectSmb') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 's3'" @click="doConnectS3">{{ t('sidebar.connectS3') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'webdav'" @click="doConnectWebDAV">{{ t('sidebar.connectWebdav') }}</MenuItem>
       <!-- Remote Desktop -->
-      <div v-if="selectedConn && selectedConn.type === 'rdp'" class="menu-item" @click="doConnectRDP">{{ t('sidebar.connectRDP') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'vnc'" class="menu-item" @click="doConnectVNC">{{ t('sidebar.connectVNC') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'spice'" class="menu-item" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'x11-desktop'" class="menu-item" @click="doConnectX11Desktop">{{ t('sidebar.connectX11Desktop') }}</div>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'rdp'" @click="doConnectRDP">{{ t('sidebar.connectRDP') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'vnc'" @click="doConnectVNC">{{ t('sidebar.connectVNC') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'spice'" @click="doConnectSPICE">{{ t('sidebar.connectSPICE') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'x11-desktop'" @click="doConnectX11Desktop">{{ t('sidebar.connectX11Desktop') }}</MenuItem>
       <!-- Database & Monitor -->
-      <div v-if="selectedConn && selectedConn.type === 'database'" class="menu-item" @click="doConnectDB">{{ t('db.connectDB') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'k8s'" class="menu-item" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'container'" class="menu-item" @click="doConnect">{{ t('sidebar.connectContainer') }}</div>
-      <div v-if="selectedConn && selectedConn.type === 'ssh'" class="menu-item" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</div>
-      <div v-if="selectedConn && isConnOpen(selectedConn.id)" class="menu-item" @click="doLocateSession">{{ t('sidebar.locateSession') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</div>
-      <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item" @click="doChangeGroup">{{ t('conn.moveTo') }}</div>
-      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item danger" @click="doDelete">{{ t('sidebar.delete') }}</div>
-    </div>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'database'" @click="doConnectDB">{{ t('db.connectDB') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'k8s'" @click="doConnectK8s">{{ t('sidebar.connectK8s') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'container'" @click="doConnect">{{ t('sidebar.connectContainer') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
+      <MenuItem v-if="selectedConn && isConnOpen(selectedConn.id)" @click="doLocateSession">{{ t('sidebar.locateSession') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</MenuItem>
+      <MenuItem @click="doDuplicate">{{ t('sidebar.duplicate') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem @click="doChangeGroup">{{ t('conn.moveTo') }}</MenuItem>
+      <MenuItem @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem class="danger" @click="doDelete">{{ t('sidebar.delete') }}</MenuItem>
+    </Menu>
 
-    <!-- Group context menu (kept inside sidebar to avoid native RDP occlusion) -->
-    <div
-      v-show="groupMenuVisible"
-      ref="groupMenuRef"
-      class="conn-context-menu"
-      :style="groupMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item" @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</div>
-      <div class="menu-item" @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</div>
+    <!-- Group context menu -->
+    <Menu ref="groupMenuRef" v-model:visible="groupMenuVisible" @contextmenu.stop>
+      <MenuItem @click="doNewGroup(selectedGroupParentId())">{{ t('conn.newGroupTitle') }}</MenuItem>
+      <MenuItem @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</MenuItem>
       <template v-if="selectedGroup && selectedGroup.id !== '__ungrouped__'">
-        <div class="menu-divider" />
-        <div class="menu-item" @click="doRenameGroup">{{ t('conn.renameGroup') }}</div>
-        <div class="menu-item" @click="doChangeParentGroup">{{ t('conn.moveTo') }}</div>
-        <div class="menu-divider" />
-        <div class="menu-item danger" @click="doDeleteGroup">{{ t('conn.deleteGroup') }}</div>
+        <MenuDivider />
+        <MenuItem @click="doRenameGroup">{{ t('conn.renameGroup') }}</MenuItem>
+        <MenuItem @click="doChangeParentGroup">{{ t('conn.moveTo') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem class="danger" @click="doDeleteGroup">{{ t('conn.deleteGroup') }}</MenuItem>
       </template>
-    </div>
+    </Menu>
 
-    <!-- Empty area context menu (kept inside sidebar to avoid native RDP occlusion) -->
-    <div
-      v-show="emptyAreaMenuVisible"
-      ref="emptyAreaMenuRef"
-      class="conn-context-menu"
-      :style="emptyAreaMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item" @click="doNewGroup()">{{ t('conn.newGroupTitle') }}</div>
-    </div>
+    <!-- Empty area context menu -->
+    <Menu ref="emptyAreaMenuRef" v-model:visible="emptyAreaMenuVisible" @contextmenu.stop>
+      <MenuItem @click="doNewGroup()">{{ t('conn.newGroupTitle') }}</MenuItem>
+    </Menu>
 
     <!-- Delete group dialog -->
     <el-dialog append-to-body v-model="showDeleteGroupDialog" :title="t('conn.deleteGroupTitle')" width="450px">
@@ -503,7 +466,10 @@ import MonitorOverviewSidebar from './MonitorOverviewSidebar.vue'
 import { useCompanionStore } from '../stores/companionStore'
 import CustomThemeEditor from './CustomThemeEditor.vue'
 import GroupTreeItem from './GroupTreeItem.vue'
-import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuSubmenu from './MenuSubmenu.vue'
+import MenuDivider from './MenuDivider.vue'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog } from '../utils/quickConnect'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
@@ -515,7 +481,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle', 'new-local-terminal-with-shell'])
+const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const panelStore = usePanelStore()
@@ -681,16 +647,12 @@ function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
   return conn.type === filter
 }
 
+const showFilterMenu = ref(false)
+const filterMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+
 function onFilterSelect(val: string) {
   selectedTypeFilter.value = val
-  closeTypeFilter()
-}
-
-const typeFilterDropdownRef = ref()
-
-// el-dropdown exposes handleClose() to dismiss the dropdown programmatically.
-function closeTypeFilter() {
-  typeFilterDropdownRef.value?.handleClose()
+  showFilterMenu.value = false
 }
 
 // ── Expand/collapse state ──
@@ -1275,50 +1237,29 @@ function getSelectedConnectionIds(): string[] {
 
 // ── Connection context menu ──
 const menuVisible = ref(false)
-const menuStyle = ref({ left: '0px', top: '0px' })
 const selectedConn = ref<ConnectionConfig | null>(null)
-const menuRef = ref<HTMLDivElement>()
-
-function clampMenuPosition(x: number, y: number): { left: string, top: string } {
-  const el = sidebarEl.value
-  if (!el) return { left: x + 'px', top: y + 'px' }
-  const sr = el.getBoundingClientRect()
-  const menuW = 150
-  const menuH = 220
-  let left = x
-  let top = y
-  if (left + menuW > sr.right) left = sr.right - menuW - 4
-  if (left < sr.left) left = sr.left + 4
-  if (top + menuH > window.innerHeight) top = y - menuH
-  if (top < 0) top = 4
-  return { left: left + 'px', top: top + 'px' }
-}
+const menuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 function onContextMenu(e: MouseEvent, conn: ConnectionConfig) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   selectedConn.value = conn
   // If right-clicking on a non-multi-selected item, clear others and select this one
   if (!selectedIds.value.has(conn.id)) {
     selectedIds.value = new Set([conn.id])
     focusedId.value = conn.id
   }
-  menuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  menuVisible.value = true
+  menuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 function onConnMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   const btn = e.currentTarget as HTMLElement
   const rect = btn.getBoundingClientRect()
-  const x = rect.right + 4
-  const y = rect.top
   selectedConn.value = conn
   if (!selectedIds.value.has(conn.id)) {
     selectedIds.value = new Set([conn.id])
     focusedId.value = conn.id
   }
-  menuStyle.value = clampMenuPosition(x, y)
-  menuVisible.value = true
+  menuRef.value?.openAt(rect.right + 4, rect.top)
 }
 
 function closeMenu() {
@@ -1724,16 +1665,13 @@ watch(showChangeGroupDialog, (open) => {
 
 // ── Group context menu ──
 const groupMenuVisible = ref(false)
-const groupMenuStyle = ref({ left: '0px', top: '0px' })
 const selectedGroup = ref<ConnectionGroup | null>(null)
-const groupMenuRef = ref<HTMLDivElement>()
+const groupMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 function onGroupContextMenu(e: MouseEvent, group: ConnectionGroup) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   selectedGroup.value = group
-  groupMenuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  groupMenuVisible.value = true
+  groupMenuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 function closeGroupMenu() {
@@ -1742,13 +1680,10 @@ function closeGroupMenu() {
 
 // ── Empty area context menu ──
 const emptyAreaMenuVisible = ref(false)
-const emptyAreaMenuStyle = ref({ left: '0px', top: '0px' })
-const emptyAreaMenuRef = ref<HTMLDivElement>()
+const emptyAreaMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 function onEmptyAreaContextMenu(e: MouseEvent) {
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  emptyAreaMenuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  emptyAreaMenuVisible.value = true
+  emptyAreaMenuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 function closeEmptyAreaMenu() {
@@ -1758,10 +1693,8 @@ function closeEmptyAreaMenu() {
 // ── Virtual group context menu ──
 function onVirtualGroupContextMenu(e: MouseEvent) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   selectedGroup.value = { id: '__ungrouped__', name: t('conn.noGroup') }
-  groupMenuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  groupMenuVisible.value = true
+  groupMenuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 // ── Rename group ──
@@ -1812,9 +1745,18 @@ async function confirmDeleteGroup(connAction: 'delete-connections' | 'move-out',
   selectedGroup.value = null
 }
 
-// ── New-connection dropdown + shell submenu ──
-const showShellSubmenu = ref(false)
-const shellSubmenuStyle = ref({ left: '0px', top: '0px' })
+// ── New-connection dropdown ──
+const showNewConnMenu = ref(false)
+const newConnMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+
+function closeNewConnMenu() {
+  showNewConnMenu.value = false
+}
+
+function onNewConnSelect(cmd: string) {
+  closeNewConnMenu()
+  onNewConnCommand(cmd)
+}
 
 function onNewConnCommand(cmd: string) {
   if (cmd === 'new-connection') {
@@ -1833,10 +1775,6 @@ function onNewConnCommand(cmd: string) {
   }
 }
 
-function onShellSelect(sh: string) {
-  showShellSubmenu.value = false
-  emit('new-local-terminal-with-shell', sh)
-}
 
 function getShellLabel(path: string): string {
   if (!path) return 'Local'
@@ -1881,20 +1819,6 @@ function connIcon(conn: ConnectionConfig) {
   }
 }
 
-function onNewConnVisibleChange(visible: boolean) {
-  if (!visible) return
-  nextTick(() => {
-    // Position submenu flush against the right edge of the button, aligned with dropdown
-    const btn = document.querySelector('.sb-icon-btn')
-    if (btn) {
-      const rect = btn.getBoundingClientRect()
-      shellSubmenuStyle.value = {
-        left: rect.right + 'px',
-        top: (rect.bottom + 4) + 'px',
-      }
-    }
-  })
-}
 
 // ── Form handlers ──
 function openNewForm() {
@@ -1944,17 +1868,7 @@ function onConnectFromForm(config: ConnectionConfig) {
 
 // ── Lifecycle ──
 onMounted(async () => {
-  window.addEventListener('global:close-context-menus', () => {
-    closeMenu()
-    closeGroupMenu()
-    closeEmptyAreaMenu()
-  })
   window.addEventListener('app:locate-connection', onLocateConnection)
-  document.addEventListener('click', () => {
-    closeMenu()
-    closeGroupMenu()
-    closeEmptyAreaMenu()
-  })
   // Restore group collapse state from persisted settings
   await initCollapseState()
   // Load all fonts for personalization panel
@@ -1978,17 +1892,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('global:close-context-menus', () => {
-    closeMenu()
-    closeGroupMenu()
-    closeEmptyAreaMenu()
-  })
   window.removeEventListener('app:locate-connection', onLocateConnection)
-  document.removeEventListener('click', () => {
-    closeMenu()
-    closeGroupMenu()
-    closeEmptyAreaMenu()
-  })
 })
 
 // Provide to GroupTreeItem (after all refs/functions are defined)
@@ -2445,131 +2349,6 @@ defineExpose({ focusSearch, openChangeGroupFor, openChangeGroupForGroup })
 </style>
 
 <style>
-.conn-context-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 140px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-
-.conn-context-menu .menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-
-.conn-context-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.conn-context-menu .menu-item.disabled {
-  color: var(--text-disabled);
-  cursor: default;
-  pointer-events: none;
-}
-
-.conn-context-menu .menu-item.danger:hover {
-  background: var(--error-subtle);
-  color: var(--error);
-}
-
-.conn-context-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
-}
-
-.type-filter-menu .el-dropdown-menu__item {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-}
-
-.type-filter-menu .el-dropdown-menu__item.is-active {
-  color: var(--accent);
-}
-
-.dropdown-item-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.check-placeholder {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-</style>
-
-<style>
-.submenu-wrapper {
-  position: relative;
-}
-.submenu-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.shell-submenu {
-  position: fixed;
-  z-index: 10001;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  box-shadow: var(--shadow-lg);
-  padding: 4px;
-  min-width: 140px;
-}
-.shell-item {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-.shell-item:hover {
-  background: var(--bg-hover);
-}
-
-.new-conn-popper {
-  margin-top: -8px !important;
-  margin-left: 4px !important;
-}
-
-/* Teleported (.type-filter-popper) to body so it floats above everything.
-   The global .el-dropdown-menu provides the surface, but we set a popper
-   background here too as a safety net against any future Teleport removal. */
-.type-filter-popper {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-
-/* el-dropdown wraps its content in an el-scrollbar (el-scrollbar wraps in an
-   overflow:auto wrap), whose horizontal scrollable overflow is widened by the
-   two-level flyout submenu — producing a horizontal scrollbar. Let both layers
-   overflow visibly so the flyout shows fully with no scrollbar. The menu is
-   short, so unscrolling vertically is fine. */
-.type-filter-popper .el-scrollbar,
-.type-filter-popper .el-scrollbar__wrap {
-  overflow: visible !important;
-}
-
 .theme-select-popper .el-select-group__title {
   font-size: 10px;
   color: var(--text-disabled);

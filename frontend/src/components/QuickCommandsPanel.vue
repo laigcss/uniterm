@@ -10,17 +10,13 @@
         class="qc-search-input"
         @keydown="onListKeydown"
       />
-      <el-dropdown trigger="click" placement="bottom-end" :teleported="false">
-        <button class="qc-icon-btn" :title="t('quickCommands.addCommand')" @click.stop>
-          <Plus :size="15" />
-        </button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="addCommand()">{{ t('quickCommands.addCommand') }}</el-dropdown-item>
-            <el-dropdown-item @click="addGroup">{{ t('quickCommands.addGroup') }}</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <button class="qc-icon-btn" :title="t('quickCommands.addCommand')" @click.stop="addMenuRef?.toggle($event.currentTarget)">
+        <Plus :size="15" />
+      </button>
+      <Menu ref="addMenuRef" v-model:visible="addMenuVisible" align="end">
+        <MenuItem @click="onAddCommand()">{{ t('quickCommands.addCommand') }}</MenuItem>
+        <MenuItem @click="onAddGroup">{{ t('quickCommands.addGroup') }}</MenuItem>
+      </Menu>
     </div>
 
     <!-- Command list -->
@@ -164,30 +160,23 @@
       </div>
     </div>
 
-    <!-- Context menu -->
-    <div
-      v-show="menuVisible"
-      class="qc-context-menu"
-      :style="menuStyle"
-      @click.stop
-    >
-      <!-- Command menu items -->
-      <template v-if="selectedCmd">
-        <div class="menu-item" @click="runCommand(selectedCmd!); closeMenu()">{{ t('quickCommands.run') }}</div>
-        <div class="menu-item" @click="pasteCommand(selectedCmd!); closeMenu()">{{ t('quickCommands.paste') }}</div>
-        <div class="menu-item" @click="copyCommand(selectedCmd!); closeMenu()">{{ t('quickCommands.copy') }}</div>
-        <div class="menu-divider" />
-        <div class="menu-item" @click="editCommand(selectedCmd!)">{{ t('quickCommands.editCommand') }}</div>
-        <div class="menu-item danger" @click="deleteCommand(selectedCmd!)">{{ t('quickCommands.deleteCommand') }}</div>
+    <!-- Context menu (right-click on commands / groups) -->
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <template v-if="current && (current as CtxPayload).kind === 'command'">
+        <MenuItem @click="runCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.run') }}</MenuItem>
+        <MenuItem @click="pasteCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.paste') }}</MenuItem>
+        <MenuItem @click="copyCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="editCommand((current as CtxPayload).cmd)">{{ t('quickCommands.editCommand') }}</MenuItem>
+        <MenuItem class="danger" @click="deleteCommand((current as CtxPayload).cmd)">{{ t('quickCommands.deleteCommand') }}</MenuItem>
       </template>
 
-      <!-- Group menu items -->
-      <template v-if="selectedGroup">
-        <div class="menu-item" @click="addCommand(selectedGroup!.id)">{{ t('quickCommands.addCommand') }}</div>
-        <div class="menu-item" @click="renameGroup(selectedGroup!)">{{ t('quickCommands.renameGroup') }}</div>
-        <div class="menu-item danger" @click="deleteGroupDialog(selectedGroup!)">{{ t('quickCommands.deleteGroup') }}</div>
+      <template v-else-if="current && (current as CtxPayload).kind === 'group'">
+        <MenuItem @click="addCommand((current as CtxPayload).group.id)">{{ t('quickCommands.addCommand') }}</MenuItem>
+        <MenuItem @click="renameGroup((current as CtxPayload).group)">{{ t('quickCommands.renameGroup') }}</MenuItem>
+        <MenuItem class="danger" @click="deleteGroupDialog((current as CtxPayload).group)">{{ t('quickCommands.deleteGroup') }}</MenuItem>
       </template>
-    </div>
+    </Menu>
 
     <!-- Delete group dialog -->
     <el-dialog append-to-body
@@ -231,7 +220,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import {
   Plus, Play, Clipboard, Copy,
   ChevronDown, ChevronRight
@@ -244,6 +233,9 @@ import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'
 import QuickCommandEditDialog from './QuickCommandEditDialog.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 const { t } = useI18n()
 const store = useQuickCommandStore()
@@ -259,10 +251,12 @@ const expandedGroups = ref<Set<string>>(new Set())
 
 const dragOverGroupId = ref<string | null>(null)
 
-const menuVisible = ref(false)
-const menuStyle = ref({ left: '0px', top: '0px' })
-const selectedCmd = ref<QuickCommand | null>(null)
-const selectedGroup = ref<QuickCommandGroup | null>(null)
+const ctxMenuVisible = ref(false)
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+// Right-click context menu payload (command or group), exposed via Menu slot `current`.
+type CtxPayload =
+  | { kind: 'command'; cmd: QuickCommand }
+  | { kind: 'group'; group: QuickCommandGroup }
 
 const deleteGroupDialogVisible = ref(false)
 const deletingGroup = ref<QuickCommandGroup | null>(null)
@@ -281,26 +275,8 @@ onMounted(async () => {
   await store.load()
   store.groups.forEach(g => expandedGroups.value.add(g.id))
   expandedGroups.value.add('__ungrouped__')
-  document.addEventListener('click', closeMenu)
-  window.addEventListener('global:close-context-menus', closeMenu)
 })
 
-onUnmounted(() => {
-  document.removeEventListener('click', closeMenu)
-  window.removeEventListener('global:close-context-menus', closeMenu)
-})
-
-function closeMenu() {
-  menuVisible.value = false
-}
-
-function clampMenuPosition(x: number, y: number) {
-  const menuWidth = 160
-  const menuHeight = 80
-  const mx = Math.min(x, window.innerWidth - menuWidth)
-  const my = Math.min(y, window.innerHeight - menuHeight)
-  return { left: mx + 'px', top: my + 'px' }
-}
 
 function toggleGroup(id: string) {
   if (expandedGroups.value.has(id)) expandedGroups.value.delete(id)
@@ -436,20 +412,12 @@ async function copyCommand(cmd: QuickCommand) {
 
 function onCommandContextMenu(e: MouseEvent, cmd: QuickCommand) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  selectedCmd.value = cmd
-  selectedGroup.value = null
   selectCommand(cmd.id)
-  menuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  menuVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, { kind: 'command', cmd })
 }
 function onGroupContextMenu(e: MouseEvent, group: QuickCommandGroup) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  selectedGroup.value = group
-  selectedCmd.value = null
-  menuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  menuVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, { kind: 'group', group })
 }
 
 function editCommand(cmd: QuickCommand) {
@@ -458,14 +426,14 @@ function editCommand(cmd: QuickCommand) {
   editingCmdCommand.value = cmd.command
   editingCmdGroupId.value = cmd.groupId
   editDialogVisible.value = true
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function deleteCommand(cmd: QuickCommand) {
   store.deleteCommand(cmd.id)
   if (selectedId.value === cmd.id) selectedId.value = null
   if (focusedId.value === cmd.id) focusedId.value = null
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function addCommand(groupId?: string) {
@@ -474,7 +442,7 @@ function addCommand(groupId?: string) {
   editingCmdCommand.value = ''
   editingCmdGroupId.value = groupId
   editDialogVisible.value = true
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function addGroup() {
@@ -483,11 +451,22 @@ function addGroup() {
   groupNameDialogVisible.value = true
 }
 
+const addMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const addMenuVisible = ref(false)
+function onAddCommand() {
+  addMenuVisible.value = false
+  addCommand()
+}
+function onAddGroup() {
+  addMenuVisible.value = false
+  addGroup()
+}
+
 function renameGroup(group: QuickCommandGroup) {
   renamingGroup.value = group
   groupNameInput.value = group.name
   groupNameDialogVisible.value = true
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function doSaveGroupName() {
@@ -504,7 +483,7 @@ function doSaveGroupName() {
 function deleteGroupDialog(group: QuickCommandGroup) {
   deletingGroup.value = group
   deleteGroupDialogVisible.value = true
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function doDeleteGroup(deleteCommands: boolean) {
@@ -711,39 +690,6 @@ watch(searchQuery, (q) => {
   text-align: center;
   color: var(--text-muted);
   font-size: 12px;
-}
-
-.qc-context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  box-shadow: var(--shadow-lg);
-  padding: 4px;
-  min-width: 140px;
-}
-
-.qc-context-menu .menu-item {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.qc-context-menu .menu-item:hover {
-  background: var(--bg-hover);
-}
-
-.qc-context-menu .menu-item.danger {
-  color: var(--error);
-}
-
-.qc-context-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
 }
 
 .delete-group-actions {

@@ -39,23 +39,19 @@
     </button>
   </div>
   <div class="tab-more" v-if="showMore">
-    <el-dropdown trigger="click" @command="setActiveTab" @visible-change="onMoreDropdownVisibleChange">
-      <span class="tab-more-btn" :title="t('tab.more')">
-        <el-icon class="tab-more-icon"><MoreHorizontal :size="14" /></el-icon>
-      </span>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item
-            v-for="tab in tabs"
-            :key="tab.id"
-            :command="tab.id"
-            :class="{ 'is-active': tab.id === activeTabId }"
-          >
-            {{ tab.name }}
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
+    <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget)">
+      <el-icon class="tab-more-icon"><MoreHorizontal :size="14" /></el-icon>
+    </span>
+    <Menu ref="tabMoreRef" v-model:visible="tabMoreVisible" align="end">
+      <MenuItem
+        v-for="tab in tabs"
+        :key="tab.id"
+        :class="{ active: tab.id === activeTabId }"
+        @click="onTabMoreSelect(tab.id)"
+      >
+        {{ tab.name }}
+      </MenuItem>
+    </Menu>
     <button
       class="tab-add-btn"
       :title="t('startTab.defaultName') + shortcutSuffix('newConnection')"
@@ -75,6 +71,8 @@ import { useI18n } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import TabItem from './TabItem.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
@@ -145,12 +143,19 @@ function onWheel(e: WheelEvent) {
   tabsListRef.value.scrollLeft += e.deltaY
 }
 
-function onMoreDropdownVisibleChange(visible: boolean) {
-  if (visible) {
-    window.dispatchEvent(new CustomEvent('rdp:overlay-push'))
-  } else {
-    window.dispatchEvent(new CustomEvent('rdp:overlay-pop'))
-  }
+const tabMoreRef = ref<InstanceType<typeof Menu> | null>(null)
+const tabMoreVisible = ref(false)
+// Push/pop the native RDP overlay while the tab-more menu is open, so the menu
+// floats above it (mirrors the old el-dropdown @visible-change behavior).
+watch(tabMoreVisible, (v) => {
+  if (v) window.dispatchEvent(new CustomEvent('rdp:overlay-push'))
+  else window.dispatchEvent(new CustomEvent('rdp:overlay-pop'))
+})
+
+function onTabMoreSelect(id: string) {
+  tabMoreVisible.value = false
+  tabStore.setActiveTab(id)
+  scrollToTab(id)
 }
 
 function setActiveTab(id: string) {

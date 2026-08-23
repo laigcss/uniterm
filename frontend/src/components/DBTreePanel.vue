@@ -8,7 +8,7 @@
         :placeholder="t('db.searchTables')"
       />
     </div>
-    <div ref="treeContentRef" class="tree-content" @click="closeContextMenu" @contextmenu.prevent="onTreeContextMenu">
+    <div ref="treeContentRef" class="tree-content" @contextmenu.prevent="onTreeContextMenu">
       <div v-if="loading" class="tree-loading">{{ t('db.loading') }}</div>
       <template v-for="db in filteredDbs" :key="db.name">
         <div
@@ -47,47 +47,45 @@
       </template>
     </div>
 
-    <!-- Context menu -->
-    <div
-      v-if="ctxVisible"
-      class="ctx-menu"
-      :style="{ left: ctxX + 'px', top: ctxY + 'px' }"
-      @click.stop
+    <Menu
+      ref="ctxMenuRef"
+      v-model:visible="ctxMenuVisible"
+      v-slot="{ current }"
     >
-      <template v-if="ctxTargetType === 'db'">
-        <div class="ctx-item" @click="onCtxQueryDatabase">{{ t('db.openData') }}</div>
-        <div class="ctx-item" @click="onCtxListDatabase">{{ t('db.tableList') }}</div>
-        <div class="ctx-item" @click="onCtxNewQuery">{{ t('db.newQuery') }}</div>
-        <div class="ctx-sep" />
-        <div v-if="canCreateDatabase" class="ctx-item" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</div>
-        <div class="ctx-item" @click="onCtxNewTable">{{ t('db.newTable') }}</div>
-        <div class="ctx-item danger" @click="onCtxDropDatabase">{{ t('db.dropDatabase') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxRefresh">{{ t('db.refreshTables') }}</div>
+      <template v-if="current && current.type === 'db'">
+        <MenuItem @click="onCtxQueryDatabase">{{ t('db.openData') }}</MenuItem>
+        <MenuItem @click="onCtxListDatabase">{{ t('db.tableList') }}</MenuItem>
+        <MenuItem @click="onCtxNewQuery">{{ t('db.newQuery') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem v-if="canCreateDatabase" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
+        <MenuItem @click="onCtxNewTable">{{ t('db.newTable') }}</MenuItem>
+        <MenuItem class="danger" @click="onCtxDropDatabase">{{ t('db.dropDatabase') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxRefresh">{{ t('db.refreshTables') }}</MenuItem>
       </template>
-      <template v-else-if="ctxTargetType === 'table'">
-        <div class="ctx-item" @click="onCtxViewData">{{ t('db.openData') }}</div>
-        <div v-if="ctxTableType !== 'view'" class="ctx-item" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxCopyName">{{ t('db.copyName') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxExportStructure">{{ t('db.exportStructure') }}</div>
-        <div v-if="ctxTableType !== 'view'" class="ctx-item" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</div>
-        <div class="ctx-sep" />
-        <template v-if="ctxTableType === 'view'">
-          <div class="ctx-item danger" @click="onCtxDropView">{{ t('db.dropView') }}</div>
+      <template v-else-if="current && current.type === 'table'">
+        <MenuItem @click="onCtxViewData">{{ t('db.openData') }}</MenuItem>
+        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxCopyName">{{ t('db.copyName') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxExportStructure">{{ t('db.exportStructure') }}</MenuItem>
+        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</MenuItem>
+        <MenuDivider />
+        <template v-if="current.tableType === 'view'">
+          <MenuItem class="danger" @click="onCtxDropView">{{ t('db.dropView') }}</MenuItem>
         </template>
         <template v-else>
-          <div class="ctx-item danger" @click="onCtxTruncateTable">{{ t('db.truncateTable') }}</div>
-          <div class="ctx-item danger" @click="onCtxDropTable">{{ t('db.dropTable') }}</div>
+          <MenuItem class="danger" @click="onCtxTruncateTable">{{ t('db.truncateTable') }}</MenuItem>
+          <MenuItem class="danger" @click="onCtxDropTable">{{ t('db.dropTable') }}</MenuItem>
         </template>
       </template>
-      <template v-else-if="ctxTargetType === 'blank'">
-        <div class="ctx-item" @click="onCtxNewQueryBlank">{{ t('db.newQuery') }}</div>
-        <div v-if="canCreateDatabase" class="ctx-item" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</div>
-        <div class="ctx-item" @click="onCtxRefreshDatabases">{{ t('db.refreshDatabases') }}</div>
+      <template v-else-if="current && current.type === 'blank'">
+        <MenuItem @click="onCtxNewQueryBlank">{{ t('db.newQuery') }}</MenuItem>
+        <MenuItem v-if="canCreateDatabase" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
+        <MenuItem @click="onCtxRefreshDatabases">{{ t('db.refreshDatabases') }}</MenuItem>
       </template>
-    </div>
+    </Menu>
 
     <!-- Confirm dialog -->
     <el-dialog append-to-body
@@ -141,11 +139,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { Database, Table2, Eye, ChevronRight, ChevronDown } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64 } from '../../wailsjs/go/main/App'
 import { msg } from '../services/message'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import type { TableInfo } from '../types/database'
 
 const { t } = useI18n()
@@ -341,44 +342,27 @@ watch(searchQuery, (q) => {
 
 // ── Context menu ──
 
-const ctxVisible = ref(false)
-const ctxX = ref(0)
-const ctxY = ref(0)
-const ctxTargetType = ref('')
+interface DbMenuCtx {
+  type: 'db' | 'table' | 'blank'
+  dbName: string
+  tableName: string
+  tableType: string
+}
+
+const ctxMenuVisible = ref(false)
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const ctxDbName = ref('')
 const ctxTableName = ref('')
 const ctxTableType = ref('')
 
-function closeContextMenu() {
-  ctxVisible.value = false
-}
-
-function fitContextMenu(x: number, y: number, type: string) {
-  const heights: Record<string, number> = { db: 250, table: 180, blank: 100 }
-  const menuW = 160
-  const menuH = heights[type] || 150
-
-  let left = x
-  let top = y
-
-  if (left + menuW > window.innerWidth) left = x - menuW
-  if (left < 0) left = 4
-
-  if (top + menuH > window.innerHeight) top = y - menuH
-  if (top < 0) top = window.innerHeight - menuH - 4
-  if (top < 0) top = 4
-
-  return { left, top }
+function openDbMenu(e: MouseEvent, item: DbMenuCtx) {
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, item)
 }
 
 function onDbContextMenu(e: MouseEvent, dbName: string) {
-  ctxTargetType.value = 'db'
   ctxDbName.value = dbName
   ctxTableName.value = ''
-  const pos = fitContextMenu(e.clientX, e.clientY, 'db')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  openDbMenu(e, { type: 'db', dbName, tableName: '', tableType: '' })
 }
 
 function onTableContextMenu(e: MouseEvent, dbName: string, table: TableInfo) {
@@ -386,67 +370,59 @@ function onTableContextMenu(e: MouseEvent, dbName: string, table: TableInfo) {
   selectedTable.value = table.name
   // 右键表节点时直接切换到该表数据页，同时弹出菜单
   emit('selectTable', dbName, table.name, table.type === 'view')
-  ctxTargetType.value = 'table'
   ctxDbName.value = dbName
   ctxTableName.value = table.name
   ctxTableType.value = table.type || ''
-  const pos = fitContextMenu(e.clientX, e.clientY, 'table')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  openDbMenu(e, { type: 'table', dbName, tableName: table.name, tableType: table.type || '' })
 }
 
 function onTreeContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (target.closest('.db-header') || target.closest('.table-item')) return
-  ctxTargetType.value = 'blank'
   ctxDbName.value = ''
   ctxTableName.value = ''
-  const pos = fitContextMenu(e.clientX, e.clientY, 'blank')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  openDbMenu(e, { type: 'blank', dbName: '', tableName: '', tableType: '' })
 }
 
 function onCtxQueryDatabase() {
   emit('openDatabase', ctxDbName.value, 'objects')
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxListDatabase() {
   emit('openDatabase', ctxDbName.value, 'objects')
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxNewQuery() {
   emit('newQuery', ctxDbName.value)
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxNewQueryBlank() {
   emit('newQuery')
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxViewData() {
   emit('selectTable', ctxDbName.value, ctxTableName.value, ctxTableType.value === 'view')
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxViewStructure() {
   emit('viewStructure', ctxDbName.value, ctxTableName.value)
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 function onCtxCopyName() {
   navigator.clipboard.writeText(ctxTableName.value).catch(() => {})
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 // ── Export table as .sql ──
 
 async function exportTable(withStructure: boolean, withData: boolean) {
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
   const dbName = ctxDbName.value
   const tableName = ctxTableName.value
   try {
@@ -491,7 +467,7 @@ function showConfirm(title: string, text: string, name: string, action: () => Pr
   confirmInput.value = ''
   confirmAction = action
   confirmVisible.value = true
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 async function onConfirm() {
@@ -558,7 +534,7 @@ function onCtxTruncateTable() {
 }
 
 async function onCtxRefresh() {
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
   const db = databases.value.find(d => d.name === ctxDbName.value)
   if (db) {
     try {
@@ -571,7 +547,7 @@ async function onCtxRefresh() {
 }
 
 async function onCtxRefreshDatabases() {
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
   await loadTree()
 }
 
@@ -596,7 +572,7 @@ const newDbVisible = ref(false)
 const newDbName = ref('')
 
 function onCtxNewDatabase() {
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
   newDbName.value = ''
   newDbVisible.value = true
 }
@@ -617,7 +593,7 @@ const newTableVisible = ref(false)
 const newTableName = ref('')
 
 function onCtxNewTable() {
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
   newTableName.value = ''
   newTableVisible.value = true
 }
@@ -638,14 +614,6 @@ async function onCreateTable() {
     msg.error(e?.message || String(e))
   }
 }
-
-// Close context menu on click outside
-onMounted(() => {
-  document.addEventListener('click', closeContextMenu)
-})
-onUnmounted(() => {
-  document.removeEventListener('click', closeContextMenu)
-})
 </script>
 
 <style scoped>
@@ -773,39 +741,6 @@ onUnmounted(() => {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-muted);
-}
-
-/* Context menu */
-.ctx-menu {
-  position: fixed;
-  z-index: 10000;
-  background-color: var(--bg-surface) !important;
-  opacity: 1 !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 4px 0;
-  min-width: 150px;
-  box-shadow: var(--shadow-md);
-}
-.ctx-item {
-  padding: 6px 12px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.ctx-item:hover {
-  background: var(--bg-hover);
-}
-.ctx-item.danger {
-  color: var(--error);
-}
-.ctx-sep {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 0;
 }
 
 /* Confirm dialog */

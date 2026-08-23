@@ -38,29 +38,25 @@
       ></div>
     </div>
     <div class="tab-more" v-if="tabs.length > 0">
-      <el-dropdown trigger="click" @command="setActiveTab" @visible-change="onMoreDropdownVisibleChange">
-        <span class="tab-more-btn" :title="t('tab.more')">
-          <el-icon class="tab-more-icon"><MoreHorizontal /></el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="tab in tabs"
-              :key="tab.id"
-              :command="tab.id"
-              :class="{ 'is-active': tab.id === activeTabId }"
-            >
-              {{ tab.name }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget)">
+        <el-icon class="tab-more-icon"><MoreHorizontal /></el-icon>
+      </span>
+      <Menu ref="tabMoreRef" v-model:visible="tabMoreVisible" align="end">
+        <MenuItem
+          v-for="tab in tabs"
+          :key="tab.id"
+          :class="{ active: tab.id === activeTabId }"
+          @click="onTabMoreSelect(tab.id)"
+        >
+          {{ tab.name }}
+        </MenuItem>
+      </Menu>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { MoreHorizontal } from '@lucide/vue'
 import { useTabStore } from '../stores/tabStore'
@@ -68,6 +64,8 @@ import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { SftpCancelTransfer, CloseSession, RDPHide } from '../../wailsjs/go/main/App'
 import TabItem from './TabItem.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
@@ -88,12 +86,17 @@ function onWheel(e: WheelEvent) {
   tabsListRef.value.scrollLeft += e.deltaY
 }
 
-function onMoreDropdownVisibleChange(visible: boolean) {
-  if (visible) {
-    window.dispatchEvent(new CustomEvent('rdp:overlay-push'))
-  } else {
-    window.dispatchEvent(new CustomEvent('rdp:overlay-pop'))
-  }
+const tabMoreRef = ref<InstanceType<typeof Menu> | null>(null)
+const tabMoreVisible = ref(false)
+watch(tabMoreVisible, (v) => {
+  if (v) window.dispatchEvent(new CustomEvent('rdp:overlay-push'))
+  else window.dispatchEvent(new CustomEvent('rdp:overlay-pop'))
+})
+
+function onTabMoreSelect(id: string) {
+  tabMoreVisible.value = false
+  tabStore.setActiveTab(id)
+  scrollToTab(id)
 }
 
 function setActiveTab(id: string) {

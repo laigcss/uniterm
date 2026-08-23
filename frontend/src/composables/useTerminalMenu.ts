@@ -1,4 +1,4 @@
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useSettingsStore } from '../stores/settingsStore'
 import { ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime'
@@ -7,14 +7,14 @@ export interface UseTerminalMenuOptions {
   getSelection: () => string
   onPaste: (text: string) => Promise<void> | void
   onAskAI?: (text: string) => void
-  /** The rendered menu element, used to measure its real size so it can be
-   *  clamped inside the viewport instead of relying on an estimated height. */
-  menuElement?: Ref<HTMLElement | null>
+  /** Position + open the actual menu. The host wires this to its <Menu>
+   *  instance (openAt), so the composable stays decoupled from the component
+   *  and its viewport clamping lives in Menu. */
+  openAt?: (x: number, y: number) => void
 }
 
 export interface UseTerminalMenuReturn {
   menuVisible: Ref<boolean>
-  menuStyle: Ref<{ left: string; top: string }>
   hasSelection: Ref<boolean>
   onContextMenu: (e: MouseEvent) => void
   closeMenu: () => void
@@ -28,7 +28,6 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
   const settingsStore = useSettingsStore()
 
   const menuVisible = ref(false)
-  const menuStyle = ref({ left: '0px', top: '0px' })
   const hasSelection = ref(false)
 
   function closeMenu() {
@@ -45,35 +44,11 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     }
     e.preventDefault()
     e.stopPropagation()
-    window.dispatchEvent(new CustomEvent('global:close-context-menus'))
     hasSelection.value = !!options.getSelection()
-
-    const menuElement = options.menuElement?.value
-    if (menuElement) {
-      // Show at the cursor first, then clamp to the viewport on nextTick once
-      // Vue has laid the menu out so we can read its real width/height.
-      menuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
-      menuVisible.value = true
-      nextTick(() => {
-        if (!menuVisible.value) return
-        menuStyle.value = fitMenuToViewport(e.clientX, e.clientY, menuElement.offsetWidth, menuElement.offsetHeight)
-      })
-    } else {
-      // Fallback when no element is provided (e.g. isolated unit tests).
-      menuStyle.value = fitMenuToViewport(e.clientX, e.clientY, 120, 140)
-      menuVisible.value = true
-    }
-  }
-
-  function fitMenuToViewport(x: number, y: number, menuW: number, menuH: number) {
-    const margin = 4
-    let left = x
-    let top = y
-    if (left + menuW + margin > window.innerWidth) left = window.innerWidth - menuW - margin
-    if (top + menuH + margin > window.innerHeight) top = window.innerHeight - menuH - margin
-    if (left < margin) left = margin
-    if (top < margin) top = margin
-    return { left: left + 'px', top: top + 'px' }
+    // menuVisible drives the host <Menu>.v-model; openAt positions it (and
+    // flips it on). In isolation (tests) openAt is absent so we set it here.
+    menuVisible.value = true
+    options.openAt?.(e.clientX, e.clientY)
   }
 
   // Write to the OS clipboard. Wails' ClipboardSetText resolves false (it
@@ -139,19 +114,8 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     closeMenu()
   }
 
-  onMounted(() => {
-    window.addEventListener('global:close-context-menus', closeMenu)
-    document.addEventListener('click', closeMenu)
-  })
-
-  onUnmounted(() => {
-    window.removeEventListener('global:close-context-menus', closeMenu)
-    document.removeEventListener('click', closeMenu)
-  })
-
   return {
     menuVisible,
-    menuStyle,
     hasSelection,
     onContextMenu,
     closeMenu,
