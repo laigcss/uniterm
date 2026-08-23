@@ -132,7 +132,7 @@ import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, Search, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -198,7 +198,7 @@ const tabIcon = computed(() => {
     const panel = panelStore.getPanel(t.panelId)
     if (panel?.config?.dbType === 'redis') return DatabaseZap
     if (panel?.config?.dbType === 'mongodb') return Layers
-    if (panel?.config?.dbType === 'elasticsearch') return Search
+    if (panel?.config?.dbType === 'elasticsearch') return DatabaseSearch
     return Database
   }
   if (t.type === 'monitor') return Activity

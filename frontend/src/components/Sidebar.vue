@@ -484,7 +484,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -636,6 +636,7 @@ const TYPE_LABELS: Record<string, string> = {
   'database:sqlserver': 'SQL Server',
   'database:redis': 'Redis',
   'database:mongodb': 'MongoDB',
+  'database:elasticsearch': 'Elasticsearch',
 }
 
 // Label for a filter value (type / `database:<db>` / `container:<runtime>`).
@@ -1872,7 +1873,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'vnc': return MonitorSmartphone
     case 'spice': return MonitorCloud
     case 'x11-desktop': return AppWindow
-    case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : Database
+    case 'database': return conn.dbType === 'redis' ? DatabaseZap : conn.dbType === 'mongodb' ? Layers : conn.dbType === 'elasticsearch' ? DatabaseSearch : Database
     case 'monitor': return Activity
     case 'k8s': return ShipWheel
     case 'container': return Boxes

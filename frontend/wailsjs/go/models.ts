@@ -702,8 +702,6 @@ export namespace session {
 	    dbType?: string;
 	    dbName?: string;
 	    dbParams?: string;
-	    esAuthType?: string;
-	    esApiKey?: string;
 	    esUseSsl?: boolean;
 	    esPathPrefix?: string;
 	    esSkipVerify?: boolean;
@@ -783,8 +781,6 @@ export namespace session {
 	        this.dbType = source["dbType"];
 	        this.dbName = source["dbName"];
 	        this.dbParams = source["dbParams"];
-	        this.esAuthType = source["esAuthType"];
-	        this.esApiKey = source["esApiKey"];
 	        this.esUseSsl = source["esUseSsl"];
 	        this.esPathPrefix = source["esPathPrefix"];
 	        this.esSkipVerify = source["esSkipVerify"];

@@ -6,20 +6,12 @@
     width="440px"
   >
     <el-form label-width="100px">
-      <el-form-item :label="t('importExport.includePassword')">
-        <el-radio-group v-model="includePassword">
-          <el-radio :value="false">{{ t('importExport.no') }}</el-radio>
-          <el-radio :value="true">{{ t('importExport.yes') }}</el-radio>
-        </el-radio-group>
+      <el-form-item :label="t('importExport.configPassword')">
+        <el-input v-model="password" type="password" show-password />
       </el-form-item>
-      <template v-if="includePassword">
-        <el-form-item :label="t('importExport.configPassword')">
-          <el-input v-model="password" type="password" show-password />
-        </el-form-item>
-        <el-form-item :label="t('importExport.confirmPassword')">
-          <el-input v-model="confirmPassword" type="password" show-password />
-        </el-form-item>
-      </template>
+      <el-form-item :label="t('importExport.confirmPassword')">
+        <el-input v-model="confirmPassword" type="password" show-password />
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="onCancel">{{ t('common.cancel') }}</el-button>
@@ -38,27 +30,24 @@ const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done'): void }>()
 
 const { t } = useI18n()
-const includePassword = ref(false)
 const password = ref('')
 const confirmPassword = ref('')
 const exporting = ref(false)
 
 watch(() => props.visible, (v) => {
-  if (v) { includePassword.value = false; password.value = ''; confirmPassword.value = '' }
+  if (v) { password.value = ''; confirmPassword.value = '' }
 })
 
 function onCancel() { emit('update:visible', false) }
 
 async function onExport() {
-  if (includePassword.value) {
-    if (!password.value) { msg.error(t('importExport.configPassword')); return }
-    if (password.value !== confirmPassword.value) { msg.error(t('importExport.passwordMismatch')); return }
-  }
+  if (!password.value) { msg.error(t('importExport.configPassword')); return }
+  if (password.value !== confirmPassword.value) { msg.error(t('importExport.passwordMismatch')); return }
   const dest = await SaveFileDialogFiltered(t('importExport.exportTitle'), 'uniterm-connections.utm', 'uniTerm (*.utm)', '*.utm')
   if (!dest) return
   exporting.value = true
   try {
-    await ExportConnections(dest, includePassword.value ? password.value : '')
+    await ExportConnections(dest, password.value)
     msg.success(t('importExport.exported'))
     emit('done')
     emit('update:visible', false)

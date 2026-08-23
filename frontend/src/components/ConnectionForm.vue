@@ -1,5 +1,5 @@
 <template>
-  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="780px" class="conn-dialog" @opened="onDialogOpened">
+  <el-dialog append-to-body v-model="visible" :title="isEdit ? t('conn.editTitle') : t('conn.newTitle')" width="700px" class="conn-dialog" @opened="onDialogOpened">
     <div class="conn-layout">
       <!-- Left sidebar: category icons -->
       <div class="conn-categories">
@@ -33,7 +33,7 @@
 
         <!-- Form fields -->
         <div class="conn-fields">
-          <el-form :model="form" :label-width="formLabelWidth" @submit.prevent="onSave">
+          <el-form :model="form" label-width="90px" @submit.prevent="onSave">
             <el-form-item :label="t('conn.name')">
               <div class="name-group-row">
                 <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" class="name-input" />
@@ -74,38 +74,17 @@
                 </template>
               </div>
             </el-form-item>
+            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop' || isElasticsearch" :label="t('conn.authType')">
+              <el-radio-group v-model="form.authType">
+                <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
+                <el-radio-button v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" label="key">{{ t('conn.keyPath') }}</el-radio-button>
+                <el-radio-button v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" label="identity">{{ t('conn.identity') }}</el-radio-button>
+                <el-radio-button v-if="isElasticsearch" label="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
             <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop'" :label="t('conn.authType')">
-              <el-radio-group v-model="form.authType">
-                <el-radio-button label="password">{{ t('conn.password') }}</el-radio-button>
-                <el-radio-button label="identity">{{ t('conn.identity') }}</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-            <template v-if="isElasticsearch">
-              <el-form-item :label="t('conn.esAuthType')">
-                <el-radio-group v-model="form.esAuthType">
-                  <el-radio-button label="basic">{{ t('conn.esAuthBasic') }}</el-radio-button>
-                  <el-radio-button label="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
-                </el-radio-group>
-              </el-form-item>
-              <el-form-item v-if="isEsApiKey" :label="t('conn.esApiKey')" required>
-                <el-input v-model="form.esApiKey" type="password" show-password :placeholder="t('conn.esApiKeyPlaceholder')" />
-              </el-form-item>
-              <el-form-item :label="t('conn.esUseSsl')">
-                <el-switch v-model="form.esUseSsl" />
-              </el-form-item>
-              <el-form-item v-if="form.esUseSsl" :label="t('conn.esSkipVerify')">
-                <div class="nla-row">
-                  <el-switch v-model="form.esSkipVerify" />
-                  <span class="field-hint">{{ t('conn.esSkipVerifyHint') }}</span>
-                </div>
-              </el-form-item>
-              <el-form-item :label="t('conn.esPathPrefix')">
-                <el-input v-model="form.esPathPrefix" placeholder="/es" />
-              </el-form-item>
-            </template>
             <el-form-item
               v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'mosh' || form.type === 'x11-desktop')"
               :label="t('conn.identity')"
@@ -127,9 +106,23 @@
                 </el-select>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite') && !isEsApiKey" :label="form.type === 's3' ? 'Secret Key' : t('conn.password')">
-              <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : ''" />
+            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
+              <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : (isEsApiKey ? t('conn.esApiKeyPlaceholder') : '')" />
             </el-form-item>
+            <template v-if="isElasticsearch">
+              <el-form-item :label="t('conn.esUseSsl')">
+                <el-switch v-model="form.esUseSsl" />
+              </el-form-item>
+              <el-form-item v-if="form.esUseSsl" :label="t('conn.esSkipVerify')">
+                <div class="nla-row">
+                  <el-switch v-model="form.esSkipVerify" />
+                  <span class="field-hint">{{ t('conn.esSkipVerifyHint') }}</span>
+                </div>
+              </el-form-item>
+              <el-form-item :label="t('conn.esPathPrefix')">
+                <el-input v-model="form.esPathPrefix" placeholder="/es" />
+              </el-form-item>
+            </template>
             <template v-if="isRedisSentinel">
               <el-form-item :label="t('conn.sentinelUser')">
                 <el-input v-model="form.sentinelUser" :placeholder="t('conn.sentinelAuthHint')" />
@@ -597,11 +590,12 @@ import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts, TestConnection } from '../../wailsjs/go/main/App'
 import { ElInput } from 'element-plus'
 import { msg } from '../services/message'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, Search, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 import IdentityEditDialog from './IdentityEditDialog.vue'
 import ProxyEditDialog from './ProxyEditDialog.vue'
+import { isSqlDbType } from '../utils/quickConnect'
 import type { Identity } from '../types/identity'
 import type { Proxy } from '../types/proxy'
 
@@ -629,7 +623,8 @@ const categories = computed(() => [
   { key: 'terminal', label: t('conn.categoryTerminal'), icon: SquareTerminal },
   { key: 'filetransfer', label: t('conn.categoryFileTransfer'), icon: FolderUp },
   { key: 'remote', label: t('conn.categoryRemote'), icon: Monitor },
-  { key: 'database', label: t('db.database'), icon: Database },
+  { key: 'sql', label: t('db.categorySQL'), icon: Database },
+  { key: 'nosql', label: t('db.categoryNoSQL'), icon: DatabaseZap },
   { key: 'container', label: t('conn.categoryContainer'), icon: Boxes },
 ])
 
@@ -653,15 +648,17 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     { type: 'spice', label: 'SPICE', icon: MonitorCloud },
     { type: 'x11-desktop', label: 'X11 Desktop', icon: AppWindow },
   ],
-  database: [
+  sql: [
     { type: 'database', dbType: 'mysql', label: 'MySQL', icon: Database },
     { type: 'database', dbType: 'postgres', label: 'PostgreSQL', icon: Database },
     { type: 'database', dbType: 'oracle', label: 'Oracle', icon: Database },
     { type: 'database', dbType: 'sqlserver', label: 'SQL Server', icon: Database },
     { type: 'database', dbType: 'rqlite', label: 'rqlite', icon: Database },
+  ],
+  nosql: [
     { type: 'database', dbType: 'redis', label: 'Redis', icon: DatabaseZap },
     { type: 'database', dbType: 'mongodb', label: 'MongoDB', icon: Layers },
-    { type: 'database', dbType: 'elasticsearch', label: 'Elasticsearch', icon: Search },
+    { type: 'database', dbType: 'elasticsearch', label: 'Elasticsearch', icon: DatabaseSearch },
   ],
   container: [
     { type: 'k8s', label: 'Kubernetes', icon: ShipWheel },
@@ -822,11 +819,13 @@ const TERMINAL_TYPES = ['ssh', 'telnet', 'mosh', 'local', 'serial']
 const REMOTE_TYPES = ['rdp', 'vnc', 'spice', 'x11-desktop']
 const FILETRANSFER_TYPES = ['ftp', 'ssh', 'smb', 'webdav', 's3']
 
+// SQL-family dbTypes fall under the "SQL数据库" top-level category; anything
+// else with type 'database' falls under "NoSQL数据库" (see isSqlDbType).
 const category = computed(() => {
   if (TERMINAL_TYPES.includes(form.type)) return 'terminal'
   if (FILETRANSFER_TYPES.includes(form.type)) return 'filetransfer'
   if (REMOTE_TYPES.includes(form.type)) return 'remote'
-  if (form.type === 'database') return 'database'
+  if (form.type === 'database') return isSqlDbType(form.dbType) ? 'sql' : 'nosql'
   if (form.type === 'k8s' || form.type === 'container') return 'container'
   return 'terminal'
 })
@@ -853,10 +852,7 @@ const isElasticsearch = computed(() =>
   form.type === 'database' && form.dbType === 'elasticsearch'
 )
 const isEsApiKey = computed(() =>
-  isElasticsearch.value && form.esAuthType === 'apikey'
-)
-const formLabelWidth = computed(() =>
-  isElasticsearch.value ? '120px' : '90px'
+  isElasticsearch.value && form.authType === 'apikey'
 )
 
 const defaultParamsHint = computed(() => {
@@ -887,8 +883,6 @@ const form = reactive<ConnectionConfig>({
   dbType: '',
   dbName: '',
   dbParams: '',
-  esAuthType: 'basic',
-  esApiKey: '',
   esUseSsl: false,
   esPathPrefix: '',
   esSkipVerify: false,
@@ -1020,6 +1014,21 @@ watch(() => props.editConfig, (config) => {
     resetForm()
     hydrating.value = true
     Object.assign(form, { ...config, postLoginExpectSteps: cloneExpectSteps(config.postLoginExpectSteps || []) })
+    // Backfill legacy ES auth: older versions stored the auth type in a dedicated
+    // `esAuthType` ('basic'|'apikey') and the key in `esApiKey`. Both now live in
+    // the shared `authType` ('password'|'apikey') and `password` fields.
+    if (form.type === 'database' && form.dbType === 'elasticsearch') {
+      const legacy = config as any
+      const legacyType = legacy?.esAuthType
+      if (legacyType) {
+        form.authType = legacyType === 'apikey' ? 'apikey' : 'password'
+        if (form.authType === 'apikey' && !form.password && legacy?.esApiKey) {
+          form.password = legacy.esApiKey
+        }
+      } else if (form.authType !== 'apikey' && form.authType !== 'password') {
+        form.authType = 'password'
+      }
+    }
     // Existing connections without the field default to NLA off (old behavior).
     form.rdpEnableNLA = config.rdpEnableNLA ?? false
     form.x11Forwarding = config.x11Forwarding ?? false
@@ -1111,7 +1120,8 @@ watch(() => form.dbType, (newType) => {
   else if (newType === 'mongodb') form.port = 27017
   else if (newType === 'elasticsearch') {
     form.port = 9200
-    form.esAuthType = form.esAuthType || 'basic'
+    // ES shares the common `authType` field; default to 'password' unless an API key was already chosen.
+    form.authType = form.authType === 'apikey' ? 'apikey' : 'password'
   }
 })
 
@@ -1149,8 +1159,6 @@ function resetForm() {
   form.dbType = ''
   form.dbName = ''
   form.dbParams = ''
-  form.esAuthType = 'basic'
-  form.esApiKey = ''
   form.esUseSsl = false
   form.esPathPrefix = ''
   form.esSkipVerify = false
@@ -1254,6 +1262,15 @@ async function reloadK8sContexts() {
   }
 }
 
+async function selectKeyFile() {
+  try {
+    const selected = await OpenFileDialog()
+    if (selected) form.keyPath = selected
+  } catch (e) {
+    console.error('select key file:', e)
+  }
+}
+
 async function pickKubeconfigFile() {
   try {
     const selected = await OpenFileDialog()
@@ -1316,7 +1333,7 @@ function normalizeForm(): ConnectionConfig {
   if (normalized.type === 'database' && normalized.dbType === 'postgres' && !normalized.dbName?.trim()) {
     throw new Error(t('db.pgDbNameRequired'))
   }
-  if (normalized.type === 'database' && normalized.dbType === 'elasticsearch' && normalized.esAuthType === 'apikey' && !normalized.esApiKey?.trim()) {
+  if (normalized.type === 'database' && normalized.dbType === 'elasticsearch' && normalized.authType === 'apikey' && !normalized.password?.trim()) {
     throw new Error(t('conn.esApiKeyRequired'))
   }
   if (!normalized.name.trim()) {
@@ -1521,7 +1538,7 @@ function onConnect() {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  width: 64px;
+  width: 72px;
   height: 52px;
   padding: 4px;
   border: 1px solid var(--border-subtle);

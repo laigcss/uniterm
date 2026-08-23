@@ -1984,7 +1984,8 @@ watch(
 .app-container.has-bg .main-content :deep(.skill-dropdown),
 .app-container.has-bg .main-content :deep(.drive-dropdown),
 .app-container.has-bg .main-content :deep(.bookmark-dropdown),
-.app-container.has-bg .main-content :deep(.type-filter-menu) {
+.app-container.has-bg .main-content :deep(.type-filter-menu),
+.app-container.has-bg .main-content :deep(.type-filter-menu-sub) {
   background-color: var(--bg-surface) !important;
 }
 /* CodeMirror 选区：覆盖 has-bg 通配透明，保证 SQL/语法编辑器选中可见 */
