@@ -166,9 +166,10 @@ func (s *ElasticsearchSession) Connect(config ConnectionConfig) error {
 }
 
 func buildEsAuthHeader(config ConnectionConfig) string {
-	authType := strings.ToLower(strings.TrimSpace(config.EsAuthType))
+	// Auth type reuses the shared `authType` field: 'password'(basic) | 'apikey'.
+	authType := strings.ToLower(strings.TrimSpace(config.AuthType))
 	if authType == "apikey" {
-		key := strings.TrimSpace(config.EsApiKey)
+		key := strings.TrimSpace(config.Password)
 		if key == "" {
 			return ""
 		}

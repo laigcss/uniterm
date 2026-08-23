@@ -119,6 +119,13 @@ export const TYPE_CATEGORY: Record<string, string> = {
   k8s: 'container', container: 'container',
 }
 
+// SQL-family database types placed under the "SQL数据库" category; everything
+// else with type 'database' (Redis/MongoDB/Elasticsearch) sits under NoSQL.
+export const SQL_DB_TYPES = ['mysql', 'postgres', 'oracle', 'sqlserver', 'rqlite']
+export function isSqlDbType(dbType?: string): boolean {
+  return !!dbType && SQL_DB_TYPES.includes(dbType)
+}
+
 // Grouping key used by the type filter for a connection, the same shape as a
 // filter value: `database:<dbType>` / `container:<runtime>` / plain type.
 export function getConnectionTypeKey(config: ConnectionConfig): string {
@@ -140,13 +147,18 @@ export function formatTypeFilterLabel(key: string): string {
 }
 
 // Top-level category (key) a filter value belongs to, with a fallback category
-// for any unexpected type so it still shows up in the menu.
+// for any unexpected type so it still shows up in the menu. Database types are
+// further routed to the sql/nosql sub-categories by dbType.
 export function getTypeCategory(key: string): string {
-  return TYPE_CATEGORY[getTypeBaseType(key)] || 'other'
+  const base = getTypeBaseType(key)
+  if (base === 'database') {
+    return isSqlDbType(key.slice('database:'.length)) ? 'sql' : 'nosql'
+  }
+  return TYPE_CATEGORY[base] || 'other'
 }
 
 // Ordered, labelled category keys for the two-level filter menu.
-export const TYPE_CATEGORIES: string[] = ['terminal', 'filetransfer', 'remote', 'database', 'container', 'other']
+export const TYPE_CATEGORIES: string[] = ['terminal', 'filetransfer', 'remote', 'sql', 'nosql', 'container', 'other']
 
 // Two-level type catalog for the type filter, matching the new-connection form
 // (ConnectionForm `categories` + `allSubTypes`) exactly — same category order,
@@ -186,16 +198,23 @@ export function getTypeFilterCatalog(t: (key: string) => string) {
       ],
     },
     {
-      key: 'database',
-      label: t('db.database'),
+      key: 'sql',
+      label: t('db.categorySQL'),
       items: [
         { key: 'database:mysql', label: 'MySQL' },
         { key: 'database:postgres', label: 'PostgreSQL' },
         { key: 'database:oracle', label: 'Oracle' },
         { key: 'database:sqlserver', label: 'SQL Server' },
         { key: 'database:rqlite', label: 'rqlite' },
+      ],
+    },
+    {
+      key: 'nosql',
+      label: t('db.categoryNoSQL'),
+      items: [
         { key: 'database:redis', label: 'Redis' },
         { key: 'database:mongodb', label: 'MongoDB' },
+        { key: 'database:elasticsearch', label: 'Elasticsearch' },
       ],
     },
     {

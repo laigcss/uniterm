@@ -1,8 +1,8 @@
 <template>
-  <div class="ttfm" @click.stop>
-    <div class="ttfm-level">
+  <div class="type-filter-menu" @click.stop>
+    <div class="type-filter-menu-level">
       <div
-        class="ttfm-item all"
+        class="type-filter-menu-item all"
         :class="{ active: modelValue === 'all' }"
         @click="$emit('update:modelValue', 'all')"
       >
@@ -14,21 +14,21 @@
       <div
         v-for="grp in groups"
         :key="grp.key"
-        class="ttfm-grp"
+        class="type-filter-menu-grp"
         :class="{ current: isCurrentCat(grp) }"
       >
-        <div class="ttfm-item cat">
+        <div class="type-filter-menu-item cat">
           <span class="check"></span>
           <span class="cat-label">{{ grp.label }}</span>
           <el-icon class="arrow"><ChevronRight :size="12" /></el-icon>
         </div>
 
         <!-- Level-2 flyout submenu (shown on hover of the parent category) -->
-        <div class="ttfm-sub">
+        <div class="type-filter-menu-sub">
           <div
             v-for="it in grp.items"
             :key="it.key"
-            class="ttfm-item sub"
+            class="type-filter-menu-item sub"
             :class="{ active: modelValue === it.key }"
             @click="$emit('update:modelValue', it.key)"
           >
@@ -69,18 +69,18 @@ function isCurrentCat(grp: TypeFilterGroup): boolean {
 </script>
 
 <style scoped>
-.ttfm {
+.type-filter-menu {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   padding: 4px;
 }
-.ttfm-level {
+.type-filter-menu-level {
   position: relative;
   min-width: 148px;
 }
-.ttfm-item {
+.type-filter-menu-item {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -94,14 +94,14 @@ function isCurrentCat(grp: TypeFilterGroup): boolean {
   white-space: nowrap;
   transition: background 0.1s ease;
 }
-.ttfm-item:hover {
+.type-filter-menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.ttfm-item.active {
+.type-filter-menu-item.active {
   color: var(--accent);
 }
-.ttfm-grp.current > .ttfm-item.cat {
+.type-filter-menu-grp.current > .type-filter-menu-item.cat {
   color: var(--accent);
   font-weight: 600;
 }
@@ -129,10 +129,10 @@ function isCurrentCat(grp: TypeFilterGroup): boolean {
   flex-shrink: 0;
 }
 /* Submenu container sits inside each level-1 row; hidden until hovered */
-.ttfm-grp {
+.type-filter-menu-grp {
   position: relative;
 }
-.ttfm-sub {
+.type-filter-menu-sub {
   position: absolute;
   left: calc(100% - 4px);
   top: -4px;
@@ -146,14 +146,14 @@ function isCurrentCat(grp: TypeFilterGroup): boolean {
   min-width: 130px;
 }
 /* Standard nested-menu behavior: hovering the parent keeps the flyout open */
-.ttfm-grp:hover > .ttfm-item.cat {
+.type-filter-menu-grp:hover > .type-filter-menu-item.cat {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.ttfm-grp:hover > .ttfm-sub {
+.type-filter-menu-grp:hover > .type-filter-menu-sub {
   display: block;
 }
-.ttfm-item.sub {
+.type-filter-menu-item.sub {
   padding: 6px 12px 6px 10px;
 }
 </style>

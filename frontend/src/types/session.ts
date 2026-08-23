@@ -45,9 +45,9 @@ export interface ConnectionConfig {
   dbType?: string   // database type key
   dbName?: string   // default database name
   dbParams?: string // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
-  // Elasticsearch / OpenSearch
-  esAuthType?: string   // 'basic'(default) | 'apikey'
-  esApiKey?: string
+  // Elasticsearch / OpenSearch. The auth type reuses the shared `authType`
+  // field: 'basic'(default) | 'apikey'. In 'apikey' mode the API key is stored
+  // in `password` (reusing the credential field, same convention as S3).
   esUseSsl?: boolean
   esPathPrefix?: string
   esSkipVerify?: boolean

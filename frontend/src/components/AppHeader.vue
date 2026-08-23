@@ -30,8 +30,8 @@
 
     <!-- Settings button opens a dropdown menu with common settings items -->
     <div class="settings-wrap">
-      <button ref="settingsBtnRef" class="header-btn" @click.stop="toggleSettingsMenu" :title="t('header.settings') + shortcutSuffix('openSettings')">
-        <el-icon><Settings :size="14" /></el-icon>
+      <button ref="settingsBtnRef" class="header-btn" @click.stop="toggleSettingsMenu" :title="t('header.menu') + shortcutSuffix('openSettings')">
+        <el-icon><Menu :size="14" /></el-icon>
       </button>
 
       <!-- Settings dropdown (theme / language / ai / identities / proxies / settings / check update) -->
@@ -41,6 +41,7 @@
           class="header-settings-menu"
           :style="settingsMenuStyle"
           @mouseleave="activeSub = ''"
+          @mouseover="onMenuMouseOver"
         >
           <!-- 主题 -->
           <div class="settings-menu-item submenu-wrap" @mouseenter="activeSub = 'theme'">
@@ -122,7 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
-import { Settings, PanelLeft, Bot, ChevronRight } from '@lucide/vue'
+import { Menu, PanelLeft, Bot, ChevronRight } from '@lucide/vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useTabStore } from '../stores/tabStore'
@@ -183,6 +184,16 @@ function positionSettingsMenu() {
 function toggleSettingsMenu() {
   showSettingsMenu.value = !showSettingsMenu.value
   if (showSettingsMenu.value) positionSettingsMenu()
+}
+
+// Hovering anywhere outside a submenu-wrap or its flyout closes any open
+// submenu (theme/language). Delegated on the menu container so plain items
+// and separators also collapse the open flyout instead of leaving it lingering.
+function onMenuMouseOver(e: MouseEvent) {
+  const t = e.target as HTMLElement
+  if (!t.closest('.submenu-wrap') && !t.closest('.settings-submenu')) {
+    activeSub.value = ''
+  }
 }
 
 function closeSettingsMenu() {
