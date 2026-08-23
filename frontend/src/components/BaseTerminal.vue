@@ -44,57 +44,46 @@
     </div>
 
     <!-- Terminal context menu -->
-    <div
-      v-show="menu.menuVisible.value"
-      ref="contextMenuEl"
-      class="context-menu"
-      :style="menu.menuStyle.value"
-      @click.stop
-    >
+    <Menu ref="terminalMenuRef" v-model:visible="terminalMenuVisible" root-class="right-shortcuts">
       <!-- ① 剪贴板 -->
-      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copySelection">
+      <MenuItem :class="{ disabled: !menu.hasSelection.value }" :shortcut="menuShortcut('copy')" @click="menu.copySelection">
         {{ t('terminal.copy') }}
-        <span class="menu-shortcut">{{ menuShortcut('copy') }}</span>
-      </div>
-      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.copyAndPaste">
+      </MenuItem>
+      <MenuItem :class="{ disabled: !menu.hasSelection.value }" @click="menu.copyAndPaste">
         {{ t('terminal.copyAndPaste') }}
-      </div>
-      <div class="menu-item" @click="menu.pasteFromClipboard">
+      </MenuItem>
+      <MenuItem :shortcut="menuShortcut('paste')" @click="menu.pasteFromClipboard">
         {{ t('terminal.paste') }}
-        <span class="menu-shortcut">{{ menuShortcut('paste') }}</span>
-      </div>
-      <div class="menu-item" :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
+      </MenuItem>
+      <MenuItem :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
         {{ t('terminal.askAI') }}
-      </div>
+      </MenuItem>
 
       <!-- ② 会话文本操作 -->
-      <div class="menu-divider" />
-      <div class="menu-item" @click="triggerSearch">
+      <MenuDivider />
+      <MenuItem :shortcut="menuShortcut('terminalSearch')" @click="triggerSearch">
         {{ t('terminal.searchText') }}
-        <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
-      </div>
-      <div class="menu-item" @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</div>
-      <div class="menu-item" @click="toggleLineNumbers">
+      </MenuItem>
+      <MenuItem @click="menu.closeMenu(); exportContent()">{{ t('terminal.export') }}</MenuItem>
+      <MenuItem :shortcut="menuShortcut('toggleLineNumbers')" @click="toggleLineNumbers">
         {{ showLineNumbers ? t('settings.hideLineNumbers') : t('settings.showLineNumbers') }}
-        <span class="menu-shortcut">{{ menuShortcut('toggleLineNumbers') }}</span>
-      </div>
-      <div class="menu-item" @click="toggleTimestamps">
+      </MenuItem>
+      <MenuItem :shortcut="menuShortcut('toggleTimestamps')" @click="toggleTimestamps">
         {{ showTimestamps ? t('settings.hideTimestamps') : t('settings.showTimestamps') }}
-        <span class="menu-shortcut">{{ menuShortcut('toggleTimestamps') }}</span>
-      </div>
-      <div v-if="supportsOutputLog" class="menu-item" @click="toggleOutputLog">
+      </MenuItem>
+      <MenuItem v-if="supportsOutputLog" @click="toggleOutputLog">
         {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
-      </div>
-      <div v-if="supportsOutputLog && isOutputLogOn" class="menu-item" @click="openLogDir">
+      </MenuItem>
+      <MenuItem v-if="supportsOutputLog && isOutputLogOn" @click="openLogDir">
         {{ t('session.openLogDir') }}
-      </div>
+      </MenuItem>
 
       <!-- ③ SSH 连接功能 -->
-      <div v-if="isSsh" class="menu-divider" />
-      <div v-if="isSsh" class="menu-item" @click="openSftp">{{ t('sidebar.connectSftp') }}</div>
-      <div v-if="isSsh" class="menu-item" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</div>
-      <div v-if="isSsh" class="menu-item" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</div>
-    </div>
+      <MenuDivider />
+      <MenuItem v-if="isSsh" @click="openSftp">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
+      <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
+    </Menu>
 
     <!-- Terminal suggestions popup -->
     <TerminalSuggestion
@@ -131,6 +120,9 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import { useI18n } from '../i18n'
 import {
   acquireTerminal,
@@ -1899,11 +1891,10 @@ function openMonitor() {
   }
 }
 
-const contextMenuEl = ref<HTMLElement | null>(null)
-
+const terminalMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const menu = useTerminalMenu({
   getSelection,
-  menuElement: contextMenuEl,
+  openAt: (x, y) => terminalMenuRef.value?.openAt(x, y),
   onPaste: async (text) => {
     if (props.mode === 'ssh' || props.mode === 'local') {
       await pasteToSession(text)
@@ -1916,6 +1907,15 @@ const menu = useTerminalMenu({
   onAskAI: (text) => {
     window.dispatchEvent(new CustomEvent('ai:ask', { detail: text }))
   },
+})
+
+// `menu.menuVisible` is a ref nested in a plain object, so the template would
+// not auto-unwrap it — `v-model:visible="menu.menuVisible"` would hand the raw
+// Ref (always truthy) to <Menu> and the menu could never hide. Route v-model
+// through a top-level computed instead so get/set both hit the real boolean.
+const terminalMenuVisible = computed({
+  get: () => menu.menuVisible.value,
+  set: (v: boolean) => { menu.menuVisible.value = v },
 })
 
 defineExpose({
@@ -2029,61 +2029,6 @@ defineExpose({
    style.css 里的 .xterm-scrollable-element > .scrollbar 规则。 */
 .terminal-area :deep(.xterm-viewport) {
   overflow: hidden;
-}
-
-.context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 120px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-  white-space: nowrap;
-}
-
-.menu-shortcut {
-  color: var(--text-muted, var(--text-disabled));
-  font-size: 11px;
-  font-family: var(--font-mono);
-  opacity: 0.8;
-}
-
-.menu-item:hover:not(.disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.menu-item.disabled {
-  color: var(--text-disabled);
-  cursor: default;
-}
-
-.menu-item.disabled .menu-shortcut {
-  opacity: 0.4;
-}
-
-.menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
 }
 
 .drop-overlay {

@@ -76,74 +76,69 @@
     </el-table>
     </div>
 
-    <Teleport to="body">
-      <div
-        v-show="contextMenuVisible"
-        class="sftp-context-menu"
-        :style="contextMenuStyle"
-        @click.stop
-        @mousedown.stop
-      >
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" @contextmenu.stop v-slot="{ current }">
         <template v-if="menuType === 'file'">
-          <div class="menu-item" @click="doEdit">{{ t('sftp.edit') }}</div>
-          <div class="menu-item" @click="doNewFile">{{ t('sftp.newFile') }}</div>
-          <div class="menu-item" @click="doMkdir">{{ t('sftp.newDirectory') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doCopyToClipboard">{{ t('sftp.copy') }}</div>
-          <div class="menu-item" @click="doCutToClipboard">{{ t('sftp.cut') }}</div>
-          <div :class="['menu-item', { disabled: !clipboardCount }]" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
-          <div v-if="mode === 'remote'" class="menu-item" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
-          <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
+          <MenuItem @click="doEdit">{{ t('sftp.edit') }}</MenuItem>
+          <MenuItem @click="doNewFile">{{ t('sftp.newFile') }}</MenuItem>
+          <MenuItem @click="doMkdir">{{ t('sftp.newDirectory') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doCopyToClipboard">{{ t('sftp.copy') }}</MenuItem>
+          <MenuItem @click="doCutToClipboard">{{ t('sftp.cut') }}</MenuItem>
+          <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doRename">{{ t('sftp.rename') }}</MenuItem>
+          <MenuItem @click="doDelete">{{ t('sftp.delete') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doChmod">{{ t('sftp.changePermission') }}</MenuItem>
         </template>
         <template v-else-if="menuType === 'dir'">
-          <div class="menu-item" @click="doNewFile">{{ t('sftp.newFile') }}</div>
-          <div class="menu-item" @click="doMkdir">{{ t('sftp.newDirectory') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doCopyToClipboard">{{ t('sftp.copy') }}</div>
-          <div class="menu-item" @click="doCutToClipboard">{{ t('sftp.cut') }}</div>
-          <div :class="['menu-item', { disabled: !clipboardCount }]" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
-          <div v-if="mode === 'remote'" class="menu-item" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
-          <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
+          <MenuItem @click="doNewFile">{{ t('sftp.newFile') }}</MenuItem>
+          <MenuItem @click="doMkdir">{{ t('sftp.newDirectory') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doCopyToClipboard">{{ t('sftp.copy') }}</MenuItem>
+          <MenuItem @click="doCutToClipboard">{{ t('sftp.cut') }}</MenuItem>
+          <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doRename">{{ t('sftp.rename') }}</MenuItem>
+          <MenuItem @click="doDelete">{{ t('sftp.delete') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doChmod">{{ t('sftp.changePermission') }}</MenuItem>
         </template>
         <template v-else-if="menuType === 'batch'">
-          <div class="menu-item" @click="doCopyToClipboard">{{ t('sftp.copy') }}</div>
-          <div class="menu-item" @click="doCutToClipboard">{{ t('sftp.cut') }}</div>
-          <div :class="['menu-item', { disabled: !clipboardCount }]" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
-          <div v-if="mode === 'remote'" class="menu-item" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</div>
-          <div class="menu-divider" />
-          <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.renameDisabled') }}</div>
-          <div v-if="mode === 'local'" class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
-          <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
-          <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.chmodDisabled') }}</div>
+          <MenuItem @click="doCopyToClipboard">{{ t('sftp.copy') }}</MenuItem>
+          <MenuItem @click="doCutToClipboard">{{ t('sftp.cut') }}</MenuItem>
+          <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem v-if="mode === 'remote'" class="disabled">{{ t('sftp.renameDisabled') }}</MenuItem>
+          <MenuItem v-if="mode === 'local'" @click="doRename">{{ t('sftp.rename') }}</MenuItem>
+          <MenuItem @click="doDelete">{{ t('sftp.delete') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" class="disabled">{{ t('sftp.chmodDisabled') }}</MenuItem>
         </template>
         <template v-else-if="menuType === 'empty'">
-          <div class="menu-item" @click="doNewFile">{{ t('sftp.newFile') }}</div>
-          <div class="menu-item" @click="doMkdir">{{ t('sftp.newDirectory') }}</div>
-          <div class="menu-divider" />
-          <div :class="['menu-item', { disabled: !clipboardCount }]" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</div>
+          <MenuItem @click="doNewFile">{{ t('sftp.newFile') }}</MenuItem>
+          <MenuItem @click="doMkdir">{{ t('sftp.newDirectory') }}</MenuItem>
+          <MenuDivider />
+          <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
         </template>
-      </div>
-    </Teleport>
+    </Menu>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { Folder, File, Link, RefreshCw, Eye, Upload } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 export interface FileItem {
   name: string
@@ -199,8 +194,8 @@ const filterText = ref('')
 const showHidden = ref(false)
 const selectedItems = ref<FileItem[]>([])
 const lastClickedIndex = ref(-1)
-const contextMenuVisible = ref(false)
-const contextMenuStyle = ref({ left: '0px', top: '0px' })
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const ctxMenuVisible = ref(false)
 const menuType = ref<'file' | 'dir' | 'batch' | 'empty'>('file')
 const tableRef = ref<any>(null)
 
@@ -306,21 +301,13 @@ function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
     // Show empty area menu for parent directory
     event.preventDefault()
     event.stopPropagation()
-    closeMenu()
     selectedItems.value = []
     menuType.value = 'empty'
-    const mW = 170, mH = 200
-    let cx = event.clientX, cy = event.clientY
-    if (cx + mW > window.innerWidth) cx -= mW
-    if (cy + mH > window.innerHeight) cy = Math.max(0, window.innerHeight - mH)
-    contextMenuStyle.value = { left: cx + 'px', top: cy + 'px' }
-    contextMenuVisible.value = true
-    document.addEventListener('mousedown', closeMenu, { once: true })
+    ctxMenuRef.value?.openAt(event.clientX, event.clientY)
     return
   }
   event.preventDefault()
   event.stopPropagation()
-  closeMenu()
   if (!selectedItems.value.some(s => s.name === row.name)) {
     selectedItems.value = [row]
   }
@@ -331,16 +318,7 @@ function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
   } else {
     menuType.value = 'file'
   }
-  // Clamp position to keep menu within viewport
-  const menuW = 170
-  const menuH = 360
-  let x = event.clientX
-  let y = event.clientY
-  if (x + menuW > window.innerWidth) x -= menuW
-  if (y + menuH > window.innerHeight) y = Math.max(0, window.innerHeight - menuH)
-  contextMenuStyle.value = { left: x + 'px', top: y + 'px' }
-  contextMenuVisible.value = true
-  document.addEventListener('mousedown', closeMenu, { once: true })
+  ctxMenuRef.value?.openAt(event.clientX, event.clientY)
 }
 
 function onEmptyAreaContextMenu(event: MouseEvent, force = false) {
@@ -348,52 +326,24 @@ function onEmptyAreaContextMenu(event: MouseEvent, force = false) {
   // Only show empty menu if not clicking on a row (unless forced)
   if (!force && target.closest('tr')) return
   event.stopPropagation()
-  closeMenu()
   selectedItems.value = []
   menuType.value = 'empty'
-  const menuW = 170
-  const menuH = 200
-  let x = event.clientX
-  let y = event.clientY
-  if (x + menuW > window.innerWidth) x -= menuW
-  if (y + menuH > window.innerHeight) y = Math.max(0, window.innerHeight - menuH)
-  contextMenuStyle.value = { left: x + 'px', top: y + 'px' }
-  contextMenuVisible.value = true
-  document.addEventListener('mousedown', closeMenu, { once: true })
+  ctxMenuRef.value?.openAt(event.clientX, event.clientY)
 }
 
-function closeMenu() {
-  contextMenuVisible.value = false
-}
-
-function onGlobalContextMenu(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (!target.closest('.sftp-file-list')) {
-    closeMenu()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('contextmenu', onGlobalContextMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('contextmenu', onGlobalContextMenu)
-})
-
-function doSendToOther() { emit('sendToOther', [...selectedItems.value]); closeMenu() }
-function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); closeMenu() }
-function doRename() { emit('rename', selectedItems.value[0]); closeMenu() }
-function doDelete() { emit('delete', [...selectedItems.value]); closeMenu() }
-function doChmod() { emit('chmod', selectedItems.value[0]); closeMenu() }
-function doEdit() { emit('edit', selectedItems.value[0]); closeMenu() }
-function doNewFile() { emit('newFile'); closeMenu() }
-function doMkdir() { emit('mkdir'); closeMenu() }
-function doCopyToClipboard() { emit('copyToClipboard', [...selectedItems.value]); closeMenu() }
-function doCutToClipboard() { emit('cutToClipboard', [...selectedItems.value]); closeMenu() }
-function doPaste() { emit('paste'); closeMenu() }
-function doUpload() { emit('upload'); closeMenu() }
-function doRefresh() { emit('refresh'); closeMenu() }
+function doSendToOther() { emit('sendToOther', [...selectedItems.value]); ctxMenuVisible.value = false }
+function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); ctxMenuVisible.value = false }
+function doRename() { emit('rename', selectedItems.value[0]); ctxMenuVisible.value = false }
+function doDelete() { emit('delete', [...selectedItems.value]); ctxMenuVisible.value = false }
+function doChmod() { emit('chmod', selectedItems.value[0]); ctxMenuVisible.value = false }
+function doEdit() { emit('edit', selectedItems.value[0]); ctxMenuVisible.value = false }
+function doNewFile() { emit('newFile'); ctxMenuVisible.value = false }
+function doMkdir() { emit('mkdir'); ctxMenuVisible.value = false }
+function doCopyToClipboard() { emit('copyToClipboard', [...selectedItems.value]); ctxMenuVisible.value = false }
+function doCutToClipboard() { emit('cutToClipboard', [...selectedItems.value]); ctxMenuVisible.value = false }
+function doPaste() { emit('paste'); ctxMenuVisible.value = false }
+function doUpload() { emit('upload'); ctxMenuVisible.value = false }
+function doRefresh() { emit('refresh'); ctxMenuVisible.value = false }
 
 function getRowClassName({ row }: { row: FileItem }): string {
   if (props.cutItemNames && props.cutItemNames.includes(row.name)) {
@@ -496,41 +446,6 @@ function onDragStart(event: DragEvent, row: FileItem) {
 </style>
 
 <style>
-.sftp-context-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 160px;
-  padding: 4px;
-}
-.sftp-context-menu .menu-item {
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-.sftp-context-menu .menu-item:hover:not(.disabled) {
-  background: var(--bg-hover);
-}
-.sftp-context-menu .menu-item.disabled {
-  color: var(--text-disabled);
-  cursor: not-allowed;
-}
-.sftp-context-menu .menu-item.danger {
-  color: var(--error, #f87171);
-}
-.sftp-context-menu .menu-item.danger:hover:not(.disabled) {
-  background: color-mix(in srgb, var(--error, #f87171) 12%, transparent);
-}
-.sftp-context-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px;
-}
-
 /* Custom loading overlay */
 .table-wrapper {
   flex: 1;

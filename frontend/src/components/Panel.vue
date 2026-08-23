@@ -49,40 +49,38 @@
         <div class="panel-more-wrapper">
           <button
             class="panel-more"
-            @click.stop="toggleMoreMenu"
+            @click.stop="toggleMoreMenu($event)"
             :title="t('terminal.more')"
           >
             <MoreHorizontal :size="14" />
           </button>
-          <div v-show="moreMenuVisible" class="panel-more-menu" @click.stop>
+          <Menu ref="moreMenuRef" align="end" root-class="right-shortcuts" v-model:visible="moreMenuVisible">
             <!-- ① 面板操作 -->
-            <div class="menu-item" @click="emit('duplicate', panel.id); moreMenuVisible = false">
+            <MenuItem :shortcut="menuShortcut('duplicateSession')" @click="emit('duplicate', panel.id); moreMenuVisible = false">
               {{ t('tab.duplicate') }}
-              <span class="menu-shortcut">{{ menuShortcut('duplicateSession') }}</span>
-            </div>
-            <div class="menu-item" @click="renamePanel">{{ t('tab.rename') }}</div>
-            <div v-if="panel.config?.id" class="menu-item" @click="locateConnection">{{ t('tab.locate') }}</div>
+            </MenuItem>
+            <MenuItem @click="renamePanel">{{ t('tab.rename') }}</MenuItem>
+            <MenuItem v-if="panel.config?.id" @click="locateConnection">{{ t('tab.locate') }}</MenuItem>
 
             <!-- ② 会话文本操作 -->
-            <div class="menu-divider" />
-            <div class="menu-item" @click="triggerSearch(); moreMenuVisible = false">
+            <MenuDivider />
+            <MenuItem :shortcut="menuShortcut('terminalSearch')" @click="triggerSearch(); moreMenuVisible = false">
               {{ t('terminal.searchText') }}
-              <span class="menu-shortcut">{{ menuShortcut('terminalSearch') }}</span>
-            </div>
-            <div class="menu-item" @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</div>
-            <div class="menu-item" @click="toggleOutputLog(); moreMenuVisible = false">
+            </MenuItem>
+            <MenuItem @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</MenuItem>
+            <MenuItem @click="toggleOutputLog(); moreMenuVisible = false">
               {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
-            </div>
-            <div v-if="isOutputLogOn" class="menu-item" @click="openLogDir(); moreMenuVisible = false">
+            </MenuItem>
+            <MenuItem v-if="isOutputLogOn" @click="openLogDir(); moreMenuVisible = false">
               {{ t('session.openLogDir') }}
-            </div>
+            </MenuItem>
 
             <!-- ③ 连接功能（ssh） -->
-            <div v-if="panel.type === 'ssh'" class="menu-divider" />
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</div>
-            <div v-if="panel.type === 'ssh'" class="menu-item" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</div>
-          </div>
+            <MenuDivider />
+            <MenuItem v-if="panel.type === 'ssh'" @click="connectSftp(); moreMenuVisible = false">{{ t('sidebar.connectSftp') }}</MenuItem>
+            <MenuItem v-if="panel.type === 'ssh'" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</MenuItem>
+            <MenuItem v-if="panel.type === 'ssh'" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</MenuItem>
+          </Menu>
         </div>
         <button class="panel-close" @click.stop="emit('close', panel.id)"><X :size="14" /></button>
       </div>
@@ -103,6 +101,9 @@
 import { ref, watch, computed, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import { Radio, Sparkles, MoreHorizontal, X, SquareTerminal, Laptop, Cable, Terminal, Zap } from '@lucide/vue'
 import BaseTerminal from './BaseTerminal.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -200,6 +201,7 @@ const editing = ref(false)
 const editName = ref('')
 const editInputRef = ref<HTMLInputElement>()
 const moreMenuVisible = ref(false)
+const moreMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 // Session output log state — mirrors TabItem so both surfaces stay in sync
 // via panelStore.setOutputLog. Refreshed when the more menu opens and on mount.
@@ -215,11 +217,10 @@ const panelIcon = computed(() => {
   return SquareTerminal
 })
 
-function toggleMoreMenu() {
-  moreMenuVisible.value = !moreMenuVisible.value
-  if (moreMenuVisible.value) {
-    refreshOutputLogState()
-  }
+function toggleMoreMenu(e: MouseEvent) {
+  const opening = !moreMenuVisible.value
+  moreMenuRef.value?.toggle(e.currentTarget)
+  if (opening) refreshOutputLogState()
 }
 
 async function refreshOutputLogState() {
@@ -286,10 +287,6 @@ function triggerSearch() {
 
 function triggerExport() {
   window.dispatchEvent(new CustomEvent('terminal:export', { detail: { panelId: props.panel.id } }))
-}
-
-function onDocumentClick() {
-  moreMenuVisible.value = false
 }
 
 function startEdit() {
@@ -476,13 +473,11 @@ function onReconnectEvent(e: Event) {
 }
 
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
   window.addEventListener('panel:reconnect', onReconnectEvent)
   refreshOutputLogState()
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', onDocumentClick)
   window.removeEventListener('panel:reconnect', onReconnectEvent)
 })
 
@@ -696,46 +691,5 @@ watch(() => props.panel.outputLog, (val) => {
 .panel-more:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
-}
-.panel-more-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 100;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 120px;
-  padding: 4px;
-}
-.panel-more-menu .menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-.panel-more-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.panel-more-menu .menu-shortcut {
-  color: var(--text-muted, var(--text-disabled));
-  font-size: 11px;
-  font-family: var(--font-mono);
-  opacity: 0.8;
-}
-.panel-more-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
 }
 </style>

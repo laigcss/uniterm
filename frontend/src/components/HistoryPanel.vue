@@ -43,19 +43,14 @@
     </div>
 
     <!-- Context menu -->
-    <div
-      v-show="menuVisible"
-      class="qc-context-menu"
-      :style="menuStyle"
-      @click.stop
-    >
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && runCommand(menuTarget!)">{{ t('quickCommands.run') }}</div>
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && pasteCommand(menuTarget!)">{{ t('quickCommands.paste') }}</div>
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && copyCommand(menuTarget!); closeMenu()">{{ t('quickCommands.copy') }}</div>
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && saveAsQuickCommand(menuTarget!)">{{ t('quickCommands.saveAs') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item danger" @click="deleteSelected(); closeMenu()">{{ t('sidebar.delete') }}</div>
-    </div>
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && runCommand(current)">{{ t('quickCommands.run') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && pasteCommand(current)">{{ t('quickCommands.paste') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && copyCommand(current); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && saveAsQuickCommand(current)">{{ t('quickCommands.saveAs') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem class="danger" @click="deleteSelected(); ctxMenuVisible = false">{{ t('sidebar.delete') }}</MenuItem>
+    </Menu>
 
     <!-- Custom tooltip -->
     <div v-show="tooltipVisible" class="qc-tooltip" :style="tooltipStyle">{{ tooltipText }}</div>
@@ -69,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Play, Clipboard, Copy } from '@lucide/vue'
 import { useSuggestions, type HistoryEntry } from '../composables/useSuggestions'
 import { useTabStore } from '../stores/tabStore'
@@ -80,6 +75,9 @@ import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'
 import QuickCommandEditDialog from './QuickCommandEditDialog.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 const { t } = useI18n()
 const suggestions = useSuggestions()
@@ -94,9 +92,8 @@ const hoveredId = ref<string | null>(null)
 const listRef = ref<HTMLDivElement | null>(null)
 const lastClickId = ref<string | null>(null)
 
-const menuVisible = ref(false)
-const menuStyle = ref({ left: '0px', top: '0px' })
-const menuTarget = ref<HistoryEntry | null>(null)
+const ctxMenuVisible = ref(false)
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 const editDialogVisible = ref(false)
 const editingCmdCommand = ref('')
@@ -119,11 +116,6 @@ const entries = suggestions.historyEntries
 
 onMounted(async () => {
   await suggestions.loadHistory()
-  document.addEventListener('click', closeMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeMenu)
 })
 
 const filteredEntries = computed(() => {
@@ -243,7 +235,7 @@ async function copyCommand(entry: HistoryEntry) {
 function saveAsQuickCommand(entry: HistoryEntry) {
   editingCmdCommand.value = entry.command
   editDialogVisible.value = true
-  closeMenu()
+  ctxMenuVisible.value = false
 }
 
 function deleteEntries(ids: string[]) {
@@ -259,22 +251,11 @@ function deleteSelected() {
 
 function onContextMenu(e: MouseEvent, entry: HistoryEntry) {
   e.stopPropagation()
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
-  menuTarget.value = entry
   if (!selectedIds.value.has(entry.id)) {
     selectedIds.value = new Set([entry.id])
     focusedId.value = entry.id
   }
-  menuStyle.value = clampMenuPosition(e.clientX, e.clientY)
-  menuVisible.value = true
-}
-
-function closeMenu() { menuVisible.value = false }
-
-function clampMenuPosition(x: number, y: number) {
-  const mx = Math.min(x, window.innerWidth - 160)
-  const my = Math.min(y, window.innerHeight - 100)
-  return { left: mx + 'px', top: my + 'px' }
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, entry)
 }
 
 watch(searchQuery, () => {
@@ -377,32 +358,4 @@ watch(searchQuery, () => {
   font-size: 12px;
 }
 
-.qc-context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  box-shadow: var(--shadow-lg);
-  padding: 4px;
-  min-width: 140px;
-}
-
-.qc-context-menu .menu-item {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.qc-context-menu .menu-item:hover { background: var(--bg-hover); }
-.qc-context-menu .menu-item.danger { color: var(--error); }
-.qc-context-menu .menu-item.disabled { color: var(--text-disabled); pointer-events: none; }
-
-.qc-context-menu .menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
-}
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="mongodb-tab-content" @click="closeContextMenu">
+  <div class="mongodb-tab-content">
     <div class="mongo-main">
       <!-- Left tree panel -->
       <div class="mongo-left" :style="{ width: leftWidth + 'px' }">
@@ -108,35 +108,30 @@
     </div>
 
     <!-- Context menu -->
-    <div
-      v-if="ctxVisible"
-      class="ctx-menu"
-      :style="{ left: ctxX + 'px', top: ctxY + 'px' }"
-      @click.stop
-    >
-      <template v-if="ctxTargetType === 'blank'">
-        <div class="ctx-item" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxRefresh">{{ t('mongodb.refresh') }}</div>
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <template v-if="current?.type === 'blank'">
+        <MenuItem @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxRefresh">{{ t('mongodb.refresh') }}</MenuItem>
       </template>
-      <template v-else-if="ctxTargetType === 'db'">
-        <div class="ctx-item" @click="onCtxOpenQuery">{{ t('mongodb.openQuery') }}</div>
-        <div class="ctx-item" @click="onCtxNewCollection">{{ t('mongodb.newCollection') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxRefresh">{{ t('mongodb.refresh') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item danger" @click="onCtxDropDatabase">{{ t('mongodb.dropDatabase') }}</div>
+      <template v-else-if="current?.type === 'db'">
+        <MenuItem @click="onCtxOpenQuery(current as CtxMenuData)">{{ t('mongodb.openQuery') }}</MenuItem>
+        <MenuItem @click="onCtxNewCollection(current as CtxMenuData)">{{ t('mongodb.newCollection') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxRefresh">{{ t('mongodb.refresh') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem class="danger" @click="onCtxDropDatabase(current as CtxMenuData)">{{ t('mongodb.dropDatabase') }}</MenuItem>
       </template>
-      <template v-else-if="ctxTargetType === 'col'">
-        <div class="ctx-item" @click="onCtxOpenColQuery">{{ t('mongodb.openQuery') }}</div>
-        <div class="ctx-item" @click="onCtxNewColDocument">{{ t('mongodb.newDocument') }}</div>
-        <div class="ctx-item" @click="onCtxViewIndexes">{{ t('mongodb.indexesTab') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item" @click="onCtxCopyName">{{ t('mongodb.copyName') }}</div>
-        <div class="ctx-sep" />
-        <div class="ctx-item danger" @click="onCtxDropCollection">{{ t('mongodb.dropCollection') }}</div>
+      <template v-else-if="current?.type === 'col'">
+        <MenuItem @click="onCtxOpenColQuery(current as CtxMenuData)">{{ t('mongodb.openQuery') }}</MenuItem>
+        <MenuItem @click="onCtxNewColDocument(current as CtxMenuData)">{{ t('mongodb.newDocument') }}</MenuItem>
+        <MenuItem @click="onCtxViewIndexes(current as CtxMenuData)">{{ t('mongodb.indexesTab') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="onCtxCopyName(current as CtxMenuData)">{{ t('mongodb.copyName') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem class="danger" @click="onCtxDropCollection(current as CtxMenuData)">{{ t('mongodb.dropCollection') }}</MenuItem>
       </template>
-    </div>
+    </Menu>
 
     <!-- New Collection dialog -->
     <el-dialog append-to-body
@@ -191,6 +186,9 @@ import {
   MongoDropDatabase,
 } from '../../wailsjs/go/main/App'
 import MongoDBCollectionView from './MongoDBCollectionView.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 defineOptions({ name: 'MongoDBTabContent' })
 
@@ -297,38 +295,19 @@ function closeTab(tabId: number) {
 }
 
 // ── Context menu state ──
-const ctxVisible = ref(false)
-const ctxX = ref(0)
-const ctxY = ref(0)
-const ctxTargetType = ref<'db' | 'col' | 'blank'>('db')
-const ctxDbName = ref('')
-const ctxColName = ref('')
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const ctxMenuVisible = ref(false)
 
-function closeContextMenu() {
-  ctxVisible.value = false
-}
-
-function fitContextMenu(x: number, y: number, type: string) {
-  const heights: Record<string, number> = { blank: 90, db: 160, col: 190 }
-  const menuW = 160
-  const menuH = heights[type] || 150
-
-  let left = x
-  let top = y
-
-  if (left + menuW > window.innerWidth) left = x - menuW
-  if (left < 0) left = 4
-
-  if (top + menuH > window.innerHeight) top = y - menuH
-  if (top < 0) top = window.innerHeight - menuH - 4
-  if (top < 0) top = 4
-
-  return { left, top }
+interface CtxMenuData {
+  type: 'db' | 'col' | 'blank'
+  db: string
+  col: string
 }
 
 // ── Dialog state ──
 const newColDialogVisible = ref(false)
 const newColName = ref('')
+const ctxNewColDb = ref('')
 
 const newDbDialogVisible = ref(false)
 const newDbName = ref('')
@@ -381,65 +360,49 @@ async function toggleDb(db: string) {
 function onTreeContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (target.closest('.db-header') || target.closest('.table-item')) return
-  ctxTargetType.value = 'blank'
-  const pos = fitContextMenu(e.clientX, e.clientY, 'blank')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, { type: 'blank', db: '', col: '' } as CtxMenuData)
 }
 
 function onDbContextMenu(e: MouseEvent, db: string) {
-  ctxTargetType.value = 'db'
-  ctxDbName.value = db
-  ctxColName.value = ''
-  const pos = fitContextMenu(e.clientX, e.clientY, 'db')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, { type: 'db', db, col: '' } as CtxMenuData)
 }
 
 function onColContextMenu(e: MouseEvent, db: string, col: string) {
-  ctxTargetType.value = 'col'
-  ctxDbName.value = db
-  ctxColName.value = col
-  const pos = fitContextMenu(e.clientX, e.clientY, 'col')
-  ctxX.value = pos.left
-  ctxY.value = pos.top
-  ctxVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, { type: 'col', db, col } as CtxMenuData)
 }
 
-function onCtxOpenQuery() {
-  openQueryTab(ctxDbName.value)
-  ctxVisible.value = false
+function onCtxOpenQuery(current: CtxMenuData) {
+  openQueryTab(current.db)
+  ctxMenuVisible.value = false
 }
 
-function onCtxOpenColQuery() {
-  openCollectionTab(ctxDbName.value, ctxColName.value)
-  ctxVisible.value = false
+function onCtxOpenColQuery(current: CtxMenuData) {
+  openCollectionTab(current.db, current.col)
+  ctxMenuVisible.value = false
 }
 
-function onCtxNewColDocument() {
+function onCtxNewColDocument(current: CtxMenuData) {
   // Open the collection tab; the "New Document" action lives inside it.
-  openCollectionTab(ctxDbName.value, ctxColName.value)
-  ctxVisible.value = false
+  openCollectionTab(current.db, current.col)
+  ctxMenuVisible.value = false
 }
 
-function onCtxViewIndexes() {
+function onCtxViewIndexes(current: CtxMenuData) {
   // Open the collection tab; switch to the indexes sub-tab inside it.
-  openCollectionTab(ctxDbName.value, ctxColName.value)
-  ctxVisible.value = false
+  openCollectionTab(current.db, current.col)
+  ctxMenuVisible.value = false
 }
 
-function onCtxCopyName() {
-  navigator.clipboard.writeText(ctxColName.value)
-  ctxVisible.value = false
+function onCtxCopyName(current: CtxMenuData) {
+  navigator.clipboard.writeText(current.col)
+  ctxMenuVisible.value = false
 }
 
 function onCtxNewDatabase() {
   newDbName.value = ''
   newDbFirstCol.value = ''
   newDbDialogVisible.value = true
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 async function createDatabase() {
@@ -458,31 +421,32 @@ async function createDatabase() {
 
 function onCtxRefresh() {
   refreshDatabases()
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
-function onCtxNewCollection() {
+function onCtxNewCollection(current: CtxMenuData) {
+  ctxNewColDb.value = current.db
   newColName.value = ''
   newColDialogVisible.value = true
 }
 
 async function createCollection() {
   const name = newColName.value.trim()
-  if (!name || !ctxDbName.value) return
+  if (!name || !ctxNewColDb.value) return
   try {
-    await MongoCreateCollection(props.sessionId, ctxDbName.value, name)
+    await MongoCreateCollection(props.sessionId, ctxNewColDb.value, name)
     msg.success(t('mongodb.collectionCreated'))
     newColDialogVisible.value = false
-    const cols = await MongoListCollections(props.sessionId, ctxDbName.value)
-    collections.value[ctxDbName.value] = cols.filter(c => !c.startsWith('system.'))
+    const cols = await MongoListCollections(props.sessionId, ctxNewColDb.value)
+    collections.value[ctxNewColDb.value] = cols.filter(c => !c.startsWith('system.'))
     collections.value = { ...collections.value }
   } catch (e: any) {
     msg.error(e?.message || String(e))
   }
 }
 
-function onCtxDropDatabase() {
-  const db = ctxDbName.value
+function onCtxDropDatabase(current: CtxMenuData) {
+  const db = current.db
   ElMessageBox.confirm(t('mongodb.dropDatabase') + ': ' + db, t('common.confirm'), { type: 'warning' })
     .then(async () => {
       try {
@@ -500,12 +464,12 @@ function onCtxDropDatabase() {
       }
     })
     .catch(() => {})
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
-function onCtxDropCollection() {
-  const db = ctxDbName.value
-  const col = ctxColName.value
+function onCtxDropCollection(current: CtxMenuData) {
+  const db = current.db
+  const col = current.col
   ElMessageBox.confirm(t('mongodb.dropCollection') + ': ' + col, t('common.confirm'), { type: 'warning' })
     .then(async () => {
       try {
@@ -523,12 +487,11 @@ function onCtxDropCollection() {
       }
     })
     .catch(() => {})
-  ctxVisible.value = false
+  ctxMenuVisible.value = false
 }
 
 // ── Lifecycle ──
 onMounted(() => {
-  document.addEventListener('click', closeContextMenu)
   if (props.sessionId) {
     refreshDatabases()
   }
@@ -539,7 +502,6 @@ onUnmounted(() => {
     document.removeEventListener('mousemove', onResizeMove)
     document.removeEventListener('mouseup', onResizeEnd)
   }
-  document.removeEventListener('click', closeContextMenu)
 })
 
 watch(() => props.sessionId, () => {
@@ -816,34 +778,4 @@ watch(() => props.sessionId, () => {
   font-size: 14px;
 }
 
-/* ── Context menu ── */
-.ctx-menu {
-  position: fixed;
-  z-index: 1000;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 4px 0;
-  min-width: 150px;
-  box-shadow: var(--shadow-md);
-}
-.ctx-item {
-  padding: 6px 12px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.ctx-item:hover {
-  background: var(--bg-hover);
-}
-.ctx-item.danger {
-  color: var(--error);
-}
-.ctx-sep {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 0;
-}
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="es-tab-content" @click="closeContextMenu">
+  <div class="es-tab-content">
     <!-- Cluster status bar -->
     <div class="es-cluster-bar">
       <span class="health-dot" :class="healthStatus" />
@@ -212,18 +212,13 @@
     </div>
 
     <!-- Index context menu -->
-    <div
-      v-if="ctxVisible"
-      class="ctx-menu"
-      :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }"
-      @click.stop
-    >
-      <div class="ctx-item" @click="ctxRefresh">{{ t('es.refresh') }}</div>
-      <div class="ctx-item" @click="ctxOpenIndex">{{ t('es.openIndex') }}</div>
-      <div class="ctx-item" @click="ctxCloseIndex">{{ t('es.closeIndex') }}</div>
-      <div class="ctx-divider" />
-      <div class="ctx-item danger" @click="ctxDeleteIndex">{{ t('es.deleteIndex') }}</div>
-    </div>
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <MenuItem @click="ctxRefresh(current)">{{ t('es.refresh') }}</MenuItem>
+      <MenuItem @click="ctxOpenIndex(current)">{{ t('es.openIndex') }}</MenuItem>
+      <MenuItem @click="ctxCloseIndex(current)">{{ t('es.closeIndex') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem class="danger" @click="ctxDeleteIndex(current)">{{ t('es.deleteIndex') }}</MenuItem>
+    </Menu>
 
     <!-- Document editor dialog -->
     <el-dialog
@@ -263,10 +258,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import {
   EsClusterInfo,
   EsClusterHealth,
@@ -325,9 +323,8 @@ const restLoading = ref(false)
 const restError = ref('')
 const restResult = ref<EsRestResult | null>(null)
 
-const ctxVisible = ref(false)
-const ctxPos = ref({ x: 0, y: 0 })
-const ctxIndex = ref<EsIndexInfo | null>(null)
+const ctxMenuVisible = ref(false)
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 const docDialogVisible = ref(false)
 const docDialogMode = ref<'create' | 'edit'>('create')
@@ -378,10 +375,6 @@ watch(() => props.sessionId, () => {
 
 onMounted(() => {
   if (props.sessionId) refreshAll()
-  window.addEventListener('click', closeContextMenu)
-})
-onUnmounted(() => {
-  window.removeEventListener('click', closeContextMenu)
 })
 
 async function refreshAll() {
@@ -631,23 +624,17 @@ async function createIndex() {
 }
 
 function onIndexContextMenu(e: MouseEvent, idx: EsIndexInfo) {
-  ctxIndex.value = idx
-  ctxPos.value = { x: e.clientX, y: e.clientY }
-  ctxVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, idx)
 }
 
-function closeContextMenu() {
-  ctxVisible.value = false
-}
-
-async function ctxRefresh() {
-  closeContextMenu()
+async function ctxRefresh(_current: unknown) {
+  ctxMenuVisible.value = false
   await loadIndices()
 }
 
-async function ctxOpenIndex() {
-  const name = ctxIndex.value?.name
-  closeContextMenu()
+async function ctxOpenIndex(current: unknown) {
+  const name = (current as EsIndexInfo | null)?.name
+  ctxMenuVisible.value = false
   if (!name || !props.sessionId) return
   try {
     await EsOpenIndex(props.sessionId, name)
@@ -658,9 +645,9 @@ async function ctxOpenIndex() {
   }
 }
 
-async function ctxCloseIndex() {
-  const name = ctxIndex.value?.name
-  closeContextMenu()
+async function ctxCloseIndex(current: unknown) {
+  const name = (current as EsIndexInfo | null)?.name
+  ctxMenuVisible.value = false
   if (!name || !props.sessionId) return
   try {
     await EsCloseIndex(props.sessionId, name)
@@ -671,9 +658,9 @@ async function ctxCloseIndex() {
   }
 }
 
-async function ctxDeleteIndex() {
-  const name = ctxIndex.value?.name
-  closeContextMenu()
+async function ctxDeleteIndex(current: unknown) {
+  const name = (current as EsIndexInfo | null)?.name
+  ctxMenuVisible.value = false
   if (!name || !props.sessionId) return
   try {
     await ElMessageBox.confirm(t('es.deleteIndexConfirm', { name }), { type: 'warning' })
@@ -1101,27 +1088,4 @@ function onTopResizeStart(e: MouseEvent) {
   outline: none;
 }
 
-.ctx-menu {
-  position: fixed;
-  z-index: 3000;
-  min-width: 160px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-  padding: 4px 0;
-}
-.ctx-item {
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: var(--font-ui);
-}
-.ctx-item:hover { background: var(--bg-hover); }
-.ctx-item.danger { color: var(--error); }
-.ctx-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 0;
-}
 </style>

@@ -27,7 +27,7 @@
         <span
           v-else-if="isWindowsPath && item === pathParts[0]"
           class="breadcrumb-part breadcrumb-drive"
-          @click.stop="toggleDriveMenu"
+          @click.stop="driveMenuRef?.toggle($event.currentTarget)"
         >
           {{ item }}
           <span class="drive-arrow">&#9660;</span>
@@ -43,88 +43,73 @@
       </template>
       <button
         v-if="bookmarkMode"
-        ref="bookmarkBtnRef"
         class="bookmark-btn"
         :title="t('sftp.bookmark.title')"
-        @click.stop="toggleBookmarkMenu"
+        @click.stop="bookmarkMenuRef?.toggle($event.currentTarget)"
       >
         <Bookmark :size="14" :class="{ 'bookmark-active': hasCurrentPathBookmarked }" />
       </button>
     </template>
 
     <!-- Drive dropdown -->
-    <Teleport to="body">
-      <div
-        v-show="driveMenuVisible"
-        class="drive-dropdown"
-        :style="driveMenuStyle"
-        @click.stop
-        @mousedown.stop
+    <Menu ref="driveMenuRef" align="start" v-model:visible="driveMenuVisible">
+      <MenuItem
+        v-for="drive in drives"
+        :key="drive"
+        class="mono"
+        :class="{ active: drive === currentDrive }"
+        @click="onDriveSelect(drive)"
       >
-        <div
-          v-for="drive in drives"
-          :key="drive"
-          class="drive-item"
-          :class="{ active: drive === currentDrive }"
-          @click="onDriveSelect(drive)"
-        >
-          {{ drive }}
-        </div>
-      </div>
-    </Teleport>
+        {{ drive }}
+      </MenuItem>
+    </Menu>
 
     <!-- Bookmark dropdown -->
-    <Teleport to="body">
-      <div
-        v-show="bookmarkMenuVisible"
-        class="bookmark-dropdown"
-        :style="bookmarkMenuStyle"
-        @click.stop
-        @mousedown.stop
+    <Menu ref="bookmarkMenuRef" align="end" v-model:visible="bookmarkMenuVisible">
+      <MenuItem
+        v-if="!hasCurrentPathBookmarked"
+        iconic
+        :icon="BookmarkPlus"
+        class="bookmark-save"
+        @click="onSaveBookmark"
       >
-        <div
-          v-if="!hasCurrentPathBookmarked"
-          class="bookmark-item bookmark-save"
-          @click="onSaveBookmark"
-        >
-          <BookmarkPlus :size="14" />
-          <span>{{ t('sftp.bookmark.saveCurrent') }}</span>
-        </div>
-        <div
-          v-else
-          class="bookmark-item bookmark-saved-hint"
-        >
-          <BookmarkCheck :size="14" />
-          <span>{{ t('sftp.bookmark.saved') }}</span>
-        </div>
-        <div v-if="savedPaths.length > 0" class="bookmark-divider"></div>
-        <div
-          v-for="(savedPath, idx) in savedPaths"
-          :key="idx"
-          class="bookmark-item bookmark-path-item"
-          :class="{ active: savedPath === currentPath }"
-          @click="onBookmarkClick(savedPath)"
-          @mouseenter="hoveredBookmarkIdx = idx"
-          @mouseleave="hoveredBookmarkIdx = -1"
-        >
-          <span class="bookmark-path-text" :title="savedPath">{{ savedPath }}</span>
+        {{ t('sftp.bookmark.saveCurrent') }}
+      </MenuItem>
+      <MenuItem
+        v-else
+        iconic
+        :icon="BookmarkCheck"
+        class="bookmark-saved-hint"
+      >
+        {{ t('sftp.bookmark.saved') }}
+      </MenuItem>
+      <MenuDivider />
+      <MenuItem
+        v-for="savedPath in savedPaths"
+        :key="savedPath"
+        iconic
+        class="mono bookmark-path-item"
+        :class="{ active: savedPath === currentPath }"
+        @click="onBookmarkClick(savedPath)"
+      >
+        <span class="bookmark-path-text" :title="savedPath">{{ savedPath }}</span>
+        <template #trailing>
           <button
-            v-show="hoveredBookmarkIdx === idx"
             class="bookmark-remove-btn"
             @click.stop="onRemoveBookmark(savedPath)"
             :title="t('sftp.bookmark.remove')"
           >
             <Trash2 :size="12" />
           </button>
-        </div>
-        <div
-          v-if="savedPaths.length === 0"
-          class="bookmark-item bookmark-empty"
-        >
-          {{ t('sftp.bookmark.empty') }}
-        </div>
-      </div>
-    </Teleport>
+        </template>
+      </MenuItem>
+      <MenuItem
+        v-if="savedPaths.length === 0"
+        class="bookmark-empty"
+      >
+        {{ t('sftp.bookmark.empty') }}
+      </MenuItem>
+    </Menu>
   </div>
 </template>
 
@@ -132,6 +117,9 @@
 import { computed, ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { Bookmark, BookmarkPlus, BookmarkCheck, Trash2, MoreHorizontal } from '@lucide/vue'
 import { useI18n } from '../i18n'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 
 const { t } = useI18n()
 
@@ -268,35 +256,19 @@ function cancelEdit() {
 
 // Drive menu
 const driveMenuVisible = ref(false)
-const driveMenuStyle = ref({ left: '0px', top: '0px' })
-
-function toggleDriveMenu(event?: MouseEvent) {
-  if (driveMenuVisible.value) {
-    driveMenuVisible.value = false
-    return
-  }
-  if (event) {
-    const rect = (event.target as HTMLElement).getBoundingClientRect()
-    driveMenuStyle.value = {
-      left: rect.left + 'px',
-      top: (rect.bottom + 4) + 'px'
-    }
-  }
-  closeDriveMenu()
-  driveMenuVisible.value = true
-  nextTick(() => {
-    document.addEventListener('mousedown', closeDriveMenu, { once: true })
-  })
-}
-
-function closeDriveMenu() {
-  driveMenuVisible.value = false
-}
+const driveMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 function onGlobalContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.sftp-breadcrumb')) {
-    closeDriveMenu()
+    driveMenuVisible.value = false
+  }
+}
+
+function onGlobalBookmarkContextMenu(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.sftp-breadcrumb')) {
+    bookmarkMenuVisible.value = false
   }
 }
 
@@ -308,12 +280,10 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('contextmenu', onGlobalContextMenu)
   document.removeEventListener('contextmenu', onGlobalBookmarkContextMenu)
-  document.removeEventListener('mousedown', closeDriveMenu)
-  document.removeEventListener('mousedown', closeBookmarkMenu)
 })
 
 function onDriveSelect(drive: string) {
-  closeDriveMenu()
+  driveMenuVisible.value = false
   emit('navigate', drive)
 }
 
@@ -356,48 +326,11 @@ function onBreadcrumbClick(part: string) {
 
 // Bookmark menu
 const bookmarkMenuVisible = ref(false)
-const bookmarkMenuStyle = ref({ left: '0px', top: '0px' })
-const bookmarkBtnRef = ref<HTMLElement>()
-const hoveredBookmarkIdx = ref(-1)
-
+const bookmarkMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const currentPath = computed(() => props.path)
 const hasCurrentPathBookmarked = computed(() => {
   return (props.savedPaths || []).includes(props.path)
 })
-
-function toggleBookmarkMenu(event?: MouseEvent) {
-  if (bookmarkMenuVisible.value) {
-    bookmarkMenuVisible.value = false
-    return
-  }
-  if (event) {
-    const rect = (event.target as HTMLElement).closest('.bookmark-btn')?.getBoundingClientRect()
-    if (rect) {
-      bookmarkMenuStyle.value = {
-        left: 'auto',
-        right: (window.innerWidth - rect.right) + 'px',
-        top: (rect.bottom + 4) + 'px'
-      }
-    }
-  }
-  closeBookmarkMenu()
-  bookmarkMenuVisible.value = true
-  nextTick(() => {
-    document.addEventListener('mousedown', closeBookmarkMenu, { once: true })
-  })
-}
-
-function closeBookmarkMenu() {
-  bookmarkMenuVisible.value = false
-  hoveredBookmarkIdx.value = -1
-}
-
-function onGlobalBookmarkContextMenu(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (!target.closest('.sftp-breadcrumb')) {
-    closeBookmarkMenu()
-  }
-}
 
 function onSaveBookmark() {
   emit('saveBookmark', props.path)
@@ -409,7 +342,7 @@ function onRemoveBookmark(path: string) {
 }
 
 function onBookmarkClick(path: string) {
-  closeBookmarkMenu()
+  bookmarkMenuVisible.value = false
   if (path !== props.path) {
     emit('navigate', path)
   }
@@ -493,61 +426,7 @@ function onBookmarkClick(path: string) {
 </style>
 
 <style>
-.drive-dropdown {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 80px;
-  padding: 4px;
-}
-.drive-item {
-  padding: 5px 10px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-.drive-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.drive-item.active {
-  color: var(--accent);
-}
-
-.bookmark-dropdown {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 200px;
-  max-width: 320px;
-  padding: 4px;
-}
-.bookmark-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-.bookmark-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.bookmark-item.active {
-  color: var(--accent);
-}
+/* Bookmark accent / remove-button specifics. */
 .bookmark-save,
 .bookmark-saved-hint {
   color: var(--accent);
@@ -580,11 +459,6 @@ function onBookmarkClick(path: string) {
 .bookmark-remove-btn:hover {
   background: var(--bg-hover);
   color: var(--error);
-}
-.bookmark-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 4px 6px;
 }
 .bookmark-empty {
   font-family: var(--font-ui);

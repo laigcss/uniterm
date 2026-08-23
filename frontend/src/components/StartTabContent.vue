@@ -6,20 +6,21 @@
 
       <!-- Search row -->
     <div class="start-search-row">
-      <el-dropdown ref="typeFilterDropdownRef" trigger="click" placement="bottom-start" :teleported="false" popper-class="type-filter-popper">
-        <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }">
-          <el-icon><Filter :size="14" /></el-icon>
-          <span>{{ filterDisplay }}</span>
-        </span>
-        <template #dropdown>
-          <TypeFilterMenuContent
-            :model-value="selectedTypeFilter"
-            :all-label="t('sidebar.filterAll')"
-            :groups="filterGroups"
-            @update:model-value="onFilterSelect"
-          />
-        </template>
-      </el-dropdown>
+      <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
+        <el-icon><Filter :size="14" /></el-icon>
+        <span>{{ filterDisplay }}</span>
+      </span>
+      <Menu ref="filterMenuRef" align="start" v-model:visible="showFilterMenu">
+        <MenuItem :class="{ active: selectedTypeFilter === 'all' }" @click="onFilterSelect('all')">{{ t('sidebar.filterAll') }}</MenuItem>
+        <MenuSubmenu v-for="grp in filterGroups" :key="grp.key" :label="grp.label">
+          <MenuItem
+            v-for="it in grp.items"
+            :key="it.key"
+            :class="{ active: selectedTypeFilter === it.key }"
+            @click="onFilterSelect(it.key)"
+          >{{ it.label }}</MenuItem>
+        </MenuSubmenu>
+      </Menu>
       <el-input
         ref="searchInputRef"
         v-model="searchQuery"
@@ -41,25 +42,21 @@
           <el-icon><Laptop :size="14" /></el-icon>
           {{ t('conn.startLocalTerminal') }}
         </button>
-        <el-dropdown trigger="click" placement="bottom-start" :teleported="false">
-          <button class="start-action-btn-dropdown-arrow">
-            <el-icon><ChevronDown :size="12" /></el-icon>
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="sh in settingsStore.availableShells"
-                :key="sh"
-                @click="emit('local-terminal', sh, $event.ctrlKey || $event.metaKey)"
-              >
-                {{ getShellLabel(sh) }}
-              </el-dropdown-item>
-              <el-dropdown-item v-if="settingsStore.availableShells.length === 0" disabled>
-                No shells available
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <button class="start-action-btn-dropdown-arrow" @click.stop="shellMenuRef?.toggle($event.currentTarget)">
+          <el-icon><ChevronDown :size="12" /></el-icon>
+        </button>
+        <Menu ref="shellMenuRef" v-model:visible="shellMenuVisible">
+          <MenuItem
+            v-for="sh in settingsStore.availableShells"
+            :key="sh"
+            @click="onShellPick(sh, $event)"
+          >
+            {{ getShellLabel(sh) }}
+          </MenuItem>
+          <MenuItem v-if="settingsStore.availableShells.length === 0" class="disabled">
+            No shells available
+          </MenuItem>
+        </Menu>
       </div>
 
     </div>
@@ -317,57 +314,47 @@
     </div>
 
     <!-- Context menu -->
-    <div
-      v-show="contextMenuVisible"
-      class="start-context-menu"
-      :style="contextMenuStyle"
-      @click.stop
-    >
+    <Menu ref="contextMenuRef" v-model:visible="contextMenuVisible">
       <!-- Terminal -->
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectSSH') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'telnet'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectTelnet') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'mosh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectMosh') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'local'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectLocal') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'serial'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSerial(contextMenuConfig, $event)">{{ t('sidebar.connectSerial') }}</div>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectSSH') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'telnet'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectTelnet') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'mosh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectMosh') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'local'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectLocal') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'serial'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSerial(contextMenuConfig, $event)">{{ t('sidebar.connectSerial') }}</MenuItem>
       <!-- File Transfer -->
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSftp(contextMenuConfig)">{{ t('sidebar.connectSftp') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'ftp'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectFtp(contextMenuConfig)">{{ t('sidebar.connectFtp') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'smb'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSmb(contextMenuConfig)">{{ t('sidebar.connectSmb') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 's3'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectS3(contextMenuConfig)">{{ t('sidebar.connectS3') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'webdav'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectWebdav(contextMenuConfig)">{{ t('sidebar.connectWebdav') }}</div>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSftp(contextMenuConfig)">{{ t('sidebar.connectSftp') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ftp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectFtp(contextMenuConfig)">{{ t('sidebar.connectFtp') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'smb'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSmb(contextMenuConfig)">{{ t('sidebar.connectSmb') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 's3'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectS3(contextMenuConfig)">{{ t('sidebar.connectS3') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'webdav'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectWebdav(contextMenuConfig)">{{ t('sidebar.connectWebdav') }}</MenuItem>
       <!-- Remote Desktop -->
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'rdp'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectRdp(contextMenuConfig)">{{ t('sidebar.connectRDP') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'vnc'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectVnc(contextMenuConfig)">{{ t('sidebar.connectVNC') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'spice'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSpice(contextMenuConfig)">{{ t('sidebar.connectSPICE') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'x11-desktop'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectX11Desktop(contextMenuConfig)">{{ t('sidebar.connectX11Desktop') }}</div>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'rdp'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectRdp(contextMenuConfig)">{{ t('sidebar.connectRDP') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'vnc'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectVnc(contextMenuConfig)">{{ t('sidebar.connectVNC') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'spice'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectSpice(contextMenuConfig)">{{ t('sidebar.connectSPICE') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'x11-desktop'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectX11Desktop(contextMenuConfig)">{{ t('sidebar.connectX11Desktop') }}</MenuItem>
       <!-- Database & Monitor -->
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'database'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectDb(contextMenuConfig)">{{ t('db.connectDB') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'k8s'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectK8s(contextMenuConfig)">{{ t('sidebar.connectK8s') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'container'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectContainer') }}</div>
-      <div v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectMonitor(contextMenuConfig)">{{ t('sidebar.connectMonitor') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEditConnection(contextMenuConfig)">{{ t('sidebar.edit') }}</div>
-      <div class="menu-item" @click="doChangeGroupBulk">{{ t('conn.moveTo') }}</div>
-      <div class="menu-item" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doDuplicate(contextMenuConfig)">{{ t('sidebar.duplicate') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item danger" @click="doDeleteBulk">{{ t('sidebar.delete') }}</div>
-    </div>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'database'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectDb(contextMenuConfig)">{{ t('db.connectDB') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'k8s'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectK8s(contextMenuConfig)">{{ t('sidebar.connectK8s') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'container'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnect(contextMenuConfig, $event)">{{ t('sidebar.connectContainer') }}</MenuItem>
+      <MenuItem v-if="contextMenuConfig && contextMenuConfig.type === 'ssh'" :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doConnectMonitor(contextMenuConfig)">{{ t('sidebar.connectMonitor') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEditConnection(contextMenuConfig)">{{ t('sidebar.edit') }}</MenuItem>
+      <MenuItem @click="doChangeGroupBulk">{{ t('conn.moveTo') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doDuplicate(contextMenuConfig)">{{ t('sidebar.duplicate') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem class="danger" @click="doDeleteBulk">{{ t('sidebar.delete') }}</MenuItem>
+    </Menu>
 
     <!-- Group context menu -->
-    <div
-      v-show="groupContextVisible"
-      class="start-context-menu"
-      :style="contextMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item" @click="doNewGroupFromCtx">{{ t('conn.newGroupTitle') }}</div>
-      <div class="menu-item" @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item" @click="doRenameGroup">{{ t('conn.renameGroup') }}</div>
-      <div class="menu-item" @click="doChangeGroupParent">{{ t('conn.moveTo') }}</div>
-      <div class="menu-divider" />
-      <div class="menu-item danger" @click="doDeleteGroup">{{ t('conn.deleteGroup') }}</div>
-    </div>
+    <Menu ref="groupMenuRef" v-model:visible="groupMenuVisible">
+      <MenuItem @click="doNewGroupFromCtx">{{ t('conn.newGroupTitle') }}</MenuItem>
+      <MenuItem @click="doNewConnInGroup">{{ t('sidebar.newConnection') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem @click="doRenameGroup">{{ t('conn.renameGroup') }}</MenuItem>
+      <MenuItem @click="doChangeGroupParent">{{ t('conn.moveTo') }}</MenuItem>
+      <MenuDivider />
+      <MenuItem class="danger" @click="doDeleteGroup">{{ t('conn.deleteGroup') }}</MenuItem>
+    </Menu>
 
     </div>
 
@@ -440,7 +427,10 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { GetRecentConnections } from '../../wailsjs/go/main/App'
 import { formatConnSubtitle, getConnectionTypeKey, getTypeCategory, formatTypeFilterLabel, getTypeFilterCatalog } from '../utils/quickConnect'
-import TypeFilterMenuContent from './TypeFilterMenuContent.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuSubmenu from './MenuSubmenu.vue'
+import MenuDivider from './MenuDivider.vue'
 import { Filter, Plus, Laptop, Cable, SquareTerminal, Terminal, Database, DatabaseZap, Layers, DatabaseSearch, Monitor, MonitorSmartphone, MonitorCloud, FolderUp, HardDrive, Cloud, Globe, Server, Folder, FolderOpen, Zap, MoreHorizontal, ChevronDown, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
@@ -469,6 +459,11 @@ const effectiveDefaultShell = computed(() => {
   const preferred = settingsStore.settings.defaultLocalShell
   return preferred && shells.includes(preferred) ? preferred : shells[0]
 })
+
+function onShellPick(sh: string, e: MouseEvent) {
+  shellMenuVisible.value = false
+  emit('local-terminal', sh, e.ctrlKey || e.metaKey)
+}
 
 function handleDefaultLocalTerminal() {
   const shell = effectiveDefaultShell.value
@@ -578,16 +573,15 @@ function matchTypeFilter(conn: ConnectionConfig, filter: string): boolean {
   return conn.type === filter
 }
 
+const showFilterMenu = ref(false)
+const filterMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+
+const shellMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const shellMenuVisible = ref(false)
+
 function onFilterSelect(val: string) {
   selectedTypeFilter.value = val
-  closeTypeFilter()
-}
-
-const typeFilterDropdownRef = ref()
-
-// el-dropdown exposes handleClose() to dismiss the dropdown programmatically.
-function closeTypeFilter() {
-  typeFilterDropdownRef.value?.handleClose()
+  showFilterMenu.value = false
 }
 
 // ── Shell label helper ──
@@ -1025,35 +1019,21 @@ function onKeydown(e: KeyboardEvent) {
 
 // ── Context menu ──
 const contextMenuVisible = ref(false)
-const contextMenuStyle = ref<Record<string, string>>({})
+const contextMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const contextMenuConfig = ref<ConnectionConfig | null>(null)
 
-function clampMenuPos(x: number, y: number, menuW = 160, menuH = 280): { left: string; top: string } {
-  let left = x
-  let top = y
-  if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 4
-  if (left < 0) left = 4
-  if (top + menuH > window.innerHeight) top = y - menuH
-  if (top < 0) top = 4
-  return { left: left + 'px', top: top + 'px' }
+function closeContextMenu() {
+  contextMenuVisible.value = false
 }
 
 function onContextMenu(e: MouseEvent, config: ConnectionConfig, prefix = 'conn:') {
-  closeContextMenu()
   // If right-clicking an unselected item, replace selection with this card
   const key = prefix + config.id
   if (!selectedIds.value.has(key)) {
     selectedIds.value = new Set([key])
   }
   contextMenuConfig.value = config
-  const pos = clampMenuPos(e.clientX, e.clientY)
-  contextMenuStyle.value = { position: 'fixed', left: pos.left, top: pos.top, zIndex: '10000' }
-  contextMenuVisible.value = true
-}
-
-function closeContextMenu() {
-  contextMenuVisible.value = false
-  groupContextVisible.value = false
+  contextMenuRef.value?.openAt(e.clientX, e.clientY, config)
 }
 
 function onCardMoreClick(e: MouseEvent, config: ConnectionConfig, prefix = 'conn:') {
@@ -1066,28 +1046,28 @@ function onCardMoreClick(e: MouseEvent, config: ConnectionConfig, prefix = 'conn
     selectedIds.value = new Set([key])
   }
   contextMenuConfig.value = config
-  const pos = clampMenuPos(x, y)
-  contextMenuStyle.value = { position: 'fixed', left: pos.left, top: pos.top, zIndex: '10000' }
-  contextMenuVisible.value = true
+  contextMenuRef.value?.openAt(x, y, config)
 }
 
 // ── Group context menu ──
-const groupContextVisible = ref(false)
+const groupMenuVisible = ref(false)
+const groupMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const groupContextTarget = ref<{ id: string; name: string } | null>(null)
 
+function closeGroupContextMenu() {
+  groupMenuVisible.value = false
+}
+
 function onGroupContextMenu(e: MouseEvent, groupId: string, groupName: string) {
-  closeContextMenu()
   groupContextTarget.value = { id: groupId, name: groupName }
-  const pos = clampMenuPos(e.clientX, e.clientY, 160, 160)
-  contextMenuStyle.value = { position: 'fixed', left: pos.left, top: pos.top, zIndex: '10000' }
-  groupContextVisible.value = true
+  groupMenuRef.value?.openAt(e.clientX, e.clientY, { id: groupId, name: groupName })
 }
 
 const showRenameGroupDialog = ref(false)
 const renameGroupName = ref('')
 
 function doRenameGroup() {
-  closeContextMenu()
+  closeGroupContextMenu()
   if (!groupContextTarget.value) return
   renameGroupName.value = groupContextTarget.value.name
   showRenameGroupDialog.value = true
@@ -1146,7 +1126,7 @@ const groupTreeData = computed<TreeOption[]>(() => {
 // Group context menu: New Group (child of current)
 function doNewGroupFromCtx() {
   if (!groupContextTarget.value) return
-  closeContextMenu()
+  closeGroupContextMenu()
   newGroupDialogName.value = ''
   newGroupParentId.value = groupContextTarget.value.id
   showNewGroupDialog.value = true
@@ -1155,7 +1135,7 @@ function doNewGroupFromCtx() {
 // Group context menu: New Connection in group
 function doNewConnInGroup() {
   if (!groupContextTarget.value) return
-  closeContextMenu()
+  closeGroupContextMenu()
   emit('new-connection', { groupId: groupContextTarget.value.id })
 }
 
@@ -1165,13 +1145,13 @@ const changeParentTargetId = ref<string | undefined>(undefined)
 
 function doChangeGroupParent() {
   if (!groupContextTarget.value) return
-  closeContextMenu()
+  closeGroupContextMenu()
   emit('change-group-parent', groupContextTarget.value.id)
 }
 
 async function doDeleteGroup() {
   if (!groupContextTarget.value) return
-  closeContextMenu()
+  closeGroupContextMenu()
   const g = groupContextTarget.value
   const connCount = connectionStore.connections.filter(c => c.groupId === g.id).length
   const childCount = connectionStore.groups.filter(cg => cg.parentId === g.id).length
@@ -1201,20 +1181,8 @@ async function confirmDeleteGroup(action: 'delete-connections' | 'move-out') {
   deleteGroupTarget.value = null
 }
 
-function onDocumentClick() {
-  contextMenuVisible.value = false
-  groupContextVisible.value = false
-}
-
-function onGlobalClose() {
-  closeContextMenu()
-  groupContextVisible.value = false
-}
-
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
   window.addEventListener('keydown', onKeydown)
-  window.addEventListener('global:close-context-menus', onGlobalClose)
   updateContentWidth()
   if (startTabRef.value) {
     resizeObserver = new ResizeObserver(() => updateContentWidth())
@@ -1224,9 +1192,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', onDocumentClick)
   window.removeEventListener('keydown', onKeydown)
-  window.removeEventListener('global:close-context-menus', onGlobalClose)
   resizeObserver?.disconnect()
 })
 
@@ -1637,46 +1603,4 @@ async function doDelete(config: ConnectionConfig | null) {
   opacity: 0.3;
 }
 
-.start-context-menu {
-  position: fixed;
-  z-index: 99999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 140px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-.start-context-menu .menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-.start-context-menu .menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.start-context-menu .menu-item.danger {
-  color: var(--error);
-}
-.start-context-menu .menu-item.danger:hover {
-  background: var(--bg-hover);
-  color: var(--error);
-}
-.start-context-menu .menu-item.disabled {
-  color: var(--text-disabled);
-  cursor: default;
-  pointer-events: none;
-}
-.start-context-menu .menu-divider {
-  border: none;
-  border-top: 1px solid var(--border-subtle);
-  margin: 4px;
-}
 </style>

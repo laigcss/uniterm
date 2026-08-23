@@ -259,19 +259,15 @@
         </div>
         <div class="detail-actions">
           <el-button @click="detailDrawerVisible = false">{{ t('common.cancel') }}</el-button>
-          <el-dropdown trigger="click" @command="(cmd: string) => onDetailAction(cmd)">
-            <el-button type="primary">
-              {{ t('monitor.sendSignal') }}<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="term">{{ t('monitor.signalTerm') }}</el-dropdown-item>
-                <el-dropdown-item command="kill">{{ t('monitor.signalKill') }}</el-dropdown-item>
-                <el-dropdown-item command="hup">{{ t('monitor.signalHup') }}</el-dropdown-item>
-                <el-dropdown-item command="int">{{ t('monitor.signalInt') }}</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <el-button type="primary" @click.stop="signalMenuRef?.toggle($event.currentTarget)">
+            {{ t('monitor.sendSignal') }}<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+          </el-button>
+          <Menu ref="signalMenuRef" v-model:visible="signalMenuVisible">
+            <MenuItem @click="onSignal('term')">{{ t('monitor.signalTerm') }}</MenuItem>
+            <MenuItem @click="onSignal('kill')">{{ t('monitor.signalKill') }}</MenuItem>
+            <MenuItem @click="onSignal('hup')">{{ t('monitor.signalHup') }}</MenuItem>
+            <MenuItem @click="onSignal('int')">{{ t('monitor.signalInt') }}</MenuItem>
+          </Menu>
         </div>
       </div>
       <div v-else class="process-detail-empty">{{ t('monitor.noProcessSelected') }}</div>
@@ -286,15 +282,9 @@
       </template>
     </el-dialog>
 
-    <!-- Context Menu -->
-    <div
-      v-show="contextMenuVisible"
-      class="context-menu"
-      :style="{ left: contextMenuX + 'px', top: contextMenuY + 'px' }"
-      @click.stop
-    >
-      <div class="context-menu-item" @click="copyContextText">{{ t('terminal.copy') }}</div>
-    </div>
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+      <MenuItem @click="copyContextText(current)">{{ t('terminal.copy') }}</MenuItem>
+    </Menu>
   </div>
 </template>
 
@@ -305,6 +295,9 @@ import { SetMonitorActiveTab, SetMonitorPaused, GetProcessDetail, KillProcess, G
 import { msg } from '../services/message'
 import { ArrowDown, Close, RefreshRight } from '@element-plus/icons-vue'
 import { useI18n } from '../i18n'
+
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 
 const props = defineProps<{
   sessionId: string
@@ -332,10 +325,8 @@ const killTarget = ref<any>(null)
 const killType = ref<string>('term') // 'term' | 'kill' | 'hup' | 'int'
 
 // Context menu
-const contextMenuVisible = ref(false)
-const contextMenuX = ref(0)
-const contextMenuY = ref(0)
-const contextMenuText = ref('')
+const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const ctxMenuVisible = ref(false)
 
 // Histories (max 60 points)
 const cpuHistory = ref<number[]>([])
@@ -588,6 +579,13 @@ function onDetailAction(cmd: string) {
   killDialogVisible.value = true
 }
 
+const signalMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const signalMenuVisible = ref(false)
+function onSignal(cmd: string) {
+  signalMenuVisible.value = false
+  onDetailAction(cmd)
+}
+
 async function confirmKill() {
   if (!killTarget.value) return
   const pid = killTarget.value.pid
@@ -647,31 +645,24 @@ function showContextMenu(e: MouseEvent) {
   const selection = window.getSelection()?.toString().trim()
   if (!selection) return
   e.preventDefault()
-  contextMenuText.value = selection
-  contextMenuX.value = e.clientX
-  contextMenuY.value = e.clientY
-  contextMenuVisible.value = true
+  ctxMenuRef.value?.openAt(e.clientX, e.clientY, selection)
 }
 
-function hideContextMenu() {
-  contextMenuVisible.value = false
-}
-
-function copyContextText() {
-  if (!contextMenuText.value) return
-  navigator.clipboard.writeText(contextMenuText.value).then(() => {
+function copyContextText(text: unknown) {
+  if (typeof text !== 'string' || !text) return
+  navigator.clipboard.writeText(text).then(() => {
     msg.success(t('ai.copied'))
   }).catch(() => {
     // fallback
     const ta = document.createElement('textarea')
-    ta.value = contextMenuText.value
+    ta.value = text
     document.body.appendChild(ta)
     ta.select()
     document.execCommand('copy')
     document.body.removeChild(ta)
     msg.success(t('ai.copied'))
   })
-  hideContextMenu()
+  ctxMenuVisible.value = false
 }
 
 function onDetailSectionContextMenu(e: MouseEvent) {
@@ -825,8 +816,6 @@ onMounted(() => {
 
   // Notify backend of initial active tab
   SetMonitorActiveTab(props.sessionId, activeTab.value).catch(() => {})
-
-  document.addEventListener('click', hideContextMenu)
 })
 
 onActivated(() => {
@@ -842,7 +831,6 @@ onDeactivated(() => {
 
 onUnmounted(() => {
   if (unlisten) unlisten()
-  document.removeEventListener('click', hideContextMenu)
   SetMonitorPaused(props.sessionId, true).catch(() => {})
 })
 
@@ -1224,32 +1212,6 @@ watch(activeTab, (tab) => {
   height: 100%;
   color: var(--text-muted);
   font-size: 14px;
-}
-
-/* Context Menu */
-.context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-  padding: 4px 0;
-  min-width: 100px;
-}
-
-.context-menu-item {
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-
-.context-menu-item:hover {
-  background: var(--accent-subtle);
-  color: var(--accent);
 }
 
 /* Detail drawer (inside monitor-tab) */

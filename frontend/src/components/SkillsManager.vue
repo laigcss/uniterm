@@ -49,19 +49,16 @@
         >
           <el-icon :size="15"><Lock v-if="skill.locked" /><LockOpen v-else /></el-icon>
         </el-button>
-        <el-dropdown trigger="click" @command="(cmd: string) => handleCmd(cmd, skill)">
-          <el-button link>
-            <el-icon :size="15"><Settings2 /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="edit">{{ t('settings.skillsEdit') }}</el-dropdown-item>
-              <el-dropdown-item command="delete" divided>
-                <span style="color: var(--el-color-danger)">{{ t('settings.skillsDelete') }}</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
+        <el-button link @click.stop="actionMenuRef?.toggle($event.currentTarget, skill)">
+          <el-icon :size="15"><Settings2 /></el-icon>
+        </el-button>
+        <Menu ref="actionMenuRef" v-model:visible="actionMenuVisible">
+          <template #default="{ current }">
+            <MenuItem @click="onAction('edit', current)">{{ t('settings.skillsEdit') }}</MenuItem>
+            <MenuDivider />
+            <MenuItem class="danger" @click="onAction('delete', current)">{{ t('settings.skillsDelete') }}</MenuItem>
           </template>
-        </el-dropdown>
+        </Menu>
       </div>
     </div>
 
@@ -126,6 +123,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useSkillStore } from '../stores/skillStore'
 import SkillCreateDialog from './SkillCreateDialog.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import type { SkillMeta } from '../types/skill'
 
 const { t } = useI18n()
@@ -168,6 +168,13 @@ async function onSaveEdit() {
 function handleCmd(cmd: string, skill: SkillMeta) {
   if (cmd === 'delete') onDelete(skill)
   else if (cmd === 'edit') openEdit(skill)
+}
+
+const actionMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const actionMenuVisible = ref(false)
+function onAction(cmd: string, current?: unknown) {
+  actionMenuVisible.value = false
+  handleCmd(cmd, current as SkillMeta)
 }
 
 function openFolder(skill: SkillMeta) {

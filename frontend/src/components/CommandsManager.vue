@@ -49,19 +49,16 @@
         >
           <el-icon :size="15"><Lock v-if="cmd.locked" /><LockOpen v-else /></el-icon>
         </el-button>
-        <el-dropdown trigger="click" @command="(action: string) => handleCmd(action, cmd)">
-          <el-button link>
-            <el-icon :size="15"><Settings2 /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="edit">{{ t('settings.commandsEdit') }}</el-dropdown-item>
-              <el-dropdown-item command="delete" divided>
-                <span style="color: var(--el-color-danger)">{{ t('settings.commandsDelete') }}</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
+        <el-button link @click.stop="actionMenuRef?.toggle($event.currentTarget, cmd)">
+          <el-icon :size="15"><Settings2 /></el-icon>
+        </el-button>
+        <Menu ref="actionMenuRef" v-model:visible="actionMenuVisible">
+          <template #default="{ current }">
+            <MenuItem @click="onAction('edit', current)">{{ t('settings.commandsEdit') }}</MenuItem>
+            <MenuDivider />
+            <MenuItem class="danger" @click="onAction('delete', current)">{{ t('settings.commandsDelete') }}</MenuItem>
           </template>
-        </el-dropdown>
+        </Menu>
       </div>
     </div>
 
@@ -134,6 +131,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useCommandStore } from '../stores/commandStore'
 import CommandCreateDialog from './CommandCreateDialog.vue'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
+import MenuDivider from './MenuDivider.vue'
 import type { CommandMeta } from '../types/command'
 
 const { t } = useI18n()
@@ -141,6 +141,13 @@ const store = useCommandStore()
 
 const showCreate = ref(false)
 const searchQuery = ref('')
+
+const actionMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const actionMenuVisible = ref(false)
+function onAction(action: string, cmd?: unknown) {
+  actionMenuVisible.value = false
+  handleCmd(action, cmd as CommandMeta)
+}
 
 const showEdit = ref(false)
 const editCommand = ref<CommandMeta | null>(null)

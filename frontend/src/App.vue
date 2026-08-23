@@ -12,7 +12,7 @@
       @tab-dragstart="onTabDragStart"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" @new-local-terminal-with-shell="createLocalTerminalWithShell" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
       <div class="tab-area">
         <template v-if="activeTab">
           <KeepAlive>
@@ -131,18 +131,12 @@
       @resolve="onCredentialResolve"
     />
 
-    <!-- Input context menu -->
-    <div
-      v-show="inputMenuVisible"
-      class="input-context-menu"
-      :style="{ left: inputMenuPos.x + 'px', top: inputMenuPos.y + 'px' }"
-      @click.stop
-    >
-      <div v-if="!inputMenuReadonly" class="input-menu-item" @click="inputMenuCut">{{ t('input.cut') }}</div>
-      <div class="input-menu-item" @click="inputMenuCopy">{{ t('input.copy') }}</div>
-      <div v-if="!inputMenuReadonly" class="input-menu-item" @click="inputMenuPaste">{{ t('input.paste') }}</div>
-      <div class="input-menu-item" @click="inputMenuSelectAll">{{ t('input.selectAll') }}</div>
-    </div>
+    <Menu ref="inputMenuRef" v-model:visible="inputMenuVisible">
+      <MenuItem v-if="!inputMenuReadonly" @click="inputMenuCut">{{ t('input.cut') }}</MenuItem>
+      <MenuItem @click="inputMenuCopy">{{ t('input.copy') }}</MenuItem>
+      <MenuItem v-if="!inputMenuReadonly" @click="inputMenuPaste">{{ t('input.paste') }}</MenuItem>
+      <MenuItem @click="inputMenuSelectAll">{{ t('input.selectAll') }}</MenuItem>
+    </Menu>
 
     <SyncConflictDialog />
     <DataDirDialog v-model:visible="dataDirVisible" :first-run="credStore.firstRun || credStore.dataDirInfo.firstRun" @done="onDataDirDone" />
@@ -191,6 +185,8 @@ import CredentialUnlockDialog from './components/CredentialUnlockDialog.vue'
 import KeychainLostDialog from './components/KeychainLostDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
 import type { CredentialResult } from './components/CredentialPrompt.vue'
+import Menu from './components/Menu.vue'
+import MenuItem from './components/MenuItem.vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
 import { useConnectionStore } from './stores/connectionStore'
 import { useTabStore } from './stores/tabStore'
@@ -435,8 +431,8 @@ const aiSidebarRef = ref<any>(null)
 
 // Input context menu state
 const inputMenuVisible = ref(false)
-const inputMenuPos = ref({ x: 0, y: 0 })
 const inputMenuReadonly = ref(false)
+const inputMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
 // ── Credential prompt ──────────────────────────────────────────
 const credentialVisible = ref(false)
@@ -553,20 +549,9 @@ function onInputContextMenu(e: Event) {
   const { x, y, target, readonly } = (e as CustomEvent).detail as {
     x: number; y: number; target: HTMLElement; readonly?: boolean
   }
-  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   inputMenuTarget = target
   inputMenuReadonly.value = !!readonly
-  const pos = fitMenuPosition(x, y, 120, 140)
-  inputMenuPos.value = { x: parseInt(pos.left), y: parseInt(pos.top) }
-  inputMenuVisible.value = true
-}
-
-function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
-  let left = x
-  let top = y
-  if (x + menuW > window.innerWidth) left = x - menuW
-  if (y + menuH > window.innerHeight) top = y - menuH
-  return { left: left + 'px', top: top + 'px' }
+  inputMenuRef.value?.openAt(x, y)
 }
 
 function inputMenuCut() {
@@ -723,8 +708,6 @@ onMounted(async () => {
     ;(window as any).__novnc_RFB = m.default || m
   }).catch(() => {})
   window.addEventListener('input:contextmenu', onInputContextMenu)
-  window.addEventListener('global:close-context-menus', closeInputMenu)
-  document.addEventListener('click', closeInputMenu)
   // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
   // scrolls, but bails on defaultPrevented — so we must preempt it.
   document.addEventListener('wheel', onWheel, { passive: false, capture: true })
@@ -922,8 +905,6 @@ onUnmounted(() => {
   uninstallGlobalListener()
   uninstallFocusRestore?.()
   window.removeEventListener('input:contextmenu', onInputContextMenu)
-  window.removeEventListener('global:close-context-menus', closeInputMenu)
-  document.removeEventListener('click', closeInputMenu)
   document.removeEventListener('wheel', onWheel, { capture: true })
   document.removeEventListener('keydown', onMacSystemShortcut, true)
   // RDP overlay tracking
@@ -1887,34 +1868,6 @@ watch(
   padding: 3px;
 }
 
-.input-context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  min-width: 120px;
-  padding: 4px;
-  backdrop-filter: blur(8px);
-}
-
-.input-menu-item {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.1s ease;
-}
-
-.input-menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 .group-list {
   display: flex;
   flex-direction: column;
@@ -1967,25 +1920,9 @@ watch(
 .app-container.has-bg .main-content :deep(.el-dialog),
 .app-container.has-bg .main-content :deep(.el-message-box),
 .app-container.has-bg .main-content :deep(.el-select-dropdown),
-.app-container.has-bg .main-content :deep(.el-dropdown-menu),
-.app-container.has-bg .main-content :deep(.context-menu),
-.app-container.has-bg .main-content :deep(.ai-context-menu),
 .app-container.has-bg .main-content :deep(.conn-context-menu),
-.app-container.has-bg .main-content :deep(.qc-context-menu),
-.app-container.has-bg .main-content :deep(.sftp-context-menu),
-.app-container.has-bg .main-content :deep(.tab-context-menu),
-.app-container.has-bg .main-content :deep(.start-context-menu),
-.app-container.has-bg .main-content :deep(.tn-context-menu),
-.app-container.has-bg .main-content :deep(.ctx-menu),
-.app-container.has-bg .main-content :deep(.doc-ctx-menu),
-.app-container.has-bg .main-content :deep(.panel-more-menu),
-.app-container.has-bg .main-content :deep(.shell-submenu),
 .app-container.has-bg .main-content :deep(.hash-dropdown),
-.app-container.has-bg .main-content :deep(.skill-dropdown),
-.app-container.has-bg .main-content :deep(.drive-dropdown),
-.app-container.has-bg .main-content :deep(.bookmark-dropdown),
-.app-container.has-bg .main-content :deep(.type-filter-menu),
-.app-container.has-bg .main-content :deep(.type-filter-menu-sub) {
+.app-container.has-bg .main-content :deep(.skill-dropdown) {
   background-color: var(--bg-surface) !important;
 }
 /* CodeMirror 选区：覆盖 has-bg 通配透明，保证 SQL/语法编辑器选中可见 */
@@ -1994,9 +1931,7 @@ watch(
   background-color: rgba(64, 158, 255, 0.45) !important;
 }
 /* Teleport 到 body 的菜单不在 .main-content 内，单独强制不透明 */
-body > .doc-ctx-menu,
-body > .tab-context-menu,
-body > .ctx-menu {
+body > .conn-context-menu {
   background-color: var(--bg-surface) !important;
   opacity: 1 !important;
   backdrop-filter: none !important;
