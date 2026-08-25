@@ -203,7 +203,7 @@ sudo rpm -i uniterm.rpm
 
 | 层级 | 技术 |
 |------|------|
-| 桌面框架 | Wails v2 |
+| 桌面框架 | Wails v3 |
 | 后端 | Go |
 | 前端 | Vue 3 + Pinia + Element Plus |
 | 终端引擎 | xterm.js |
@@ -211,14 +211,14 @@ sudo rpm -i uniterm.rpm
 
 ## 从源码构建
 
-需要 [Go](https://go.dev/dl/) 1.23+、[Node.js](https://nodejs.org/) 20+ 和 [Wails CLI](https://wails.io/docs/gettingstarted/installation) v2。此外，macOS 需 Xcode Command Line Tools，Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`。
+需要 [Go](https://go.dev/dl/) 1.26+、[Node.js](https://nodejs.org/) 20+ 和 [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`）。此外，macOS 需 Xcode Command Line Tools，Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`。
 
 ```bash
 git clone https://github.com/ys-ll/uniterm.git
 cd uniTerm
 cd frontend && npm install && cd ..
-wails dev                   # 开发模式运行
-wails build                 # 构建生产版本
+wails3 dev                   # 开发模式运行
+wails3 build                 # 构建生产版本
 ```
 
 ## 项目结构
@@ -250,7 +250,9 @@ uniTerm/
 │       └── vendor/               # 第三方库
 ├── plugins/                      # 插件目录
 ├── docs/                         # 文档
-└── wails.json
+├── Taskfile.yml                  # wails3 构建任务
+└── build/
+    └── config.yml                # 构建配置（应用信息、开发模式）
 ```
 
 ## 路线图
@@ -278,6 +280,7 @@ uniTerm/
 - [@coderstory](https://github.com/coderstory)
 - [@jiayunora](https://github.com/jiayunora)
 - [@iCarrear](https://github.com/iCarrear)
+- [@boltomli](https://github.com/boltomli)
 
 ## 开源协议
 

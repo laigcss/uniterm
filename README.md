@@ -203,7 +203,7 @@ sudo rpm -i uniterm.rpm
 
 | Layer | Technology |
 |-------|-----------|
-| Desktop Framework | Wails v2 |
+| Desktop Framework | Wails v3 |
 | Backend | Go |
 | Frontend | Vue 3 + Pinia + Element Plus |
 | Terminal | xterm.js |
@@ -211,14 +211,14 @@ sudo rpm -i uniterm.rpm
 
 ## Build from Source
 
-Requires [Go](https://go.dev/dl/) 1.23+, [Node.js](https://nodejs.org/) 20+, and [Wails CLI](https://wails.io/docs/gettingstarted/installation) v2. Additionally, macOS needs Xcode Command Line Tools, and Linux needs `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`.
+Requires [Go](https://go.dev/dl/) 1.26+, [Node.js](https://nodejs.org/) 20+, and [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12 (install with `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`). Additionally, macOS needs Xcode Command Line Tools, and Linux needs `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`.
 
 ```bash
 git clone https://github.com/ys-ll/uniterm.git
 cd uniTerm
 cd frontend && npm install && cd ..
-wails dev                   # Development
-wails build                 # Production build
+wails3 dev                  # Development
+wails3 build                # Production build
 ```
 
 ## Project Structure
@@ -250,7 +250,9 @@ uniTerm/
 │       └── vendor/               # Third-party libraries
 ├── plugins/                      # Plugin directory
 ├── docs/                         # Documentation
-└── wails.json
+├── Taskfile.yml                  # wails3 build tasks
+└── build/
+    └── config.yml                # build config (app info, dev mode)
 ```
 
 ## Roadmap
@@ -278,6 +280,7 @@ Thanks to the following people for contributing code and improvements, and to ev
 - [@coderstory](https://github.com/coderstory)
 - [@jiayunora](https://github.com/jiayunora)
 - [@iCarrear](https://github.com/iCarrear)
+- [@boltomli](https://github.com/boltomli)
 
 ## License
 
