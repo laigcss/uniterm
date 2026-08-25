@@ -1,10 +1,10 @@
 import { reactive, ref, watch, h } from 'vue'
 import { ElMessage } from 'element-plus'
 import { msg } from '../services/message'
-import { CheckForUpdate, GetAppInfo } from '../../wailsjs/go/main/App'
-import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { CheckForUpdate, GetAppInfo } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useI18n, locale } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
+import { Browser } from '@wailsio/runtime'
 import type { UpdateInfo } from '../types/settings'
 
 function showUpdateNotification(info: UpdateInfo) {
@@ -17,7 +17,7 @@ function showUpdateNotification(info: UpdateInfo) {
         style: 'color:inherit;text-decoration:underline;',
         onClick: (e: Event) => {
           e.preventDefault()
-          BrowserOpenURL(info.releaseUrl)
+          Browser.OpenURL(info.releaseUrl)
         },
       }, t('settings.openRelease')),
     ]),

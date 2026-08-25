@@ -243,11 +243,11 @@ import {
   SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
   WriteTempFile, SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer, ListSessions,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
-} from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import SFTPFileList from './SFTPFileList.vue'
 import SFTPTransferProgress from './SFTPTransferProgress.vue'
 import type { FileItem } from './SFTPFileList.vue'
+import { Events } from '@wailsio/runtime'
 import type { TransferTaskUI } from '../stores/panelStore'
 
 const props = defineProps<{
@@ -597,7 +597,7 @@ let unsubscribeStatus: (() => void) | null = null
 let initialNavDone = false
 
 onMounted(async () => {
-  unsubscribeStatus = EventsOn('session:status', (payload: { id: string; status: string }) => {
+  unsubscribeStatus =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data; 
     if (payload.id === panel.value?.sessionId) {
       if (payload.status === 'connected') {
         onRefreshLocal()
@@ -606,9 +606,9 @@ onMounted(async () => {
         msg.error(t('sftp.connectError'))
       }
     }
-  })
+   })
 
-  unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+  unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
     if (payload.id !== panel.value?.sessionId) return
     // Connection failed messages from backend (SFTP/FTP async connect errors)
     const connMatch = payload.data.match(/\[Connection failed: ([^\]]+)\]/)
@@ -685,7 +685,7 @@ onMounted(async () => {
         }
       }
     } catch {}
-  })
+   })
 
   // Proactively check if session is already connected (race: event may have fired before listener registered)
   const sid = panel.value?.sessionId

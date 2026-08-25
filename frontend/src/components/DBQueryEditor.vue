@@ -185,12 +185,12 @@ import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import SyntaxEditor from './SyntaxEditor.vue'
 import DBResultGrid from './DBResultGrid.vue'
-import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64 } from '../../wailsjs/go/main/App'
+import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { chat } from '../services/llm'
 import { msg } from '../services/message'
 import { loadSqlHistory, pushSqlHistory } from '../composables/useDbSqlHistory'
 import type { QueryResult, ExecResult, ColumnInfo, HistoryEntry } from '../types/database'
-import { database as dbModels } from '../../wailsjs/go/models'
+import { ScriptResult } from '../../bindings/github.com/ys-ll/uniterm/backend/database/models'
 
 const { t } = useI18n()
 
@@ -502,7 +502,7 @@ function onCancelQuery() {
   loading.value = false
 }
 
-const scriptResult = shallowRef<dbModels.ScriptResult | null>(null)
+const scriptResult = shallowRef<ScriptResult | null>(null)
 
 async function onOpenScriptFile() {
   try {

@@ -290,13 +290,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime'
-import { SetMonitorActiveTab, SetMonitorPaused, GetProcessDetail, KillProcess, GetPorts, GetDisks, GetNetworkCards } from '../../wailsjs/go/main/App'
+import { SetMonitorActiveTab, SetMonitorPaused, GetProcessDetail, KillProcess, GetPorts, GetDisks, GetNetworkCards } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { ArrowDown, Close, RefreshRight } from '@element-plus/icons-vue'
 import { useI18n } from '../i18n'
 
 import Menu from './Menu.vue'
+import { Events } from '@wailsio/runtime'
 import MenuItem from './MenuItem.vue'
 
 const props = defineProps<{
@@ -770,7 +770,7 @@ function drawChart() {
 let unlisten: (() => void) | null = null
 
 onMounted(() => {
-  unlisten = EventsOn('session:data', (data: any) => {
+  unlisten =Events.On('session:data', (ev) => { const data: any = ev.data; 
     if (data?.id !== props.sessionId) return
     try {
       const payload = JSON.parse(data.data)
@@ -812,7 +812,7 @@ onMounted(() => {
     } catch {
       // ignore parse errors
     }
-  })
+   })
 
   // Notify backend of initial active tab
   SetMonitorActiveTab(props.sessionId, activeTab.value).catch(() => {})

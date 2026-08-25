@@ -292,7 +292,7 @@ import {
   RedisSetKeyTTL,
   RedisSwitchDB,
   RedisKeyspaceInfo,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult } from '../types/redis'
 
 const props = defineProps<{ sessionId: string }>()

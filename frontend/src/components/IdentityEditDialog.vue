@@ -50,7 +50,7 @@
 import { ref, reactive, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { ElMessage } from 'element-plus'
-import { OpenFileDialog } from '../../wailsjs/go/main/App'
+import { OpenFileDialog } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { FolderOpen } from '@lucide/vue'
 import { useIdentityStore } from '../stores/identityStore'
 import type { Identity } from '../types/identity'

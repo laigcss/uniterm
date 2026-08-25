@@ -184,7 +184,7 @@ import {
   MongoCreateCollection,
   MongoDropCollection,
   MongoDropDatabase,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import MongoDBCollectionView from './MongoDBCollectionView.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'

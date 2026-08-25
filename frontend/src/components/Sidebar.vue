@@ -475,7 +475,7 @@ import { parseQuickConnect, formatConnSubtitle, getConnectionTypeKey, getTypeCat
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { GetAllFonts } from '../../wailsjs/go/main/App'
+import { GetAllFonts } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from '../stores/localStateStore'
 
 defineProps<{

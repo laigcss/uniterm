@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ListCommands, GetCommandBody, SetCommandEnabled, SetCommandLocked, DeleteCommand, CreateCommand, SaveCommand, OpenPathInExplorer } from '../../wailsjs/go/main/App'
+import { ListCommands, GetCommandBody, SetCommandEnabled, SetCommandLocked, DeleteCommand, CreateCommand, SaveCommand, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { CommandMeta } from '../types/command'
 
 export const useCommandStore = defineStore('commands', () => {

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 type SessionManager struct {
@@ -156,7 +157,7 @@ func (sm *SessionManager) CloseAll() {
 
 	for _, s := range sessions {
 		if err := s.Disconnect(); err != nil {
-			fmt.Printf("session %s disconnect error: %v\n", s.ID(), err)
+			log.Writef("session %s disconnect error: %v", s.ID(), err)
 		}
 	}
 }

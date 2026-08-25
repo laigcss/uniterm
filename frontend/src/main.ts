@@ -4,12 +4,12 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import '@fontsource-variable/jetbrains-mono'
 import { ElDialog } from 'element-plus'
-import { WindowSetTitle } from '../wailsjs/runtime'
 import App from './App.vue'
 import './style.css'
+import { Window } from '@wailsio/runtime'
 import { useSettingsStore } from './stores/settingsStore'
 
-WindowSetTitle('uniTerm')
+Window.SetTitle('uniTerm')
 
 // Set ElDialog draggable by default
 if (ElDialog.props) {

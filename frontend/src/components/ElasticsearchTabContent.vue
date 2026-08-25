@@ -280,7 +280,7 @@ import {
   EsOpenIndex,
   EsCloseIndex,
   EsRest,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { EsIndexInfo, EsClusterHealth as EsHealth, EsClusterInfo as EsInfo, EsSearchResult, EsRestResult } from '../types/elasticsearch'
 import { Plus, Pencil, Trash2, RefreshCw } from '@lucide/vue'
 

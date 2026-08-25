@@ -30,7 +30,7 @@ import type { WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { waitForTerminalSize } from '../services/terminalManager'
 import PanelGrid from './PanelGrid.vue'
-import { CreateSession, CloseSession, SessionStart } from '../../wailsjs/go/main/App'
+import { CreateSession, CloseSession, SessionStart } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 

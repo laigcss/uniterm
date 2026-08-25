@@ -44,8 +44,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Loader } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import type { ConnectionConfig } from '../types/session'
-import { CreateSession, CloseSession, RDPHide, RDPSetFullScreen } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { CreateSession, CloseSession, RDPHide, RDPSetFullScreen } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import { usePanelStore } from '../stores/panelStore'
 
 const { t } = useI18n()
@@ -144,7 +144,7 @@ onMounted(() => {
     status.value = 'connecting'
   }
 
-  unsubStatus = EventsOn('session:status', (data: any) => {
+  unsubStatus =Events.On('session:status', (ev) => { const data: any = ev.data; 
     if (data.id !== currentSessionId.value) return
     switch (data.status) {
       case 'connected':
@@ -165,13 +165,13 @@ onMounted(() => {
         if (currentSessionId.value) RDPHide(currentSessionId.value)
         break
     }
-  })
+   })
 
-  unsubData = EventsOn('session:data', (data: any) => {
+  unsubData =Events.On('session:data', (ev) => { const data: any = ev.data; 
     if (data.id === currentSessionId.value && data.data?.includes('[Connection failed')) {
       status.value = 'error'
     }
-  })
+   })
 
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
   window.addEventListener('panel:reconnect', onReconnectEvent)

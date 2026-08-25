@@ -8,8 +8,8 @@ import {
   K8sStartLogStream,
   K8sStopLogStream,
   K8sExecSession,
-} from '../../wailsjs/go/main/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import type { K8sContextInfo, K8sWatchEvent } from '../types/k8s'
 
 export async function listContexts(source: string, sourceIsPath: boolean): Promise<K8sContextInfo[]> {
@@ -63,15 +63,15 @@ export async function startWatch(
   const id = await K8sStartWatch(connID, path)
   const eventName = `k8s:watch:${id}`
   const endName = `k8s:watch-end:${id}`
-  EventsOn(eventName, (payload: K8sWatchEvent) => onEvent(payload))
-  EventsOn(endName, (payload: { error: string }) => {
+ Events.On(eventName, (ev) => { const payload: K8sWatchEvent = ev.data; return onEvent(payload) })
+ Events.On(endName, (ev) => { const payload: { error: string } = ev.data; 
     onEnd?.(payload?.error || '')
-  })
+   })
   return {
     id,
     stop: () => {
-      EventsOff(eventName)
-      EventsOff(endName)
+      Events.Off(eventName)
+      Events.Off(endName)
       K8sStopWatch(id)
     },
   }
@@ -95,12 +95,12 @@ export async function startLogStream(
   const streamId = await K8sStartLogStream(connId, ns, pod, container, tailLines, timestamps, previous)
   const evName = `k8s:log:${streamId}`
   const endName = `k8s:log-end:${streamId}`
-  EventsOn(evName, (line: string) => onLine(line))
-  EventsOn(endName, (p: any) => onEnd(p?.error || ''))
+ Events.On(evName, (ev) => { const line: string = ev.data; return onLine(line) })
+ Events.On(endName, (ev) => { const p: any = ev.data; return onEnd(p?.error || '') })
   return {
     stop() {
-      EventsOff(evName)
-      EventsOff(endName)
+      Events.Off(evName)
+      Events.Off(endName)
       K8sStopLogStream(streamId)
     },
   }

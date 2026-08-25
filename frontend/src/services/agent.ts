@@ -7,9 +7,9 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSkillStore } from '../stores/skillStore'
-import { GetSkillFile, ListSkillFiles } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { GetSkillFile, ListSkillFiles } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { AIMessage } from '../types/ai'
+import { Events } from '@wailsio/runtime'
 import {
   InputValidationError,
   validateRequiredString,
@@ -31,7 +31,7 @@ let activeGeneration = 0
 
 function registerTokenListener(callback: (data: any) => void): () => void {
   activeTokenUnsubscribe?.()
-  activeTokenUnsubscribe = EventsOn('ai:token', callback)
+  activeTokenUnsubscribe =Events.On('ai:token', (ev) => callback(ev.data))
   activeGeneration++
   const myGeneration = activeGeneration
   return () => {

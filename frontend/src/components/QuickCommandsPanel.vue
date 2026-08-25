@@ -228,7 +228,7 @@ import {
 import { useQuickCommandStore, type QuickCommand, type QuickCommandGroup } from '../stores/quickCommandStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
-import { SessionWrite } from '../../wailsjs/go/main/App'
+import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'

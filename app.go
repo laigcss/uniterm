@@ -26,7 +26,7 @@ import (
 	"go.bug.st/serial"
 
 	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/database"
@@ -44,6 +44,8 @@ import (
 
 type App struct {
 	ctx                  context.Context
+	app                  *application.App
+	window               *application.WebviewWindow
 	sessionManager       *session.SessionManager
 	k8sManager           *k8s.Manager
 	containerManager     *container.Manager
@@ -132,14 +134,31 @@ func NewApp(webviewDataPath string) *App {
 	}
 }
 
-func (a *App) startup(ctx context.Context) {
+// emit is a v3 helper that forwards an event to the frontend. It no-ops when
+// the application reference is not yet attached (e.g. in unit tests that build
+// an App without a running Wails runtime), matching the previous
+// `if a.ctx != nil` defensiveness.
+func (a *App) emit(name string, data ...any) {
+	if a.app == nil {
+		return
+	}
+	a.app.Event.Emit(name, data...)
+}
+
+// win returns the single application window, used to drive window operations
+// from the v3 application object.
+func (a *App) win() *application.WebviewWindow {
+	return a.window
+}
+
+func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.ctx = ctx
 
 	a.k8sManager.SetEventEmitter(func(name string, payload any) {
-		runtime.EventsEmit(a.ctx, name, payload)
+		a.emit(name, payload)
 	})
 	a.containerManager.SetEventEmitter(func(name string, payload any) {
-		runtime.EventsEmit(a.ctx, name, payload)
+		a.emit(name, payload)
 	})
 
 	// Init logger first so subsequent log.Writef calls actually write
@@ -158,7 +177,7 @@ func (a *App) startup(ctx context.Context) {
 	a.moveResizeCh = make(chan string, 10)
 	go func() {
 		for evt := range a.moveResizeCh {
-			runtime.EventsEmit(a.ctx, evt)
+			a.emit(evt)
 			if evt == "rdp:move-resize-end" {
 				a.saveWindowStateFromRuntime()
 			}
@@ -176,17 +195,18 @@ func (a *App) startup(ctx context.Context) {
 		log.Writef("Failed to resolve data dir: %v", err)
 		a.sendStartupErr(fmt.Errorf("data dir: %w", err))
 		a.drainStartupErr()
-		return
+		return nil
 	}
 	if dd.FirstRun {
 		a.dataDir = ""
-		runtime.EventsEmit(a.ctx, "app:firstRun", nil)
+		a.emit("app:firstRun", nil)
 		a.drainStartupErr()
-		return
+		return nil
 	}
 	a.dataDir = dd.Path
 
 	a.initStores(dd.Path, dd.Upgrade)
+	return nil
 }
 
 // initStores initializes every config store under dataDir and brings up the
@@ -253,7 +273,7 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 
 	// Push tunnel runtime state to the frontend, and bring up auto-start tunnels.
 	a.tunnelService.SetStateCallback(func(st session.TunnelState) {
-		runtime.EventsEmit(a.ctx, "tunnel:state", st)
+		a.emit("tunnel:state", st)
 	})
 	go a.autoStartTunnels()
 	go a.watchForeground(a.ctx)
@@ -281,7 +301,7 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 				if err != nil {
 					log.Writef("Auto-sync on startup failed: %v", err)
 				} else if result.Direction == sync.SyncConflict {
-					runtime.EventsEmit(a.ctx, "sync:conflict", map[string]interface{}{
+					a.emit("sync:conflict", map[string]interface{}{
 						"localTime":  result.Conflict.LocalTime.Format(time.RFC3339),
 						"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
 					})
@@ -291,14 +311,12 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 				if err == nil && result.Direction == sync.SyncPull {
 					a.reloadStoresAfterSync()
 				}
-				runtime.EventsEmit(a.ctx, "sync:completed")
+				a.emit("sync:completed")
 			}()
 		}
 	}
 
 	a.storesReady = true
-	// Restore window position and size from last session
-	a.restoreWindow(a.ctx)
 
 	// Raise the window to the foreground once, shortly after launch. On Windows a
 	// relaunched instance can otherwise land behind other windows; the short delay
@@ -316,7 +334,7 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	// guarded as before; the app still launches.
 	a.drainStartupErr()
 	if a.startupErr != nil {
-		runtime.EventsEmit(a.ctx, "app:startup-error", a.startupErr.Error())
+		a.emit("app:startup-error", a.startupErr.Error())
 	}
 }
 
@@ -437,26 +455,6 @@ func (a *App) StartupError() string {
 	return a.startupErr.Error()
 }
 
-// restoreWindow restores the saved window position and size.
-// Windows will constrain off-screen windows to the visible area, so no
-// explicit screen-boundary validation is needed.
-func (a *App) restoreWindow(ctx context.Context) {
-	ls, err := a.localStateStore.Load()
-	if err != nil {
-		return
-	}
-	if ls.WindowWidth <= 0 || ls.WindowHeight <= 0 {
-		return
-	}
-	// Move to the correct monitor first, then maximise if needed
-	runtime.WindowSetPosition(ctx, ls.WindowX, ls.WindowY)
-	if ls.WindowMaximised {
-		runtime.WindowMaximise(ctx)
-	} else {
-		runtime.WindowSetSize(ctx, ls.WindowWidth, ls.WindowHeight)
-	}
-}
-
 // saveWindowStateFromRuntime saves the current window geometry using runtime
 // API calls. Called from the WndProc event loop on Windows (WM_EXITSIZEMOVE).
 func (a *App) saveWindowStateFromRuntime() {
@@ -466,16 +464,16 @@ func (a *App) saveWindowStateFromRuntime() {
 	// Do not save geometry when minimised — the position is off-screen
 	// (-32000, -32000 on Windows) and the size is the tiny taskbar thumbnail,
 	// which would restore incorrectly.
-	if runtime.WindowIsMinimised(a.ctx) {
+	if a.win().IsMinimised() {
 		return
 	}
 	ls, err := a.localStateStore.Load()
 	if err != nil {
 		return
 	}
-	ls.WindowX, ls.WindowY = runtime.WindowGetPosition(a.ctx)
-	ls.WindowWidth, ls.WindowHeight = runtime.WindowGetSize(a.ctx)
-	ls.WindowMaximised = runtime.WindowIsMaximised(a.ctx)
+	ls.WindowX, ls.WindowY = a.window.Position()
+	ls.WindowWidth, ls.WindowHeight = a.window.Size()
+	ls.WindowMaximised = a.window.IsMaximised()
 	_ = a.localStateStore.Save(ls)
 }
 
@@ -521,7 +519,7 @@ func (a *App) SetAppVisibility(visible bool) {
 	a.foregroundMu.Lock()
 	a.foregroundMu.Unlock()
 	if a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "app:visibility", visible)
+		a.emit("app:visibility", visible)
 	}
 }
 
@@ -659,7 +657,7 @@ func (a *App) watchForeground(ctx context.Context) {
 			if a.ctx == nil {
 				continue
 			}
-			visible := !runtime.WindowIsMinimised(a.ctx)
+			visible := !a.win().IsMinimised()
 			if visible != a.foreground.Load() {
 				a.SetAppVisibility(visible)
 			}
@@ -667,7 +665,7 @@ func (a *App) watchForeground(ctx context.Context) {
 	}
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown() {
 	a.unsubclassMainWindow()
 	if a.tunnelService != nil {
 		a.tunnelService.Shutdown()
@@ -690,7 +688,7 @@ func (a *App) SaveConnections(data session.ConnectionStoreData) error {
 	}
 	err := a.connectionStore.Save(data)
 	if err == nil {
-		runtime.EventsEmit(a.ctx, "store:connections:changed", data)
+		a.emit("store:connections:changed", data)
 		a.triggerAutoSync()
 	}
 	return err
@@ -777,7 +775,7 @@ func (a *App) SaveTunnels(data session.TunnelStoreData) error {
 	}
 	err := a.tunnelStore.Save(data)
 	if err == nil {
-		runtime.EventsEmit(a.ctx, "store:tunnels:changed", data)
+		a.emit("store:tunnels:changed", data)
 	}
 	return err
 }
@@ -1103,27 +1101,27 @@ func (a *App) ClearBackgroundImage() error {
 func (a *App) reloadStoresAfterSync() {
 	if a.connectionStore != nil {
 		if data, err := a.connectionStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:connections:changed", data)
+			a.emit("store:connections:changed", data)
 		}
 	}
 	if a.settingsStore != nil {
 		if settings, err := a.settingsStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:settings:changed", settings)
+			a.emit("store:settings:changed", settings)
 		}
 	}
 	if a.quickCommandsStore != nil {
 		if data, err := a.quickCommandsStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:quickCommands:changed", data)
+			a.emit("store:quickCommands:changed", data)
 		}
 	}
 	if a.identityStore != nil {
 		if data, err := a.identityStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:identities:changed", data)
+			a.emit("store:identities:changed", data)
 		}
 	}
 	if a.proxyStore != nil {
 		if data, err := a.proxyStore.Load(); err == nil {
-			runtime.EventsEmit(a.ctx, "store:proxies:changed", data)
+			a.emit("store:proxies:changed", data)
 		}
 	}
 }
@@ -1137,7 +1135,7 @@ func (a *App) triggerAutoSync() {
 		if err != nil {
 			log.Writef("Auto-sync failed: %v", err)
 		} else if result.Direction == sync.SyncConflict {
-			runtime.EventsEmit(a.ctx, "sync:conflict", map[string]interface{}{
+			a.emit("sync:conflict", map[string]interface{}{
 				"localTime":  result.Conflict.LocalTime.Format(time.RFC3339),
 				"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
 			})
@@ -1145,7 +1143,7 @@ func (a *App) triggerAutoSync() {
 		if err == nil && result.Direction == sync.SyncPull {
 			a.reloadStoresAfterSync()
 		}
-		runtime.EventsEmit(a.ctx, "sync:completed")
+		a.emit("sync:completed")
 	}()
 }
 
@@ -1199,7 +1197,7 @@ func (a *App) SyncNow() (*sync.SyncResult, error) {
 		return nil, err
 	}
 	if result.Direction == sync.SyncConflict {
-		runtime.EventsEmit(a.ctx, "sync:conflict", map[string]interface{}{
+		a.emit("sync:conflict", map[string]interface{}{
 			"localTime":  result.Conflict.LocalTime.Format(time.RFC3339),
 			"remoteTime": result.Conflict.RemoteTime.Format(time.RFC3339),
 		})
@@ -1207,7 +1205,7 @@ func (a *App) SyncNow() (*sync.SyncResult, error) {
 	if result.Direction == sync.SyncPull {
 		a.reloadStoresAfterSync()
 	}
-	runtime.EventsEmit(a.ctx, "sync:completed")
+	a.emit("sync:completed")
 	return result, nil
 }
 
@@ -1251,7 +1249,7 @@ func (a *App) SyncConfigureRepo(repoURL, username, token, masterPassword string)
 	result, err := a.syncService.ConfigureRepo(repoURL, username, token, masterPassword)
 	if err == nil {
 		a.reloadStoresAfterSync()
-		runtime.EventsEmit(a.ctx, "sync:completed")
+		a.emit("sync:completed")
 	}
 	return result, err
 }
@@ -1511,55 +1509,49 @@ func (a *App) SaveCommand(name, description, argumentHint, body string) error {
 }
 
 func (a *App) OpenFileDialog() (string, error) {
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select File",
-	})
+	return a.app.Dialog.OpenFile().SetTitle("Select File").PromptForSingleSelection()
 }
 
 // OpenFileDialogFiltered is like OpenFileDialog but restricts the picker to
 // a single extension filter (e.g. for importing a specific file format).
 func (a *App) OpenFileDialogFiltered(title, filterDisplayName, filterPattern string) (string, error) {
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	return a.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
 		Title: title,
-		Filters: []runtime.FileFilter{
+		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
-	})
+	}).PromptForSingleSelection()
 }
 
 func (a *App) OpenMultipleFilesDialog() ([]string, error) {
-	files, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Files",
-	})
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
+	return a.app.Dialog.OpenFile().SetTitle("Select Files").PromptForMultipleSelection()
 }
 
 func (a *App) OpenDirectoryDialog() (string, error) {
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Directory",
-	})
+	return a.app.Dialog.OpenFile().
+		SetTitle("Select Directory").
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		PromptForSingleSelection()
 }
 
 func (a *App) SaveFileDialog(defaultName string) (string, error) {
-	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Save File",
-		DefaultFilename: defaultName,
-	})
+	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
+		Title:    "Save File",
+		Filename: defaultName,
+	}).PromptForSingleSelection()
 }
 
 // SaveFileDialogFiltered is like SaveFileDialog but restricts the picker to
 // a single extension filter (e.g. for exporting a specific file format).
 func (a *App) SaveFileDialogFiltered(title, defaultName, filterDisplayName, filterPattern string) (string, error) {
-	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           title,
-		DefaultFilename: defaultName,
-		Filters: []runtime.FileFilter{
+	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
+		Title:    title,
+		Filename: defaultName,
+		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
-	})
+	}).PromptForSingleSelection()
 }
 
 func (a *App) GetDesktopPath() (string, error) {
@@ -1579,11 +1571,9 @@ func (a *App) GetAllFonts() ([]platform.FontInfo, error) {
 }
 
 func (a *App) OnConnectionsChanged(callback func(session.ConnectionStoreData)) {
-	runtime.EventsOn(a.ctx, "store:connections:changed", func(optionalData ...interface{}) {
-		if len(optionalData) > 0 {
-			if data, ok := optionalData[0].(session.ConnectionStoreData); ok {
-				callback(data)
-			}
+	a.app.Event.On("store:connections:changed", func(e *application.CustomEvent) {
+		if data, ok := e.Data.(session.ConnectionStoreData); ok {
+			callback(data)
 		}
 	})
 }
@@ -1721,19 +1711,19 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		// Notify the frontend when the user exits native full screen so it can
 		// resume position sync.
 		rdp.SetOnFullScreenExit(func() {
-			runtime.EventsEmit(a.ctx, "rdp:fullscreen-exit", s.ID())
+			a.emit("rdp:fullscreen-exit", s.ID())
 		})
 	}
 
 	s.SetOnDataCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+		a.emit("session:data", map[string]interface{}{
 			"id":   s.ID(),
 			"data": string(data),
 		})
 	})
 
 	s.SetOnBinaryCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:binary", map[string]interface{}{
+		a.emit("session:binary", map[string]interface{}{
 			"id":   s.ID(),
 			"data": base64.StdEncoding.EncodeToString(data),
 		})
@@ -1771,7 +1761,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			}
 		}
 
-		runtime.EventsEmit(a.ctx, "session:status", payload)
+		a.emit("session:status", payload)
 	})
 
 	// Database, Redis, and MongoDB sessions connect synchronously so
@@ -1878,12 +1868,12 @@ func (a *App) failSessionConnect(s session.Session, err error) {
 		a.tunnelService.Stop(s.ID())
 	}
 	if a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+		a.emit("session:status", map[string]interface{}{
 			"id":           s.ID(),
 			"status":       "error",
 			"errorMessage": err.Error(),
 		})
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+		a.emit("session:data", map[string]interface{}{
 			"id":   s.ID(),
 			"data": fmt.Sprintf("\r\n\x1b[31m[Connection failed: %v]\x1b[0m\r\nPress Enter to retry...\r\n", err),
 		})
@@ -2357,7 +2347,7 @@ func (a *App) RelaunchApp() {
 	}
 	go func() {
 		time.Sleep(800 * time.Millisecond)
-		runtime.Quit(a.ctx)
+		a.app.Quit()
 	}()
 }
 
@@ -2574,7 +2564,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			currentBlockIndex++
 			if block, ok := event["content_block"].(map[string]interface{}); ok {
 				currentBlock = block
-				runtime.EventsEmit(a.ctx, "ai:block_start", map[string]interface{}{
+				a.emit("ai:block_start", map[string]interface{}{
 					"index":         currentBlockIndex,
 					"content_block": block,
 				})
@@ -2592,7 +2582,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 					}
 					currentBlock["text"] = currentBlock["text"].(string) + text
 				}
-				runtime.EventsEmit(a.ctx, "ai:token", map[string]interface{}{
+				a.emit("ai:token", map[string]interface{}{
 					"text":  text,
 					"index": currentBlockIndex,
 				})
@@ -2627,7 +2617,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 			}
 			if delta, ok := event["delta"].(map[string]interface{}); ok {
 				if stopReason, ok := delta["stop_reason"].(string); ok {
-					runtime.EventsEmit(a.ctx, "ai:done", map[string]interface{}{
+					a.emit("ai:done", map[string]interface{}{
 						"message": map[string]interface{}{
 							"role":    messageRole,
 							"content": contentBlocks,
@@ -2950,7 +2940,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 
 	// Emit message_start at the beginning
 	// F-320: typed payload (frontend reads event.message.role).
-	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
+	a.emit("ai:message_start", aiMessageStartEvent{
 		Role: "assistant",
 	})
 
@@ -2965,14 +2955,14 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
 				flushCurrentTextBlock()
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
 				contentBlocks = append(contentBlocks, tc)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
@@ -2980,7 +2970,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 
 			// Emit message_delta and message_stop
 			// F-320: typed payload.
-			runtime.EventsEmit(a.ctx, "ai:done", aiDoneEvent{
+			a.emit("ai:done", aiDoneEvent{
 				Message: map[string]interface{}{
 					"role":    messageRole,
 					"content": contentBlocks,
@@ -3012,7 +3002,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				// Close previous block if any
 				if currentBlock != nil {
 					flushCurrentTextBlock()
-					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -3023,7 +3013,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				}
 				currentTextBuf.Reset()
 				// F-320: typed payload.
-				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index:        currentBlockIndex,
 					ContentBlock: currentBlock,
 				})
@@ -3031,7 +3021,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			currentTextBuf.WriteString(delta.Content)
 			// F-320: typed struct + dropped unused fields — see
 			// chatCompletionAnthropic for rationale.
-			runtime.EventsEmit(a.ctx, "ai:token", aiTokenEvent{
+			a.emit("ai:token", aiTokenEvent{
 				Text:  delta.Content,
 				Index: currentBlockIndex,
 			})
@@ -3048,7 +3038,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				// Close current text block if open
 				if currentBlock != nil {
 					flushCurrentTextBlock()
-					runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -3060,7 +3050,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					"input": "",
 				}
 				// F-320: typed payload.
-				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index: currentBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -3083,7 +3073,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				}
 				buf.WriteString(args)
 				// F-320: typed payload.
-				runtime.EventsEmit(a.ctx, "ai:input_json_delta", aiInputJsonDeltaEvent{
+				a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 					PartialJSON: args,
 				})
 			}
@@ -3095,7 +3085,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			// Close any open text block
 			if currentBlock != nil {
 				flushCurrentTextBlock()
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
@@ -3118,7 +3108,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					}
 				}
 				contentBlocks = append(contentBlocks, tc)
-				runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
@@ -3136,7 +3126,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			}
 
 			// F-320: typed payload.
-			runtime.EventsEmit(a.ctx, "ai:done", aiDoneEvent{
+			a.emit("ai:done", aiDoneEvent{
 				Message: map[string]interface{}{
 					"role":    messageRole,
 					"content": contentBlocks,
@@ -3381,7 +3371,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	// F-320: typed payload.
-	runtime.EventsEmit(a.ctx, "ai:message_start", aiMessageStartEvent{
+	a.emit("ai:message_start", aiMessageStartEvent{
 		Role: "assistant",
 	})
 
@@ -3396,7 +3386,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		}
 		// F-320: typed payload with json.RawMessage so the
 		// already-marshaled message bytes pass through untouched.
-		runtime.EventsEmit(a.ctx, "ai:done", struct {
+		a.emit("ai:done", struct {
 			Message    json.RawMessage `json:"message"`
 			StopReason string          `json:"stop_reason"`
 		}{
@@ -3433,7 +3423,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
 				// F-320: typed payload.
-				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index:        nextBlockIndex,
 					ContentBlock: block,
 				})
@@ -3448,7 +3438,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
 				// F-320: typed payload.
-				runtime.EventsEmit(a.ctx, "ai:block_start", aiBlockStartEvent{
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index: nextBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -3477,7 +3467,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			buf.WriteString(ev.Delta)
 			// F-320: typed struct + dropped unused fields — see
 			// chatCompletionAnthropic for rationale.
-			runtime.EventsEmit(a.ctx, "ai:token", aiTokenEvent{
+			a.emit("ai:token", aiTokenEvent{
 				Text:  ev.Delta,
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
@@ -3497,7 +3487,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			}
 			buf.WriteString(ev.Delta)
 			// F-320: typed payload.
-			runtime.EventsEmit(a.ctx, "ai:input_json_delta", aiInputJsonDeltaEvent{
+			a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 				PartialJSON: ev.Delta,
 			})
 
@@ -3531,7 +3521,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 			}
 			contentBlocks = append(contentBlocks, block)
 			// F-320: typed payload.
-			runtime.EventsEmit(a.ctx, "ai:content_block_stop", aiContentBlockStopEvent{
+			a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
 			delete(blockByOutputIdx, ev.OutputIndex)
@@ -5236,13 +5226,13 @@ func (a *App) K8sExecSession(connID, namespace, pod, container string) (*session
 	id := uuid.New().String()
 	sess := session.NewK8sExecSession(id, wsConn)
 	sess.SetOnDataCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+		a.emit("session:data", map[string]interface{}{
 			"id":   sess.ID(),
 			"data": string(data),
 		})
 	})
 	sess.SetOnStatusChangeCallback(func(status session.SessionStatus) {
-		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+		a.emit("session:status", map[string]interface{}{
 			"id":     sess.ID(),
 			"status": status,
 		})
@@ -5510,13 +5500,13 @@ func (a *App) ContainerExecSession(connectionID, containerID, shell string) (*se
 	id := uuid.New().String()
 	sess := session.NewContainerExecSession(id, pty)
 	sess.SetOnDataCallback(func(data []byte) {
-		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
+		a.emit("session:data", map[string]interface{}{
 			"id":   sess.ID(),
 			"data": string(data),
 		})
 	})
 	sess.SetOnStatusChangeCallback(func(status session.SessionStatus) {
-		runtime.EventsEmit(a.ctx, "session:status", map[string]interface{}{
+		a.emit("session:status", map[string]interface{}{
 			"id":     sess.ID(),
 			"status": status,
 		})

@@ -120,7 +120,7 @@ import {
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   SessionStart,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
 import type { Panel } from '../types/workspace'

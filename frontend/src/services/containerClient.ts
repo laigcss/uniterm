@@ -4,8 +4,8 @@ import {
   ContainerRemoveImage, ContainerCreate, ContainerNamespaces,
   ContainerSetNamespace, ContainerStartLogs, ContainerStartPull,
   ContainerStopStream, ContainerExecSession,
-} from '../../wailsjs/go/main/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import type {
   ContainerInfo, InspectResult, ContainerImage, ContainerStats as ContainerStatsInfo, ContainerCreateOptions,
 } from '../types/container'
@@ -38,17 +38,17 @@ async function startStream(
   const id = await start()
   const evName = `container:stream:${id}`
   const endName = `container:stream-end:${id}`
-  EventsOn(evName, (p: { line: string }) => onLine(p?.line ?? ''))
-  EventsOn(endName, (p: { error: string }) => {
+ Events.On(evName, (ev) => { const p: { line: string } = ev.data; return onLine(p?.line ?? '') })
+ Events.On(endName, (ev) => { const p: { error: string } = ev.data; 
     onEnd?.(p?.error || '')
-    EventsOff(evName)
-    EventsOff(endName)
-  })
+    Events.Off(evName)
+    Events.Off(endName)
+   })
   return {
     id,
     stop: () => {
-      EventsOff(evName)
-      EventsOff(endName)
+      Events.Off(evName)
+      Events.Off(endName)
       ContainerStopStream(id)
     },
   }

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { SaveConnections, LoadConnections } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { SaveConnections, LoadConnections } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 
 // Module-level un-subscriber for the cross-window store:connections:changed listener.
@@ -312,12 +312,12 @@ export const useConnectionStore = defineStore('connection', () => {
 
   // Listen for cross-window connection sync
   unsubConnectionsChanged?.()
-  unsubConnectionsChanged = EventsOn('store:connections:changed', (data: { groups?: ConnectionGroup[]; connections?: ConnectionConfig[] }) => {
+  unsubConnectionsChanged =Events.On('store:connections:changed', (ev) => { const data: { groups?: ConnectionGroup[]; connections?: ConnectionConfig[] } = ev.data; 
     if (data) {
       if (data.groups) groups.value = data.groups
       if (data.connections) connections.value = data.connections
     }
-  })
+   })
 
   function dispose() {
     unsubConnectionsChanged?.()

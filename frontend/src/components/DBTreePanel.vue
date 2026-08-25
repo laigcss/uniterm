@@ -142,7 +142,7 @@
 import { ref, watch, computed, nextTick } from 'vue'
 import { Database, Table2, Eye, ChevronRight, ChevronDown } from '@lucide/vue'
 import { useI18n } from '../i18n'
-import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64 } from '../../wailsjs/go/main/App'
+import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'

@@ -68,9 +68,9 @@ import { useContainerStore } from '../stores/containerStore'
 import * as client from '../services/containerClient'
 import type { StreamHandle } from '../services/containerClient'
 import { useI18n } from '../i18n'
-import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
+import { Clipboard } from '@wailsio/runtime'
 import type { ContainerDetail, ContainerInfo, InspectResult } from '../types/container'
 
 const props = defineProps<{ mode: 'detail' | 'logs' | null; tabId: string; target: ContainerInfo | null }>()
@@ -95,7 +95,7 @@ function onCopyContextMenu(e: MouseEvent) {
 async function onCopyMenu() {
   const sel = window.getSelection()?.toString() || ''
   if (sel) {
-    try { await ClipboardSetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
+    try { await Clipboard.SetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
   }
   copyMenuVisible.value = false
 }

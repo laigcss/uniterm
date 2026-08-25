@@ -3,8 +3,8 @@ import { setActivePinia, createPinia } from 'pinia'
 
 // EventsOn is called at module load; stub it so importing the store is safe.
 import { vi } from 'vitest'
-vi.mock('../../wailsjs/runtime', () => ({
-  EventsOn: vi.fn(() => () => {}),
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
 
 import { useSessionStore } from './sessionStore'

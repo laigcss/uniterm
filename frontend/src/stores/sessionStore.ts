@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
-import { EventsOn } from '../../wailsjs/runtime'
+import { Events } from '@wailsio/runtime'
 import type { SessionStatus } from '../types/session'
 
 interface SessionData {
@@ -74,7 +74,7 @@ let unsubSessionStatus: (() => void) | null = null
 let unsubSessionData: (() => void) | null = null
 
 // Register event listeners once at module level
-unsubSessionStatus = EventsOn('session:status', (payload: { id: string; status: SessionStatus; remoteOS?: string }) => {
+unsubSessionStatus =Events.On('session:status', (ev) => { const payload: { id: string; status: SessionStatus; remoteOS?: string } = ev.data; 
   let s = sessionState.sessions.get(payload.id)
   if (!s) {
     s = { id: payload.id, status: 'connecting', data: [], seq: 0, bytes: 0 }
@@ -84,16 +84,16 @@ unsubSessionStatus = EventsOn('session:status', (payload: { id: string; status: 
   if (payload.remoteOS !== undefined) {
     s.remoteOS = payload.remoteOS
   }
-})
+ })
 
-unsubSessionData = EventsOn('session:data', (payload: { id: string; data: string }) => {
+unsubSessionData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
   let s = sessionState.sessions.get(payload.id)
   if (!s) {
     s = { id: payload.id, status: 'connecting', data: [], seq: 0, bytes: 0 }
     sessionState.sessions.set(payload.id, s)
   }
   pushChunk(s, payload.data)
-})
+ })
 
 // Detach both session:* listeners. Called from App.vue's onUnmounted.
 export function disposeSessionStore() {

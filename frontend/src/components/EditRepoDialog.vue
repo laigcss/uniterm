@@ -59,7 +59,7 @@ import { ref, computed, watch } from 'vue'
 import { Lock } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { useSyncStore } from '../stores/syncStore'
-import { SyncVerifyPassword } from '../../wailsjs/go/main/App'
+import { SyncVerifyPassword } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 
 const { t } = useI18n()

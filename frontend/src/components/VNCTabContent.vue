@@ -71,9 +71,8 @@ import { Loader } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import type { ConnectionConfig } from '../types/session'
-import { CreateSession, CloseSession } from '../../wailsjs/go/main/App'
-import { EventsOn, ClipboardSetText } from '../../wailsjs/runtime'
-
+import { Clipboard, Events } from '@wailsio/runtime'
+import { CreateSession, CloseSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const panelStore = usePanelStore()
 
@@ -246,7 +245,7 @@ function createRFB(RFB: any, proxyAddr: string, password: string) {
 
   rfb.addEventListener('clipboard', (e: any) => {
     const text = e.detail.text
-    ClipboardSetText(text).catch(() => {})
+    Clipboard.SetText(text).catch(() => {})
   })
 
   isIniting = false
@@ -293,7 +292,7 @@ onMounted(() => {
 
   watchThemeBackground()
 
-  unsubStatus = EventsOn('session:status', (data: any) => {
+  unsubStatus =Events.On('session:status', (ev) => { const data: any = ev.data; 
     if (data.id !== currentSessionId.value) return
     switch (data.status) {
       case 'connected':
@@ -323,7 +322,7 @@ onMounted(() => {
         status.value = 'error'
         break
     }
-  })
+   })
 
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
   window.addEventListener('panel:reconnect', onReconnectEvent)

@@ -70,7 +70,7 @@ import { useSuggestions, type HistoryEntry } from '../composables/useSuggestions
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useQuickCommandStore } from '../stores/quickCommandStore'
-import { SessionWrite } from '../../wailsjs/go/main/App'
+import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { focusActivePanelTerminal } from '../composables/useFocusTerminal'

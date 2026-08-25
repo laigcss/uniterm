@@ -8,8 +8,8 @@ import {
   ReadFileChunkBase64,
   OpenDirectoryDialog,
   OpenMultipleFilesDialog,
-} from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import { useZmodemStore } from '../stores/zmodemStore'
 
 // Global dialog lock: prevents multiple BaseTerminal instances (e.g. from
@@ -110,10 +110,10 @@ export function startZmodemService(options: ZmodemServiceOptions) {
     },
   })
 
-  binaryUnsub = EventsOn('session:binary', (payload: { id: string; data: string }) => {
+  binaryUnsub =Events.On('session:binary', (ev) => { const payload: { id: string; data: string } = ev.data; 
     if (payload.id !== sessionId) return
     try { sentry.consume(base64ToUint8Array(payload.data)) } catch (_) {}
-  })
+   })
 
   const svc = {
     consume: (data: string) => {

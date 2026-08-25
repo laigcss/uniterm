@@ -90,8 +90,8 @@ import { dump, load } from 'js-yaml'
 import { getResource, genericDetailSections, type DetailSection } from '../services/k8sResources'
 import { requestJSON, startLogStream, type LogHandle } from '../services/k8sClient'
 import { useI18n } from '../i18n'
-import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import Menu from './Menu.vue'
+import { Clipboard } from '@wailsio/runtime'
 import MenuItem from './MenuItem.vue'
 
 const props = defineProps<{ connId: string; mode: 'detail' | 'logs' | null; target: any | null; resourceKey: string; selfPathOverride?: (obj: any) => string; initialTab?: 'detail' | 'yaml' }>()
@@ -115,7 +115,7 @@ function onCopyContextMenu(e: MouseEvent) {
 async function onCopyMenu() {
   const sel = window.getSelection()?.toString() || ''
   if (sel) {
-    try { await ClipboardSetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
+    try { await Clipboard.SetText(sel) } catch { try { await navigator.clipboard.writeText(sel) } catch { /* ignore */ } }
   }
   copyMenuVisible.value = false
 }

@@ -214,7 +214,7 @@ import { Pencil, Trash2 } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
-import { GetTableSchema, AddColumn, ModifyColumn, DropColumn, AddIndex, DropIndexOp, GetDBCapabilities } from '../../wailsjs/go/main/App'
+import { GetTableSchema, AddColumn, ModifyColumn, DropColumn, AddIndex, DropIndexOp, GetDBCapabilities } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { SchemaResult, ColumnInfo, IndexInfo } from '../types/database'
 
 const { t } = useI18n()

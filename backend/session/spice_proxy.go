@@ -2,12 +2,12 @@ package session
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // SPICEProxy bridges WebSocket (frontend spice-html5) to TCP (SPICE server).
@@ -47,7 +47,7 @@ func (p *SPICEProxy) Start() (string, error) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("[SPICEProxy] WebSocket upgrade failed: %v", err)
+			log.Writef("[SPICEProxy] WebSocket upgrade failed: %v", err)
 			return
 		}
 		p.handleWebSocket(ws)
@@ -60,7 +60,7 @@ func (p *SPICEProxy) Start() (string, error) {
 	}()
 
 	addr := ln.Addr().(*net.TCPAddr)
-	log.Printf("[SPICEProxy] Listening on ws://127.0.0.1:%d, target: %s", addr.Port, p.target)
+	log.Writef("[SPICEProxy] Listening on ws://127.0.0.1:%d, target: %s", addr.Port, p.target)
 	return fmt.Sprintf("ws://127.0.0.1:%d", addr.Port), nil
 }
 
@@ -68,13 +68,13 @@ func (p *SPICEProxy) handleWebSocket(ws *websocket.Conn) {
 	p.mu.Lock()
 	if p.wsConn != nil {
 		p.mu.Unlock()
-		log.Printf("[SPICEProxy] Rejecting additional WebSocket connection")
+		log.Writef("[SPICEProxy] Rejecting additional WebSocket connection")
 		ws.Close()
 		return
 	}
 	p.wsConn = ws
 	p.mu.Unlock()
-	log.Printf("[SPICEProxy] WebSocket client connected")
+	log.Writef("[SPICEProxy] WebSocket client connected")
 
 	// Allow large SPICE frames (up to 16 MB).
 	ws.SetReadLimit(16 << 20)
@@ -89,11 +89,11 @@ func (p *SPICEProxy) handleWebSocket(ws *websocket.Conn) {
 
 	tcp, err := net.Dial("tcp", p.target)
 	if err != nil {
-		log.Printf("[SPICEProxy] TCP dial to %s failed: %v", p.target, err)
+		log.Writef("[SPICEProxy] TCP dial to %s failed: %v", p.target, err)
 		ws.Close()
 		return
 	}
-	log.Printf("[SPICEProxy] TCP connection to %s established", p.target)
+	log.Writef("[SPICEProxy] TCP connection to %s established", p.target)
 
 	p.mu.Lock()
 	p.tcpConn = tcp
@@ -112,12 +112,12 @@ func (p *SPICEProxy) handleWebSocket(ws *websocket.Conn) {
 			}
 			msgType, data, err := ws.ReadMessage()
 			if err != nil {
-				log.Printf("[SPICEProxy] WebSocket read error: %v", err)
+				log.Writef("[SPICEProxy] WebSocket read error: %v", err)
 				return
 			}
 			if msgType == websocket.BinaryMessage {
 				if _, err := tcp.Write(data); err != nil {
-					log.Printf("[SPICEProxy] TCP write error: %v", err)
+					log.Writef("[SPICEProxy] TCP write error: %v", err)
 					return
 				}
 			}
@@ -136,11 +136,11 @@ func (p *SPICEProxy) handleWebSocket(ws *websocket.Conn) {
 			}
 			n, err := tcp.Read(buf)
 			if err != nil {
-				log.Printf("[SPICEProxy] TCP read error: %v", err)
+				log.Writef("[SPICEProxy] TCP read error: %v", err)
 				return
 			}
 			if err := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-				log.Printf("[SPICEProxy] WebSocket write error: %v", err)
+				log.Writef("[SPICEProxy] WebSocket write error: %v", err)
 				return
 			}
 		}

@@ -249,12 +249,12 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent, answerQuestion, dismissQuestion } from '../services/agent'
-import { CancelChatStream } from '../../wailsjs/go/main/App'
-import { ClipboardGetText } from '../../wailsjs/runtime'
+import { CancelChatStream } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { ExecutionMode } from '../types/ai'
 import AIMessage from './AIMessage.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
+import { Clipboard } from '@wailsio/runtime'
 import MenuDivider from './MenuDivider.vue'
 
 const aiStore = useAIStore()
@@ -1212,7 +1212,7 @@ function onKeydown(e: KeyboardEvent) {
   // Cmd/Ctrl+V: paste via Wails clipboard (DOM paste unreliable in WKWebView)
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
     e.preventDefault()
-    ClipboardGetText().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+    Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
     return
   }
 
@@ -1225,7 +1225,7 @@ function onKeydown(e: KeyboardEvent) {
 
 function onPaste(e: ClipboardEvent) {
   e.preventDefault()
-  ClipboardGetText().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+  Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
 }
 
 function insertTextAtCursor(text: string) {

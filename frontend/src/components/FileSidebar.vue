@@ -138,11 +138,11 @@ import {
   SftpGet, SftpPut, WriteTempFile, CreateTempUpload, AppendTempUpload,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer,
   OpenMultipleFilesDialog, OpenDirectoryDialog, ListSessions,
-} from '../../wailsjs/go/main/App'
-import { EventsOn, OnFileDrop, OnFileDropOff } from '../../wailsjs/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import SFTPFileList from './SFTPFileList.vue'
 import type { FileItem } from './SFTPFileList.vue'
 import SFTPTransferProgress from './SFTPTransferProgress.vue'
+import { Events } from '@wailsio/runtime'
 import SyntaxEditor from './SyntaxEditor.vue'
 
 const { t } = useI18n()
@@ -163,6 +163,7 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let refreshDebounce: ReturnType<typeof setTimeout> | null = null
 let lastWailsDropAt = 0
 let fileDropBound = false
+let fileDropUnsub: (() => void) | null = null
 
 const sessionId = computed(() => companionStore.currentSftpSessionId)
 const transferKey = computed(() => companionStore.transferKey || 'companion-sftp')
@@ -512,13 +513,14 @@ async function onDropUpload(e: DragEvent) {
 function bindFileDrop() {
   if (fileDropBound) return
   try {
-    OnFileDrop((_x: number, _y: number, paths: string[]) => {
+    fileDropUnsub = Events.On('common:WindowFilesDropped', (ev) => {
+      const d = ev.data as { x: number; y: number; filenames: string[] }
       if (!companionStore.filesVisible || !sessionId.value) return
-      if (!paths?.length) return
+      if (!d?.filenames?.length) return
       lastWailsDropAt = Date.now()
       clearDragState()
-      uploadLocalPaths(paths)
-    }, true)
+      uploadLocalPaths(d.filenames)
+    })
     fileDropBound = true
   } catch {
     // runtime may be unavailable in browser preview
@@ -527,7 +529,7 @@ function bindFileDrop() {
 
 function unbindFileDrop() {
   if (!fileDropBound) return
-  try { OnFileDropOff() } catch { /* ignore */ }
+  try { fileDropUnsub?.(); fileDropUnsub = null } catch { /* ignore */ }
   fileDropBound = false
 }
 
@@ -903,15 +905,15 @@ let unsubData: (() => void) | null = null
 function bindListeners() {
   unsubStatus?.()
   unsubData?.()
-  unsubStatus = EventsOn('session:status', (payload: { id: string; status: string }) => {
+  unsubStatus =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data; 
     if (payload.id !== sessionId.value) return
     if (payload.status === 'connected') {
       onRefresh()
     } else if (payload.status === 'error') {
       connectError.value = t('sftp.connectError')
     }
-  })
-  unsubData = EventsOn('session:data', (payload: { id: string; data: string }) => {
+   })
+  unsubData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
     if (payload.id !== sessionId.value) return
     const connMatch = payload.data.match(/\[Connection failed: ([^\]]+)\]/)
     if (connMatch) {
@@ -976,7 +978,7 @@ function bindListeners() {
         }
       }
     } catch { /* ignore */ }
-  })
+   })
 }
 
 /** Restore this panel's cached listing; returns true if a non-empty cache existed. */

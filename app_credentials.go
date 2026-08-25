@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/store"
@@ -60,7 +59,7 @@ func (a *App) SetDataDir(kind, customDir string, migrate bool) error {
 			log.Writef("bootstrap write failed (data dir pointer): %v", err)
 		}
 		a.initStores(target, false)
-		runtime.EventsEmit(a.ctx, "app:dataDirReady", target)
+		a.emit("app:dataDirReady", target)
 		return nil
 	}
 
