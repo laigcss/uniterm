@@ -140,31 +140,41 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          # Universal binary (arm64 + amd64 via lipo) then .app bundle from Info.plist
+          # Universal binary (arm64 + amd64 via lipo); then a per-arch .app
+          # bundle from Info.plist. Each single-arch .app is what gets packaged
+          # into its own dmg below (matches the v1.8.0 single-arch dmgs).
           wails3 task darwin:build:universal VERSION="$VERSION"
-          wails3 task darwin:create:app:bundle
-          ls -la bin/uniTerm.app/Contents/MacOS bin/uniTerm.app/Contents/Info.plist
+          for arch in amd64 arm64; do
+            cp "bin/uniTerm-$arch" bin/uniTerm
+            wails3 task darwin:create:app:bundle
+            mv bin/uniTerm.app "bin/uniTerm-$arch.app"
+          done
+          ls -la bin/uniTerm-amd64.app/Contents/MacOS bin/uniTerm-arm64.app/Contents/MacOS
 
       - name: Package (macOS)
         if: matrix.slug == 'darwin'
         run: |
-          APP="bin/uniTerm.app"
-          chmod +x "$APP/Contents/MacOS/uniTerm"
+          # One dmg per arch. Stage under GITHUB_WORKSPACE (the large "/"
+          # volume) rather than /tmp: the hosted runner's /tmp is a small,
+          # separate volume and hdiutil regularly ran out of space there for a
+          # large .app. Fall back to a zipped .app when hdiutil still fails.
+          for arch in amd64 arm64; do
+            APP="bin/uniTerm-$arch.app"
+            chmod +x "$APP/Contents/MacOS/uniTerm"
 
-          # Stage in /tmp. hdiutil's dmg build frequently runs the hosted
-          # runner out of space for a large universal .app, so fall back to a
-          # plain zip of the .app (still a valid redistributable) when it fails.
-          STAGE="$(mktemp -d)"
-          cp -R "$APP" "$STAGE/uniTerm.app"
-          ln -s /Applications "$STAGE/Applications"
-          if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${VERSION}.dmg"; then
-            echo "dmg created"
-          else
-            echo "hdiutil dmg failed (disk space) — shipping zipped .app instead"
-            rm -f "uniterm-darwin-${VERSION}.dmg"
-            ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${VERSION}.zip"
-          fi
-          rm -rf "$STAGE"
+            STAGE="${{ github.workspace }}/dmg_staging_${arch}"
+            mkdir -p "$STAGE"
+            cp -R "$APP" "$STAGE/uniTerm.app"
+            ln -s /Applications "$STAGE/Applications"
+            if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${arch}-${VERSION}.dmg"; then
+              echo "dmg created ($arch)"
+            else
+              echo "hdiutil dmg failed ($arch) — shipping zipped .app instead"
+              rm -f "uniterm-darwin-${arch}-${VERSION}.dmg"
+              ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${arch}-${VERSION}.zip"
+            fi
+            rm -rf "$STAGE"
+          done
 
       ## ---- Package (kept per-platform; v2 NSIS installer feeds the v3 binaries) ----
 
@@ -229,7 +239,7 @@ jobs:
           upx --best --lzma bin/uniTerm
 
           cd bin
-          tar czf ../../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
+          tar czf ../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
           cd ..
 
           NFPM_VER="2.46.3"
