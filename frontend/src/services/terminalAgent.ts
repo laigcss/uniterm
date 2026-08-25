@@ -1,9 +1,9 @@
-import { EventsOn } from '../../wailsjs/runtime'
-import { SessionWrite } from '../../wailsjs/go/main/App'
+import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { getManagedTerminal } from '../services/terminalManager'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { Events } from '@wailsio/runtime'
 import { watch } from 'vue'
 
 // F-317: maintain a title→panelId index for O(1) lookups in
@@ -175,7 +175,7 @@ export function watchOutput(
       cancelPollId = setTimeout(checkCancel, CANCEL_POLL_MS)
     }
 
-    unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+    unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
       if (payload.id !== sessionId || resolved) return
 
       output += payload.data
@@ -195,7 +195,7 @@ export function watchOutput(
         finish(false)
         return
       }
-    })
+     })
 
     if (shouldCancel) {
       cancelPollId = setTimeout(checkCancel, CANCEL_POLL_MS)
@@ -385,10 +385,10 @@ export async function startCommand(command: string, panelTitle?: string): Promis
   // Collect output for 3 seconds, then return
   return new Promise((resolve) => {
     let output = ''
-    const unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+    const unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
       if (payload.id !== sessionId) return
       output += payload.data
-    })
+     })
 
     setTimeout(() => {
       unsubscribe()
@@ -519,10 +519,10 @@ export async function sendTerminalKey(
   if (control === 'ctrl_c' || control === 'ctrl_d') {
     return new Promise((resolve) => {
       let output = ''
-      const unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+      const unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
         if (payload.id !== sessionId) return
         output += payload.data
-      })
+       })
       setTimeout(() => {
         unsubscribe()
         resolve({ output: stripAnsi(output).trim() || '(input sent)' })

@@ -37,9 +37,11 @@ const { mockClipboardSetText, mockSettingsStore } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('../../wailsjs/runtime/runtime', () => ({
-  ClipboardGetText: vi.fn().mockResolvedValue(''),
-  ClipboardSetText: (...args: unknown[]) => mockClipboardSetText(...args),
+vi.mock('@wailsio/runtime', () => ({
+  Clipboard: {
+    Text: vi.fn().mockResolvedValue(''),
+    SetText: (...args: unknown[]) => mockClipboardSetText(...args),
+  },
 }))
 
 vi.mock('../stores/settingsStore', () => ({

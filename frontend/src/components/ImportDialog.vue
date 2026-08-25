@@ -37,7 +37,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
-import { ParseImportFile, ApplyImport, OpenFileDialogFiltered } from '../../wailsjs/go/main/App'
+import { ParseImportFile, ApplyImport, OpenFileDialogFiltered } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done', count: number): void }>()

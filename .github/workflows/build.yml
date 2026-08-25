@@ -21,25 +21,15 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            platform: windows/amd64,windows/arm64
             slug: windows
-            artifact: uniTerm.exe
           - os: ubuntu-24.04
-            platform: linux/amd64
             slug: linux-amd64
-            artifact: uniTerm
-            webkit: '41'
           - os: ubuntu-24.04-arm
-            platform: linux/arm64
             slug: linux-arm64
-            artifact: uniTerm
-            webkit: '41'
           # Kylin/RHEL webkit40+glibc2.28 builds: use workflow build-linux-webkit40.yml
           # (Ubuntu runners link glibc 2.34 and will not run on Kylin V10.)
           - os: macos-latest
-            platform: darwin
             slug: darwin
-            artifact: uniTerm.app
 
     runs-on: ${{ matrix.os }}
 
@@ -48,10 +38,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Free disk space (macOS)
-        if: startsWith(matrix.platform, 'darwin')
+        if: matrix.slug == 'darwin'
         run: |
+          # Keep CommandLineTools — cgo/clang needs it. Only drop the big,
+          # unneeded Xcode app + CoreSimulator.
           sudo rm -rf /Library/Developer/CoreSimulator
-          sudo rm -rf /Applications/Xcode_*.app 2>/dev/null || true
+          sudo rm -rf /Applications/Xcode_*.app
+          rm -rf "$HOME/.npm" "$HOME/.cache" 2>/dev/null || true
           df -h /
 
       - name: Setup Go
@@ -65,7 +58,7 @@ jobs:
           node-version: '24'
 
       - name: Install dependencies (Windows)
-        if: startsWith(matrix.platform, 'windows')
+        if: matrix.slug == 'windows'
         shell: bash
         run: |
           choco install nsis -y
@@ -82,17 +75,20 @@ jobs:
           upx --version
 
       - name: Install dependencies (Linux)
-        if: startsWith(matrix.platform, 'linux')
+        if: startsWith(matrix.slug, 'linux')
         run: |
           sudo apt-get update
-          if [ "${{ matrix.webkit }}" = "40" ]; then
-            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev upx
-          else
-            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx
-          fi
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx pkg-config
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails CLI (wails3)
+        shell: bash
+        run: |
+          # On Linux, wails3 defaults to the WebKitGTK 6.0 (GTK4) pkg-config
+          # stack, which ubuntu-24.04 does not ship. Build the CLI (and later the
+          # app) with the legacy -tags gtk3 contract (WebKit2GTK 4.1).
+          TAGS=""
+          if [[ "${{ matrix.slug }}" == linux* ]]; then TAGS="-tags gtk3"; fi
+          go install $TAGS github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
 
       - name: Set version
         shell: bash
@@ -104,61 +100,76 @@ jobs:
             echo "VERSION=dev-${SHORT}" >> $GITHUB_ENV
           fi
 
-      - name: Install and build frontend
-        env:
-          VITE_VERSION: ${{ env.VERSION }}
-        run: cd frontend && npm install && npm run build
-
-      - name: Build
+      # Regenerate the gitignored build assets (build/windows/info.json +
+      # manifest, darwin Info.plist, linux nfpm.yaml) from build/config.yml.
+      # A fresh checkout has only icon.ico/uniterm.desktop committed, and
+      # generate:syso + app-bundle/nfpm all need these.
+      - name: Update build assets
         shell: bash
         run: |
-          PLATFORM="${{ matrix.platform }}"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          wails3 task common:update:build-assets
 
-          if [[ "$PLATFORM" == windows/* ]]; then
-            export PATH="/c/Program Files (x86)/NSIS/Bin:$PATH"
-          fi
-          echo "PATH=$PATH"
+      ## ---- Build: wails3 compiles the binary; packaging happens below ----
 
-          if [ "$PLATFORM" = "darwin" ]; then
-            for ARCH in amd64 arm64; do
-              echo "Building darwin/$ARCH..."
-              wails build -platform "darwin/$ARCH" -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -skipbindings
-              mv build/bin/uniTerm.app "build/bin/uniTerm-${ARCH}.app"
-            done
-          else
-            BUILD_ARGS="-platform $PLATFORM -ldflags \"-s -w -X main.Version=${{ env.VERSION }}\" -skipbindings"
-
-            if [ "${PLATFORM%/*}" = "linux" ]; then
-              BUILD_ARGS="$BUILD_ARGS -upx -upxflags=\"--best --lzma\""
-              WEBKIT_TAG="webkit2_41"
-              if [ "${{ matrix.webkit }}" = "40" ]; then
-                WEBKIT_TAG="webkit2_40"
-              fi
-              BUILD_ARGS="$BUILD_ARGS -tags $WEBKIT_TAG"
-            fi
-
-            echo "BUILD_ARGS=$BUILD_ARGS"
-            eval wails build $BUILD_ARGS
-          fi
-      - name: Package (macOS)
-        if: startsWith(matrix.platform, 'darwin')
+      - name: Build (Windows)
+        if: matrix.slug == 'windows'
+        shell: bash
         run: |
-          for ARCH in amd64 arm64; do
-            APP="build/bin/uniTerm-${ARCH}.app"
-            chmod +x "$APP/Contents/MacOS/uniTerm"
-            codesign --force --deep --sign - "$APP"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          wails3 build VERSION="$VERSION"                 # bin/uniTerm.exe (amd64)
+          mv bin/uniTerm.exe bin/uniTerm-amd64.exe
+          wails3 build VERSION="$VERSION" ARCH=arm64      # bin/uniTerm.exe (arm64)
+          mv bin/uniTerm.exe bin/uniTerm-arm64.exe
+          echo "AMD64|ARM64 built:"; ls -la bin/
 
-            cd build/bin
-            mkdir -p dmg_staging
-            cp -R "uniTerm-${ARCH}.app" dmg_staging/uniTerm.app
-            ln -s /Applications dmg_staging/Applications
-            hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO "../../uniterm-darwin-${ARCH}-${VERSION}.dmg"
-            rm -rf dmg_staging
-            cd ../..
-          done
+      - name: Build (Linux)
+        if: startsWith(matrix.slug, 'linux')
+        shell: bash
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          # Native CGO build on the matching-arch runner → bin/uniTerm.
+          # gtk3 = legacy WebKit2GTK 4.1 stack (the only one ubuntu-24.04 provides).
+          pkg-config --modversion webkit2gtk-4.1
+          wails3 build GOOS=linux VERSION="$VERSION" EXTRA_TAGS=gtk3
+          chmod +x bin/uniTerm
+          echo "Linux binary:"; ls -la bin/uniTerm
+
+      - name: Build (macOS)
+        if: matrix.slug == 'darwin'
+        shell: bash
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          # Universal binary (arm64 + amd64 via lipo) then .app bundle from Info.plist
+          wails3 task darwin:build:universal VERSION="$VERSION"
+          wails3 task darwin:create:app:bundle
+          ls -la bin/uniTerm.app/Contents/MacOS bin/uniTerm.app/Contents/Info.plist
+
+      - name: Package (macOS)
+        if: matrix.slug == 'darwin'
+        run: |
+          APP="bin/uniTerm.app"
+          chmod +x "$APP/Contents/MacOS/uniTerm"
+
+          # Stage in /tmp. hdiutil's dmg build frequently runs the hosted
+          # runner out of space for a large universal .app, so fall back to a
+          # plain zip of the .app (still a valid redistributable) when it fails.
+          STAGE="$(mktemp -d)"
+          cp -R "$APP" "$STAGE/uniTerm.app"
+          ln -s /Applications "$STAGE/Applications"
+          if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${VERSION}.dmg"; then
+            echo "dmg created"
+          else
+            echo "hdiutil dmg failed (disk space) — shipping zipped .app instead"
+            rm -f "uniterm-darwin-${VERSION}.dmg"
+            ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${VERSION}.zip"
+          fi
+          rm -rf "$STAGE"
+
+      ## ---- Package (kept per-platform; v2 NSIS installer feeds the v3 binaries) ----
 
       - name: Download VcXsrv (Windows)
-        if: startsWith(matrix.platform, 'windows')
+        if: startsWith(matrix.slug, 'windows')
         shell: pwsh
         env:
           VCXSRV_VERSION: v1.0.0
@@ -170,35 +181,33 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $VCXSRV_DIR -Force
           Get-ChildItem $VCXSRV_DIR
 
-      - name: Package (Windows)
-        if: startsWith(matrix.platform, 'windows')
+      - name: Package (Windows, v2 NSIS installer)
+        if: startsWith(matrix.slug, 'windows')
         shell: pwsh
         run: |
           $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
           $ROOT = $env:GITHUB_WORKSPACE
-          $AMD64_BIN = Join-Path $ROOT 'build\bin\uniTerm-amd64.exe'
-          $ARM64_BIN = Join-Path $ROOT 'build\bin\uniTerm-arm64.exe'
+          $AMD64_BIN = Join-Path $ROOT 'bin\uniTerm-amd64.exe'
+          $ARM64_BIN = Join-Path $ROOT 'bin\uniTerm-arm64.exe'
           $NSI = Join-Path $ROOT 'build\windows\installer\project.nsi'
 
           # compress amd64 with upx; arm64 is left uncompressed because
           # UPX 5.2.0 can't pack the PE section structure that Wails'
-          # new Go WebView2Loader produces for windows/arm64
+          # WebView2Loader produces for windows/arm64
           upx --best --lzma $AMD64_BIN
 
           $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\plugins\vcxsrv'
 
-          # rebuild NSIS installers (one per arch) so the amd64 installer
-          # embeds the compressed binary; arm64 installer is regenerated
-          # too but with the original uncompressed binary. Use absolute
-          # paths (mirroring how Wails internally invokes makensis) since
-          # NSIS' `File` command is unreliable with `..` relative paths
-          # on Windows.
+          # project.nsi's OutFile is ..\..\bin\... installers into build\bin,
+          # which v3 never creates (it outputs to bin/). Ensure it exists.
+          New-Item -ItemType Directory -Force -Path (Join-Path $ROOT 'build\bin') | Out-Null
+
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
-            $srcExe = Join-Path $ROOT "build\bin\uniTerm-$arch.exe"
+            $srcExe = Join-Path $ROOT "bin\uniTerm-$arch.exe"
             $srcInstaller = Join-Path $ROOT "build\bin\uniTerm-$arch-installer.exe"
 
             # portable zip
@@ -212,57 +221,42 @@ jobs:
             Move-Item $srcInstaller "uniterm-windows-$arch-installer-$VERSION.exe"
           }
 
-      - name: Package (Linux)
-        if: startsWith(matrix.platform, 'linux')
+      - name: Package (Linux, nfpm)
+        if: startsWith(matrix.slug, 'linux')
         run: |
-          ARCH=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          NFPM_ARCH=${{ matrix.platform == 'linux/amd64' && 'x86_64' || 'arm64' }}
-          WEBKIT="${{ matrix.webkit }}"
-          # Distinguish Kylin/RHEL (webkit40) artifacts from default webkit41 builds
-          if [ "$WEBKIT" = "40" ]; then
-            PKG_SUFFIX="${ARCH}-webkit40"
-            DEB_WEBKIT_DEP="libwebkit2gtk-4.0-37"
-            RPM_WEBKIT_DEP="webkit2gtk3"
-          else
-            PKG_SUFFIX="${ARCH}"
-            DEB_WEBKIT_DEP="libwebkit2gtk-4.1-0"
-            RPM_WEBKIT_DEP="webkit2gtk4.1"
-          fi
+          ARCH=${{ matrix.slug == 'linux-amd64' && 'amd64' || 'arm64' }}
+          NFPM_ARCH=${{ matrix.slug == 'linux-amd64' && 'x86_64' || 'arm64' }}
+          upx --best --lzma bin/uniTerm
 
-          cd build/bin
-          chmod +x uniTerm
+          cd bin
+          tar czf ../../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
+          cd ..
 
-          # tar.gz
-          tar czf ../../uniterm-linux-${PKG_SUFFIX}-${VERSION}.tar.gz uniTerm
-
-          # nfpm for deb + rpm
-          cd ../..
           NFPM_VER="2.46.3"
           curl -sSfL -o /tmp/nfpm.tar.gz \
             "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VER}/nfpm_${NFPM_VER}_Linux_${NFPM_ARCH}.tar.gz"
           tar xf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
           chmod +x /usr/local/bin/nfpm
-          nfpm --version
 
           cat > nfpm.yaml << EOF
           name: uniterm
           arch: ${ARCH}
           platform: linux
           version: ${VERSION}
-          maintainer: uniTerm <uniTerm@example.com>
+          maintainer: uniTerm <uniTerm@uniterm.net>
           description: Lightweight all-in-one terminal emulator with built-in AI Agent
           homepage: https://uniterm.net
           license: Proprietary
           depends:
             - libgtk-3-0
-            - ${DEB_WEBKIT_DEP}
+            - libwebkit2gtk-4.1-0
           overrides:
             rpm:
               depends:
                 - gtk3
-                - ${RPM_WEBKIT_DEP}
+                - webkit2gtk4.1
           contents:
-            - src: build/bin/uniTerm
+            - src: bin/uniTerm
               dst: /usr/bin/uniterm
             - src: build/linux/uniterm.desktop
               dst: /usr/share/applications/uniterm.desktop
@@ -271,9 +265,9 @@ jobs:
           EOF
 
           nfpm package --config nfpm.yaml --packager deb \
-            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.deb"
+            --target "uniterm-linux-${ARCH}-${VERSION}.deb"
           nfpm package --config nfpm.yaml --packager rpm \
-            --target "uniterm-linux-${PKG_SUFFIX}-${VERSION}.rpm"
+            --target "uniterm-linux-${ARCH}-${VERSION}.rpm"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

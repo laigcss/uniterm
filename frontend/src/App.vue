@@ -210,11 +210,11 @@ import { focusPanelTerminal, installTerminalFocusRestore } from './composables/u
 import { useDuplicateSession } from './composables/useDuplicateSession'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../wailsjs/go/main/App'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../bindings/github.com/ys-ll/uniterm/app'
 import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
-import { EventsOn, ClipboardGetText, Quit } from '../wailsjs/runtime'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
+import { Application, Clipboard, Events } from '@wailsio/runtime'
 import { parseQuickConnect } from './utils/quickConnect'
 
 const bgDataUrl = ref('')
@@ -588,7 +588,7 @@ function inputMenuPaste() {
   const el = inputMenuTarget
   closeInputMenu()
   if (!el) return
-  ClipboardGetText().then(text => {
+  Clipboard.Text().then(text => {
     if (el.isContentEditable) {
       insertTextAtContentEditable(el, text)
     } else {
@@ -678,7 +678,7 @@ function onMacSystemShortcut(e: KeyboardEvent) {
   const key = e.key.toLowerCase()
   if (key === 'q') {
     e.preventDefault()
-    Quit()
+    Application.Quit()
   } else if (key === 'w') {
     e.preventDefault()
     const t = tabStore.activeTab
@@ -731,10 +731,10 @@ onMounted(async () => {
   // RDP native full-screen enter/exit
   window.addEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
   // Exit is emitted from Go when the user uses the connection bar's restore button.
-  unsubRdpFullscreenExit = EventsOn('rdp:fullscreen-exit', () => onRdpFullScreenExit())
+  unsubRdpFullscreenExit =Events.On('rdp:fullscreen-exit', () => onRdpFullScreenExit())
   // Go-side WndProc events: window move/resize start/end
-  unsubRdpMoveResizeStart = EventsOn('rdp:move-resize-start', () => RDPHideForOverlay())
-  unsubRdpMoveResizeEnd = EventsOn('rdp:move-resize-end', () => RDPShowForOverlay())
+  unsubRdpMoveResizeStart =Events.On('rdp:move-resize-start', () => RDPHideForOverlay())
+  unsubRdpMoveResizeEnd =Events.On('rdp:move-resize-end', () => RDPShowForOverlay())
 
   // Panel/Tab/StartTab menu actions
   window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {

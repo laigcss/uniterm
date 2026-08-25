@@ -7,11 +7,12 @@ const { mockSessionWrite } = vi.hoisted(() => {
 })
 
 // ---- mock wailsjs modules ----
-vi.mock('../../wailsjs/runtime', () => ({
-  EventsOn: vi.fn(() => () => {}),
+import { Events } from '@wailsio/runtime'
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
 
-vi.mock('../../wailsjs/go/main/App', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   SessionWrite: mockSessionWrite,
 }))
 
@@ -73,8 +74,6 @@ vi.mock('../stores/sessionStore', () => ({
 // ---- import after mocks ----
 import { watchOutput, executeCommand, truncateOutput } from './terminalAgent'
 import type { ExecuteResult, WatchResult } from './terminalAgent'
-import { EventsOn } from '../../wailsjs/runtime'
-
 // ---- helpers ----
 const MOCK_TIMESTAMP = 1700000000000
 
@@ -184,7 +183,7 @@ describe('watchOutput', () => {
 
   it('resolves when the prompt line reappears after the command', async () => {
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
@@ -192,7 +191,7 @@ describe('watchOutput', () => {
     const { promise } = watchOutput('s1', PROMPT, 5000)
 
     // Echoed command line, then output, then the prompt returns.
-    capturedCallback!(fakeData('s1', `${PROMPT} echo hi\nhi\n${PROMPT} `))
+    capturedCallback!({ data: fakeData('s1', `${PROMPT} echo hi\nhi\n${PROMPT} `) })
 
     const result: WatchResult = await promise
     expect(result.timedOut).toBe(false)
@@ -205,14 +204,14 @@ describe('watchOutput', () => {
   it('resolves via idle heuristic when prompt differs (e.g. dynamic prompt)', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
 
     const { promise } = watchOutput('s1', PROMPT, 5000)
 
-    capturedCallback!(fakeData('s1', `${PROMPT} echo hi\nhi\n[user@host ~]$ `))
+    capturedCallback!({ data: fakeData('s1', `${PROMPT} echo hi\nhi\n[user@host ~]$ `) })
     vi.advanceTimersByTime(800)
 
     const result: WatchResult = await promise
@@ -224,7 +223,7 @@ describe('watchOutput', () => {
   it('does not resolve on the initial prompt alone', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
@@ -232,7 +231,7 @@ describe('watchOutput', () => {
     const { promise } = watchOutput('s1', PROMPT, 1000)
 
     // Only the prompt so far (no echoed command line before it) → keep waiting.
-    capturedCallback!(fakeData('s1', `${PROMPT} `))
+    capturedCallback!({ data: fakeData('s1', `${PROMPT} `) })
     vi.advanceTimersByTime(1000)
 
     const result: WatchResult = await promise
@@ -243,7 +242,7 @@ describe('watchOutput', () => {
   it('never resolves early when promptLine is empty (timeout only)', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
@@ -251,7 +250,7 @@ describe('watchOutput', () => {
     const { promise } = watchOutput('s1', '', 1000)
 
     // Even output that looks like a prompt must not trigger detection.
-    capturedCallback!(fakeData('s1', `${PROMPT} echo hi\nhi\n${PROMPT} `))
+    capturedCallback!({ data: fakeData('s1', `${PROMPT} echo hi\nhi\n${PROMPT} `) })
     vi.advanceTimersByTime(1000)
 
     const result: WatchResult = await promise
@@ -263,14 +262,14 @@ describe('watchOutput', () => {
   it('times out after timeoutMs', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
 
     const { promise } = watchOutput('s1', PROMPT, 1000)
 
-    capturedCallback!(fakeData('s1', 'partial output'))
+    capturedCallback!({ data: fakeData('s1', 'partial output') })
     vi.advanceTimersByTime(1000)
 
     const result: WatchResult = await promise
@@ -282,14 +281,14 @@ describe('watchOutput', () => {
   it('ignores events from different sessions', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
 
     const { promise } = watchOutput('s1', PROMPT, 1000)
 
-    capturedCallback!(fakeData('s2', 'wrong session data'))
+    capturedCallback!({ data: fakeData('s2', 'wrong session data') })
     vi.advanceTimersByTime(1000)
 
     const result: WatchResult = await promise
@@ -299,7 +298,7 @@ describe('watchOutput', () => {
 
   it('cleanup prevents resolution', async () => {
     vi.useFakeTimers()
-    vi.mocked(EventsOn).mockImplementation((_eventName, _callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, _callback) => {
       return () => { }
     })
 
@@ -320,7 +319,7 @@ describe('watchOutput', () => {
 describe('executeCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(EventsOn).mockReturnValue(() => {})
+    vi.mocked(Events.On).mockReturnValue(() => {})
     vi.mocked(mockSessionWrite).mockClear()
     vi.mocked(mockGetPanel).mockReturnValue(mockPanel)
     vi.mocked(mockGetAILockedPanel).mockReturnValue(null)
@@ -341,7 +340,7 @@ describe('executeCommand', () => {
     const restore = withMockedTime()
 
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => {}
     })
@@ -360,7 +359,7 @@ describe('executeCommand', () => {
     expect(capturedCallback).not.toBeNull()
 
     // Prompt reappears after the echoed command + output → completion.
-    capturedCallback!(fakeData('test-session-id', `${PROMPT} echo hello\nhello\n${PROMPT} `))
+    capturedCallback!({ data: fakeData('test-session-id', `${PROMPT} echo hello\nhello\n${PROMPT} `) })
 
     const result = await cmdPromise
     expect(result.exitCode).toBe(0)
@@ -375,7 +374,7 @@ describe('executeCommand', () => {
     const restore = withMockedTime()
 
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => {}
     })
@@ -387,7 +386,7 @@ describe('executeCommand', () => {
     expect(writtenArg).toBe('dir\r') // CR terminator, no leading space
 
     await Promise.resolve()
-    capturedCallback!(fakeData('test-session-id', `${PROMPT} dir\r\n${PROMPT} `))
+    capturedCallback!({ data: fakeData('test-session-id', `${PROMPT} dir\r\n${PROMPT} `) })
     await cmdPromise
 
     restore()
@@ -396,7 +395,7 @@ describe('executeCommand', () => {
   it('returns timedOut=true on timeout', async () => {
     vi.useFakeTimers()
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
@@ -407,7 +406,7 @@ describe('executeCommand', () => {
     await Promise.resolve()
     expect(capturedCallback).not.toBeNull()
 
-    capturedCallback!(fakeData('test-session-id', 'some output line1\nline2\nline3\nline4\nline5'))
+    capturedCallback!({ data: fakeData('test-session-id', 'some output line1\nline2\nline3\nline4\nline5') })
     vi.advanceTimersByTime(1000)
 
     const result: ExecuteResult = await cmdPromise
@@ -426,7 +425,7 @@ describe('executeCommand', () => {
     const restore = withMockedTime()
 
     let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
-    vi.mocked(EventsOn).mockImplementation((_eventName, callback) => {
+    vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
       capturedCallback = callback
       return () => { }
     })
@@ -442,7 +441,7 @@ describe('executeCommand', () => {
     expect(capturedCallback).not.toBeNull()
 
     // Echoed command + long output + returning prompt triggers completion.
-    capturedCallback!(fakeData('test-session-id', `${PROMPT} some-cmd\n` + output + `\n${PROMPT} `))
+    capturedCallback!({ data: fakeData('test-session-id', `${PROMPT} some-cmd\n` + output + `\n${PROMPT} `) })
 
     const result: ExecuteResult = await cmdPromise
     expect(result.exitCode).toBe(0)

@@ -92,7 +92,7 @@
 import { ref, computed, watch } from 'vue'
 import { Table2, Eye, Eraser, Trash2 } from '@lucide/vue'
 import { useI18n } from '../i18n'
-import { GetTables, CreateTable, DropTable, DropView, TruncateTable } from '../../wailsjs/go/main/App'
+import { GetTables, CreateTable, DropTable, DropView, TruncateTable } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import type { TableInfo } from '../types/database'
 

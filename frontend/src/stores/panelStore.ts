@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import type { Panel, PanelStatus, ConnectionConfig } from '../types/workspace'
-import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../wailsjs/go/main/App'
+import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 export interface TransferTaskUI {
   id: string

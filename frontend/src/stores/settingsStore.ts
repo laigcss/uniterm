@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { AppSettings, AIModelConfig, CustomTerminalTheme } from '../types/settings'
 import { DEFAULT_SETTINGS, DEFAULT_KEYBOARD } from '../types/settings'
-import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import { setLocale } from '../i18n'
 
 // Module-level un-subscriber for the cross-window store:settings:changed listener.
@@ -210,7 +210,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // Listen for settings changes from sync
   unsubSettingsChanged?.()
-  unsubSettingsChanged = EventsOn('store:settings:changed', (data: AppSettings) => {
+  unsubSettingsChanged =Events.On('store:settings:changed', (ev) => { const data: AppSettings = ev.data; 
     if (data) {
       settings.value = mergeSettings(data)
       loaded.value = true

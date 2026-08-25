@@ -8,11 +8,11 @@ import { describe, expect, it, vi } from 'vitest'
 // agent.ts transitively pulls in terminalAgent.ts → terminalManager.ts → xterm
 // addons that expect a browser `self` global. Stub the wails runtime + the
 // terminal manager so the module graph is small enough to load in vitest.
-vi.mock('../../wailsjs/runtime', () => ({
-  EventsOn: vi.fn(() => () => {}),
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
 
-vi.mock('../../wailsjs/go/main/App', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   ChatCompletion: vi.fn(),
   GetSkillFile: vi.fn(),
   ListSkillFiles: vi.fn(),

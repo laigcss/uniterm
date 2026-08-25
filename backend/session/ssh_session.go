@@ -56,12 +56,12 @@ type SSHSession struct {
 	expectOutput *postLoginOutputBuffer
 	x11Forwarder *x11Forwarder
 
-	enc            encoding.Encoding // input(write) codec; nil = utf-8 passthrough
+	enc            encoding.Encoding     // input(write) codec; nil = utf-8 passthrough
 	encoder        transform.Transformer // cached encoder; nil = utf-8 passthrough (F-003)
-	decoder        *encoding.Decoder // persistent streaming decoder for output(read)
-	decodeLeftover []byte            // trailing partial multibyte bytes between reads
-	decodeScratch  []byte            // reusable src buffer for decodeOutput (F-002)
-	encScratch     []byte            // reusable dst buffer for encodeInput (F-003)
+	decoder        *encoding.Decoder     // persistent streaming decoder for output(read)
+	decodeLeftover []byte                // trailing partial multibyte bytes between reads
+	decodeScratch  []byte                // reusable src buffer for decodeOutput (F-002)
+	encScratch     []byte                // reusable dst buffer for encodeInput (F-003)
 
 	// Disconnect diagnostics (see readLoop / disconnect logs).
 	lastRecv atomic.Value // []byte: tail of most recent server output (diagnostics)
@@ -569,7 +569,12 @@ func (s *SSHSession) Resize(cols, rows int) error {
 	// Always save the desired size so it can be applied after Connect finishes.
 	s.SetPendingSize(cols, rows)
 	if s.session == nil {
-		return fmt.Errorf("session not connected")
+		// The frontend fits the terminal as soon as a session is created, which
+		// races Connect(). The pending size above is retained and applied once
+		// Connect establishes the shell channel, so a nil channel here is a
+		// no-op (the size still lands), not a failure worth surfacing — it only
+		// produces spurious "session not connected" errors in the dev log.
+		return nil
 	}
 	return s.session.WindowChange(rows, cols)
 }

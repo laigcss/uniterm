@@ -216,7 +216,7 @@ import {
   MongoListIndexes,
   MongoCreateIndex,
   MongoDropIndex,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { MongoIndexInfo, MongoQueryResult } from '../types/mongodb'
 
 defineOptions({ name: 'MongoDBCollectionView' })

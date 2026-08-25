@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed, reactive, watch } from 'vue'
 import type { AIMessage, AIConfig, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
-import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../wailsjs/go/main/App'
+import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from './localStateStore'
-import { EventsOn } from '../../wailsjs/runtime'
+import { Events } from '@wailsio/runtime'
 import { t } from '../i18n'
 
 /**
@@ -667,7 +667,7 @@ export const useAIStore = defineStore('ai', () => {
   const systemPrompt = computed(() => SYSTEM_RULES)
 
   // Reload AI config when settings change via sync
-  EventsOn('store:settings:changed', () => {
+ Events.On('store:settings:changed', () => {
     initConfig()
   })
 

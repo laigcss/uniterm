@@ -108,21 +108,8 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
-import {
-  Environment,
-  WindowMinimise,
-  WindowToggleMaximise,
-  WindowMaximise,
-  WindowUnmaximise,
-  WindowIsMaximised,
-  WindowIsMinimised,
-  WindowSetMaxSize,
-  WindowGetPosition,
-  WindowGetSize,
-  Quit,
-  ScreenGetAll,
-} from '../../wailsjs/runtime'
-import { SaveWindowState } from '../../wailsjs/go/main/App'
+import { Application, Screens, System, Window } from '@wailsio/runtime'
+import { SaveWindowState } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const { t } = useI18n()
 const tabStore = useTabStore()
@@ -206,7 +193,7 @@ const emit = defineEmits<{
 }>()
 
 // Detect synchronously so the layout is correct on first render,
-// even if the Wails Environment() call is slow or fails.
+// even if the Wails System.Environment() call is slow or fails.
 function detectPlatformSync(): 'windows' | 'darwin' | 'linux' {
   const ua = navigator.userAgent
   if (/Mac|iPhone|iPad/.test(ua)) return 'darwin'
@@ -224,21 +211,21 @@ const showWindowControls = computed(
 
 async function updateMaximisedState() {
   try {
-    isMaximised.value = await WindowIsMaximised()
+    isMaximised.value = await Window.IsMaximised()
   } catch {
     // ignore
   }
 }
 
 function onMinimise() {
-  WindowMinimise()
+  Window.Minimise()
 }
 
 async function onMaximise() {
   if (platform.value === 'linux') {
     await linuxMaximise()
   } else {
-    WindowToggleMaximise()
+    Window.ToggleMaximise()
   }
   setTimeout(() => {
     updateMaximisedState()
@@ -247,25 +234,25 @@ async function onMaximise() {
 }
 
 async function linuxMaximise() {
-  const maximised = await WindowIsMaximised()
+  const maximised = await Window.IsMaximised()
   if (maximised) {
     // Restore: use native unmaximise, then clear max size constraint
-    WindowUnmaximise()
-    WindowSetMaxSize(0, 0)
+    Window.UnMaximise()
+    Window.SetMaxSize(0, 0)
   } else {
     // Before native maximise, set max size to current screen dimensions
     // to prevent GTK from clamping to the wrong monitor's size.
     try {
-      const screens = await ScreenGetAll()
+      const screens = await Screens.GetAll()
       const current = screens.find((s: { isCurrent: boolean }) => s.isCurrent) || screens[0]
       if (current) {
-        WindowSetMaxSize(current.width, current.height)
+        Window.SetMaxSize(current.width, current.height)
       }
     } catch {
       // Fallback: set large max size to disable any constraint
-      WindowSetMaxSize(9999, 9999)
+      Window.SetMaxSize(9999, 9999)
     }
-    WindowMaximise()
+    Window.Maximise()
   }
 }
 
@@ -275,11 +262,11 @@ async function saveWindowState() {
   try {
     // Do not save geometry when minimised — the position is off-screen
     // and the size is the tiny taskbar thumbnail.
-    if (await WindowIsMinimised()) return
-    const maxed = await WindowIsMaximised()
-    const { x, y } = await WindowGetPosition()
-    const { w, h } = await WindowGetSize()
-    SaveWindowState(x, y, w, h, maxed)
+    if (await Window.IsMinimised()) return
+    const maxed = await Window.IsMaximised()
+    const { x, y } = await Window.Position()
+    const { width, height } = await Window.Size()
+    SaveWindowState(x, y, width, height, maxed)
   } catch {
     // ignore
   }
@@ -316,7 +303,7 @@ async function onClose() {
     }
   }
   await saveWindowState()
-  Quit()
+  Application.Quit()
 }
 
 function onDblClick(e: MouseEvent) {
@@ -334,8 +321,8 @@ function onWindowResize() {
 
 onMounted(async () => {
   try {
-    const env = await Environment()
-    const p = env.platform.toLowerCase()
+    const env = await System.Environment()
+    const p = env.OS.toLowerCase()
     if (p === 'darwin') platform.value = 'darwin'
     else if (p === 'linux') platform.value = 'linux'
     else platform.value = 'windows'

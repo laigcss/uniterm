@@ -107,10 +107,9 @@ import { ref, computed, onMounted, onBeforeUnmount, onUnmounted, onActivated, on
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { SessionWrite, SessionResize, SessionEndZmodem } from '../../wailsjs/go/main/App'
-import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../wailsjs/go/main/App'
+import { SessionWrite, SessionResize, SessionEndZmodem } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { WriteFileBase64, SaveFileDialog, FrontendLog, WriteTempFile, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
-import { EventsOn, BrowserOpenURL, ClipboardGetText } from '../../wailsjs/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { highlight } from '../composables/useHighlight'
@@ -150,6 +149,7 @@ import { startZmodemService } from '../services/zmodemService'
 import { stampWrittenLines, stampCommandLine, currentAbsoluteLine } from '../services/terminalTimestamps'
 import { useZmodemStore } from '../stores/zmodemStore'
 import ZmodemTransfer from './ZmodemTransfer.vue'
+import { Browser, Clipboard, Events } from '@wailsio/runtime'
 import { ChevronUp, ChevronDown, X } from '@lucide/vue'
 
 const props = defineProps<{
@@ -791,7 +791,7 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
     e.preventDefault()
     if (props.mode === 'ssh' || props.mode === 'local') {
-      ClipboardGetText().then(text => {
+      Clipboard.Text().then(text => {
         if (text) pasteToSession(text)
       }).catch(() => {})
     }
@@ -889,7 +889,7 @@ onMounted(() => {
   const webLinksAddon = new WebLinksAddon(
     (event, uri) => {
       if (event.ctrlKey || event.metaKey) {
-        BrowserOpenURL(uri)
+        Browser.OpenURL(uri)
       }
     },
     {
@@ -1175,7 +1175,7 @@ onMounted(() => {
     if (action !== 'paste') return
     event.preventDefault()
     event.stopPropagation()
-    ClipboardGetText().then(text => {
+    Clipboard.Text().then(text => {
       if (text && props.sessionId) {
         pasteToSession(text)
       }
@@ -1184,7 +1184,7 @@ onMounted(() => {
   document.addEventListener('auxclick', onTerminalAuxClick)
 
   // Session data
-  unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+  unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
     if (!isActive.value) {
       // Mark notification dot on the tab when inactive terminal receives output
       // Only process events for this instance's session (events are global)
@@ -1252,7 +1252,7 @@ onMounted(() => {
         if (sid) {
           // Consume immediately to avoid losing data during async handoff
           zmodemService.consume(payload.data)
-          import('../../wailsjs/go/main/App').then(({ SessionStartZmodem }) => {
+          import('../../bindings/github.com/ys-ll/uniterm/app').then(({ SessionStartZmodem }) => {
             SessionStartZmodem(sid).catch(() => {})
           })
         }
@@ -1309,7 +1309,8 @@ onMounted(() => {
   // SSH/Local: session status events
   if (props.mode === 'ssh' || props.mode === 'local') {
     retryOnEnter = false
-    statusUnsubscribe = EventsOn('session:status', (payload: { id: string; status: string }) => {
+    statusUnsubscribe = Events.On('session:status', (ev) => {
+      const payload = ev.data as { id: string; status: string }
       if (!isActive.value) return
       if (payload.id !== props.sessionId) return
       if (payload.status === 'connected') {
@@ -1335,7 +1336,7 @@ onMounted(() => {
           props.onSessionStatus(payload.status)
         }
         // Local shells exit for ordinary reasons (`exit`, or a child like
-        // opencode's /exit tearing down the ConPTY), so say the shell ended
+        // opencode's /exit tearing down the ConPT }), so say the shell ended
         // rather than implying a failure. Without this the pane just freezes
         // mid-output and looks hung — see the stray `+q4d73` case.
         //
@@ -1404,7 +1405,7 @@ onMounted(() => {
     const detail = (e as CustomEvent).detail
     if (detail?.panelId && detail.panelId !== props.panelId) return
     if (props.mode === 'ssh' || props.mode === 'local') {
-      ClipboardGetText().then(text => {
+      Clipboard.Text().then(text => {
         if (text) pasteToSession(text)
       }).catch(() => {})
     }

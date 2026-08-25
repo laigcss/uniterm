@@ -10,10 +10,9 @@ import {
   SyncConfigureRepo,
   SyncChangePassword,
   SyncDeleteRepo,
-} from '../../wailsjs/go/main/App'
-import { sync } from '../../wailsjs/go/models'
-import { EventsOn } from '../../wailsjs/runtime'
-
+} from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
+import { SyncConfig } from '../../bindings/github.com/ys-ll/uniterm/backend/sync/models'
 // Module-level un-subscribers for sync:conflict / sync:completed listeners.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).
@@ -82,7 +81,7 @@ export const useSyncStore = defineStore('sync', () => {
 
   async function saveConfig(token: string = '') {
     try {
-      const cfg = new sync.SyncConfig()
+      const cfg = new SyncConfig()
       cfg.repoUrl = config.value.repoUrl
       cfg.branch = config.value.branch
       cfg.username = config.value.username
@@ -214,16 +213,16 @@ export const useSyncStore = defineStore('sync', () => {
 
   // Listen for conflict events from auto-sync
   unsubSyncConflict?.()
-  unsubSyncConflict = EventsOn('sync:conflict', (data: SyncConflict) => {
+  unsubSyncConflict =Events.On('sync:conflict', (ev) => { const data: SyncConflict = ev.data; 
     conflict.value = {
       localTime: data.localTime ?? (data as any).LocalTime ?? '',
       remoteTime: data.remoteTime ?? (data as any).RemoteTime ?? '',
     }
-  })
+   })
 
   // Reload config when auto-sync completes
   unsubSyncCompleted?.()
-  unsubSyncCompleted = EventsOn('sync:completed', () => {
+  unsubSyncCompleted =Events.On('sync:completed', () => {
     loadConfig()
   })
 

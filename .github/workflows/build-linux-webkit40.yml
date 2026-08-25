@@ -4,6 +4,8 @@ name: Build Linux WebKit40 (Kylin/RHEL)
 # - Built in Rocky Linux 8 → glibc 2.28
 # - Links webkit2gtk-4.0 (package webkit2gtk3) WITHOUT -tags webkit2_40
 #   (that tag forces runtime WebKit >= 2.40, which old Kylin repos often lack)
+# - wails3 builds natively here; no webkit version tag is passed, so the
+#   linker picks whatever webkit2gtk-4.0 pkg-config provides (4.0 ABI).
 # Manual only — does not run the full multi-platform Build matrix.
 
 on:
@@ -53,8 +55,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails CLI (wails3)
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
 
       - name: Set version
         shell: bash
@@ -62,30 +64,27 @@ jobs:
           SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
           echo "VERSION=dev-${SHORT}" >> $GITHUB_ENV
 
-      - name: Install and build frontend
-        env:
-          VITE_VERSION: ${{ env.VERSION }}
-        run: cd frontend && npm install && npm run build
-
-      - name: Build
+      # Regenerate gitignored build assets (linux nfpm.yaml etc.) from build/config.yml
+      - name: Update build assets
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          # Verify builder glibc (expect 2.28 on Rocky 8)
-          ldd --version 2>&1 | awk 'NR==1{print; exit}' || true
-          # IMPORTANT: do NOT use -tags webkit2_40 here.
-          # That tag means "require WebKit *version* >= 2.40 at runtime",
-          # which Kylin V10's older webkit2gtk3 cannot satisfy.
-          # Default/legacy build still links webkit2gtk-4.0 (ABI) via pkg-config
-          # and accepts older WebKit minor versions (MinMinorVersion=0).
-          BUILD_ARGS="-platform linux/amd64 -ldflags \"-s -w -X main.Version=${VERSION}\" -skipbindings -upx -upxflags=\"--best --lzma\""
-          echo "BUILD_ARGS=$BUILD_ARGS"
+          wails3 task common:update:build-assets
+
+      - name: Build (wails3, native, webkit 4.0)
+        shell: bash
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          # IMPORTANT: no webkit version tag is passed. That tag means "require
+          # WebKit *version* >= 2.40 at runtime", which Kylin V10's older
+          # webkit2gtk3 cannot satisfy. wails3 links whatever webkit2gtk-4.0 the
+          # pkg-config for webkit2gtk3-devel provides.
           pkg-config --modversion webkit2gtk-4.0 || true
-          eval wails build $BUILD_ARGS
+          wails3 build GOOS=linux VERSION="$VERSION"   # native CGO build on rocky8
           # Sanity: binary must not require glibc newer than 2.28
-          if command -v objdump >/dev/null && [ -f build/bin/uniTerm ]; then
+          if command -v objdump >/dev/null && [ -f bin/uniTerm ]; then
             echo "GLIBC symbols required by binary:"
-            objdump -T build/bin/uniTerm 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -5 || true
+            objdump -T bin/uniTerm 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -5 || true
           fi
 
       - name: Package
@@ -94,10 +93,12 @@ jobs:
           NFPM_ARCH=x86_64
           PKG_SUFFIX="${ARCH}-webkit40"
 
-          cd build/bin
+          upx --best --lzma bin/uniTerm
+
+          cd bin
           chmod +x uniTerm
           tar czf ../../uniterm-linux-${PKG_SUFFIX}-${VERSION}.tar.gz uniTerm
-          cd ../..
+          cd ..
 
           NFPM_VER="2.46.3"
           curl -sSfL -o /tmp/nfpm.tar.gz \
@@ -110,7 +111,7 @@ jobs:
           arch: ${ARCH}
           platform: linux
           version: ${VERSION}
-          maintainer: uniTerm <uniTerm@example.com>
+          maintainer: uniTerm <uniTerm@uniterm.net>
           description: Lightweight all-in-one terminal emulator (WebKit 4.0 / glibc 2.28 / Kylin)
           homepage: https://uniterm.net
           license: Proprietary
@@ -123,7 +124,7 @@ jobs:
                 - gtk3
                 - webkit2gtk3
           contents:
-            - src: build/bin/uniTerm
+            - src: bin/uniTerm
               dst: /usr/bin/uniterm
             - src: build/linux/uniterm.desktop
               dst: /usr/share/applications/uniterm.desktop

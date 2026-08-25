@@ -179,9 +179,8 @@ import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useCompanionStore } from '../stores/companionStore'
 import { usePanelStore } from '../stores/panelStore'
-import { SetMonitorActiveTab, KillProcess } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
-
+import { Events } from '@wailsio/runtime'
+import { SetMonitorActiveTab, KillProcess } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const companionStore = useCompanionStore()
 const panelStore = usePanelStore()
@@ -366,7 +365,7 @@ let unsub: (() => void) | null = null
 
 function bindListeners() {
   unsub?.()
-  unsub = EventsOn('session:data', (data: any) => {
+  unsub =Events.On('session:data', (ev) => { const data: any = ev.data; 
     if (data?.id !== sessionId.value) return
     if (typeof data.data === 'string') {
       const connMatch = data.data.match(/\[Connection failed: ([^\]]+)\]/)
@@ -432,7 +431,7 @@ function bindListeners() {
         }
       }
     } catch { /* ignore */ }
-  })
+   })
 }
 
 /** Restore this panel's cached monitor data; returns true if a cache existed. */

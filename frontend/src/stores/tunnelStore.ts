@@ -1,10 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { Events } from '@wailsio/runtime'
 import {
   LoadTunnels, SaveTunnels, StartTunnel, StopTunnel, ListTunnelStates,
-} from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
-
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 // Module-level un-subscribers for tunnel:state / store:tunnels:changed listeners.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).
@@ -81,15 +80,15 @@ export const useTunnelStore = defineStore('tunnels', () => {
     }
     // Live state pushes.
     unsubTunnelState?.()
-    unsubTunnelState = EventsOn('tunnel:state', (st: TunnelState) => {
+    unsubTunnelState =Events.On('tunnel:state', (ev) => { const st: TunnelState = ev.data; 
       states.value = { ...states.value, [st.id]: st }
-    })
+     })
     // Cross-window sync.
     unsubTunnelsChanged?.()
-    unsubTunnelsChanged = EventsOn('store:tunnels:changed', (data: { groups?: TunnelGroup[]; tunnels?: Tunnel[] }) => {
+    unsubTunnelsChanged =Events.On('store:tunnels:changed', (ev) => { const data: { groups?: TunnelGroup[]; tunnels?: Tunnel[] } = ev.data; 
       groups.value = data.groups || []
       tunnels.value = data.tunnels || []
-    })
+     })
     loaded.value = true
   }
 

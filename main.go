@@ -13,12 +13,7 @@ import (
 	// F-201: register pprof handlers on the default mux.
 	_ "net/http/pprof"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/store"
 )
@@ -78,83 +73,107 @@ func main() {
 	// window. On Linux (GTK) a non-nil Menu creates an empty GtkMenuBar that
 	// shows as a thin white line in the frameless window, so leave it nil
 	// there. See issue #291.
-	var appMenu *menu.Menu
+	var appMenu *application.Menu
 	if runtime.GOOS == "darwin" {
-		appMenu = menu.NewMenuFromItems(
-			menu.AppMenu(),
-			menu.EditMenu(),
-		)
+		appMenu = application.NewMenu()
+		appMenu.AddRole(application.AppMenu)
+		appMenu.AddRole(application.EditMenu)
 	}
 
-	// Read the persisted window-frame preference before wails.Run — the frame
-	// style is fixed at startup and can't be toggled at runtime.
-	//
-	// F-410: the previous version did the Load() synchronously, so a slow
-	// home directory (network share, antivirus scan, locked file) could stall
-	// main() and delay the entire first paint. Default to the frameless
-	// preference (systemTitleBar=false) and race the disk load against a
-	// short timeout; on a slow disk we paint the default, on a fast disk
-	// we use the persisted value. The background goroutine's result is
-	// discarded — it's purely there to absorb the disk latency.
+	// Read persisted window geometry before creating the window — it's fixed at
+	// creation in v3 (services start before the window exists, so ServiceStartup
+	// can't position it). Race the load against a short timeout so a slow disk
+	// doesn't delay first paint.
 	systemTitleBar := false
+	winW, winH := 1200, 800 // fallback before any saved geometry is applied
+	savedX, savedY := 0, 0
+	savedMaxed := false
 	if configDir, err := os.UserConfigDir(); err == nil {
 		ls := store.NewLocalStateStore(filepath.Join(configDir, "uniTerm"))
-		done := make(chan bool, 1)
+		done := make(chan store.LocalState, 1)
 		go func() {
 			if state, err := ls.Load(); err == nil {
-				done <- state.SystemTitleBar
+				done <- state
 				return
 			}
-			done <- false
+			done <- store.LocalState{}
 		}()
 		select {
-		case v := <-done:
-			systemTitleBar = v
+		case state := <-done:
+			systemTitleBar = state.SystemTitleBar
+			if state.WindowWidth > 0 && state.WindowHeight > 0 {
+				winW, winH = state.WindowWidth, state.WindowHeight
+			}
+			savedX, savedY = state.WindowX, state.WindowY
+			savedMaxed = state.WindowMaximised
 		case <-time.After(100 * time.Millisecond):
-			// Slow disk — paint the default. The goroutine continues to load
-			// in the background; its result is discarded because the
-			// window-frame option is fixed at startup.
+			// Slow disk — paint the defaults. The goroutine continues to load
+			// in the background; its result is discarded because the window
+			// geometry options are fixed at startup.
 		}
 	}
 
-	macTitleBar := mac.TitleBarHiddenInset()
-	if systemTitleBar {
-		macTitleBar = mac.TitleBarDefault()
+	// Restore a saved position only when one actually exists; otherwise keep v3's
+	// default (centered) so a fresh install doesn't land at (0,0).
+	startPos := application.WindowCentered
+	if savedX != 0 || savedY != 0 {
+		startPos = application.WindowXY
+	}
+	startState := application.WindowStateNormal
+	if savedMaxed {
+		startState = application.WindowStateMaximised
 	}
 
-	err := wails.Run(&options.App{
-		Title:     "uniTerm",
-		Width:     1200,
-		Height:    800,
-		MinWidth:  700,
-		MinHeight: 450,
-		MaxWidth:  maxW,
-		MaxHeight: maxH,
-		Frameless: runtime.GOOS != "darwin" && !systemTitleBar,
-		Menu:      appMenu,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
-		Mac: &mac.Options{
-			TitleBar: macTitleBar,
-		},
-		Windows: &windows.Options{
+	macTitleBar := application.MacTitleBarHiddenInset
+	if systemTitleBar {
+		macTitleBar = application.MacTitleBarDefault
+	}
+
+	w3app := application.New(application.Options{
+		Name:       "uniTerm",
+		Assets:     application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		OnShutdown: app.shutdown,
+		// WebviewUserDataPath is a Windows-only path for WebView2 user data; it is
+		// harmless (ignored) on other platforms.
+		Windows: application.WindowsOptions{
 			WebviewUserDataPath: webviewDataPath,
-		},
-		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop:     true,
-			DisableWebViewDrop: false,
-		},
-		Bind: []interface{}{
-			app,
 		},
 	})
 
+	if appMenu != nil {
+		w3app.Menu.SetApplicationMenu(appMenu)
+	}
+
+	window := w3app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:           "uniTerm",
+		Width:           winW,
+		Height:          winH,
+		X:               savedX,
+		Y:               savedY,
+		InitialPosition: startPos,
+		StartState:      startState,
+		MinWidth:        700,
+		MinHeight:       450,
+		MaxWidth:        maxW,
+		MaxHeight:       maxH,
+		Frameless:       runtime.GOOS != "darwin" && !systemTitleBar,
+		BackgroundColour: application.RGBA{
+			Red: 27, Green: 38, Blue: 54, Alpha: 1,
+		},
+		EnableFileDrop: true,
+		Mac: application.MacWindow{
+			TitleBar: macTitleBar,
+		},
+	})
+
+	// Wire the bound App back to the runtime before registering it as a service:
+	// emit() / window operations route through these references.
+	app.app = w3app
+	app.window = window
+	w3app.RegisterService(application.NewService(app))
+
+	err := w3app.Run()
 	if err != nil {
-		fmt.Println("Error:", err.Error())
 		log.Writef("Wails run error: %v", err)
 	}
 }

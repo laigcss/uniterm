@@ -5,8 +5,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { SessionWrite, SessionResize } from '../../wailsjs/go/main/App'
-import { EventsOn, BrowserOpenURL } from '../../wailsjs/runtime'
+import { SessionWrite, SessionResize } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -14,6 +13,7 @@ import { highlight } from './useHighlight'
 import { stripCursorBlink } from '../utils/cursor'
 import { formatFontFamily } from '../utils/formatFontFamily'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from './useTerminalTheme'
+import { Browser, Events } from '@wailsio/runtime'
 import type { CustomTerminalTheme } from '../types/settings'
 
 export interface UseTerminalOptions {
@@ -577,7 +577,7 @@ export function useTerminal(
     const webLinksAddon = new WebLinksAddon(
       (event, uri) => {
         if (event.ctrlKey || event.metaKey) {
-          BrowserOpenURL(uri)
+          Browser.OpenURL(uri)
         }
       },
       {
@@ -672,7 +672,7 @@ export function useTerminal(
     }
     document.addEventListener('mousedown', onMouseDownGlobal)
 
-    unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
+    unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
       const sid = getSessionId()
       if (payload.id === sid && terminal) {
         // Filter ED3 (erase scrollback). For ED2 (clear screen), replace with
@@ -691,10 +691,10 @@ export function useTerminal(
           options.onSessionData(data)
         }
       }
-    })
+     })
 
     retryOnEnter = false
-    statusUnsubscribe = EventsOn('session:status', (payload: { id: string; status: string }) => {
+    statusUnsubscribe =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data; 
       const sid = getSessionId()
       if (payload.id !== sid) return
       if (payload.status === 'connected') {
@@ -724,7 +724,7 @@ export function useTerminal(
           options.onSessionStatus(payload.status)
         }
       }
-    })
+     })
 
     window.addEventListener('resize', onWindowResize)
     window.addEventListener('split:resize-start', onSplitResizeStart)

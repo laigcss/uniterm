@@ -3,8 +3,8 @@ import { ref } from 'vue'
 import {
   GetDataDirInfo, SetDataDir, GetCredentialStatus, SetupCredentials,
   UnlockCredentials, SwitchCredentialMode, ChangeMasterPassword, ResetCredentials,
-} from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import type { DataDirInfo, CredentialStatus } from '../types/credentials'
 
 let unsubFirstRun: (() => void) | null = null
@@ -48,7 +48,7 @@ export const useCredentialStore = defineStore('credential', () => {
 
   function watchEvents() {
     unsubFirstRun?.()
-    unsubFirstRun = EventsOn('app:firstRun', () => { firstRun.value = true })
+    unsubFirstRun =Events.On('app:firstRun', () => { firstRun.value = true })
   }
   function dispose() {
     unsubFirstRun?.()

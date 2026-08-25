@@ -30,11 +30,11 @@ vi.mock('zmodem.js/src/zmodem_browser', () => ({
   },
 }))
 
-vi.mock('../../wailsjs/runtime', () => ({
-  EventsOn: vi.fn(() => () => {}),
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
 
-vi.mock('../../wailsjs/go/main/App', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   AppendFileBase64: mockAppendFileBase64,
   OpenDirectoryDialog: mockOpenDirectoryDialog,
   OpenMultipleFilesDialog: vi.fn(),

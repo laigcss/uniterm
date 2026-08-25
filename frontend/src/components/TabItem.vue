@@ -114,15 +114,15 @@ import {
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
-} from '../../wailsjs/go/main/App'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
-import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import type { ConnectionConfig } from '../types/session'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
+import { Clipboard } from '@wailsio/runtime'
 import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
 
 const props = defineProps<{
@@ -431,7 +431,7 @@ async function copyHostAddress() {
   // Wails clipboard, falling back to the browser API when the runtime is
   // absent (plain dev in a browser) or the call fails.
   let ok = false
-  try { ok = await ClipboardSetText(host) } catch { ok = false }
+  try { ok = await Clipboard.SetText(host) } catch { ok = false }
   if (!ok) {
     try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
   }

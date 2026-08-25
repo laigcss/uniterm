@@ -8,8 +8,19 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_VERSION': JSON.stringify(version)
   },
+  // esnext everywhere so the dev server's esbuild transform also accepts
+  // top-level await (used by @novnc/novnc). `build.target` alone only affects
+  // the production bundle; without this the `wails3 dev` Vite server crashes.
   build: {
     target: 'esnext'
+  },
+  esbuild: {
+    target: 'esnext'
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext'
+    }
   },
   server: {
     port: 34115,

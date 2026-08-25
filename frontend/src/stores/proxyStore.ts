@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { LoadProxies, SaveProxies } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { LoadProxies, SaveProxies } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import type { Proxy, ProxyStoreData } from '../types/proxy'
 
 // Module-level un-subscriber for the cross-window store:proxies:changed listener.
@@ -30,9 +30,9 @@ export const useProxyStore = defineStore('proxy', () => {
   // Reload from disk when the backend pushes updated proxy data (e.g. after a
   // cloud sync pull), so the list isn't stale until restart.
   unsubProxiesChanged?.()
-  unsubProxiesChanged = EventsOn('store:proxies:changed', (data: ProxyStoreData) => {
+  unsubProxiesChanged =Events.On('store:proxies:changed', (ev) => { const data: ProxyStoreData = ev.data; 
     if (data?.proxies) proxies.value = data.proxies
-  })
+   })
 
   function dispose() {
     unsubProxiesChanged?.()

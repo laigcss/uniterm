@@ -1,9 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { LoadLocalState, SaveLocalState } from '../../wailsjs/go/main/App'
-import { store } from '../../wailsjs/go/models'
-
-type LocalState = store.LocalState
+import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { LocalState } from '../../bindings/github.com/ys-ll/uniterm/backend/store/models'
 
 const DEFAULT: LocalState = {
   sidebarVisible: true,

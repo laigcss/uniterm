@@ -165,7 +165,7 @@ import DBTreePanel from './DBTreePanel.vue'
 import DBTableStructure from './DBTableStructure.vue'
 import DBQueryEditor from './DBQueryEditor.vue'
 import DBObjectList from './DBObjectList.vue'
-import { GetTableSchema } from '../../wailsjs/go/main/App'
+import { GetTableSchema } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { ColumnInfo } from '../types/database'
 
 defineOptions({ name: 'DBTabContent' })

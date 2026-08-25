@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 // sessionStore (imported by containerStore) calls EventsOn at module load; stub it.
-vi.mock('../../wailsjs/runtime', () => ({ EventsOn: vi.fn(() => () => {}) }))
+vi.mock('@wailsio/runtime', async (importOriginal) => ({
+  ...(await importOriginal()),
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
+}))
 
 vi.mock('../services/containerClient', () => ({
   connect: vi.fn().mockResolvedValue(undefined),

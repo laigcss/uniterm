@@ -12,7 +12,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const ChatCompletion = vi.fn()
 
-vi.mock('../../wailsjs/go/main/App', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   ChatCompletion: (...args: unknown[]) => ChatCompletion(...args),
 }))
 

@@ -1,5 +1,5 @@
-import { ChatCompletion } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { ChatCompletion } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export interface ChatOptions {
@@ -79,10 +79,10 @@ export async function chat(options: ChatOptions): Promise<void> {
   // Accumulate tokens as a fallback; do NOT forward them to onChunk here (the
   // agent already listens to ai:token and would double-append).
   let streamedText = ''
-  const unsubToken = EventsOn('ai:token', (data: any) => {
+  const unsubToken =Events.On('ai:token', (ev) => { const data: any = ev.data; 
     const text = typeof data === 'string' ? data : (data?.text ?? data?.Text ?? '')
     if (text) streamedText += text
-  })
+   })
   try {
     responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON, protocol, userAgent)
   } catch (e: any) {

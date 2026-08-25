@@ -3,10 +3,10 @@ import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 
 // ---- mock wails + i18n so the store module can be imported ----
-vi.mock('../../wailsjs/runtime', () => ({
-  EventsOn: vi.fn(() => () => {}),
+vi.mock('@wailsio/runtime', () => ({
+  Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
-vi.mock('../../wailsjs/go/main/App', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   SaveAIConfig: vi.fn().mockResolvedValue(undefined),
   LoadAIConfig: vi.fn().mockResolvedValue({}),
   SaveAISessions: vi.fn().mockResolvedValue(undefined),
@@ -277,7 +277,7 @@ describe('aiStore lazy _rawApiMsg parse (F-316)', () => {
   it('parses _rawApiMsg only on switchSession, not at load time', async () => {
     const raw = { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }
     const rawJson = JSON.stringify(raw)
-    const { LoadAISessions } = await import('../../wailsjs/go/main/App')
+    const { LoadAISessions } = await import('../../bindings/github.com/ys-ll/uniterm/app')
     vi.mocked(LoadAISessions).mockResolvedValue({
       sessions: [{
         id: 's1',
@@ -317,7 +317,7 @@ describe('aiStore doSave debounce (F-304)', () => {
   })
 
   it('coalesces a burst of addMessage calls into a single save', async () => {
-    const { SaveAISessions } = await import('../../wailsjs/go/main/App')
+    const { SaveAISessions } = await import('../../bindings/github.com/ys-ll/uniterm/app')
     vi.mocked(SaveAISessions).mockClear()
 
     const store = useAIStore()
@@ -338,7 +338,7 @@ describe('aiStore doSave debounce (F-304)', () => {
   })
 
   it('renameSession flushes immediately and cancels pending debounce', async () => {
-    const { SaveAISessions } = await import('../../wailsjs/go/main/App')
+    const { SaveAISessions } = await import('../../bindings/github.com/ys-ll/uniterm/app')
     vi.mocked(SaveAISessions).mockClear()
 
     const store = useAIStore()
