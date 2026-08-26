@@ -208,6 +208,11 @@ type SessionInfo struct {
 	Type   string        `json:"type"`
 	Title  string        `json:"title"`
 	Status SessionStatus `json:"status"`
+	// ProxyAddr is the local WebSocket URL for VNC/SPICE sessions whose
+	// client (noVNC / spice-html5) connects through the WebSocket↔TCP proxy.
+	// Returned synchronously from CreateSession so the frontend can start
+	// the RFB/SPICE client without racing the session:status event.
+	ProxyAddr string `json:"proxyAddr,omitempty"`
 }
 
 type Session interface {

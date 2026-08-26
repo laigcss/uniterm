@@ -1793,9 +1793,25 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		// Without this gap Claude Code draws tables at the 80x24 default
 		// before SessionResize propagates the real width, and the borders
 		// drift across output batches.
+	} else if sessionType == "vnc" || sessionType == "spice" {
+		// VNC and SPICE start a local WebSocket↔TCP proxy synchronously
+		// so the proxyAddr is available when CreateSession returns.
+		// Avoids a race between the goroutine's session:status emit and
+		// the frontend's CreateSession IPC response.
+		if err := a.setupJumpHostTunnel(s.ID(), sessionType, &config); err != nil {
+			_ = a.sessionManager.Close(s.ID())
+			return nil, err
+		}
+		if err := s.Connect(config); err != nil {
+			if a.tunnelService != nil {
+				a.tunnelService.Stop(s.ID())
+			}
+			_ = a.sessionManager.Close(s.ID())
+			return nil, fmt.Errorf("%s connect failed: %w", sessionType, err)
+		}
 	} else {
-		// Non-terminal sessions (sftp, monitor, ftp, smb, webdav, s3,
-		// rdp, vnc, spice) connect immediately.
+		// Non-terminal sessions (sftp, monitor, ftp, smb, webdav, s3, rdp)
+		// connect immediately.
 		a.launchConnectGoroutine(s, sessionType, config)
 	}
 
@@ -1804,6 +1820,17 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		Type:   s.Type(),
 		Title:  s.Title(),
 		Status: s.Status(),
+	}
+	// VNC and SPICE expose a local WebSocket↔TCP proxy; return its address
+	// in the CreateSession result so the frontend can mount the RFB/SPICE
+	// client without racing the session:status event (whose 'connected'
+	// emission happens inside s.Connect, before the frontend sets the
+	// session id / stores the proxy addr — see SESSION regression).
+	if vnc, ok := s.(*session.VNCSession); ok {
+		info.ProxyAddr = vnc.ProxyAddr()
+	}
+	if spice, ok := s.(*session.SPICESession); ok {
+		info.ProxyAddr = spice.ProxyAddr()
 	}
 	return info, nil
 }

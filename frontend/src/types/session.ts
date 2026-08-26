@@ -157,6 +157,9 @@ export interface SessionInfo {
   type: string
   title: string
   status: SessionStatus
+  // Local WebSocket URL for VNC/SPICE sessions bridged through the
+  // WebSocket↔TCP proxy; returned by CreateSession.
+  proxyAddr?: string
 }
 
 export interface Tab {

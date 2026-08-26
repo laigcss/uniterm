@@ -19,6 +19,10 @@ build/darwin/*
 uniTerm.exe
 __debug*
 
+# Build output (Wails v3 emits the compiled app + runtime data into bin/)
+bin/
+dist/
+
 # Wails v3 generated bindings + task runner cache
 frontend/bindings/
 .task/

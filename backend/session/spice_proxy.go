@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/ys-ll/uniterm/backend/log"
@@ -87,7 +88,7 @@ func (p *SPICEProxy) handleWebSocket(ws *websocket.Conn) {
 		p.mu.Unlock()
 	}()
 
-	tcp, err := net.Dial("tcp", p.target)
+	tcp, err := net.DialTimeout("tcp", p.target, 5*time.Second)
 	if err != nil {
 		log.Writef("[SPICEProxy] TCP dial to %s failed: %v", p.target, err)
 		ws.Close()
