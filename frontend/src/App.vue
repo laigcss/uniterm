@@ -210,7 +210,7 @@ import { focusPanelTerminal, installTerminalFocusRestore } from './composables/u
 import { useDuplicateSession } from './composables/useDuplicateSession'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp } from '../bindings/github.com/ys-ll/uniterm/app'
 import { getTerminalSize, waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
@@ -364,10 +364,13 @@ function rdpSyncPosition() {
   const rect = area.getBoundingClientRect()
   if (rect.width <= 0) return
   const dpr = window.devicePixelRatio || 1
-  const sx = window.screenLeft ?? (window as any).screenX ?? 0
-  const sy = window.screenTop ?? (window as any).screenY ?? 0
-  const x = Math.round((sx + rect.left) * dpr)
-  const y = Math.round((sy + rect.top) * dpr)
+  // Parent-client-relative offset: the RDP window is a WS_CHILD of the main
+  // window, so rect.left/top (webview viewport coords == client-area coords)
+  // are used directly by the backend's placeAtChild. No window.screenLeft/screenTop
+  // — those are top-level window coords and were the cause of the RDP popup
+  // lagging behind / sticking on a moved main window.
+  const x = Math.round(rect.left * dpr)
+  const y = Math.round(rect.top * dpr)
 
   const w = Math.round(rect.width * dpr)
   const h = Math.round(rect.height * dpr)
@@ -396,12 +399,51 @@ const rdpOverlayCount = ref(0)
 // Set while a native ActiveX full-screen session is active.
 const rdpFullScreen = ref(false)
 let rdpRestoreTimer: ReturnType<typeof setTimeout> | null = null
+let rdpAreaObserver: ResizeObserver | null = null
+
+function setRdpSnapshotBg(url: string) {
+	const area = document.querySelector('.rdp-area') as HTMLElement | null
+	if (area) {
+		area.style.backgroundImage = `url(${url})`
+		area.style.backgroundSize = '100% 100%'
+		area.style.backgroundRepeat = 'no-repeat'
+	}
+}
+
+function clearRdpSnapshotBg() {
+	const area = document.querySelector('.rdp-area') as HTMLElement | null
+	if (area) {
+		area.style.backgroundImage = ''
+		area.style.backgroundSize = ''
+		area.style.backgroundRepeat = ''
+	}
+}
 
 function RDPHideForOverlay() {
 	rdpOverlayCount.value++
 	if (rdpOverlayCount.value === 1) {
 		const sid = getActiveRdpSessionId()
-		if (sid) RDPHide(sid)
+		if (sid) {
+			// Capture the current RDP frame while the window is still visible,
+			// show it as a frozen .rdp-area background, THEN hide the live window
+			// — so the area shows a snapshot instead of a black placeholder while
+			// a menu/dialog is open. The image is pre-decoded via <img> so the
+			// frozen frame is available the instant the live window drops away
+			// (avoids a decode gap → dark flash).
+			RDPSnapshot(sid)
+				.then((snap: string) => {
+					if (!snap) { RDPHide(sid); return }
+					const url = `data:image/png;base64,${snap}`
+					const img = new Image()
+					img.onload = () => {
+						setRdpSnapshotBg(url)
+						RDPHide(sid)
+					}
+					img.onerror = () => { RDPHide(sid) }
+					img.src = url
+				})
+				.catch(() => { RDPHide(sid) })
+		}
 	}
 }
 
@@ -415,8 +457,22 @@ function RDPShowForOverlay() {
 			if (!tab || tab.type !== 'rdp') return
 			const sid = panelStore.getPanel(tab.panelId)?.sessionId
 			if (sid) {
+				// Restore the live window FIRST (it covers .rdp-area), then clear
+				// the frozen snapshot only after it is confirmed back on top —
+				// clearing while the live frame is visible is invisible, so there
+				// is no dark gap between the snapshot and the live frame.
 				rdpResetTracking()
-				nextTick(() => RDPShow(sid))
+				nextTick(() => {
+					RDPShow(sid)
+					// Kick a repaint: Show() early-returns on the re-show path (the
+					// position sync already set the window visible), so this is what
+					// forces mstscax to present its frame and avoids a black flash.
+					RDPInvalidate(sid)
+					setTimeout(() => {
+						rdpSyncPosition()
+						clearRdpSnapshotBg()
+					}, 200)
+				})
 			}
 		}
 	}, 150)
@@ -732,9 +788,29 @@ onMounted(async () => {
   window.addEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
   // Exit is emitted from Go when the user uses the connection bar's restore button.
   unsubRdpFullscreenExit =Events.On('rdp:fullscreen-exit', () => onRdpFullScreenExit())
-  // Go-side WndProc events: window move/resize start/end
-  unsubRdpMoveResizeStart =Events.On('rdp:move-resize-start', () => RDPHideForOverlay())
-  unsubRdpMoveResizeEnd =Events.On('rdp:move-resize-end', () => RDPShowForOverlay())
+  // Go-side WndProc events: window move/resize start/end. The RDP window is a
+  // WS_CHILD, so it moves with the main window automatically; only a resize of
+  // the .rdp-area (or a re-show after an overlay) needs a position sync.
+  unsubRdpMoveResizeStart =Events.On('rdp:move-resize-start', () => {}) // no-op: child follows; don't hide it mid-drag
+  unsubRdpMoveResizeEnd =Events.On('rdp:move-resize-end', () => {
+    setTimeout(() => {
+      rdpSyncPosition()
+      const tab = activeTab.value
+      if (tab?.type === 'rdp') {
+        const sid = panelStore.getPanel(tab.panelId)?.sessionId
+        if (sid) nextTick(() => RDPShow(sid))
+      }
+    }, 100)
+  })
+
+  // Keep native RDP window position in sync when the .rdp-area changes size
+  rdpAreaObserver = new ResizeObserver(() => rdpSyncPosition())
+  const observeRdpArea = () => {
+    const area = document.querySelector('.rdp-area')
+    if (area) rdpAreaObserver!.observe(area)
+  }
+  observeRdpArea()
+  watch(() => activeTab.value, () => nextTick(observeRdpArea))
 
   // Panel/Tab/StartTab menu actions
   window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
@@ -919,6 +995,7 @@ onUnmounted(() => {
   unsubRdpFullscreenExit?.()
   unsubRdpMoveResizeStart?.()
   unsubRdpMoveResizeEnd?.()
+  rdpAreaObserver?.disconnect()
   // Tear down store-level EventsOn registrations (FE-03)
   aiStore.dispose?.()
   settingsStore.dispose?.()
@@ -1807,7 +1884,7 @@ function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
 
 // Show/hide native RDP window on tab switch.
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),
-// so background sessions stay at (32000,32000) and don't respond to drag.
+// so background sessions are tucked under the webview and don't respond to drag.
 watch(() => activeTab.value, (newTab, oldTab) => {
   if (oldTab?.type === 'rdp') {
     const p = panelStore.getPanel(oldTab.panelId)
@@ -1834,14 +1911,12 @@ watch(showConnectionForm, (val) => {
 })
 
 watch(sidebarVisible, async () => {
-  RDPHideForOverlay()
-  nextTick(() => RDPShowForOverlay())
+  rdpResetTracking()
   localStateStore.update({ sidebarVisible: sidebarVisible.value })
 })
 
 watch(() => aiStore.visible, () => {
-  RDPHideForOverlay()
-  nextTick(() => RDPShowForOverlay())
+  rdpResetTracking()
 })
 
 watch(() => settingsStore.settings.keyboard, () => {

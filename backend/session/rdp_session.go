@@ -3,7 +3,11 @@
 package session
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/png"
 	"runtime"
 	"sync"
 	"time"
@@ -31,13 +35,13 @@ var (
 	procGetWindowRect      = user32Dll.NewProc("GetWindowRect")
 	procGetClientRect      = user32Dll.NewProc("GetClientRect")
 	procClientToScreen     = user32Dll.NewProc("ClientToScreen")
-	procSetWindowLongPtr   = user32Dll.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtr   = user32Dll.NewProc("GetWindowLongPtrW")
 	procPostMessageW       = user32Dll.NewProc("PostMessageW")
 	procFindWindowExW      = user32Dll.NewProc("FindWindowExW")
 	procSendMessageW       = user32Dll.NewProc("SendMessageW")
 	procGetSystemMetrics   = user32Dll.NewProc("GetSystemMetrics")
 	procGetWindowThreadPID = user32Dll.NewProc("GetWindowThreadProcessId")
+	procInvalidateRect     = user32Dll.NewProc("InvalidateRect")
+	procRedrawWindow       = user32Dll.NewProc("RedrawWindow")
 
 	// kernel32Dll is declared in local_session_windows.go (same package).
 	procGetCurrentProcID = kernel32Dll.NewProc("GetCurrentProcessId")
@@ -45,6 +49,7 @@ var (
 
 const (
 	WM_CLOSE           = 0x0010
+	WM_SIZE            = 0x0005
 	SWP_SHOWWINDOW     = 0x0040
 	SWP_HIDEWINDOW     = 0x0080
 	SWP_NOMOVE         = 0x0002
@@ -52,15 +57,15 @@ const (
 	SWP_NOACTIVATE     = 0x0010
 	SWP_NOZORDER       = 0x0004
 	SWP_ASYNCWINDOWPOS = 0x4000 // non-blocking: avoids freezing RDP COM thread
-	WS_EX_TOOLWINDOW   = 0x00000080
 	WS_EX_NOACTIVATE   = 0x08000000
-	WS_POPUP           = 0x80000000
+	WS_CHILD           = 0x40000000
 	WS_CLIPSIBLINGS    = 0x04000000
 	PM_REMOVE          = 0x0001
-	GWLP_HWNDPARENT    = ^uintptr(7) // -8 represented as uintptr for syscall compatibility
-	GWL_EXSTYLE        = ^uintptr(19) // -20: extended window style
 	SW_HIDE            = 0
 	SW_SHOWNOACTIVATE  = 4
+	RDW_INVALIDATE     = 0x0001
+	RDW_ALLCHILDREN    = 0x0080
+	RDW_UPDATENOW      = 0x0100
 	WM_COMMAND         = 0x0111
 	BM_CLICK           = 0x00F5
 	IDYES              = 6
@@ -80,6 +85,7 @@ type RDPSession struct {
 
 	// Last known position, used by Show() after Hide()
 	trackX, trackY int
+	trackW, trackH int
 
 	// Full-screen toggle request, applied on the COM STA thread by the message
 	// pump. COM (STA) calls must run on the thread that created the object;
@@ -108,8 +114,10 @@ func NewRDPSession(id string) *RDPSession {
 	}
 }
 
-// ClientAreaScreenRect returns the main window's client area in screen coordinates
-// (physical pixels). Used by the frontend to position the RDP overlay precisely.
+// ClientAreaScreenRect returns the main window's client area in screen
+// coordinates (physical pixels). Surfaced in the session:status payload; the
+// frontend positions the RDP child window from the .rdp-area DOM rect, so these
+// values are diagnostic only.
 func (s *RDPSession) ClientAreaScreenRect() (x, y, w, h int) {
 	if s.parentHwnd == 0 {
 		return
@@ -291,26 +299,34 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		height = 600
 	}
 
-	// Create WS_POPUP off-screen
+	// Create the RDP container as a WS_CHILD at 32000,32000 (parent-client-
+	// relative, i.e. outside the client area = hidden). The actual show/position
+	// is done by positionFromMainWindow once Connect succeeds.
 	name, _ := windows.UTF16PtrFromString(progID)
 	className, _ := windows.UTF16PtrFromString("AtlAxWin")
 
 	createWindowEx := windows.NewLazySystemDLL("user32.dll").NewProc("CreateWindowExW")
+	// Create as a WS_CHILD of the main window. A child window:
+	//  - follows the parent automatically when it moves (owned top-level windows do not),
+	//  - is clipped to the parent's client area (so it can never cover the header/tabs),
+	//  - cannot become the foreground window (so cannot push uniTerm behind other
+	//    windows during/after connect).
+	// The RDP overlay is driven purely by sibling z-order: HWND_TOP to show it above
+	// the webview, HWND_BOTTOM to tuck it under the webview while an HTML menu/dialog
+	// is open — leaving the ActiveX rendering surface untouched, so no black screen
+	// on restore. WS_EX_NOACTIVATE keeps the ActiveX + its child dialogs from
+	// stealing foreground/focus during Connect.
 	hwnd, _, _ := createWindowEx.Call(
-		// Create with WS_EX_NOACTIVATE so the RDP ActiveX control cannot steal the
-		// foreground during connection (which would push uniTerm behind other
-		// windows). The flag is cleared after connect (see below) so that clicking
-		// the RDP window then activates uniTerm and keyboard focus follows on
-		// multi-monitor setups. (issues #385, foreground-during-connect)
-		uintptr(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE),
+		uintptr(WS_EX_NOACTIVATE),
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(name)),
-		uintptr(WS_POPUP|WS_CLIPSIBLINGS),
-		32000, 32000,
+		uintptr(WS_CHILD|WS_CLIPSIBLINGS),
+		32000, 32000, // child-relative; outside the client area = hidden
 		uintptr(width), uintptr(height),
-		// Create without owner in CreateWindowEx to avoid COM initialization issues.
-		// Owner is set immediately after via SetWindowLongPtr(GWLP_HWNDPARENT).
-		0, 0, 0, 0,
+		uintptr(s.parentHwnd), // parent window handle
+		0,                     // menu
+		0,                     // hInstance
+		0,                     // lParam
 	)
 	if hwnd == 0 {
 		log.Writef("[RDP] ERROR: CreateWindowExW failed")
@@ -318,10 +334,7 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("CreateWindowEx failed")
 	}
 
-	// Make RDP window owned by uniTerm main window.
-	// Owned windows naturally stay above their owner but below other top-level windows,
-	// eliminating the need for manual HWND_TOPMOST/HWND_NOTOPMOST z-order management.
-	procSetWindowLongPtr.Call(hwnd, GWLP_HWNDPARENT, s.parentHwnd)
+	// No GWLP_HWNDPARENT owner call needed — the window is a genuine child now.
 
 	var unk *ole.IUnknown
 	procAtlAxGetControl.Call(hwnd, uintptr(unsafe.Pointer(&unk)))
@@ -418,8 +431,8 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 				a.PutProperty("ContainerHandledFullScreen", false)
 				a.PutProperty("WarnOnDirectConnect", false)
 				// Hide the minimize button on the full-screen connection bar.
-				// When minimized, the RDP window (WS_EX_TOOLWINDOW, no taskbar entry)
-				// becomes unrecoverable. Supported in AdvancedSettings6+.
+				// A minimized RDP window has no taskbar entry to restore from, so it
+				// would become unrecoverable. Supported in AdvancedSettings6+.
 				a.PutProperty("ConnectionBarShowMinimizeButton", false)
 				a.Release()
 			}
@@ -462,11 +475,9 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	// Frontend will refine via RDPSetPosition shortly after.
 	s.positionFromMainWindow(width, height)
 
-	// Connection is up and the ActiveX control is no longer trying to grab the
-	// foreground, so clear WS_EX_NOACTIVATE. From now on a click on the RDP
-	// window activates uniTerm, letting keyboard focus follow. (issue #385)
-	exStyle, _, _ := procGetWindowLongPtr.Call(hwnd, GWL_EXSTYLE)
-	procSetWindowLongPtr.Call(hwnd, GWL_EXSTYLE, exStyle&^WS_EX_NOACTIVATE)
+	// Keep WS_EX_NOACTIVATE permanently: the ActiveX control and its child
+	// windows can steal foreground during/after Connect, pushing uniTerm
+	// behind other windows. The flag prevents this. (issue #385, #470)
 
 	s.setStatus(StatusConnected)
 
@@ -811,52 +822,77 @@ func (s *RDPSession) positionFromMainWindow(width, height int) {
 		}
 		cr = rect{0, 0, wr.Right - wr.Left, wr.Bottom - wr.Top}
 	}
-	var origin point
-	ret2, _, _ := procClientToScreen.Call(s.parentHwnd, uintptr(unsafe.Pointer(&origin)))
-	if ret2 == 0 {
-		origin = point{0, 0}
-	}
-	clientLeft := int(origin.X)
-	clientTop := int(origin.Y)
 	clientWidth := int(cr.Right - cr.Left)
 	clientHeight := int(cr.Bottom - cr.Top)
 
+	// trackX/trackY are PARENT-CLIENT-RELATIVE offsets into the main window. As
+	// a WS_CHILD, the RDP window is positioned in the parent's client coordinate
+	// space, so these are used directly by placeAtChild — no screen conversion
+	// or owner-origin addition is needed, and the window follows the parent
+	// automatically when it moves.
 	topReserve := 80
 	bottomReserve := 32
 	sideMargin := 4
 
-	x := clientLeft + sideMargin
-	y := clientTop + topReserve
+	x := sideMargin
+	y := topReserve
 	w := clientWidth - sideMargin*2
 	h := clientHeight - topReserve - bottomReserve
 
 	s.shown = true
-	procSetWindowPos.Call(s.hwnd, 0,
-		uintptr(x), uintptr(y),
-		uintptr(w), uintptr(h),
-		SWP_SHOWWINDOW|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
+	s.placeAtChild(x, y, w, h, SWP_SHOWWINDOW|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
 
 	s.trackX = x
 	s.trackY = y
+	s.trackW = w
+	s.trackH = h
+}
+
+// placeAtChild positions the RDP CHILD window at the given parent-client-
+// relative offset (offsetX, offsetY) and size, bringing it to the top of the
+// main window's child z-order (above the webview) so the ActiveX is visible.
+// For a WS_CHILD, position/size are already parent-client-relative — no screen
+// origin conversion is needed (the window follows the parent automatically).
+// insertAfter=0 is HWND_TOP.
+func (s *RDPSession) placeAtChild(offsetX, offsetY, w, h int, flags uintptr) {
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
+	if hwnd == 0 {
+		return
+	}
+	procSetWindowPos.Call(hwnd, 0, // HWND_TOP
+		uintptr(offsetX), uintptr(offsetY),
+		uintptr(w), uintptr(h),
+		flags)
 }
 
 func (s *RDPSession) SetPosition(x, y, w, h int) {
 	s.mu.Lock()
-	hwnd := s.hwnd
-	if hwnd == 0 {
+	if s.hwnd == 0 {
 		s.mu.Unlock()
 		return
 	}
 	s.shown = true
 	s.trackX = x
 	s.trackY = y
+	s.trackW = w
+	s.trackH = h
 	s.mu.Unlock()
 
-	// Owned window: z-order is automatic. SWP_SHOWWINDOW handles tab-switch restore.
-	procSetWindowPos.Call(hwnd, 0,
-		uintptr(x), uintptr(y),
-		uintptr(w), uintptr(h),
-		SWP_SHOWWINDOW|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
+	// x/y are PARENT-CLIENT-RELATIVE offsets; placeAtChild positions the child
+	// directly in the parent's client coordinate space (no screen conversion).
+	// The frontend computes these from the .rdp-area DOM rect, so the RDP child
+	// is sized/placed to exactly cover the placeholder region.
+	s.placeAtChild(x, y, w, h, SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
+	// Force ActiveX to recalculate layout and repaint via WM_SIZE.
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
+	if hwnd != 0 {
+		lparam := uintptr(h<<16 | w&0xFFFF)
+		procPostMessageW.Call(hwnd, WM_SIZE, 0, lparam)
+	}
 }
 
 // SetFullScreen toggles the ActiveX control's built-in full-screen mode.
@@ -879,17 +915,26 @@ func (s *RDPSession) Show() {
 		s.mu.Unlock()
 		return
 	}
-	hwnd := s.hwnd
 	tX := s.trackX
 	tY := s.trackY
+	tW := s.trackW
+	tH := s.trackH
 	s.shown = true
 	s.mu.Unlock()
+
+	// Bring the child back to HWND_TOP (above the webview) at its tracked
+	// parent-client-relative position. placeAtChild passes insertAfter=0
+	// (HWND_TOP). The window was merely occluded (Hide only lowered z-order,
+	// never moved/resized it), so bringing it back reveals the current frame; a
+	// redraw kick makes it repaint immediately without a size change (a 1px
+	// resize nudge caused a visible re-scale flicker).
+	s.placeAtChild(tX, tY, tW, tH, SWP_SHOWWINDOW|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
 	if hwnd != 0 {
-		procShowWindow.Call(hwnd, SW_SHOWNOACTIVATE)
-		procSetWindowPos.Call(hwnd, 0,
-			uintptr(tX), uintptr(tY),
-			0, 0,
-			SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOZORDER|SWP_ASYNCWINDOWPOS)
+		procInvalidateRect.Call(hwnd, 0, 1)
+		procRedrawWindow.Call(hwnd, 0, 0, RDW_INVALIDATE|RDW_UPDATENOW|RDW_ALLCHILDREN)
 	}
 }
 
@@ -899,14 +944,150 @@ func (s *RDPSession) Hide() {
 		s.mu.Unlock()
 		return
 	}
-	hwnd := s.hwnd
 	s.shown = false
 	s.mu.Unlock()
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
 	if hwnd != 0 {
-		// SW_HIDE hides the window so the OS stops sending paint messages
-		// and the ActiveX stops rendering in background.
-		procShowWindow.Call(hwnd, SW_HIDE)
+		// Lower the child to HWND_BOTTOM (below the webview) so an HTML
+		// menu/dialog can render over it. This does NOT move or resize the
+		// window, so the ActiveX rendering surface stays intact — avoiding the
+		// black screen that a move-offscreen hide produces (the webview, which
+		// is opaque, covers the child).
+		procSetWindowPos.Call(hwnd, 1, // HWND_BOTTOM
+			0, 0, 0, 0,
+			SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_ASYNCWINDOWPOS)
 	}
+}
+
+// Invalidate forces a repaint of the RDP ActiveX control.
+func (s *RDPSession) Invalidate() {
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
+	if hwnd != 0 {
+		procInvalidateRect.Call(hwnd, 0, 1)
+		// Force a synchronous repaint so the control presents its current frame
+		// instead of a black one when re-shown after being occluded.
+		procRedrawWindow.Call(hwnd, 0, 0, RDW_INVALIDATE|RDW_UPDATENOW|RDW_ALLCHILDREN)
+	}
+}
+
+// Snapshot captures the RDP window's current content as a base64-encoded PNG.
+// The frontend uses it as a frozen background for .rdp-area while the RDP window
+// is hidden under an overlay (menu/dialog), so the area shows a snapshot instead
+// of a black placeholder.
+func (s *RDPSession) Snapshot() (string, error) {
+	s.mu.Lock()
+	hwnd := s.hwnd
+	s.mu.Unlock()
+	if hwnd == 0 {
+		return "", fmt.Errorf("RDP window not created")
+	}
+	var wr rect
+	if ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&wr))); ret == 0 {
+		return "", fmt.Errorf("GetWindowRect failed")
+	}
+	w := int(wr.Right - wr.Left)
+	h := int(wr.Bottom - wr.Top)
+	if w <= 0 || h <= 0 {
+		return "", fmt.Errorf("bad window size %dx%d", w, h)
+	}
+
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	gdi32 := windows.NewLazySystemDLL("gdi32.dll")
+	procGetDC := user32.NewProc("GetDC")
+	procReleaseDC := user32.NewProc("ReleaseDC")
+	procBitBlt := gdi32.NewProc("BitBlt")
+	procPrintWindow := user32.NewProc("PrintWindow")
+	procCreateCompatibleDC := gdi32.NewProc("CreateCompatibleDC")
+	procCreateCompatibleBitmap := gdi32.NewProc("CreateCompatibleBitmap")
+	procSelectObject := gdi32.NewProc("SelectObject")
+	procDeleteObject := gdi32.NewProc("DeleteObject")
+	procDeleteDC := gdi32.NewProc("DeleteDC")
+	procGetDIBits := gdi32.NewProc("GetDIBits")
+
+	winDC, _, _ := procGetDC.Call(hwnd)
+	if winDC == 0 {
+		return "", fmt.Errorf("GetDC(hwnd) failed")
+	}
+	defer procReleaseDC.Call(hwnd, winDC)
+
+	memDC, _, _ := procCreateCompatibleDC.Call(winDC)
+	if memDC == 0 {
+		return "", fmt.Errorf("CreateCompatibleDC failed")
+	}
+	defer procDeleteDC.Call(memDC)
+
+	hbm, _, _ := procCreateCompatibleBitmap.Call(winDC, uintptr(w), uintptr(h))
+	if hbm == 0 {
+		return "", fmt.Errorf("CreateCompatibleBitmap failed")
+	}
+	defer procDeleteObject.Call(hbm)
+
+	oldObj, _, _ := procSelectObject.Call(memDC, hbm)
+	if oldObj == 0 {
+		return "", fmt.Errorf("SelectObject failed")
+	}
+	defer procSelectObject.Call(memDC, oldObj)
+
+	// PrintWindow with PW_RENDERFULLCONTENT renders the window AND its child
+	// control into the target DC, which is what actually carries the remote
+	// desktop frame (a plain BitBlt from the AtlAxWin DC would capture the empty
+	// parent surface). Fall back to BitBlt if PrintWindow reports failure.
+	const pwRenderFullContent = 0x00000002
+	const srcCopy = 0x00CC0020
+	if ret, _, _ := procPrintWindow.Call(hwnd, memDC, pwRenderFullContent); ret == 0 {
+		if ret2, _, _ := procBitBlt.Call(memDC, 0, 0, uintptr(w), uintptr(h), winDC, 0, 0, srcCopy); ret2 == 0 {
+			return "", fmt.Errorf("PrintWindow failed")
+		}
+	}
+
+	// DIB header for GetDIBits (top-down 32bpp BGRA).
+	type bitmapInfoHeader struct {
+		biSize          uint32
+		biWidth         int32
+		biHeight        int32
+		biPlanes        uint16
+		biBitCount      uint16
+		biCompression   uint32
+		biSizeImage     uint32
+		biXPelsPerMeter int32
+		biYPelsPerMeter int32
+		biClrUsed       uint32
+		biClrImportant  uint32
+	}
+	bi := bitmapInfoHeader{
+		biSize:     uint32(unsafe.Sizeof(bitmapInfoHeader{})),
+		biWidth:    int32(w),
+		biHeight:   -int32(h), // negative = top-down rows
+		biPlanes:   1,
+		biBitCount: 32,
+	}
+	pix := make([]byte, w*h*4)
+	if ret, _, _ := procGetDIBits.Call(memDC, hbm, 0, uintptr(h), uintptr(unsafe.Pointer(&pix[0])), uintptr(unsafe.Pointer(&bi)), 0); ret == 0 {
+		return "", fmt.Errorf("GetDIBits failed")
+	}
+
+	// BGRA → RGBA, then encode PNG.
+	img := &image.RGBA{Pix: make([]byte, w*h*4), Stride: w * 4, Rect: image.Rect(0, 0, w, h)}
+	for i := range w * h {
+		b := pix[i*4+0]
+		g := pix[i*4+1]
+		r := pix[i*4+2]
+		a := pix[i*4+3]
+		img.Pix[i*4+0] = r
+		img.Pix[i*4+1] = g
+		img.Pix[i*4+2] = b
+		img.Pix[i*4+3] = a
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 func (s *RDPSession) Disconnect() error {

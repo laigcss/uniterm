@@ -1743,6 +1743,11 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 				payload["clientY"] = cy
 				payload["clientW"] = cw
 				payload["clientH"] = ch
+				// The RDP ActiveX (and any credential/security dialog it owns) can
+				// push uniTerm behind other windows during connect. Raise the main
+				// window once the session is up so it stays visible above unrelated
+				// windows. No-op on non-Windows; harmless if already in front.
+				a.bringMainWindowToFront()
 			}
 			// Attach proxyAddr for VNC and SPICE sessions
 			if vnc, ok := s.(*session.VNCSession); ok {
@@ -2272,6 +2277,41 @@ func (a *App) RDPHide(sessionID string) error {
 		return fmt.Errorf("session is not RDP")
 	}
 	rdp.Hide()
+	return nil
+}
+
+// RDPSnapshot captures the RDP session's current frame as a base64-encoded PNG.
+// The frontend shows it as a frozen background in .rdp-area while the RDP window
+// is hidden under an overlay (menu/dialog), so the area shows a snapshot instead
+// of a black placeholder.
+func (a *App) RDPSnapshot(sessionID string) (string, error) {
+	if a.sessionManager == nil {
+		return "", fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return "", fmt.Errorf("session not found: %s", sessionID)
+	}
+	rdp, ok := s.(*session.RDPSession)
+	if !ok {
+		return "", fmt.Errorf("session is not RDP")
+	}
+	return rdp.Snapshot()
+}
+
+func (a *App) RDPInvalidate(sessionID string) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	rdp, ok := s.(*session.RDPSession)
+	if !ok {
+		return fmt.Errorf("session is not RDP")
+	}
+	rdp.Invalidate()
 	return nil
 }
 
