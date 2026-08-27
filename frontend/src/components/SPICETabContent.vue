@@ -50,11 +50,13 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Loader } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 import type { ConnectionConfig } from '../types/session'
 import { Events } from '@wailsio/runtime'
 import { CreateSession, CloseSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const panelStore = usePanelStore()
+const sessionStore = useSessionStore()
 
 const props = defineProps<{
   panelId: string
@@ -78,6 +80,16 @@ async function connect() {
   try {
     const info = await CreateSession('spice', props.config)
     currentSessionId.value = info.id
+    // Bind the session to the panel so tab-close cleanup resolves to this
+    // id, and drive the SPICE client from the proxy address returned by
+    // CreateSession (the synchronous SPICE connect makes it available
+    // here) rather than the racy session:status 'connected' event.
+    panelStore.bindSession(props.panelId, info.id)
+    sessionStore.initSession(info.id)
+    if (info.proxyAddr) {
+      panelStore.setProxyAddr(props.panelId, info.proxyAddr)
+      initSpice(info.proxyAddr, props.config.password || '')
+    }
   } catch (e: any) {
     console.error('SPICE connect error:', e)
     status.value = 'error'

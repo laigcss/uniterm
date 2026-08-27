@@ -1546,22 +1546,30 @@ async function onConnectVNC(config: ConnectionConfig, prevStart?: any) {
   const panel = panelStore.createPanel(config, 'vnc')
   panelStore.updateTitle(panel.id, displayTitle)
   const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+
+  // Create the session BEFORE the tab so VNCTabContent mounts with its
+  // sessionId and proxyAddr already bound. Mounting first and calling
+  // CreateSession from the component created a duplicate session and lost
+  // the session:status 'connected' event (emitted during CreateSession,
+  // before the component set its session id), leaving VNC stuck on
+  // "connecting". Mirrors onConnectLocal.
+  let info
+  try {
+    info = await CreateSession('vnc', config)
+  } catch (e) {
+    console.error('Failed to create VNC session:', e)
+    panelStore.removePanel(panel.id)
+    return
+  }
+  if (info.proxyAddr) panelStore.setProxyAddr(panel.id, info.proxyAddr)
+  panelStore.bindSession(panel.id, info.id)
+  sessionStore.initSession(info.id)
+
   const tab = tabStore.createVNCTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
-
-  try {
-    const info = await CreateSession('vnc', config)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e) {
-    console.error('Failed to create VNC session:', e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
 }
-
 async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
   connectionStore.add(config)
 
@@ -1574,20 +1582,25 @@ async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
   const panel = panelStore.createPanel(config, 'spice')
   panelStore.updateTitle(panel.id, displayTitle)
   const reposition = prevStart ? closeStartAndReposition(prevStart) : null
+
+  // Create the session BEFORE the tab so SPICETabContent mounts with its
+  // sessionId and proxyAddr already bound — same v3 race as VNC.
+  let info
+  try {
+    info = await CreateSession('spice', config)
+  } catch (e) {
+    console.error('Failed to create SPICE session:', e)
+    panelStore.removePanel(panel.id)
+    return
+  }
+  if (info.proxyAddr) panelStore.setProxyAddr(panel.id, info.proxyAddr)
+  panelStore.bindSession(panel.id, info.id)
+  sessionStore.initSession(info.id)
+
   const tab = tabStore.createSPICETab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   RecordRecentConnection(config.id)
-
-  try {
-    const info = await CreateSession('spice', config)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e) {
-    console.error('Failed to create SPICE session:', e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
 }
 
 async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any) {

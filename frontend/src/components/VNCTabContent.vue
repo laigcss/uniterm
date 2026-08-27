@@ -70,11 +70,13 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Loader } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 import type { ConnectionConfig } from '../types/session'
 import { Clipboard, Events } from '@wailsio/runtime'
 import { CreateSession, CloseSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const panelStore = usePanelStore()
+const sessionStore = useSessionStore()
 
 const props = defineProps<{
   panelId: string
@@ -82,7 +84,7 @@ const props = defineProps<{
   sessionId: string | null
 }>()
 
-const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
+const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
 const lastError = ref<string>('')
 const currentSessionId = ref<string | null>(props.sessionId)
 const vncContainer = ref<HTMLDivElement | null>(null)
@@ -126,6 +128,19 @@ async function connect() {
   try {
     const info = await CreateSession('vnc', props.config)
     currentSessionId.value = info.id
+    // Bind the session to the panel so tab-close cleanup and later
+    // session:status events resolve to this id. The proxy address comes
+    // straight from the CreateSession result: the synchronous VNC connect
+    // makes it available here, independent of the racy session:status
+    // 'connected' event that used to be dropped before the session id was
+    // set, leaving VNC stuck on "connecting".
+    panelStore.bindSession(props.panelId, info.id)
+    sessionStore.initSession(info.id)
+    if (info.proxyAddr) {
+      panelStore.setProxyAddr(props.panelId, info.proxyAddr)
+      savedPassword.value = props.config.password || ''
+      initRFB(info.proxyAddr, savedPassword.value)
+    }
   } catch (e: any) {
     console.error('VNC connect error:', e)
     lastError.value = e?.message || String(e)
@@ -280,25 +295,13 @@ onMounted(() => {
     return
   }
 
-  const storedProxy = panelStore.getProxyAddr(props.panelId)
-  if (storedProxy && props.config) {
-    savedPassword.value = props.config.password || ''
-    initRFB(storedProxy, savedPassword.value)
-  } else if (currentSessionId.value) {
-    connect()
-  } else {
-    connect()
-  }
-
-  watchThemeBackground()
-
-  unsubStatus =Events.On('session:status', (ev) => { const data: any = ev.data; 
+  // Register event listener BEFORE connect() — with synchronous VNC/SPICE
+  // connect the session:status event is emitted during CreateSession and
+  // would arrive before the listener if we registered it after.
+  unsubStatus = Events.On('session:status', (ev) => { const data: any = ev.data; 
     if (data.id !== currentSessionId.value) return
     switch (data.status) {
       case 'connected':
-        // issue #95: do NOT flip to 'connected' here. The RFB 'connect'
-        // event is the source of truth — see createRFB above. We only
-        // hand the proxyAddr off to noVNC.
         if (data.proxyAddr) {
           panelStore.setProxyAddr(props.panelId, data.proxyAddr)
         }
@@ -322,7 +325,17 @@ onMounted(() => {
         status.value = 'error'
         break
     }
-   })
+  })
+
+  const storedProxy = panelStore.getProxyAddr(props.panelId)
+  if (storedProxy && props.config) {
+    savedPassword.value = props.config.password || ''
+    initRFB(storedProxy, savedPassword.value)
+  } else {
+    connect()
+  }
+
+  watchThemeBackground()
 
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
   window.addEventListener('panel:reconnect', onReconnectEvent)

@@ -1945,7 +1945,7 @@ async function onDropRemote(e: DragEvent) {
 .chmod-octal-input {
   width: 120px;
 }
-.chmod-octal-input :deep(.el-input__inner) {
+.chmod-octal-input .el-input__inner {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
   letter-spacing: 2px;
