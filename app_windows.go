@@ -154,7 +154,10 @@ func (a *App) findMainWindow() uintptr {
 // raise works while the old instance (the foreground process) is still alive.
 // No-op when no main window has been created yet.
 func (a *App) bringMainWindowToFront() {
-	hwnd := a.findMainWindow()
+	hwnd := a.mainHwnd
+	if hwnd == 0 {
+		hwnd = a.findMainWindow()
+	}
 	if hwnd == 0 {
 		return
 	}
