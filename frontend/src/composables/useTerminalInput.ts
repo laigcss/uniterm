@@ -55,27 +55,31 @@ export function useTerminalInput(terminal: Terminal | null, options: UseTerminal
       // Scan visible area from bottom to top — always finds the latest
       // prompt regardless of cursor position. (Cursor-based scanning was
       // tried in e4d31b7 but proved unreliable for prompt detection.)
-      const tryLine = (y: number): string | null => {
-        if (y < 0) return null
-        const line = buffer.getLine(y)
-        if (!line) return null
-        const rawText = line.translateToString().trim()
-        if (!rawText) return null
-        const cleanText = stripAnsi(rawText)
-        const match = cleanText.match(PROMPT_RE)
-        if (!match) return null
-        const command = match[2].trim()
-        if (command && !command.includes('__AI_DONE_') && command.length <= MAX_COMMAND_LENGTH) {
-          return command
-        }
-        return null
-      }
       const bottomY = (buffer.baseY ?? 0) + rows - 1
       for (let dy = 0; dy < rows; dy++) {
         const y = bottomY - dy
         if (y < 0) break
-        const hit = tryLine(y)
-        if (hit !== null) return hit
+        const line = buffer.getLine(y)
+        if (!line) continue
+        const rawText = line.translateToString().trim()
+        if (!rawText) continue
+        const cleanText = stripAnsi(rawText)
+        const match = cleanText.match(PROMPT_RE)
+        if (!match) continue
+        const command = match[2].trim()
+        if (!command || command.includes('__AI_DONE_')) continue
+        // A long command that overflows the panel width wraps onto the rows
+        // below the prompt. Walk down while each row is marked as a wrapped
+        // continuation (isWrapped) and append it so the full command is
+        // captured instead of being truncated at the wrap point (issue 639).
+        let full = command
+        for (let cy = y + 1; cy < bottomY; cy++) {
+          const cont = buffer.getLine(cy)
+          if (!cont || typeof cont.isWrapped !== 'function' || !cont.isWrapped()) break
+          full += stripAnsi(cont.translateToString().trim())
+        }
+        if (full.length > MAX_COMMAND_LENGTH) continue
+        return full
       }
     } catch {
       // Ignore errors
