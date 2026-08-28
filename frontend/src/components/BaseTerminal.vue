@@ -137,6 +137,7 @@ import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } 
 import { stripCursorBlink } from '../utils/cursor'
 import { applyBackspaceKey } from '../utils/backspaceKey'
 import { formatFontFamily } from '../utils/formatFontFamily'
+import { normalizePastedText, pasteWithScroll } from '../utils/terminalPaste'
 import {
   sanitizeTerminalOutput,
   sanitizeLiveTerminalOutput,
@@ -1781,22 +1782,11 @@ function pasteToTerminal(text: string) {
   }
 }
 
-// Wrap in bracketed-paste markers when the app enabled the mode, so vim etc.
-// don't re-indent each pasted line.
-function bracketPaste(text: string): string {
-  const sid = props.sessionId
-  const managed = sid ? getManagedTerminal(sid) : undefined
-  if (managed?.terminal.modes.bracketedPasteMode) {
-    return '\x1b[200~' + text + '\x1b[201~'
-  }
-  return text
-}
-
 async function pasteToSession(text: string) {
   if (props.mode === 'ssh' || props.mode === 'local') {
-    // Normalize line endings: \r\n -> \r to prevent extra newlines
-    // when pasting into editors like vim (Windows clipboard often has \r\n)
-    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '')
+    // Normalize line endings (CRLF -> LF, drop stray CR) so pasting into
+    // editors like vim doesn't double newlines (Windows clipboard has \r\n).
+    const normalized = normalizePastedText(text)
 
     // Broadcast mode: write to every target panel instead of only this
     // session (issue #597 — pasted command must sync like keyboard input).
@@ -1805,10 +1795,19 @@ async function pasteToSession(text: string) {
       if (targets.length > 0) {
         for (const pid of targets) {
           const p = panelStore.getPanel(pid)
-          if (p?.sessionId && (p.type === 'ssh' || p.type === 'local')) {
+          const managed = p?.sessionId ? getManagedTerminal(p.sessionId) : undefined
+          if (p?.sessionId && (p.type === 'ssh' || p.type === 'local') && managed) {
             // Bracket per target session — each has its own paste mode.
-            const wrap = getManagedTerminal(p.sessionId)?.terminal.modes.bracketedPasteMode
-            SessionWrite(p.sessionId, wrap ? '\x1b[200~' + normalized + '\x1b[201~' : normalized)
+            // Scroll each target's viewport to the bottom too, so broadcast
+            // paste behaves like keyboard input everywhere (issue 629).
+            pasteWithScroll(
+              {
+                bracketedPasteMode: managed.terminal.modes.bracketedPasteMode,
+                write: (payload) => SessionWrite(p.sessionId, payload),
+                scrollToBottom: () => managed.terminal.scrollToBottom(),
+              },
+              normalized,
+            )
           }
         }
         return
@@ -1817,7 +1816,15 @@ async function pasteToSession(text: string) {
 
     const sid = props.sessionId
     if (sid) {
-      SessionWrite(sid, bracketPaste(normalized))
+      const managed = getManagedTerminal(sid)
+      pasteWithScroll(
+        {
+          bracketedPasteMode: managed?.terminal.modes.bracketedPasteMode ?? false,
+          write: (payload) => SessionWrite(sid, payload),
+          scrollToBottom: () => terminal?.scrollToBottom(),
+        },
+        normalized,
+      )
     }
   }
 }
