@@ -30,6 +30,7 @@
           @refresh="onRefreshLocal"
           @mkdir="() => { dialogMode = 'local'; onMkdir() }"
           @edit="onLocalEditFile"
+          @edit-external="onLocalEditExternal"
           @new-file="onLocalNewFile"
           @copy-to-clipboard="onLocalCopyToClipboard"
           @cut-to-clipboard="onLocalCutToClipboard"
@@ -73,6 +74,7 @@
           @upload="onUpload"
           @download-to="onDownloadTo"
           @edit="onEditFile"
+          @edit-external="onEditExternal"
           @new-file="onNewFile"
           @copy-to-clipboard="onCopyToClipboard"
           @cut-to-clipboard="onCutToClipboard"
@@ -165,6 +167,11 @@
       <template #footer>
         <div class="editor-footer">
           <div class="editor-footer-left">
+            <el-button
+              size="small"
+              class="editor-external-btn"
+              @click="onSwitchToExternalEditor"
+            >{{ t('sftp.editExternal') }}</el-button>
             <el-checkbox v-model="editorWrapEnabled">{{ t('sftp.edit.wrap') }}</el-checkbox>
             <el-select v-model="editorEncoding" style="width: 100px">
               <el-option label="UTF-8" value="utf-8" />
@@ -180,7 +187,8 @@
           </div>
           <div class="editor-footer-buttons">
             <el-button @click="editorVisible = false">{{ t('sftp.dialog.cancel') }}</el-button>
-            <el-button type="primary" :loading="editorSaving" @click="onEditorSave">{{ t('sftp.edit.save') }}</el-button>
+            <el-button :loading="editorSaving" @click="onEditorSave(false)">{{ t('sftp.edit.save') }}</el-button>
+            <el-button type="primary" :loading="editorSaving" @click="onEditorSave(true)">{{ t('sftp.edit.saveClose') }}</el-button>
           </div>
         </div>
       </template>
@@ -233,6 +241,7 @@ import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watc
 import { msg } from '../services/message'
 import { usePanelStore } from '../stores/panelStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useLocalStateStore } from '../stores/localStateStore'
 import { useI18n } from '../i18n'
 import {
   SftpListRemote, SftpListLocal, SftpListLocalDrives,
@@ -241,6 +250,7 @@ import {
   SftpLocalRemove, SftpLocalRename, SftpLocalMkdir,
   SftpLocalGetContent, SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
   SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
+  SftpOpenExternalEditor, OpenExternalEditorLocal,
   WriteTempFile, SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer, ListSessions,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
@@ -256,6 +266,7 @@ const props = defineProps<{
 
 const panelStore = usePanelStore()
 const settingsStore = useSettingsStore()
+const localStateStore = useLocalStateStore()
 const transferTasks = panelStore.getTransferTasks(props.panelId)
 const { t } = useI18n()
 const panel = computed(() => panelStore.getPanel(props.panelId))
@@ -594,6 +605,7 @@ function parseMode(mode: string) {
 
 let unsubscribe: (() => void) | null = null
 let unsubscribeStatus: (() => void) | null = null
+let unsubscribeExt: (() => void) | null = null
 let initialNavDone = false
 
 onMounted(async () => {
@@ -687,6 +699,18 @@ onMounted(async () => {
     } catch {}
    })
 
+  // External-editor status events from the backend (started / uploaded / closed)
+  unsubscribeExt = Events.On('sftp:extedit', (ev) => {
+    const payload = ev?.data as { sessionId?: string; path?: string; status?: string }
+    if (!payload?.sessionId || payload.sessionId !== panel.value?.sessionId) return
+    if (payload.status === 'uploaded') {
+      msg.success(t('sftp.editExternalUploaded'))
+      onRefreshRemote()
+    } else if (payload.status === 'closed') {
+      msg.success(t('sftp.editExternalClosed'))
+    }
+  })
+
   // Proactively check if session is already connected (race: event may have fired before listener registered)
   const sid = panel.value?.sessionId
   if (sid) {
@@ -711,6 +735,7 @@ watch(() => panel.value?.sessionId, (newId, oldId) => {
 onUnmounted(() => {
   unsubscribe?.()
   unsubscribeStatus?.()
+  unsubscribeExt?.()
 })
 
 // With KeepAlive, only the active instance should listen for global document
@@ -1269,7 +1294,78 @@ async function onEditFile(item: FileItem) {
   }
 }
 
-async function onEditorSave() {
+// openExternalEditor launches the configured external editor on a remote file
+// and starts background auto-upload. Returns false (without opening) when no
+// editor is configured.
+async function openExternalEditor(remotePath: string): Promise<boolean> {
+  const sid = panel.value?.sessionId
+  if (!sid) return false
+  const editorCmd = localStateStore.state.externalEditor?.trim()
+  if (!editorCmd) {
+    msg.warning(t('sftp.editExternalNotConfigured'))
+    return false
+  }
+  try {
+    await SftpOpenExternalEditor(sid, remotePath, editorCmd)
+    msg.info(t('sftp.editExternalStart', { path: remotePath }))
+    return true
+  } catch (e: any) {
+    msg.error(e?.toString() || 'Failed to open external editor')
+    return false
+  }
+}
+
+async function onEditExternal(item: FileItem) {
+  if (item.isDir) return
+  if (item.size > 5 * 1024 * 1024) {
+    msg.warning(t('sftp.edit.fileTooLarge'))
+    return
+  }
+  await openExternalEditor(joinPath(cwd.value, item.name))
+}
+
+// openLocalExternalEditor launches the configured external editor directly on a
+// local file (SFTP "local" pane). The file lives on disk, so edits save in
+// place — no temp copy or auto-upload involved.
+async function openLocalExternalEditor(localPath: string): Promise<boolean> {
+  const editorCmd = localStateStore.state.externalEditor?.trim()
+  if (!editorCmd) {
+    msg.warning(t('sftp.editExternalNotConfigured'))
+    return false
+  }
+  try {
+    await OpenExternalEditorLocal(localPath, editorCmd)
+    msg.info(t('sftp.editExternalStart', { path: localPath }))
+    return true
+  } catch (e: any) {
+    msg.error(e?.toString() || 'Failed to open external editor')
+    return false
+  }
+}
+
+async function onLocalEditExternal(item: FileItem) {
+  if (item.isDir) return
+  if (item.size > 5 * 1024 * 1024) {
+    msg.warning(t('sftp.edit.fileTooLarge'))
+    return
+  }
+  await openLocalExternalEditor(joinPath(localCwd.value, item.name))
+}
+
+// Switch from the built-in editor to the external editor: close the dialog and
+// open the same file in the configured external editor. Remote files go through
+// the download→auto-upload flow; local files are opened in place.
+function onSwitchToExternalEditor() {
+  if (!editorPath.value) return
+  editorVisible.value = false
+  if (editorMode.value === 'local') {
+    openLocalExternalEditor(editorPath.value)
+  } else {
+    openExternalEditor(editorPath.value)
+  }
+}
+
+async function onEditorSave(close: boolean) {
   const sid = panel.value?.sessionId
   if (!sid) return
   editorSaving.value = true
@@ -1282,7 +1378,7 @@ async function onEditorSave() {
       onRefreshRemote()
     }
     msg.success(t('sftp.edit.saveSuccess'))
-    editorVisible.value = false
+    if (close) editorVisible.value = false
   } catch (e: any) {
     msg.error(e?.toString() || 'Failed to save file')
   } finally {

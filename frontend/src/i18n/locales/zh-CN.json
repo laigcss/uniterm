@@ -1374,5 +1374,13 @@
   "db.index": "INDEX",
   "db.null": "NULL",
   "db.undo": "撤销",
-  "db.unsavedChanges": "未保存的更改"
+  "db.unsavedChanges": "未保存的更改",
+  "sftp.editExternal": "用外部编辑器打开",
+  "sftp.editExternalStart": "正在外部编辑器中编辑 {path}",
+  "sftp.editExternalUploaded": "已自动上传到远程",
+  "sftp.editExternalClosed": "外部编辑器已关闭",
+  "sftp.editExternalNotConfigured": "尚未配置外部编辑器，请在设置中配置。",
+  "settings.externalEditor": "外部编辑器",
+  "settings.externalEditorDesc": "用于打开远程文件编辑的程序及参数，临时文件路径会自动追加。可在下拉中选择预设，也可直接输入命令。",
+  "sftp.edit.saveClose": "保存并关闭"
 }

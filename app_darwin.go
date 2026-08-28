@@ -3,11 +3,101 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/ys-ll/uniterm/backend/log"
 )
+
+func (a *App) findMainWindow() uintptr { return 0 }
+
+func (a *App) subclassMainWindow() {}
+
+func (a *App) unsubclassMainWindow() {}
+
+// bringMainWindowToFront is a no-op on non-Windows platforms: the relaunched-
+// window-behind-others issue is Windows-specific and does not occur here.
+func (a *App) bringMainWindowToFront() {}
+
+func (a *App) GetAvailableShells() []string {
+	var shells []string
+	var seen = make(map[string]bool)
+
+	add := func(path string) {
+		if path == "" {
+			return
+		}
+		abs, err := exec.LookPath(path)
+		if err != nil {
+			return
+		}
+		key := strings.ToLower(strings.ReplaceAll(abs, `\`, `/`))
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		shells = append(shells, abs)
+	}
+
+	add(os.Getenv("SHELL"))
+	add("bash")
+	add("zsh")
+	add("fish")
+	add("sh")
+	return shells
+}
+
+// detectExternalEditors scans for text editors installed on this macOS host
+// and returns only those actually found. All editors work here (they inherit a
+// usable terminal, and GUI editors open their own windows), so terminal editors
+// are offered too. TextEdit is an .app bundle and gets a fixed-path check.
+func detectExternalEditors() []ExternalEditorOption {
+	type cand struct{ name, prog, command string }
+	pathCands := []cand{
+		{"VS Code", "code", "code -w"},
+		{"VS Code Insiders", "code-insiders", "code-insiders -w"},
+		{"VSCodium", "codium", "codium -w"},
+		{"Sublime Text", "subl", "subl -w"},
+		{"Atom", "atom", "atom"},
+		{"Vim", "vim", "vim"},
+		{"gVim", "gvim", "gvim"},
+		{"Neovim", "nvim", "nvim"},
+		{"Emacs", "emacs", "emacs"},
+		{"nano", "nano", "nano"},
+		{"Micro", "micro", "micro"},
+		{"gedit", "gedit", "gedit"},
+		{"Kate", "kate", "kate"},
+		{"Xcode", "xed", "xed"},
+	}
+
+	var out []ExternalEditorOption
+	seen := map[string]bool{} // by canonical display name
+	add := func(name, command string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, ExternalEditorOption{Label: name + " (" + command + ")", Value: command})
+	}
+
+	for _, c := range pathCands {
+		if _, err := exec.LookPath(c.prog); err == nil {
+			add(c.name, c.command)
+		}
+	}
+
+	// TextEdit is an .app bundle, not a PATH executable. `open -W` blocks until
+	// the app closes, matching the -w behaviour of the other presets.
+	for _, app := range []string{"/System/Applications/TextEdit.app", "/Applications/TextEdit.app"} {
+		if pathExists(app) {
+			add("TextEdit", "open -W -a TextEdit")
+			break
+		}
+	}
+
+	return out
+}
 
 // macBundleID is the app's bundle identifier. Wails derives the default
 // identifier from wails.json's "name" as com.wails.<name>, and this project

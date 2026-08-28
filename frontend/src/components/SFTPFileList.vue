@@ -79,6 +79,7 @@
     <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" @contextmenu.stop v-slot="{ current }">
         <template v-if="menuType === 'file'">
           <MenuItem @click="doEdit">{{ t('sftp.edit') }}</MenuItem>
+          <MenuItem @click="doEditExternal">{{ t('sftp.editExternal') }}</MenuItem>
           <MenuItem @click="doNewFile">{{ t('sftp.newFile') }}</MenuItem>
           <MenuItem @click="doMkdir">{{ t('sftp.newDirectory') }}</MenuItem>
           <MenuDivider />
@@ -179,6 +180,7 @@ const emit = defineEmits<{
   cancelLoad: []
   cancelPaste: []
   edit: [item: FileItem]
+  editExternal: [item: FileItem]
   newFile: []
   copyToClipboard: [items: FileItem[]]
   cutToClipboard: [items: FileItem[]]
@@ -337,6 +339,7 @@ function doRename() { emit('rename', selectedItems.value[0]); ctxMenuVisible.val
 function doDelete() { emit('delete', [...selectedItems.value]); ctxMenuVisible.value = false }
 function doChmod() { emit('chmod', selectedItems.value[0]); ctxMenuVisible.value = false }
 function doEdit() { emit('edit', selectedItems.value[0]); ctxMenuVisible.value = false }
+function doEditExternal() { emit('editExternal', selectedItems.value[0]); ctxMenuVisible.value = false }
 function doNewFile() { emit('newFile'); ctxMenuVisible.value = false }
 function doMkdir() { emit('mkdir'); ctxMenuVisible.value = false }
 function doCopyToClipboard() { emit('copyToClipboard', [...selectedItems.value]); ctxMenuVisible.value = false }

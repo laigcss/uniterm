@@ -1374,5 +1374,13 @@
   "db.index": "INDEX",
   "db.null": "NULL",
   "db.undo": "Rückgängig",
-  "db.unsavedChanges": "Ungespeicherte Änderungen"
+  "db.unsavedChanges": "Ungespeicherte Änderungen",
+  "sftp.editExternal": "In externem Editor öffnen",
+  "sftp.editExternalStart": "Bearbeite {path} im externen Editor",
+  "sftp.editExternalUploaded": "Automatisch auf Remote hochgeladen",
+  "sftp.editExternalClosed": "Externer Editor geschlossen",
+  "sftp.editExternalNotConfigured": "Kein externer Editor konfiguriert. Bitte in den Einstellungen festlegen.",
+  "settings.externalEditor": "Externer Editor",
+  "settings.externalEditorDesc": "Programm und Optionen zum Öffnen einer Remote-Datei im externen Editor; der Pfad der temporären Datei wird automatisch angehängt. Wähle eine Vorlage oder gib selbst einen Befehl ein.",
+  "sftp.edit.saveClose": "Speichern und schließen"
 }

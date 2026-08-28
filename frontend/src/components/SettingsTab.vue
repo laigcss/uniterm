@@ -155,7 +155,8 @@
               </el-select>
             </div>
           </div>
-        </div>
+
+          </div>
 
         <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
         <div class="settings-group">
@@ -174,6 +175,32 @@
             </div>
             <div class="setting-control">
               <el-switch v-model="settingsStore.settings.closeAppPrompt" @change="settingsStore.save()" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.externalEditor') }}</div>
+              <div class="setting-desc">{{ t('settings.externalEditorDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select
+                :model-value="localStateStore.state.externalEditor"
+                class="editor-select"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder='code -w'
+                @update:model-value="(v: string) => localStateStore.update({ externalEditor: v as string })"
+              >
+                <el-option
+                  v-for="p in detectedEditors"
+                  :key="p.value"
+                  :label="p.label"
+                  :value="p.value"
+                />
+              </el-select>
             </div>
           </div>
         </div>
@@ -1020,7 +1047,7 @@
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
@@ -1059,6 +1086,10 @@ const localStateStore = useLocalStateStore()
 const { t } = useI18n()
 const platform = ref('')
 const isMac = computed(() => platform.value === 'darwin')
+
+// Editors detected on this host (from the backend). The dropdown shows exactly
+// these; empty means no editor was found installed, so nothing is listed.
+const detectedEditors = ref<{ label: string; value: string }[]>([])
 
 // ── Config management (data dir + encryption mode) ──
 const credStore = useCredentialStore()
@@ -1246,6 +1277,14 @@ onMounted(async () => {
     platform.value = await GetPlatform()
   } catch {
     platform.value = ''
+  }
+  // Populate the external-editor dropdown with editors actually installed on
+  // this host; fall back to the curated presets if detection returns nothing.
+  try {
+    const editors = await ListExternalEditors()
+    detectedEditors.value = (editors || []).map(e => ({ label: e.label, value: e.value }))
+  } catch {
+    detectedEditors.value = []
   }
   try {
     const fonts = await GetAllFonts()
@@ -1809,6 +1848,13 @@ async function onToggleSystemTitleBar(v: boolean) {
   flex-shrink: 0;
   min-width: 210px;
 }
+
+/* Keep the external-editor combobox the same width as the other select
+   controls instead of the default 100% (the free-input form stretches). */
+.setting-control .editor-select.el-select {
+  width: 210px;
+}
+
 
 /* The append button's width adds to the input's, so pin the whole group to
    the 210px the sibling selects render at instead of letting it overflow. */

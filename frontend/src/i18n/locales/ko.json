@@ -1374,5 +1374,13 @@
   "db.index": "INDEX",
   "db.null": "NULL",
   "db.undo": "실행 취소",
-  "db.unsavedChanges": "저장되지 않은 변경사항"
+  "db.unsavedChanges": "저장되지 않은 변경사항",
+  "sftp.editExternal": "외부 편집기로 열기",
+  "sftp.editExternalStart": "외부 편집기에서 {path} 편집 중",
+  "sftp.editExternalUploaded": "원격으로 자동 업로드됨",
+  "sftp.editExternalClosed": "외부 편집기가 닫혔습니다",
+  "sftp.editExternalNotConfigured": "외부 편집기가 구성되지 않았습니다. 설정에서 지정하세요.",
+  "settings.externalEditor": "외부 편집기",
+  "settings.externalEditorDesc": "원격 파일을 외부 편집기에서 열기 위한 프로그램 및 옵션. 임시 파일 경로가 자동으로 추가됩니다. 프리셋을 선택하거나 명령을 직접 입력하세요.",
+  "sftp.edit.saveClose": "저장 후 닫기"
 }

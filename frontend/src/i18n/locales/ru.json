@@ -1374,5 +1374,13 @@
   "db.index": "INDEX",
   "db.null": "NULL",
   "db.undo": "Отменить",
-  "db.unsavedChanges": "Несохранённые изменения"
+  "db.unsavedChanges": "Несохранённые изменения",
+  "sftp.editExternal": "Открыть во внешнем редакторе",
+  "sftp.editExternalStart": "Редактирование {path} во внешнем редакторе",
+  "sftp.editExternalUploaded": "Автоматически загружено на удалённый сервер",
+  "sftp.editExternalClosed": "Внешний редактор закрыт",
+  "sftp.editExternalNotConfigured": "Внешний редактор не настроен. Укажите его в настройках.",
+  "settings.externalEditor": "Внешний редактор",
+  "settings.externalEditorDesc": "Программа и параметры для открытия удалённого файла во внешнем редакторе. Путь временного файла добавляется автоматически. Выберите пресет или введите команду.",
+  "sftp.edit.saveClose": "Сохранить и закрыть"
 }

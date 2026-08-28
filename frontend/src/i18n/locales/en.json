@@ -1374,5 +1374,13 @@
   "db.index": "INDEX",
   "db.null": "NULL",
   "db.undo": "Undo",
-  "db.unsavedChanges": "Unsaved changes"
+  "db.unsavedChanges": "Unsaved changes",
+  "sftp.editExternal": "Open in External Editor",
+  "sftp.editExternalStart": "Editing {path} in external editor",
+  "sftp.editExternalUploaded": "Auto-uploaded to remote",
+  "sftp.editExternalClosed": "External editor closed",
+  "sftp.editExternalNotConfigured": "No external editor configured. Set one in Settings.",
+  "settings.externalEditor": "External Editor",
+  "settings.externalEditorDesc": "Program + flags used to open a remote file in an external editor; the temp file path is appended automatically. Pick a preset or type a command.",
+  "sftp.edit.saveClose": "Save and Close"
 }

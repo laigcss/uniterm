@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -223,4 +224,97 @@ func (a *App) unsubclassMainWindow() {
 	procSetWindowLongPtrW := user32.NewProc("SetWindowLongPtrW")
 	procSetWindowLongPtrW.Call(a.mainHwnd, GWLP_WNDPROC, a.originalWndProc)
 	a.originalWndProc = 0
+}
+
+// configureMacKeyRepeat is a no-op on Windows; the press-and-hold accent
+// picker only exists on macOS. See app_darwin.go for details.
+func (a *App) configureMacKeyRepeat() {}
+
+// detectExternalEditors scans for text editors installed on this Windows host
+// and returns only those actually found. Console-based editors (Vim, Neovim,
+// nano, Micro) are excluded: spawned from a GUI app without a console they
+// exit immediately, so they aren't offered. Every GUI editor is probed on PATH
+// first, then falls back to common install dirs (globbing versioned folders),
+// because default Windows installs often leave these off PATH.
+func detectExternalEditors() []ExternalEditorOption {
+	type fixed struct{ glob, suffix string }
+	type editor struct {
+		name, prog, pathCmd string
+		fixed               []fixed
+	}
+	editors := []editor{
+		{"VS Code", "code", "code -w", []fixed{
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Microsoft VS Code", "Code.exe"), " -w"},
+			{filepath.Join(os.Getenv("ProgramFiles"), "Microsoft VS Code", "Code.exe"), " -w"},
+		}},
+		{"VS Code Insiders", "code-insiders", "code-insiders -w", []fixed{
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Microsoft VS Code Insiders", "Code - Insiders.exe"), " -w"},
+			{filepath.Join(os.Getenv("ProgramFiles"), "Microsoft VS Code Insiders", "Code - Insiders.exe"), " -w"},
+		}},
+		{"VSCodium", "codium", "codium -w", []fixed{
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "VSCodium", "VSCodium.exe"), " -w"},
+			{filepath.Join(os.Getenv("ProgramFiles"), "VSCodium", "VSCodium.exe"), " -w"},
+		}},
+		{"Sublime Text", "subl", "subl -w", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "Sublime Text", "subl.exe"), " -w"},
+			{filepath.Join(os.Getenv("ProgramFiles(x86)"), "Sublime Text", "subl.exe"), " -w"},
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Sublime Text", "subl.exe"), " -w"},
+		}},
+		{"Atom", "atom", "atom", []fixed{
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "atom", "bin", "atom.exe"), ""},
+			{filepath.Join(os.Getenv("ProgramFiles"), "Atom", "bin", "atom.exe"), ""},
+		}},
+		{"gVim", "gvim", "gvim", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "Vim", "vim*", "gvim.exe"), ""},
+			{filepath.Join(os.Getenv("ProgramFiles(x86)"), "Vim", "vim*", "gvim.exe"), ""},
+		}},
+		{"Emacs", "emacs", "emacs", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "Emacs", "emacs-*", "bin", "emacs.exe"), ""},
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Emacs", "emacs-*", "bin", "emacs.exe"), ""},
+		}},
+		{"Notepad++", "notepad++", "notepad++", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "Notepad++", "notepad++.exe"), ""},
+			{filepath.Join(os.Getenv("ProgramFiles(x86)"), "Notepad++", "notepad++.exe"), ""},
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Notepad++", "notepad++.exe"), ""},
+		}},
+		{"EmEditor", "emeditor", "emeditor", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "EmEditor", "emeditor.exe"), ""},
+			{filepath.Join(os.Getenv("ProgramFiles(x86)"), "EmEditor", "emeditor.exe"), ""},
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "EmEditor", "emeditor.exe"), ""},
+		}},
+		{"Notepad--", "notepad--", "notepad--", []fixed{
+			{filepath.Join(os.Getenv("ProgramFiles"), "Notepad--", "Notepad--.exe"), ""},
+			{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Notepad--", "Notepad--.exe"), ""},
+		}},
+		// Notepad lives in System32, which is always on PATH.
+		{"Notepad", "notepad", "notepad", nil},
+	}
+
+	var out []ExternalEditorOption
+	seen := map[string]bool{} // by canonical display name
+	add := func(name, command string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, ExternalEditorOption{Label: name + " (" + command + ")", Value: command})
+	}
+
+	for _, e := range editors {
+		if _, err := exec.LookPath(e.prog); err == nil {
+			add(e.name, e.pathCmd)
+			continue
+		}
+		// Fall back to fixed install dirs. The command embeds the full quoted
+		// exe path so it launches even though the editor isn't on PATH.
+		for _, f := range e.fixed {
+			matches, _ := filepath.Glob(f.glob)
+			if len(matches) > 0 {
+				add(e.name, "\""+matches[0]+"\""+f.suffix)
+				break
+			}
+		}
+	}
+
+	return out
 }
