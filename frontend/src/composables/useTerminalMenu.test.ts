@@ -110,6 +110,32 @@ describe('useTerminalMenu.writeClipboard', () => {
     m.onContextMenu(new FakeMouseEvent() as any)
     expect(m.menuVisible.value).toBe(false)
   })
+
+  // Ctrl/Cmd + right-click is the escape hatch when right-click is bound to
+  // paste: either modifier forces the context menu open.
+  it.each([
+    ['Ctrl', (e: FakeMouseEvent) => { e.ctrlKey = true }],
+    ['Cmd/Meta', (e: FakeMouseEvent) => { e.metaKey = true }],
+  ])('opens the menu on %s + right-click even when rightClickAction is "paste"', (_label, setModifier) => {
+    mockSettingsStore.settings.terminal.rightClickAction = 'paste'
+    const m = buildMenu(() => 'selected-text')
+    const ev = new FakeMouseEvent()
+    setModifier(ev)
+    m.onContextMenu(ev as any)
+    expect(m.menuVisible.value).toBe(true)
+    expect(m.hasSelection.value).toBe(true)
+  })
+
+  it('openMenu opens the menu regardless of rightClickAction (middle-click "menu" path)', () => {
+    // The middle-click "show menu" action must never fall through to paste,
+    // even when right-click itself is bound to paste.
+    mockSettingsStore.settings.terminal.rightClickAction = 'paste'
+    const paste = vi.fn()
+    const m = useTerminalMenu({ getSelection: () => '', onPaste: paste })
+    m.openMenu(new FakeMouseEvent() as any)
+    expect(m.menuVisible.value).toBe(true)
+    expect(paste).not.toHaveBeenCalled()
+  })
 })
 
 describe('useTerminalMenu.copySelection re-reads selection at click time', () => {

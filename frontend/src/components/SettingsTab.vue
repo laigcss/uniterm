@@ -503,9 +503,19 @@
             </div>
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.middleClickAction" @change="settingsStore.save()">
-                <el-option :label="t('settings.middleClickNone')" value="none" />
-                <el-option :label="t('settings.middleClickPaste')" value="paste" />
+                <el-option :label="t('settings.rightClickPaste')" value="paste" />
+                <el-option :label="t('settings.rightClickMenu')" value="menu" />
               </el-select>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.ctrlWheelZoom') }}</div>
+              <div class="setting-desc">{{ t('settings.ctrlWheelZoomDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.terminal.ctrlWheelZoom ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.terminal.ctrlWheelZoom = v; settingsStore.save() }" />
             </div>
           </div>
 

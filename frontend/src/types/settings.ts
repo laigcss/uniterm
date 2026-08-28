@@ -63,7 +63,10 @@ export interface TerminalSettings {
   fontSize: number
   selectionAction: 'none' | 'copy'
   rightClickAction: 'menu' | 'paste'
-  middleClickAction: 'none' | 'paste'
+  middleClickAction: 'paste' | 'menu'
+  // Ctrl/Cmd + mouse wheel zooms the terminal font. Can be turned off (issue
+  // #671) for scroll-sensitive mice; defaults to enabled.
+  ctrlWheelZoom?: boolean
   maxHistoryLines: number
   smartCompletion: boolean
   aiTranscription: boolean
@@ -136,6 +139,8 @@ export type ShortcutAction =
   | 'paste'
   | 'toggleLineNumbers'
   | 'toggleTimestamps'
+  | 'zoomFontIn'
+  | 'zoomFontOut'
 
 export interface KeyBinding {
   ctrl: boolean
@@ -165,6 +170,8 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   paste: 'shortcut.paste',
   toggleLineNumbers: 'shortcut.toggleLineNumbers',
   toggleTimestamps: 'shortcut.toggleTimestamps',
+  zoomFontIn: 'shortcut.zoomFontIn',
+  zoomFontOut: 'shortcut.zoomFontOut',
 }
 
 export const DEFAULT_KEYBOARD: KeyboardSettings = {
@@ -185,6 +192,8 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   paste: { ctrl: true, shift: true, alt: false, key: 'v' },
   toggleLineNumbers: { ctrl: true, shift: true, alt: false, key: 'g' },
   toggleTimestamps: { ctrl: true, shift: true, alt: false, key: 't' },
+  zoomFontIn: { ctrl: true, shift: false, alt: false, key: '=' },
+  zoomFontOut: { ctrl: true, shift: false, alt: false, key: '-' },
 }
 
 export interface SFTPBookmarks {
@@ -225,6 +234,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     aiTranscription: true,
     highlightEnabled: true,
     cursorBlink: true,
+    ctrlWheelZoom: true,
     cursorStyle: 'block',
     minimumContrast: 4.5,
     sessionLogDir: '',

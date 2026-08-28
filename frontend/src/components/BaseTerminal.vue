@@ -1167,11 +1167,20 @@ onMounted(() => {
   }
   document.addEventListener('mousedown', onDocumentMouseDown)
 
-  // Middle-click paste: read setting and paste clipboard if enabled
+  // Middle-click action: read setting. 'paste' pastes the clipboard, 'menu'
+  // opens the context menu at the cursor, 'none' does nothing.
   onTerminalAuxClick = (event: MouseEvent) => {
     if (event.button !== 1) return
     if (!terminalRef.value?.contains(event.target as Node)) return
     const action = settingsStore.settings.terminal.middleClickAction
+    if (action === 'menu') {
+      // auxclick exposes the same clientX/clientY as a contextmenu event, so
+      // reuse the menu opener to position the <Menu> at the cursor. openMenu
+      // (not onContextMenu) is used so it opens regardless of the right-click
+      // action setting and never falls through to paste.
+      menu.openMenu(event)
+      return
+    }
     if (action !== 'paste') return
     event.preventDefault()
     event.stopPropagation()
