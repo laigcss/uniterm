@@ -177,6 +177,13 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		for evt := range a.moveResizeCh {
 			a.emit(evt)
 			if evt == "rdp:move-resize-end" {
+				// Notify the frontend that the native window stopped resizing
+				// (drag-to-restore / maximize / programmatic resize). The terminal
+				// re-fits on this signal because the browser does not always fire a
+				// final window.resize at the settled size after a native drag, which
+				// otherwise leaves the canvas at a stale small row count (issue #656).
+				// Platform-neutral name; on non-Windows it simply never fires.
+				a.emit("window:resize-end")
 				a.saveWindowStateFromRuntime()
 			}
 		}
