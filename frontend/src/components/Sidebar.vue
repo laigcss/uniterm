@@ -285,7 +285,7 @@
       </div>
     </template>
 
-    <ConnectionForm v-model="showForm" :edit-config="editConfig" :default-group-id="newConnGroupId" @save="onSave" @connect="onConnectFromForm" />
+    <ConnectionForm v-model="showForm" :edit-config="editConfig" :default-group-id="newConnGroupId" @save="onSave" @connect="onConnectFromForm" @connect-only="(c: ConnectionConfig) => { showForm = false; editConfig = undefined; emit('connectOnly', c) }" />
     <ExportDialog v-model:visible="showExportDialog" />
     <ImportDialog v-model:visible="showImportDialog" />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
@@ -481,7 +481,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
+const emit = defineEmits(['connect', 'connectOnly', 'connectSftp', 'connectFtp', 'connectSmb', 'connectWebdav', 'connectS3', 'connectRdp', 'connectVnc', 'connectSpice', 'connectX11Desktop', 'connectDB', 'connectMonitor', 'connectSerial', 'connectK8s', 'toggle'])
 const connectionStore = useConnectionStore()
 const settingsStore = useSettingsStore()
 const panelStore = usePanelStore()
@@ -1760,9 +1760,14 @@ function onNewConnSelect(cmd: string) {
 
 function onNewConnCommand(cmd: string) {
   if (cmd === 'new-connection') {
-    showForm.value = true
-    editConfig.value = undefined
-    newConnGroupId.value = undefined
+    // Match quick-connect behavior: when the search box has content, parse it
+    // into the new-connection form so fields are pre-filled; otherwise open a
+    // blank form.
+    if (searchQuery.value.trim()) {
+      openNewFormFromSearch()
+    } else {
+      openNewForm()
+    }
   } else if (cmd === 'new-serial') {
     emit('connectSerial')
   } else if (cmd === 'new-group') {
@@ -1836,7 +1841,7 @@ function openNewFormFromSearch() {
 }
 
 function onSave(config: ConnectionConfig) {
-  if (editConfig.value) {
+  if (editConfig.value?.id) {
     connectionStore.update(config.id, config)
   } else {
     connectionStore.add(config)
@@ -1846,7 +1851,7 @@ function onSave(config: ConnectionConfig) {
 }
 
 function onConnectFromForm(config: ConnectionConfig) {
-  if (editConfig.value) {
+  if (editConfig.value?.id) {
     connectionStore.update(config.id, config)
   } else {
     connectionStore.add(config)

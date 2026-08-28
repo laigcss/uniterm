@@ -64,6 +64,7 @@
   "conn.saveConnect": "保存并连接",
   "conn.save": "保存",
   "conn.saveOnly": "仅保存",
+  "conn.connectOnly": "仅连接",
   "conn.testConnection": "测试连接",
   "conn.hostRequired": "主机地址不能为空",
   "conn.advanced": "高级配置",

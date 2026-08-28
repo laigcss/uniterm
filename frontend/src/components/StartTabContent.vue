@@ -33,7 +33,7 @@
 
     <!-- Action buttons -->
     <div class="start-action-btns">
-      <button class="start-action-btn primary" @click="emit('new-connection', tab.viewMode === 'group' ? { groupId: tab.groupId } : undefined)">
+      <button class="start-action-btn primary" @click="emit('new-connection', { groupId: tab.viewMode === 'group' ? tab.groupId : undefined, host: (searchQuery || '').trim() || undefined })">
         <el-icon><Plus :size="14" /></el-icon>
         {{ t('header.newConnection') }}
       </button>

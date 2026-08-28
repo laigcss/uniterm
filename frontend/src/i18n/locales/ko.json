@@ -64,6 +64,7 @@
   "conn.saveConnect": "저장 후 연결",
   "conn.save": "저장",
   "conn.saveOnly": "저장만 하기",
+  "conn.connectOnly": "연결만 하기",
   "conn.testConnection": "연결 테스트",
   "conn.hostRequired": "호스트를 입력해 주세요",
   "conn.advanced": "고급 설정",
