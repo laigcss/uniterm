@@ -26,6 +26,9 @@ type LocalState struct {
 	// SystemTitleBar switches the window to the OS native frame instead of
 	// the built-in one. Read at startup only — changing it needs a restart.
 	SystemTitleBar bool `json:"systemTitleBar"`
+	// ExternalEditor command used to open remote files in an external editor
+	// (SFTP "edit externally"). Local-only preference, never synced.
+	ExternalEditor string `json:"externalEditor"`
 }
 
 type LocalStateStore struct {

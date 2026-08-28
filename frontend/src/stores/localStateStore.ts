@@ -18,6 +18,7 @@ const DEFAULT: LocalState = {
   backgroundBlur: 3,
   backgroundFit: 'cover',
   systemTitleBar: false,
+  externalEditor: '',
 } as LocalState
 
 export const useLocalStateStore = defineStore('localState', () => {
