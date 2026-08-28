@@ -16,6 +16,7 @@ export interface UseTerminalMenuReturn {
   menuVisible: Ref<boolean>
   hasSelection: Ref<boolean>
   onContextMenu: (e: MouseEvent) => void
+  openMenu: (e: MouseEvent) => void
   closeMenu: () => void
   copySelection: () => void
   copyAndPaste: () => Promise<void>
@@ -35,12 +36,24 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
 
   function onContextMenu(e: MouseEvent) {
     const rightClickAction = settingsStore.settings.terminal.rightClickAction
-    if (rightClickAction === 'paste') {
+    // Ctrl/Cmd + right-click always opens the menu, even when right-click is
+    // bound to paste — it's the escape hatch to reach copy/search/export etc.
+    // Either modifier is accepted so the intent reads the same on macOS (Cmd)
+    // and Windows/Linux (Ctrl).
+    const forceMenu = e.ctrlKey || e.metaKey
+    if (rightClickAction === 'paste' && !forceMenu) {
       e.preventDefault()
       e.stopPropagation()
       pasteFromClipboard()
       return
     }
+    openMenu(e)
+  }
+
+  // Unconditionally open the context menu at the cursor. Shared by right-click
+  // and the middle-click "show menu" action; unlike onContextMenu it ignores
+  // rightClickAction entirely so a middle-click menu never falls through to paste.
+  function openMenu(e: MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     hasSelection.value = !!options.getSelection()
@@ -117,6 +130,7 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     menuVisible,
     hasSelection,
     onContextMenu,
+    openMenu,
     closeMenu,
     copySelection,
     copyAndPaste,

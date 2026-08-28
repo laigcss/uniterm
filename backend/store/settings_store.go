@@ -16,20 +16,26 @@ func boolPtr(b bool) *bool { return &b }
 func intPtr(i int) *int    { return &i }
 
 type TerminalSettings struct {
-	Theme            string `json:"theme"`
-	FontFamily       string `json:"fontFamily"`
-	FontSize         int    `json:"fontSize"`
-	SelectionAction  string `json:"selectionAction"`
-	RightClickAction string `json:"rightClickAction"`
-	MaxHistoryLines  int    `json:"maxHistoryLines"`
-	SmartCompletion  *bool  `json:"smartCompletion"`
-	AiTranscription  *bool  `json:"aiTranscription"`
-	HighlightEnabled *bool  `json:"highlightEnabled"`
+	Theme             string `json:"theme"`
+	FontFamily        string `json:"fontFamily"`
+	FontSize          int    `json:"fontSize"`
+	SelectionAction   string `json:"selectionAction"`
+	RightClickAction  string `json:"rightClickAction"`
+	MiddleClickAction string `json:"middleClickAction"`
+	MaxHistoryLines   int    `json:"maxHistoryLines"`
+	SmartCompletion   *bool  `json:"smartCompletion"`
+	AiTranscription   *bool  `json:"aiTranscription"`
+	HighlightEnabled  *bool  `json:"highlightEnabled"`
 	// CursorBlink controls xterm.js's cursor blink. Pointer + omitempty so
 	// settings.json written by older builds (which lack this field) still
 	// load; the frontend falls back to `true` when nil, matching the
 	// pre-existing default behaviour.
 	CursorBlink *bool `json:"cursorBlink,omitempty"`
+	// CtrlWheelZoom enables Ctrl/Cmd + mouse wheel font zoom. Pointer +
+	// omitempty so older settings.json files (which lack this field) still
+	// load; the frontend defaults to `true` when nil, preserving the existing
+	// behaviour (issue #671 lets users disable it for scroll-sensitive mice).
+	CtrlWheelZoom *bool `json:"ctrlWheelZoom,omitempty"`
 	// SessionLogDir overrides the default directory used for session
 	// output logs (issue #227). Empty means: use the OS-appropriate
 	// default under ~/Documents/uniTerm/logs.

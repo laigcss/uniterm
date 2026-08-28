@@ -711,16 +711,25 @@ function insertTextAtContentEditable(el: HTMLElement, text: string) {
   }
 }
 
+// Adjust the terminal font size, clamped to the valid range. Shared by the
+// Ctrl/Cmd+wheel zoom and the zoom-font-in/out shortcuts.
+function adjustFontSize(delta: number) {
+  const ts = settingsStore.settings.terminal
+  const next = Math.max(8, Math.min(32, ts.fontSize + delta))
+  if (next !== ts.fontSize) {
+    ts.fontSize = next
+    settingsStore.save()
+  }
+}
+
 function onWheel(e: WheelEvent) {
-  if (e.ctrlKey) {
+  // Ctrl/Cmd + wheel zooms the terminal font — macOS (Cmd) and Windows/Linux
+  // (Ctrl) alike. Skipped when the user disables it (issue #671, e.g. for
+  // scroll-sensitive Mac mice); without preventDefault the wheel then scrolls
+  // normally.
+  if ((e.ctrlKey || e.metaKey) && settingsStore.settings.terminal.ctrlWheelZoom !== false) {
     e.preventDefault()
-    const ts = settingsStore.settings.terminal
-    const delta = e.deltaY < 0 ? 1 : -1
-    const next = Math.max(8, Math.min(32, ts.fontSize + delta))
-    if (next !== ts.fontSize) {
-      ts.fontSize = next
-      settingsStore.save()
-    }
+    adjustFontSize(e.deltaY < 0 ? 1 : -1)
   }
 }
 
@@ -949,6 +958,8 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
     const cur = settingsStore.settings.terminal.showTimestamps ?? false
     settingsStore.updateTerminal({ showTimestamps: !cur })
   },
+  zoomFontIn: () => adjustFontSize(1),
+  zoomFontOut: () => adjustFontSize(-1),
   paste: () => {
     const pid = tabStore.getActivePanelId()
     if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
