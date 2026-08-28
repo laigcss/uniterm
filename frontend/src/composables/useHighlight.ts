@@ -59,7 +59,10 @@ const PATTERNS: { sgr: string; regexes: RegExp[] }[] = [
   // feature unsupported by the JavaScriptCore in macOS ≤12.3 (Safari 15.4
   // WebView), where the whole module fails to parse and the terminal shows
   // a black screen. Anchor the start with a consuming (^|\s) group instead.
-  { sgr: C.path,    regexes: [/(?:^|\s)(?:\/|~\/)[\w.\/-]+(?=[\s:;"')\]}]|$)/g] },
+  // Character class includes `+`, `~`, `@` so paths like
+  // `/usr/local/gcc-11.5.0/bin/g++` or `/tmp/cache@1.tgz` are recognised
+  // whole (issue #651), not truncated at the first special symbol.
+  { sgr: C.path,    regexes: [/(?:^|\s)(?:\/|~\/)[\w.+~@/-]+(?=[\s:;"')\]}]|$)/g] },
   { sgr: C.datetime, regexes: [
     /\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:[.,]\d+)?Z?\b/g,
     /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\b/g,
@@ -104,10 +107,13 @@ function sgrFgEffect(seq: string): 'set' | 'clear' | 'unchanged' {
   return effect
 }
 
-function highlightPlainSegment(text: string): string {
+type HighlightSegmentOpts = { skipBrace?: boolean }
+
+function highlightPlainSegment(text: string, opts: HighlightSegmentOpts = {}): string {
   type MatchEntry = { start: number; end: number; sgr: string }
   const allMatches: MatchEntry[] = []
-  for (const { sgr, regexes } of PATTERNS) {
+  const patterns = opts.skipBrace ? PATTERNS.filter((p) => p.sgr !== C.brace) : PATTERNS
+  for (const { sgr, regexes } of patterns) {
     for (const regex of regexes) {
       regex.lastIndex = 0
       let m: RegExpExecArray | null
@@ -138,7 +144,7 @@ function highlightPlainSegment(text: string): string {
   return highlighted
 }
 
-function highlightPlainText(text: string): string {
+function highlightPlainText(text: string, opts: HighlightSegmentOpts = {}): string {
   const segments = segmentText(text)
   let result = ''
   // Track whether the upstream application already set a non-default
@@ -155,7 +161,7 @@ function highlightPlainText(text: string): string {
       }
       result += seg.text
     } else if (!colored) {
-      result += highlightPlainSegment(seg.text)
+      result += highlightPlainSegment(seg.text, opts)
     } else {
       result += seg.text
     }
@@ -199,7 +205,12 @@ export function highlight(text: string): string {
           fenceChar = m[1][0] as '`' | '~'
           result += line
         } else if (INDENTED_CODE_LINE.test(line)) {
-          result += line
+          // Indented lines used to pass through entirely, which left 4-space
+          // indented command output (e.g. `ip a`) with no highlighting at all
+          // (issue #644). Brace/bracket colour still injects SGR noise that
+          // some TUI apps misinterpret, so keep skipping it here — but colour
+          // the remaining tokens (IP, number, path, …) normally.
+          result += highlightPlainText(line, { skipBrace: true })
         } else {
           result += highlightPlainText(line)
         }
