@@ -15,8 +15,11 @@ beforeAll(() => {
   }
 })
 
-function mkTerminal(opts: { cursorY?: number; lines: string[]; rows?: number } = { lines: [] }) {
+function mkTerminal(opts: {
+  cursorY?: number; lines: string[]; rows?: number; wrapped?: number[]
+} = { lines: [] }) {
   const { cursorY = 0, lines, rows = 24 } = opts
+  const wrapped = new Set(opts.wrapped ?? [])
   return {
     rows,
     buffer: {
@@ -25,6 +28,7 @@ function mkTerminal(opts: { cursorY?: number; lines: string[]; rows?: number } =
         baseY: 0,
         getLine: (y: number) => lines[y] === undefined ? undefined : {
           translateToString: () => lines[y],
+          isWrapped: () => wrapped.has(y),
         },
       },
     },
@@ -193,6 +197,46 @@ describe('useTerminalInput', () => {
       }), (cmd) => extracted.push(cmd))
       t.handleInput('\r')
       expect(extracted).toEqual([])
+    })
+
+    it('joins wrapped continuation rows into the full command', () => {
+      const extracted: string[] = []
+      // A long command that overflows the panel width wraps onto following
+      // rows (marked isWrapped). The history must reconstruct the whole
+      // command, not just the first row's tail after the prompt.
+      const t = makeInput(mkTerminal({
+        cursorY: 5,
+        lines: [
+          'user@host:~$ echo aaaa',
+          'bbbbbbbbbbbbbbbbbb',
+          'cccccccccccccccccccc',
+          'dddddddddddddddddd',
+          'eeeeeeeeeeeeeeeeeeee',
+        ],
+        wrapped: [1, 2, 3, 4],
+      }), (cmd) => extracted.push(cmd))
+      t.handleInput('\r')
+      expect(extracted).toEqual([
+        'echo aaaabbbbbbbbbbbbbbbbbbccccccccccccccccccccdddddddddddddddddd' +
+        'eeeeeeeeeeeeeeeeeeee',
+      ])
+    })
+
+    it('stops joining wrapped rows once a non-wrapped row is reached', () => {
+      const extracted: string[] = []
+      const t = makeInput(mkTerminal({
+        cursorY: 4,
+        lines: [
+          'user@host:~$ cat foo',
+          'bar',
+          'zz',
+        ],
+        // row 1 is the wrap of the prompt command; row 2 is a fresh command
+        // (not wrapped) and must NOT be appended.
+        wrapped: [1],
+      }), (cmd) => extracted.push(cmd))
+      t.handleInput('\r')
+      expect(extracted).toEqual(['cat foobar'])
     })
   })
 })
