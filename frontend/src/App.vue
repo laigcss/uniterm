@@ -12,7 +12,7 @@
       @tab-dragstart="onTabDragStart"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-only="onConnectOnly" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
       <div class="tab-area">
         <template v-if="activeTab">
           <KeepAlive>
@@ -119,7 +119,7 @@
       </div>
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
-    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig; editConfig = null; onConnect(c, ko, wasEdit) }" @cancel="editConfig = null" />
+    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
 
     <CredentialPrompt
       v-model:visible="credentialVisible"
@@ -1243,12 +1243,19 @@ function k8sConnectionForTab(tab: any): ConnectionConfig {
 }
 
 function onSaveOnly(config: ConnectionConfig) {
-  if (editConfig.value) {
+  if (editConfig.value?.id) {
     connectionStore.update(config.id, config)
   } else {
     connectionStore.add(config)
   }
   RecordRecentConnection(config.id)
+}
+
+// Transient connection ("connect only"): connect a new form config without
+// persisting it to the connection list. Reuses onConnect with persist=false.
+function onConnectOnly(config: ConnectionConfig) {
+  editConfig.value = null
+  onConnect(config, undefined, false, false)
 }
 
 // Atomically remove a start tab and place a newly-created tab in its position.
@@ -1265,29 +1272,36 @@ function closeStartAndReposition(prevTab: any): (newTabId: string) => void {
   }
 }
 
-async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?: boolean) {
+async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?: boolean, persist = true) {
   const prev = tabStore.activeTab
   const prevStart = (prev?.type === 'start' && !keepOpen) ? prev : undefined
   // Persist form changes BEFORE dispatching by type. The type-specific
   // handlers below only call connectionStore.add(), which is a silent
   // no-op for existing ids and would otherwise drop edits made in the
-  // "Save & Connect" flow.
-  if (wasEdit) {
-    connectionStore.update(config.id, config)
-  } else {
-    connectionStore.add(config)
+  // "Save & Connect" flow. When persist=false (transient "connect only"
+  // session) skip both the store write and the recent-connection entry.
+  if (persist) {
+    if (wasEdit) {
+      connectionStore.update(config.id, config)
+    } else {
+      connectionStore.add(config)
+    }
+  } else if (!config.id) {
+    // Give the transient session a stable id for panel/tab wiring even
+    // though it will not be persisted to the connection list.
+    config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   }
-  if (config.type === 'ftp') { await onConnectFtp(config, prevStart); return }
-  if (config.type === 'smb') { await onConnectSmb(config, prevStart); return }
-  if (config.type === 'webdav') { await onConnectWebdav(config, prevStart); return }
-  if (config.type === 's3') { await onConnectS3(config, prevStart); return }
-  if (config.type === 'rdp') { await onConnectRDP(config, prevStart); return }
-  if (config.type === 'vnc') { await onConnectVNC(config, prevStart); return }
-  if (config.type === 'spice') { await onConnectSPICE(config, prevStart); return }
-  if (config.type === 'x11-desktop') { await onConnectX11Desktop(config, prevStart); return }
-  if (config.type === 'database') { await onConnectDB(config, prevStart); return }
-  if (config.type === 'k8s') { await onConnectK8s(config, prevStart); return }
-  if (config.type === 'container') { onConnectContainer(config, prevStart); return }
+  if (config.type === 'ftp') { await onConnectFtp(config, prevStart, persist); return }
+  if (config.type === 'smb') { await onConnectSmb(config, prevStart, persist); return }
+  if (config.type === 'webdav') { await onConnectWebdav(config, prevStart, persist); return }
+  if (config.type === 's3') { await onConnectS3(config, prevStart, persist); return }
+  if (config.type === 'rdp') { await onConnectRDP(config, prevStart, persist); return }
+  if (config.type === 'vnc') { await onConnectVNC(config, prevStart, persist); return }
+  if (config.type === 'spice') { await onConnectSPICE(config, prevStart, persist); return }
+  if (config.type === 'x11-desktop') { await onConnectX11Desktop(config, prevStart, persist); return }
+  if (config.type === 'database') { await onConnectDB(config, prevStart, persist); return }
+  if (config.type === 'k8s') { await onConnectK8s(config, prevStart, persist); return }
+  if (config.type === 'container') { onConnectContainer(config, prevStart, persist); return }
 
   // Credential check
   const resolved = await ensureCredentials(config)
@@ -1331,7 +1345,7 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
     : tabStore.createTerminalTab(panel.title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   // Wait for BaseTerminal to mount + fitAddon.fit() to compute the real
   // xterm cols/rows (which itself waits for document.fonts.ready + 2 rAFs
@@ -1497,8 +1511,8 @@ async function onConnectSftp(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectFtp(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectFtp(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1510,7 +1524,7 @@ async function onConnectFtp(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createFtpTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     const info = await CreateSession('ftp', config)
@@ -1522,8 +1536,8 @@ async function onConnectFtp(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectSmb(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectSmb(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1535,7 +1549,7 @@ async function onConnectSmb(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createFtpTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     const info = await CreateSession('smb', config)
@@ -1547,8 +1561,8 @@ async function onConnectSmb(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectWebdav(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectWebdav(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1560,7 +1574,7 @@ async function onConnectWebdav(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createFtpTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     const info = await CreateSession('webdav', config)
@@ -1572,8 +1586,8 @@ async function onConnectWebdav(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectS3(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectS3(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const panel = panelStore.createPanel(config, 'sftp')
   const displayTitle = config.name || (config.s3Bucket ? `s3://${config.s3Bucket}` : config.host)
@@ -1582,7 +1596,7 @@ async function onConnectS3(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createFtpTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     const info = await CreateSession('s3', config)
@@ -1594,8 +1608,8 @@ async function onConnectS3(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectRDP(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectRDP(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1609,7 +1623,7 @@ async function onConnectRDP(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createRDPTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     const info = await CreateSession('rdp', config)
@@ -1622,8 +1636,8 @@ async function onConnectRDP(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectVNC(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectVNC(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1656,10 +1670,10 @@ async function onConnectVNC(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createVNCTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 }
-async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectSPICE(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1688,11 +1702,11 @@ async function onConnectSPICE(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createSPICETab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 }
 
-async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   // Ensure the X11 desktop config itself has saved credentials before
   // handing off to X11DesktopConnect.
@@ -1707,7 +1721,7 @@ async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createX11DesktopTab(displayTitle, panel.id)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   // The X11DesktopTabContent owns CreateSession + X11DesktopConnect.
   // It runs when the tab mounts and has access to the resolved config.
@@ -1740,8 +1754,8 @@ async function onConnectMonitor(config: ConnectionConfig, prevStart?: any) {
   }
 }
 
-async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectDB(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const resolved = await ensureCredentials(config)
   if (!resolved) return
@@ -1765,7 +1779,7 @@ async function onConnectDB(config: ConnectionConfig, prevStart?: any) {
     tab.type = 'elasticsearch'
   }
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 
   try {
     let sessionType: string
@@ -1865,8 +1879,8 @@ function onPanelReconnectEvent(e: Event) {
   else if (panel.type === 'sftp') reconnectSftpPanel(panel)
 }
 
-async function onConnectK8s(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+async function onConnectK8s(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const displayTitle = config.name || 'K8s'
   const panel = panelStore.createPanel(config, 'k8s')
@@ -1876,11 +1890,11 @@ async function onConnectK8s(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createK8sTab(displayTitle, panel.id, config.id, nsDefault)
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 }
 
-function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
+function onConnectContainer(config: ConnectionConfig, prevStart?: any, persist = true) {
+  if (persist) connectionStore.add(config)
 
   const displayTitle = config.name || 'Container'
   const panel = panelStore.createPanel(config, 'container')
@@ -1889,7 +1903,7 @@ function onConnectContainer(config: ConnectionConfig, prevStart?: any) {
   const tab = tabStore.createContainerTab(displayTitle, panel.id, config.id, config.containerRuntime ?? 'docker')
   if (reposition) reposition(tab.id)
   panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
+  if (persist) RecordRecentConnection(config.id)
 }
 
 

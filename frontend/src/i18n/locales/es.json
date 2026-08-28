@@ -64,6 +64,7 @@
   "conn.saveConnect": "Guardar y Conectar",
   "conn.save": "Guardar",
   "conn.saveOnly": "Solo Guardar",
+  "conn.connectOnly": "Solo Conectar",
   "conn.testConnection": "Probar conexión",
   "conn.hostRequired": "El host es obligatorio",
   "conn.advanced": "Avanzado",

@@ -64,6 +64,7 @@
   "conn.saveConnect": "Сохранить и подключиться",
   "conn.save": "Сохранить",
   "conn.saveOnly": "Только сохранить",
+  "conn.connectOnly": "Только подключиться",
   "conn.testConnection": "Проверить соединение",
   "conn.hostRequired": "Укажите хост",
   "conn.advanced": "Дополнительно",

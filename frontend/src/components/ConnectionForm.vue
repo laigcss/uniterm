@@ -540,6 +540,7 @@
       >
         {{ t('conn.testConnection') }}
       </el-button>
+      <el-button v-if="!isEdit" @click="onConnectOnly">{{ t('conn.connectOnly') }}</el-button>
       <el-button @click="onSave">{{ t('conn.saveOnly') }}</el-button>
       <el-button type="primary" @click="onConnect">{{ t('conn.saveConnect') }}</el-button>
     </template>
@@ -785,6 +786,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   save: [config: ConnectionConfig]
   connect: [config: ConnectionConfig]
+  connectOnly: [config: ConnectionConfig]
 }>()
 
 const visible = computed({
@@ -1434,6 +1436,21 @@ function onSave() {
     }
   } catch (e: any) {
     // Host empty, silently return
+  }
+}
+
+function onConnectOnly() {
+  if (!validateContainer()) return
+  if (!validateX11Desktop()) return
+  try {
+    const config = normalizeForm()
+    emit('connectOnly', config)
+    visible.value = false
+    if (!props.editConfig) {
+      resetForm()
+    }
+  } catch (e: any) {
+    // Host empty
   }
 }
 

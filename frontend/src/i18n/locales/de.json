@@ -64,6 +64,7 @@
   "conn.saveConnect": "Speichern & Verbinden",
   "conn.save": "Speichern",
   "conn.saveOnly": "Nur speichern",
+  "conn.connectOnly": "Nur verbinden",
   "conn.testConnection": "Verbindung testen",
   "conn.hostRequired": "Host ist erforderlich",
   "conn.advanced": "Erweitert",
