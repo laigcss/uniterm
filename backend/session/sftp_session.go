@@ -58,24 +58,10 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 	s.setStatus(StatusConnecting)
 	s.title = fmt.Sprintf("%s@%s", config.User, config.Host)
 
-	authMethods := []ssh.AuthMethod{}
-	switch config.AuthType {
-	case "password":
-		authMethods = append(authMethods, ssh.Password(config.Password))
-	case "key":
-		key, err := os.ReadFile(config.KeyPath)
-		if err != nil {
-			s.setStatus(StatusError)
-			return fmt.Errorf("read key: %w", err)
-		}
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			s.setStatus(StatusError)
-			return fmt.Errorf("parse key: %w", err)
-		}
-		authMethods = append(authMethods, ssh.PublicKeys(signer))
-	case "agent":
-		authMethods = append(authMethods, ssh.Password(config.Password))
+	authMethods, err := buildAuthMethods(config)
+	if err != nil {
+		s.setStatus(StatusError)
+		return err
 	}
 
 	clientConfig := &ssh.ClientConfig{
