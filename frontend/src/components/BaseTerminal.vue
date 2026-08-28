@@ -265,6 +265,7 @@ let onTerminalCopy: ((e: Event) => void) | null = null
 let onTerminalPaste: ((e: Event) => void) | null = null
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let unsubNativeResizeEnd: (() => void) | null = null
 let isResizing = false
 let splitResizing = false
 let suppressResizeUntil = 0
@@ -659,6 +660,19 @@ function onWindowResize() {
     el.classList.remove('resizing')
     resize()
   }, 400)
+}
+
+// Native window finished resizing (drag-to-restore / maximize / programmatic
+// resize). Go emits this after WM_EXITSIZEMOVE / WM_SIZE settles, because the
+// browser does not always fire a final window.resize at the settled size after
+// a native drag — which would leave the canvas at a stale small row count with
+// blank space below (issue #656). Bypass the isResizing gate so this cleanup
+// fit always runs, then resolve for a clean re-fit at the true container size.
+function onNativeResizeEnd() {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  isResizing = false
+  terminalRef.value?.classList.remove('resizing')
+  resizeTimer = setTimeout(() => resize(), 100)
 }
 
 function onSplitResizeStart() {
@@ -1371,6 +1385,11 @@ onMounted(() => {
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('split:resize-start', onSplitResizeStart)
   window.addEventListener('split:resize-end', onSplitResizeEnd)
+  // Native window finished resizing (drag-to-restore / maximize). Go emits this
+  // after the WM_EXITSIZEMOVE / WM_SIZE loop settles; the browser doesn't always
+  // fire a final window.resize at the settled size, so this is the reliable
+  // trigger to re-fit the terminal (issue #656). Delivered as a Wails event.
+  unsubNativeResizeEnd = Events.On('window:resize-end', () => onNativeResizeEnd())
   onOpenSearch = (e: Event) => {
     if (!isActive.value) return
     const detail = (e as CustomEvent).detail
@@ -1736,6 +1755,8 @@ onUnmounted(() => {
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('split:resize-start', onSplitResizeStart)
   window.removeEventListener('split:resize-end', onSplitResizeEnd)
+  unsubNativeResizeEnd?.()
+  unsubNativeResizeEnd = null
   if (onOpenSearch) window.removeEventListener('terminal:open-search', onOpenSearch)
   if (onExport) window.removeEventListener('terminal:export', onExport)
   if (onSendRz) window.removeEventListener('terminal:send-rz', onSendRz)
