@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "グループなし",
   "quickCommands.command": "コマンド",
   "quickCommands.name": "名前",
+  "quickCommands.remark": "備考",
+  "quickCommands.remarkPlaceholder": "任意、このコマンドの補足説明",
   "quickCommands.namePlaceholder": "任意、空の場合はコマンドを表示",
   "quickCommands.commandPlaceholder": "例: df -h",
   "quickCommands.run": "実行",

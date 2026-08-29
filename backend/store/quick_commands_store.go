@@ -11,6 +11,7 @@ const quickCommandsFileName = "quickCommands.json"
 type QuickCommand struct {
 	ID        string `json:"id"`
 	Name      string `json:"name,omitempty"`
+	Remark    string `json:"remark,omitempty"`
 	Command   string `json:"command"`
 	GroupID   string `json:"groupId,omitempty"`
 	SortOrder int    `json:"sortOrder"`

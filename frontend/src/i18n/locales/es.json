@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "Sin grupo",
   "quickCommands.command": "Comando",
   "quickCommands.name": "Nombre",
+  "quickCommands.remark": "Nota",
+  "quickCommands.remarkPlaceholder": "Opcional, descripción adicional de este comando",
   "quickCommands.namePlaceholder": "Opcional, muestra el comando si está vacío",
   "quickCommands.commandPlaceholder": "ej: df -h",
   "quickCommands.run": "Ejecutar",

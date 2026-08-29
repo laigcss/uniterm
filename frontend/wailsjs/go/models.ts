@@ -2007,6 +2007,7 @@ export namespace store {
 	export class QuickCommand {
 	    id: string;
 	    name?: string;
+	    remark?: string;
 	    command: string;
 	    groupId?: string;
 	    sortOrder: number;
@@ -2019,6 +2020,7 @@ export namespace store {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.remark = source["remark"];
 	        this.command = source["command"];
 	        this.groupId = source["groupId"];
 	        this.sortOrder = source["sortOrder"];

@@ -215,6 +215,7 @@
       :initial-name="editingCmdName"
       :initial-command="editingCmdCommand"
       :initial-group-id="editingCmdGroupId"
+      :initial-remark="editingCmdRemark"
     />
   </div>
 </template>
@@ -270,6 +271,7 @@ const editingCmdId = ref<string | undefined>(undefined)
 const editingCmdName = ref<string | undefined>(undefined)
 const editingCmdCommand = ref('')
 const editingCmdGroupId = ref<string | undefined>(undefined)
+const editingCmdRemark = ref<string | undefined>(undefined)
 
 onMounted(async () => {
   await store.load()
@@ -425,6 +427,7 @@ function editCommand(cmd: QuickCommand) {
   editingCmdName.value = cmd.name
   editingCmdCommand.value = cmd.command
   editingCmdGroupId.value = cmd.groupId
+  editingCmdRemark.value = cmd.remark
   editDialogVisible.value = true
   ctxMenuVisible.value = false
 }
@@ -441,6 +444,7 @@ function addCommand(groupId?: string) {
   editingCmdName.value = undefined
   editingCmdCommand.value = ''
   editingCmdGroupId.value = groupId
+  editingCmdRemark.value = undefined
   editDialogVisible.value = true
   ctxMenuVisible.value = false
 }
@@ -519,7 +523,7 @@ async function onGroupDrop(groupId: string, e: DragEvent) {
   const targetGroupId = groupId === '__ungrouped__' ? undefined : groupId
   const cmd = store.commands.find(c => c.id === cmdId)
   if (cmd) {
-    store.updateCommand(cmd.id, cmd.name, cmd.command, targetGroupId)
+    store.updateCommand(cmd.id, cmd.name, cmd.command, targetGroupId, cmd.remark)
   }
 }
 

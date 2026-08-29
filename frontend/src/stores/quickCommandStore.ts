@@ -5,6 +5,7 @@ import { SaveQuickCommands, LoadQuickCommands } from '../../bindings/github.com/
 export interface QuickCommand {
   id: string
   name?: string
+  remark?: string
   command: string
   groupId?: string
   sortOrder: number
@@ -84,10 +85,11 @@ export const useQuickCommandStore = defineStore('quickCommands', () => {
     save()
   }
 
-  function addCommand(name: string | undefined, command: string, groupId?: string): QuickCommand {
+  function addCommand(name: string | undefined, command: string, groupId?: string, remark?: string): QuickCommand {
     const cmd: QuickCommand = {
       id: genId('qcc'),
       name: name || undefined,
+      remark: remark || undefined,
       command,
       groupId,
       sortOrder: commands.value.filter(c => c.groupId === groupId).length,
@@ -97,12 +99,13 @@ export const useQuickCommandStore = defineStore('quickCommands', () => {
     return cmd
   }
 
-  function updateCommand(id: string, name: string | undefined, command: string, groupId?: string) {
+  function updateCommand(id: string, name: string | undefined, command: string, groupId?: string, remark?: string) {
     const c = commands.value.find(x => x.id === id)
     if (c) {
       c.name = name || undefined
       c.command = command
       c.groupId = groupId
+      if (remark !== undefined) c.remark = remark || undefined
       save()
     }
   }

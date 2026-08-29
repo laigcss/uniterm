@@ -1465,7 +1465,7 @@ async function onTest() {
     msg.success(desc)
   } catch (e: any) {
     testStatus.value = 'error'
-    msg.error(String(e?.message || e), true)
+    msg.error(String(e?.message || e))
   }
 }
 
