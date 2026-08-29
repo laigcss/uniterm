@@ -520,9 +520,7 @@ const currentPerf = computed(() => {
         yMin: 0,
         details: [
           { label: t('monitor.rx'), value: formatBytes(currentNet.value.rx) + '/s' },
-          { label: t('monitor.tx'), value: formatBytes(currentNet.value.tx) + '/s' },
-          { label: t('companion.netTxTotal'), value: formatBytes(currentNet.value.txTotal ?? 0) },
-          { label: t('companion.netRxTotal'), value: formatBytes(currentNet.value.rxTotal ?? 0) }
+          { label: t('monitor.tx'), value: formatBytes(currentNet.value.tx) + '/s' }
         ]
       }
     default:
