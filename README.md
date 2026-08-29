@@ -15,7 +15,7 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 <a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
 <a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/github/stars/ys-ll/uniterm?style=social" alt="GitHub stars" /></a>
-<a href="https://gitee.com/ys-l/uniterm"><img src="https://gitee.com/ys-l/uniterm/badge/star.svg?theme=dark" alt="Gitee stars" /></a>
+<a href="https://gitee.com/ys-l/uniterm"><img src="https://gitee.com/ys-l/uniterm/badge/star.svg?theme=white" alt="Gitee stars" /></a>
 
 </div>
 
