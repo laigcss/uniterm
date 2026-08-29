@@ -1092,6 +1092,107 @@ fi`
 	return ports, nil
 }
 
+// parseLsblkPairsDisks parses the flat KEY="value" output of `lsblk -P`, used
+// on old lsblk releases that lack -J/--json (e.g. CentOS 7). Unlike the plain
+// column view, every field keeps its key, so a multi-word MODEL or an empty
+// MOUNTPOINT can no longer nudge a neighbouring token into the mount-point
+// column (which previously surfaced "QEMU"/"1" as fake mounts for sr0/vda/vdc).
+// Returns nil when the output is not in pairs form (ancient lsblk fell back to
+// plain columns); the caller then retries with column parsing.
+func parseLsblkPairsDisks(out string, mountUsage map[string]struct{ Used, Total string; Usage int }) []DiskInfo {
+	var disks []DiskInfo
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		matches := lsblkPairRe.FindAllStringSubmatch(line, -1)
+		if len(matches) == 0 {
+			return nil
+		}
+		col := make(map[string]string, len(matches))
+		for _, m := range matches {
+			if len(m) == 3 {
+				// Trim the key: `[^=]+` also captures the space separating pairs,
+				// so a later key like " TYPE" must be reduced to "TYPE".
+				col[strings.TrimSpace(m[1])] = m[2]
+			}
+		}
+		name := col["NAME"]
+		if name == "" {
+			continue
+		}
+		sizeBytes, _ := strconv.ParseUint(col["SIZE"], 10, 64)
+		media := "-"
+		switch col["TYPE"] {
+		case "rom":
+			media = "ROM"
+		default:
+			if col["ROTA"] == "1" {
+				media = "HDD"
+			} else if col["ROTA"] == "0" {
+				media = "SSD"
+			}
+		}
+		disk := DiskInfo{
+			Name:       name,
+			Type:       col["TYPE"],
+			Size:       formatBytes(sizeBytes),
+			Model:      strings.TrimSpace(col["MODEL"]),
+			MountPoint: col["MOUNTPOINT"],
+			Media:      media,
+		}
+		if mp := disk.MountPoint; mp != "" {
+			if u, ok := mountUsage[mp]; ok {
+				disk.Used = u.Used
+				disk.Total = u.Total
+				disk.Usage = u.Usage
+			}
+		}
+		disks = append(disks, disk)
+	}
+	return disks
+}
+
+// lsblkPairRe matches one KEY="value" pair in lsblk -P output. The value may
+// contain spaces (e.g. a multi-word MODEL) and escaped quotes, which is exactly
+// the case -P exists to keep unambiguous.
+var lsblkPairRe = regexp.MustCompile(`([^=]+)="((?:[^"\\]|\\.)*)"`)
+
+// parseAddrText parses the legacy `ip addr show` text output (no -j) into an
+// ifname -> [ip...] map, matching the shape of `ip -j addr show`. Interface
+// headers start at column 0; inet/inet6 lines are indented, so indentation is
+// used to attach each address to its interface. Used only when the JSON
+// address output is unavailable.
+func parseAddrText(out string) map[string][]string {
+	addrMap := map[string][]string{}
+	cur := ""
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			// Interface header, e.g. "2: eth0: <BROADCAST,MULTICAST,UP,...>"
+			parts := strings.SplitN(trimmed, ":", 3)
+			if len(parts) >= 2 {
+				cur = strings.TrimSpace(parts[1])
+			}
+			continue
+		}
+		if cur == "" {
+			continue
+		}
+		f := strings.Fields(trimmed)
+		if len(f) >= 2 && (strings.HasPrefix(trimmed, "inet ") || strings.HasPrefix(trimmed, "inet6 ")) {
+			// f[1] is "addr/prefix"; strip the prefix to match the JSON "local" field.
+			ip := strings.SplitN(f[1], "/", 2)[0]
+			addrMap[cur] = append(addrMap[cur], ip)
+		}
+	}
+	return addrMap
+}
+
 func (s *MonitorSession) GetDisks() ([]DiskInfo, error) {
 	// Run lsblk and df in a single shell script to avoid extra SSH round-trips.
 	// df only queries paths that actually have a mountpoint.
@@ -1260,9 +1361,15 @@ mp=$(lsblk -n -o MOUNTPOINT 2>/dev/null | grep -v '^$' | sort -u | tr '\n' ' ')
 		return nil, err
 	}
 	defer session2.Close()
-	out2, err := session2.Output(`lsblk -b -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null || lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null`)
+	out2, err := session2.Output(`lsblk -P -b -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null || lsblk -P -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null || lsblk -b -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null || lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,ROTA 2>/dev/null`)
 	if err != nil {
 		return nil, err
+	}
+
+	// Old lsblk (<2.30) can't emit JSON, so prefer the stable -P pairs form.
+	// The column loop below is only a last resort for pre-2.22 lsblk without -P.
+	if flat := parseLsblkPairsDisks(string(out2), mountUsage); len(flat) > 0 {
+		return flat, nil
 	}
 
 	lines := strings.Split(string(out2), "\n")
@@ -1349,6 +1456,8 @@ else
 fi
 echo "---ADDRJSON---"
 ip -j addr show 2>/dev/null || echo "[]"
+echo "---ADDRTEXT---"
+ip addr show
 echo "---BOND---"
 for f in /proc/net/bonding/*; do
     [ -f "$f" ] || continue
@@ -1429,13 +1538,22 @@ done`
 		}
 	}
 
-	// Parse addresses
+	// Parse addresses. The ADDRJSON section carries `ip -j addr show`; on hosts
+	// whose ip lacks -j (e.g. CentOS 7) the script echoes "[]" there, so we also
+	// collect the ADDRTEXT section (`ip addr show`) and fall back to it.
 	var addrData []map[string]interface{}
+	var addrTextPart string
 	if rest != "" {
 		addrSections := strings.Split(rest, "---ADDRJSON---\n")
 		if len(addrSections) > 1 {
 			addrPart := strings.TrimSpace(addrSections[1])
-			if idx := strings.Index(addrPart, "---BOND---"); idx >= 0 {
+			if idx := strings.Index(addrPart, "---ADDRTEXT---"); idx >= 0 {
+				addrTextPart = addrPart[idx+len("---ADDRTEXT---"):]
+				if idx2 := strings.Index(addrTextPart, "---BOND---"); idx2 >= 0 {
+					addrTextPart = strings.TrimSpace(addrTextPart[:idx2])
+				}
+				addrPart = strings.TrimSpace(addrPart[:idx])
+			} else if idx := strings.Index(addrPart, "---BOND---"); idx >= 0 {
 				addrPart = strings.TrimSpace(addrPart[:idx])
 			}
 			_ = json.Unmarshal([]byte(addrPart), &addrData)
@@ -1458,6 +1576,9 @@ done`
 				addrMap[ifName] = append(addrMap[ifName], ip)
 			}
 		}
+	}
+	if len(addrMap) == 0 && addrTextPart != "" {
+		addrMap = parseAddrText(addrTextPart)
 	}
 
 	// Parse speed info
@@ -1527,14 +1648,19 @@ done`
 			}
 		}
 	} else {
-		// Text format fallback
+		// Text format fallback. Detail lines are indented, headers are not, so the
+		// leading-whitespace test must run against the raw line BEFORE trimming;
+		// otherwise an indented `link/ether`/`inet` detail line is trimmed flat and
+		// misparsed as a brand-new interface header (producing junk cards on the
+		// old `ip` output that CentOS 7 emits).
 		var currentCard *NetCardInfo
 		for _, line := range strings.Split(linkPart, "\n") {
+			isDetail := strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
-			if !strings.HasPrefix(line, " ") {
+			if !isDetail {
 				if currentCard != nil {
 					cards = append(cards, *currentCard)
 				}
