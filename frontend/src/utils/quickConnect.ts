@@ -29,6 +29,7 @@ const QUICK_PROTOCOLS: Record<string, { type: string; dbType?: string; defaultPo
   oracle: { type: 'database', dbType: 'oracle', defaultPort: 1521 },
   sqlserver: { type: 'database', dbType: 'sqlserver', defaultPort: 1433 },
   rqlite: { type: 'database', dbType: 'rqlite', defaultPort: 4001 },
+  tcp: { type: 'tcp', defaultPort: 23 },
 }
 
 // Helper: parse [user[:password]@]host[:port]
@@ -115,7 +116,7 @@ export function getTypeBaseType(key: string): string {
 // Map of base type → top-level filter category, mirroring the two-level type
 // layout of the new-connection form (ConnectionForm `categories`).
 export const TYPE_CATEGORY: Record<string, string> = {
-  ssh: 'terminal', telnet: 'terminal', mosh: 'terminal', local: 'terminal', serial: 'terminal', monitor: 'terminal',
+  ssh: 'terminal', telnet: 'terminal', mosh: 'terminal', local: 'terminal', serial: 'terminal', tcp: 'terminal', monitor: 'terminal',
   sftp: 'filetransfer', ftp: 'filetransfer', smb: 'filetransfer', s3: 'filetransfer', webdav: 'filetransfer',
   rdp: 'remote', vnc: 'remote', spice: 'remote', 'x11-desktop': 'remote',
   database: 'database',
@@ -179,6 +180,7 @@ export function getTypeFilterCatalog(t: (key: string) => string, isWin = false) 
         { key: 'mosh', label: 'Mosh' },
         { key: 'local', label: t('conn.localTerminal') },
         { key: 'serial', label: t('serial.title') },
+        { key: 'tcp', label: 'TCP' },
       ],
     },
     {

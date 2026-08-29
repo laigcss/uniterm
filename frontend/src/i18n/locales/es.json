@@ -718,6 +718,7 @@
   "session.logStopped": "Registro detenido, archivo en {path}",
   "session.logFailed": "Fallo al cambiar el registro: {error}",
   "sidebar.connectSerial": "Conectar serie",
+  "sidebar.connectTcp": "Conectar TCP",
   "monitor.performance": "Rendimiento",
   "monitor.processes": "Procesos",
   "monitor.system": "Información del Sistema",

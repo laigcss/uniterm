@@ -718,6 +718,7 @@
   "session.logStopped": "已停止，文件保存至 {path}",
   "session.logFailed": "切换日志失败：{error}",
   "sidebar.connectSerial": "串口",
+  "sidebar.connectTcp": "连接 TCP",
   "monitor.performance": "性能",
   "monitor.processes": "进程",
   "monitor.system": "系统信息",

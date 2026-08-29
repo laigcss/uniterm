@@ -718,6 +718,7 @@
   "session.logStopped": "Enregistrement arrêté, fichier : {path}",
   "session.logFailed": "Échec du basculement du log : {error}",
   "sidebar.connectSerial": "Série",
+  "sidebar.connectTcp": "Connecter TCP",
   "monitor.performance": "Performances",
   "monitor.processes": "Processus",
   "monitor.system": "Infos système",
