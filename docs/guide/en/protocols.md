@@ -1,6 +1,6 @@
 # Supported Protocols
 
-uniTerm supports 20+ connection protocols, covering remote terminals, remote desktops, file transfers, databases, containers, and server monitoring.
+uniTerm supports 30+ connection protocols, covering remote terminals, remote desktops, file transfers, databases, containers, and server monitoring.
 
 ## Remote Terminal
 
@@ -9,6 +9,7 @@ uniTerm supports 20+ connection protocols, covering remote terminals, remote des
 | SSH | 22 | Encrypted remote shell, supports password/key authentication and tunnel forwarding |
 | Telnet | 23 | Plaintext remote terminal, suitable for embedded devices and legacy systems |
 | Mosh | 22 (SSH) | UDP-based mobile shell, ideal for high-latency networks |
+| Raw TCP | Custom | Raw TCP console that opens a plain socket and transceives raw bytes |
 
 ## Local Connections
 
@@ -48,6 +49,7 @@ uniTerm supports 20+ connection protocols, covering remote terminals, remote des
 | rqlite | 4001 | Lightweight distributed DB built on SQLite with Raft consensus |
 | Redis | 6379 | In-memory key-value store with visual key browsing and editing |
 | MongoDB | 27017 | Document database with tree browsing, query editor, and inline editing |
+| Elasticsearch | 9200 | Distributed search and analytics engine with index and document management |
 
 ## Containers
 
@@ -56,4 +58,5 @@ uniTerm supports 20+ connection protocols, covering remote terminals, remote des
 | Kubernetes | kubeconfig (optional SSH tunnel) | Cluster resource browsing and management, YAML editing, Pod logs and exec terminals, CPU/memory metrics |
 | Docker | Local / remote over SSH | Container and image management with lifecycle actions, logs, exec, and image pull |
 | Podman | Local / remote over SSH | Docker-compatible container engine, container and image management |
-| nerdctl | Local / remote over SSH | containerd container management with namespace switching |
+| nerdctl (containerd) | Local / remote over SSH | containerd container management with namespace switching |
+| WSLC | Windows WSL2 | Windows WSL2 Container runtime |

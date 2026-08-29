@@ -1,6 +1,6 @@
 # About uniTerm
 
-uniTerm is a lightweight all-in-one terminal emulator supporting **20+** connection protocols, covering remote terminals, remote desktops, file transfers, database management, containers, and server monitoring. It features a built-in **autonomous AI Agent** that can independently plan and execute multi-round shell commands.
+uniTerm is a lightweight all-in-one terminal emulator supporting **30+** connection protocols, covering remote terminals, remote desktops, file transfers, database management, containers, and server monitoring. It features a built-in **autonomous AI Agent** that can independently plan and execute multi-round shell commands.
 
 
 ## Core Features

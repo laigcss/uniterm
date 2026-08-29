@@ -16,6 +16,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Mosh | ✅ | v2026.06.02-alpha | Roaming-friendly terminal over UDP |  |
 | Serial | ✅ | v1.1.0 | Serial port terminal |  |
 | WSL | ✅ | v1.1.0 | Open installed WSL distributions |  |
+| Raw TCP | ✅ | v1.9.0 | Raw TCP console (plain socket byte streaming) |  |
 
 ### File Transfer
 
@@ -49,17 +50,17 @@ Legend: ✅ Shipped, 🚧 Planned
 | SQL Server | ✅ | v1.2.0 | Microsoft SQL Server |  |
 | Redis | ✅ | v1.2.1 | Key-value store with visual browser |  |
 | MongoDB | ✅ | v1.4.1 | Document database |  |
-| ClickHouse | 🚧 | — | Column-oriented OLAP database |  |
-| etcd | 🚧 | — | Distributed key-value store |  |
+| Elasticsearch | ✅ | v1.9.0 | Distributed search and analytics engine | [@iCarrear](https://github.com/iCarrear) |
 
 ### Container
 
 | Protocol | Status | Since | Notes | Contributor |
 |----------|--------|-------|-------|-------------|
-| Kubernetes | ✅ | v1.6.0 | Cluster browsing and pod management |  |
-| Docker | ✅ | v1.6.0 | Local and remote (SSH) container management |  |
-| nerdctl | ✅ | v1.6.0 | Local and remote (SSH) container management |  |
-| Podman | ✅ | v1.6.0 | Local and remote (SSH) container management |  |
+| Kubernetes | ✅ | v1.6.0 | Kubernetes container orchestration |  |
+| Docker | ✅ | v1.6.0 | Docker container runtime |  |
+| nerdctl (containerd) | ✅ | v1.6.0 | containerd container runtime |  |
+| Podman | ✅ | v1.6.0 | Podman container runtime |  |
+| WSLC | ✅ | v1.9.0 | Windows WSL2 Container runtime | [@boltomli](https://github.com/boltomli) |
 
 ## Core Features
 

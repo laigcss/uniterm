@@ -1,6 +1,6 @@
 # 支持协议
 
-uniTerm 支持 20+ 种连接协议，覆盖远程终端、远程桌面、文件传输、数据库、容器和服务器监控。
+uniTerm 支持 30+ 种连接协议，覆盖远程终端、远程桌面、文件传输、数据库、容器和服务器监控。
 
 ## 远程终端
 
@@ -9,6 +9,7 @@ uniTerm 支持 20+ 种连接协议，覆盖远程终端、远程桌面、文件�
 | SSH | 22 | 加密远程 Shell，支持密码/密钥认证、隧道转发 |
 | Telnet | 23 | 明文远程终端，适用于嵌入式设备和遗留系统 |
 | Mosh | 22 (SSH) | 基于 UDP 的移动 Shell，适合高延迟网络 |
+| Raw TCP | 自定义 | 原始 TCP 控制台，直连主机端口收发原始字节流 |
 
 ## 本地连接
 
@@ -48,6 +49,7 @@ uniTerm 支持 20+ 种连接协议，覆盖远程终端、远程桌面、文件�
 | rqlite | 4001 | 基于 SQLite、Raft 共识的轻量分布式数据库 |
 | Redis | 6379 | 内存键值数据库，可视化键值浏览与编辑 |
 | MongoDB | 27017 | 文档数据库，树形浏览、查询与行内编辑 |
+| Elasticsearch | 9200 | 分布式搜索与分析引擎，支持索引与文档管理 |
 
 ## 容器
 
@@ -56,4 +58,5 @@ uniTerm 支持 20+ 种连接协议，覆盖远程终端、远程桌面、文件�
 | Kubernetes | kubeconfig（可选 SSH 隧道） | 集群资源浏览与管理、YAML 编辑、Pod 日志与 exec 终端、CPU/内存指标 |
 | Docker | 本机 / SSH 远程 | 容器与镜像管理，支持生命周期操作、日志、exec、镜像拉取 |
 | Podman | 本机 / SSH 远程 | 兼容 Docker 的容器引擎，容器与镜像管理 |
-| nerdctl | 本机 / SSH 远程 | containerd 容器管理，支持切换 namespace |
+| nerdctl (containerd) | 本机 / SSH 远程 | containerd 容器管理，支持切换 namespace |
+| WSLC | Windows WSL2 | Windows WSL2 Container 运行时 |

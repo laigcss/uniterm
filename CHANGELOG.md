@@ -1,5 +1,97 @@
 # Changelog
 
+## v1.9.0-alpha
+
+### What's Changed
+
+**New Features**
+- Database: Elasticsearch support — browse and manage clusters, indexes and documents. (@iCarrear)
+- File sidebar: a companion file-management panel for browsing and managing files, with drag-and-drop upload. (@iCarrear)
+- Monitor sidebar: shows the current host's CPU, memory, and network monitoring info right in the sidebar. (@iCarrear)
+- Database: query execution history — a panel that records executed SQL and re-runs it with one click. (@iCarrear)
+- Database: inline cell editing with batch apply. (@iCarrear)
+- Container: added the WSLC (Windows WSL2 Container) runtime. (@boltomli)
+- File transfer: open remote files in your own external editor, with changes auto-uploaded back (SFTP / FTP / SMB / WebDAV / S3).
+- Terminal: raw TCP console session — connect a plain socket to host:port and send raw bytes, with encoding, newline mode, local echo, and backspace options.
+
+**Improvements**
+- RDP: native window follows moves, clips to the client area, and no longer steals the foreground; menus / dialogs show a snapshot instead of a black area. (@boltomli)
+- Updated to Wails v3 (frontend on Vite 8).
+- Themes: added built-in Xshell, MobaXterm and FinalShell color schemes, now folded into the standard Dark / Light groups. (@iCarrear)
+- Popup / context menus are no longer clipped at the window edge — submenus open in the correct direction and menus stay within the viewport.
+- New connection: database category split into SQL / NoSQL filter groups (with an Elasticsearch entry).
+- Config export: exporting connection configurations now always requires an export password.
+- Tunnel management moved into the Settings page.
+- Monitor: collapsible per-core / per-NIC / per-disk detail lists and a process kill button in the monitor tab; disk and network statistics are now more accurate (works on hosts without `ip` / `lsblk -j`, e.g. CentOS 7).
+- Terminal: configurable middle-click action, Ctrl/Cmd+right-click always opens the context menu, and font zoom via shortcuts or Ctrl/Cmd+wheel.
+- Quick commands: remark field and a larger edit dialog.
+- Connection: "Connect Only" opens a session without saving it; new-connection forms prefill from the search box.
+
+**Bug Fixes**
+- VNC / SPICE: fixed a race that could break session start. (@boltomli)
+- macOS: fixed the title-bar layout. (@surenwuyuwuqiu)
+- Settings: fixed the cursor-blink toggle showing the "text highlight" title and description, which duplicated the text-highlight entry. (@wangxufeng)
+- Linux: desktop icon added for the deb / rpm packages and the bare binary.
+- Terminal: suggestion popup no longer lingers when clicking outside.
+- Terminal: pasting content now auto-scrolls to the newest output (the bottom).
+- Terminal: highlighting now covers indented lines and paths with special characters.
+- Terminal: after resizing the window, the terminal now refills the new size instead of leaving a large blank area.
+- SFTP: progressive loading for large directories to prevent freezing / crashing on thousands of entries.
+- SFTP / Monitor: encrypted private keys now work for authentication.
+- K8s: namespaces stay usable when list permission is restricted.
+- History: wrapped command lines are joined so extraction isn't truncated.
+- Connection: "Save & Connect" persists edits; test-connection error toast auto-dismisses.
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @iCarrear, @boltomli, @surenwuyuwuqiu, and @wangxufeng for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- 数据库：新增 Elasticsearch 支持，可浏览与管理集群、索引与文档。（@iCarrear）
+- 文件边栏：新增文件管理边栏，可浏览与管理文件，支持拖拽上传。（@iCarrear）
+- 监控边栏：在边栏中展示当前主机的 CPU、内存、网络等监控信息。（@iCarrear）
+- 数据库：新增查询执行历史面板，记录已执行 SQL，可一键重跑。（@iCarrear）
+- 数据库：结果表格支持行内编辑与批量应用。（@iCarrear）
+- 容器：容器管理新增 WSLC（Windows WSL2 Container）运行时支持。（@boltomli）
+- 文件传输：支持用你自己的外部编辑器打开远程文件，改动保存后自动回传到远端（适配 SFTP / FTP / SMB / WebDAV / S3）。
+- 终端：新增原始 TCP 控制台会话，连接 `host:port` 后直接收发原始字节流，支持编码、换行模式、本地回显与退格键设置。
+
+**改进**
+- RDP：原生窗口随窗口移动、裁切在客户区内且不再抢占前台；菜单 / 弹窗打开时显示快照而非黑块。（@boltomli）
+- 界面框架升级至 Wails v3（前端基于 Vite 8）。
+- 主题：新增 Xshell、MobaXterm、FinalShell 内置配色方案，并入标准的 深色 / 浅色 分组。（@iCarrear）
+- 修复弹出 / 右键菜单被窗口边缘遮挡的问题：子菜单朝正确方向弹出，菜单始终显示在视口内。
+- 新建连接：数据库分类细分为 SQL / NoSQL 筛选分组（新增 Elasticsearch 入口）。
+- 配置导出：导出连接配置时始终要求设置导出密码。
+- 隧道管理移动到设置页中。
+- 监控：监控 Tab 支持可折叠的 按核心 / 网卡 / 磁盘 明细列表与进程结束按钮；磁盘与网络统计更准确（支持无 `ip` / `lsblk -j` 的主机，如 CentOS 7）。
+- 终端：中键动作可配置，Ctrl/Cmd + 右键始终打开右键菜单，并支持快捷键或 Ctrl/Cmd + 滚轮缩放字体。
+- 快捷命令：新增备注字段，并放大编辑弹窗。
+- 连接：新增「仅连接」操作，打开会话而不保存连接；新建连接表单支持从搜索框预填。
+
+**Bug 修复**
+- VNC / SPICE：修复可能导致会话无法启动的竞态问题。（@boltomli）
+- macOS：修复标题栏布局。（@surenwuyuwuqiu）
+- 设置：修复「光标闪烁」开关误用「文本高亮」标题与描述、导致与高亮条目重复显示的问题。（@wangxufeng）
+- Linux：修复 deb / rpm 与裸二进制缺少桌面图标的问题。
+- 终端：修复补全建议弹窗点击外部后不消失的问题。
+- 终端：粘贴内容后自动滚动到最新输出（底部）。
+- 终端：文本高亮现在覆盖缩进行与含特殊字符的路径。
+- 终端：调整窗口大小后，终端画面会自动重新铺满，不再留下大片空白。
+- SFTP：大目录采用渐进式加载，避免上千条目时卡死或崩溃。
+- SFTP / 监控：加密私钥现在可用于认证。
+- K8s：列表权限受限时命名空间仍可正常访问。
+- 历史：换行的命令会拼回一行，命令提取不再截断。
+- 连接：「保存并连接」会持久化编辑；测试连接错误提示自动关闭。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @iCarrear、@boltomli、@surenwuyuwuqiu 和 @wangxufeng 对本版本的贡献。
+
 ## v1.8.0
 
 ### What's Changed

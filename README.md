@@ -1,7 +1,7 @@
 <div align="center">
   <img src="build/appicon.png" alt="uniTerm" width="128" height="128" />
   <h1>uniTerm</h1>
-  <p>A lightweight all-in-one terminal with 20+ protocols — SSH, RDP, SFTP, databases, Kubernetes and more<br>With a built-in autonomous AI Agent that plans and runs multi-turn shell commands</p>
+  <p>A lightweight all-in-one terminal with 30+ protocols — SSH, RDP, SFTP, databases, Kubernetes and more<br>With a built-in autonomous AI Agent that plans and runs multi-turn shell commands</p>
   <p><a href="https://uniterm.net">🌐 Homepage</a> &nbsp;|&nbsp; <a href="https://uniterm.net/guide/en/introduction">📖 User Guide</a> &nbsp;|&nbsp; <a href="https://github.com/ys-ll/uniterm">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://gitee.com/ys-l/uniterm">💻 Gitee</a></p>
 </div>
 
@@ -38,14 +38,14 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 
 ### Full-Featured Terminal
 
-Remote terminal (SSH / Telnet / Mosh), local & serial terminal (PowerShell / CMD / Git Bash / WSL), file transfer, remote desktop, database, containers, and server monitor — covering all remote access needs.
+Remote terminal, local & serial terminal, file transfer, remote desktop, database, containers, and server monitor — covering all remote access needs.
 
-- **Remote Terminal** — SSH / Telnet / Mosh with password or key authentication; includes SSH tunnel port forwarding so any connection can route through an SSH jump host.
+- **Remote Terminal** — SSH / Telnet / Mosh / Raw TCP with password or key authentication; includes SSH tunnel port forwarding so any connection can route through an SSH jump host.
 - **Local & Serial Terminal** — PowerShell / CMD / Git Bash / WSL plus serial connections with configurable baud rate, data bits, stop bits, parity, and local echo.
 - **File Transfer** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem with dual-pane browsing and `rz`/`sz` support in SSH terminals.
 - **Remote Desktop** — RDP (Windows Remote Desktop), VNC (Linux remote control), SPICE (KVM/QEMU VMs), X11 (X Window forwarding)
-- **Database Client** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB.
-- **Containers** — Kubernetes / Docker / Podman / nerdctl
+- **Database Client** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB / Elasticsearch.
+- **Containers** — Kubernetes / Docker / Podman / nerdctl (containerd) / WSLC
 - **Server Monitor** — Real-time CPU, memory, disk, network, processes, ports, and network interfaces.
 
 ### AI Assistant
@@ -79,6 +79,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Terminal | Telnet | Remote terminal for legacy devices and embedded systems |
 | Terminal | Mosh | Server connections over high-latency or intermittent networks |
 | Terminal | Serial | Serial port terminal with configurable baud rate and other parameters |
+| Terminal | Raw TCP (v1.9.0-alpha) | Raw TCP console that opens a plain socket and transceives raw bytes |
 | Terminal | Local | PowerShell, CMD, Git Bash, and other local shells |
 | Terminal | WSL | Open installed WSL distributions via local terminal |
 | File Transfer | SFTP | Server file management and transfer |
@@ -98,10 +99,12 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Database | rqlite | Lightweight distributed DB built on SQLite with Raft consensus |
 | Database | Redis | In-memory key-value store with visual key browsing and editing |
 | Database | MongoDB | Document database with tree browsing, query editor, and inline editing |
+| Database | Elasticsearch (v1.9.0-alpha) | Distributed search and analytics engine with index and document management |
 | Containers | Kubernetes | Cluster resource browsing and management, Pod logs and exec, performance metrics |
 | Containers | Docker | Container and image management, on the local machine or remote hosts over SSH |
 | Containers | Podman | Docker-compatible container engine, on the local machine or remote hosts over SSH |
-| Containers | nerdctl | containerd container management with namespace switching |
+| Containers | nerdctl (containerd) | containerd container management with namespace switching |
+| Containers | WSLC (v1.9.0-alpha) | Windows WSL2 Container runtime |
 
 Oracle Database support is implemented with a pure Go driver. uniTerm does not bundle Oracle Database, Oracle Instant Client, OJDBC, wallet files, or Oracle brand assets; users are responsible for their own Oracle licenses, credentials, and database access.
 
