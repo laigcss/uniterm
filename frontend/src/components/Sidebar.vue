@@ -855,7 +855,7 @@ watch(searchQuery, (q) => {
 })
 
 // ── Resize ──
-const sidebarWidth = ref(220)
+const sidebarWidth = ref(240)
 const isResizing = ref(false)
 const sidebarEl = ref<HTMLDivElement>()
 
@@ -871,7 +871,7 @@ function onResizeStart(e: MouseEvent) {
   function onMouseMove(ev: MouseEvent) {
     if (!isResizing.value) return
     const delta = ev.clientX - startX
-    const newWidth = Math.min(Math.max(startWidth + delta, 180), 400)
+    const newWidth = Math.min(Math.max(startWidth + delta, 240), 400)
     el!.style.width = newWidth + 'px'
   }
 

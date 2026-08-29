@@ -9,76 +9,61 @@
     </div>
 
     <div v-else class="monitor-body">
-      <!-- System info 2x2 -->
-      <div class="sys-grid">
-        <div class="sys-cell">
-          <User :size="14" class="sys-icon" />
-          <div class="sys-text">
-            <span class="sys-label">{{ t('monitor.user') }}</span>
-            <span class="sys-value" :title="displayUser">{{ displayUser }}</span>
-          </div>
+      <!-- System info -->
+      <div class="card">
+        <div class="sys-row">
+          <span class="sys-label">{{ t('companion.host') }}</span>
+          <span class="sys-value" :title="hostText">{{ hostText }}</span>
         </div>
-        <div class="sys-cell">
-          <Clock :size="14" class="sys-icon" />
-          <div class="sys-text">
-            <span class="sys-label">{{ t('companion.uptime') }}</span>
-            <span class="sys-value" :title="uptimeText">{{ uptimeText }}</span>
-          </div>
+        <div class="sys-row">
+          <span class="sys-label">{{ t('monitor.os') }}</span>
+          <span class="sys-value" :title="systemInfo?.os || '-'">{{ systemInfo?.os || '-' }}</span>
         </div>
-        <div class="sys-cell">
-          <Globe :size="14" class="sys-icon" />
-          <div class="sys-text">
-            <span class="sys-label">{{ t('companion.host') }}</span>
-            <span class="sys-value" :title="hostText">{{ hostText }}</span>
-          </div>
+        <div class="sys-row">
+          <span class="sys-label">{{ t('monitor.arch') }}</span>
+          <span class="sys-value" :title="systemInfo?.arch || '-'">{{ systemInfo?.arch || '-' }}</span>
         </div>
-        <div class="sys-cell">
-          <Monitor :size="14" class="sys-icon" />
-          <div class="sys-text">
-            <span class="sys-label">{{ t('monitor.os') }}</span>
-            <span class="sys-value" :title="systemInfo?.os || '-'">{{ systemInfo?.os || '-' }}</span>
+        <div class="sys-row">
+          <span class="sys-label">{{ t('companion.uptime') }}</span>
+          <span class="sys-value">{{ uptimeText }}</span>
+        </div>
+      </div>
+
+      <!-- CPU -->
+      <div class="card">
+        <div class="mem-row">
+          <div class="mem-head">
+            <span>{{ t('monitor.cpu') }}</span>
+            <span class="mem-val cpu">{{ fmtPct(cpu.usage) }}</span>
+          </div>
+          <div class="mem-bar"><div class="mem-fill cpu" :style="{ width: Math.min(cpu.usage, 100) + '%' }" /></div>
+        </div>
+
+        <!-- CPU load average -->
+        <div class="load-row">
+          <span class="load-label">1m</span>
+          <span class="load-val">{{ cpu.load1 }}</span>
+          <span class="load-label">5m</span>
+          <span class="load-val">{{ cpu.load5 }}</span>
+          <span class="load-label">15m</span>
+          <span class="load-val">{{ cpu.load15 }}</span>
+        </div>
+
+        <div class="expand-toggle" @click="showCores = !showCores">
+          <ChevronRight :size="12" class="chev" :class="{ open: showCores }" />
+          <span>{{ t('monitor.allCores') }} ({{ cpus.length }})</span>
+        </div>
+        <div v-if="showCores" class="detail-list">
+          <div v-for="c in cpus" :key="c.core" class="detail-row">
+            <span class="detail-name">CPU {{ c.core }}</span>
+            <div class="detail-bar"><div class="detail-fill" :style="{ width: fmtWidth(c.usage) }" /></div>
+            <span class="detail-val">{{ fmtPct(c.usage) }}</span>
           </div>
         </div>
       </div>
 
-      <!-- CPU stats -->
+      <!-- Memory -->
       <div class="card">
-        <div class="cpu-grid">
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuAvg') }}</span>
-            <span class="cpu-num accent">{{ fmtPct(cpu.usage) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuSystem') }}</span>
-            <span class="cpu-num">{{ fmtPct(cpu.system) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuUser') }}</span>
-            <span class="cpu-num">{{ fmtPct(cpu.user) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuIowait') }}</span>
-            <span class="cpu-num">{{ fmtPct(cpu.iowait) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuTotal') }}</span>
-            <span class="cpu-num accent">{{ fmtPct(cpu.total, false) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('companion.cpuLoad') }}</span>
-            <span class="cpu-num small">{{ fmtLoad(cpu.load1) }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('monitor.cores') }}</span>
-            <span class="cpu-num">{{ cpu.cores || '-' }}</span>
-          </div>
-          <div class="cpu-stat">
-            <span class="cpu-label">{{ t('monitor.processCount') }}</span>
-            <span class="cpu-num">{{ cpu.processes || processList.length || '-' }}</span>
-          </div>
-        </div>
-
-        <!-- Memory bars -->
         <div class="mem-row">
           <div class="mem-head">
             <span>{{ t('companion.physMem') }}</span>
@@ -95,17 +80,9 @@
         </div>
       </div>
 
-      <!-- Network + multi-line chart -->
-      <div class="card chart-card">
+      <!-- Network -->
+      <div class="card">
         <div class="net-stats">
-          <div class="net-stat">
-            <span class="net-label">{{ t('companion.netTxTotal') }}</span>
-            <span class="net-num muted">{{ formatBytes(net.txTotal) }}</span>
-          </div>
-          <div class="net-stat">
-            <span class="net-label">{{ t('companion.netRxTotal') }}</span>
-            <span class="net-num muted">{{ formatBytes(net.rxTotal) }}</span>
-          </div>
           <div class="net-stat">
             <span class="net-label">{{ t('companion.netTxRate') }}</span>
             <span class="net-num tx">{{ formatBytes(net.tx) }}/s</span>
@@ -115,51 +92,57 @@
             <span class="net-num rx">{{ formatBytes(net.rx) }}/s</span>
           </div>
         </div>
-        <div class="chart-legend">
-          <span class="leg">
-            <span class="swatch" :style="{ background: SERIES.cpu }" />
-            <span class="leg-name" :style="{ color: SERIES.cpu }">{{ t('monitor.cpu') }}</span>
-          </span>
-          <span class="leg">
-            <span class="swatch" :style="{ background: SERIES.mem }" />
-            <span class="leg-name" :style="{ color: SERIES.mem }">{{ t('monitor.memory') }}</span>
-          </span>
-          <span class="leg">
-            <span class="swatch" :style="{ background: SERIES.tx }" />
-            <span class="leg-name" :style="{ color: SERIES.tx }">{{ t('companion.upload') }}</span>
-          </span>
-          <span class="leg">
-            <span class="swatch" :style="{ background: SERIES.rx }" />
-            <span class="leg-name" :style="{ color: SERIES.rx }">{{ t('companion.download') }}</span>
-          </span>
+
+        <div class="expand-toggle" @click="showNets = !showNets">
+          <ChevronRight :size="12" class="chev" :class="{ open: showNets }" />
+          <span>{{ t('monitor.allNetworks') }} ({{ nets.length }})</span>
         </div>
-        <canvas ref="chartCanvas" class="multi-canvas" />
+        <div v-if="showNets" class="detail-list">
+          <div v-for="n in nets" :key="n.name" class="detail-row net">
+            <span class="detail-name" :title="n.name">{{ n.name }}</span>
+            <span class="detail-sub">↓{{ formatBytes(n.rx) }}/s</span>
+            <span class="detail-sub tx">↑{{ formatBytes(n.tx) }}/s</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Compact processes -->
-      <div class="card proc-card">
-        <div class="proc-head">
-          <span>{{ t('monitor.processes') }}</span>
-          <el-input v-model="processSearch" size="small" clearable :placeholder="t('monitor.searchProcess')" class="proc-search" />
+      <!-- Disk -->
+      <div class="card">
+        <div class="mem-row">
+          <div class="mem-head">
+            <span>{{ t('monitor.disk') }}</span>
+            <span class="mem-val">{{ disk.used }} / {{ disk.total }}</span>
+          </div>
+          <div class="mem-bar"><div class="mem-fill disk" :style="{ width: fmtWidth(disk.usage) }" /></div>
         </div>
-        <div class="proc-list">
-          <div class="proc-row proc-header">
-            <span class="c-name">{{ t('monitor.processName') }}</span>
-            <span class="c-pid">{{ t('companion.pid') }}</span>
-            <span class="c-cpu">{{ t('monitor.cpu') }}</span>
-            <span class="c-mem">{{ t('monitor.mem') }}</span>
-            <span class="c-act"></span>
+
+        <div class="expand-toggle" @click="toggleDisks">
+          <ChevronRight :size="12" class="chev" :class="{ open: showDisks }" />
+          <span>{{ t('monitor.allDisks') }} ({{ mountedDisks.length }})</span>
+        </div>
+        <div v-if="showDisks" class="detail-list">
+          <div v-if="diskLoading" class="detail-empty">{{ t('monitor.loading') }}</div>
+          <div v-for="d in mountedDisks" v-else :key="d.name + d.mountPoint" class="detail-row disk">
+            <span class="detail-name" :title="d.name">{{ d.mountPoint || d.name }}</span>
+            <div class="detail-bar"><div class="detail-fill" :style="{ width: fmtWidth(d.usage) }" /></div>
+            <span class="detail-val">{{ d.used }} / {{ d.total }}</span>
           </div>
-          <div v-for="p in filteredProcesses" :key="p.pid" class="proc-row">
-            <span class="c-name" :title="p.name">{{ p.name }}</span>
-            <span class="c-pid">{{ p.pid }}</span>
-            <span class="c-cpu">{{ Number(p.cpu).toFixed(1) }}</span>
-            <span class="c-mem">{{ Number(p.mem).toFixed(1) }}</span>
-            <button class="kill-btn" :title="t('monitor.kill')" @click="onKill(p)">
-              <Square :size="12" />
-            </button>
-          </div>
-          <div v-if="!filteredProcesses.length" class="proc-empty">{{ t('companion.noProcesses') }}</div>
+        </div>
+      </div>
+
+      <!-- Host clock -->
+      <div class="card">
+        <div class="sys-row">
+          <span class="sys-label">{{ t('monitor.timezone') }}</span>
+          <span class="sys-value" :title="systemInfo?.timezone || '-'">{{ systemInfo?.timezone || '-' }}</span>
+        </div>
+        <div class="sys-row">
+          <span class="sys-label">{{ t('monitor.clock') }}</span>
+          <span class="sys-value">{{ hostClockText }}</span>
+        </div>
+        <div class="sys-row">
+          <span class="sys-label">{{ t('monitor.skew') }}</span>
+          <span class="sys-value">{{ clockSkewText }}</span>
         </div>
       </div>
 
@@ -173,51 +156,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { ExternalLink, Square, User, Clock, Globe, Monitor } from '@lucide/vue'
-import { ElMessageBox } from 'element-plus'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ExternalLink, ChevronRight } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { useCompanionStore } from '../stores/companionStore'
 import { usePanelStore } from '../stores/panelStore'
 import { Events } from '@wailsio/runtime'
-import { SetMonitorActiveTab, KillProcess } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SetMonitorActiveTab, SetMonitorPaused, GetDisks } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const companionStore = useCompanionStore()
 const panelStore = usePanelStore()
 
 const connecting = ref(false)
 const connectError = ref('')
-const chartCanvas = ref<HTMLCanvasElement | null>(null)
-const processSearch = ref('')
-
 const systemInfo = ref<Record<string, any> | null>(null)
+
 const cpu = ref({ usage: 0, total: 0, user: 0, system: 0, iowait: 0, cores: 0, processes: 0, load1: '-', load5: '-', load15: '-' })
 const mem = ref({ total: 0, used: 0, free: 0, usage: 0 })
 const swap = ref({ total: 0, used: 0, usage: 0 })
 const net = ref({ rx: 0, tx: 0, rxTotal: 0, txTotal: 0 })
-const processList = ref<any[]>([])
-const cpuHistory = ref<number[]>([])
-const memHistory = ref<number[]>([])
-const netRxHistory = ref<number[]>([])
-const netTxHistory = ref<number[]>([])
+const disk = ref({ total: '', used: '', usage: 0 })
+
+// Expandable detail lists: per-core / per-NIC (live from perf payload) and
+// per-disk (fetched on-demand via GetDisks when expanded).
+const cpus = ref<any[]>([])
+const nets = ref<any[]>([])
+const disks = ref<any[]>([])
+const diskLoading = ref(false)
+const showCores = ref(false)
+const showNets = ref(false)
+const showDisks = ref(false)
+
+// Only directories with a mount point are shown in the disk detail list.
+const mountedDisks = computed(() => disks.value.filter((d: any) => d.mountPoint))
 
 const sessionId = computed(() => companionStore.currentMonitorSessionId)
-
-const displayUser = computed(() => {
-  if (systemInfo.value?.user) return systemInfo.value.user
-  const pid = companionStore.activeSshPanelId
-  const panel = pid ? panelStore.getPanel(pid) : null
-  return panel?.config?.user || '-'
-})
 
 const hostText = computed(() => {
   const ip = systemInfo.value?.localIP
   const pid = companionStore.activeSshPanelId
   const panel = pid ? panelStore.getPanel(pid) : null
   const host = panel?.config?.host || ''
-  const port = panel?.config?.port
-  if (ip) return port ? `${ip}:${port}` : ip
-  if (host) return port ? `${host}:${port}` : host
+  if (ip) return ip
+  if (host) return host
   return '-'
 })
 
@@ -232,16 +213,48 @@ const uptimeText = computed(() => {
   return `${m}m`
 })
 
-const filteredProcesses = computed(() => {
-  const q = processSearch.value.trim().toLowerCase()
-  const list = processList.value
-  if (!q) return list.slice(0, 30)
-  return list.filter((p: any) =>
-    String(p.name).toLowerCase().includes(q) ||
-    String(p.pid).includes(q) ||
-    String(p.user).toLowerCase().includes(q)
-  ).slice(0, 30)
+// Host clock: systemInfo.epochSec is the host's POSIX time at the moment the
+// system payload arrived (hostClockAt). Extrapolating with the live tick lets
+// the host clock keep ticking, and the skew to the local clock is constant.
+const hostClockAt = ref(0)
+const clockNow = ref(0)
+
+const hostClockText = computed(() => {
+  const base = Number(systemInfo.value?.epochSec)
+  if (!base || !hostClockAt.value) return '-'
+  const liveMs = base * 1000 + (clockNow.value - hostClockAt.value)
+  const tz = systemInfo.value?.timezone
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: tz,
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).format(new Date(liveMs))
+  } catch {
+    return new Date(liveMs).toLocaleTimeString(undefined, { hour12: false })
+  }
 })
+
+const clockSkewText = computed(() => {
+  const base = Number(systemInfo.value?.epochSec)
+  if (!base || !hostClockAt.value) return '-'
+  // Positive = host clock is ahead of the local machine.
+  const s = (base * 1000 - hostClockAt.value) / 1000
+  return formatSkew(s)
+})
+
+function formatSkew(seconds: number): string {
+  const sign = seconds < 0 ? '-' : '+'
+  const abs = Math.abs(seconds)
+  if (abs < 1) return `${sign}${abs.toFixed(1)}s`
+  const d = Math.floor(abs / 86400)
+  const h = Math.floor((abs % 86400) / 3600)
+  const m = Math.floor((abs % 3600) / 60)
+  const s = Math.round(abs % 60)
+  if (d > 0) return `${sign}${d}d ${h}h ${m}m`
+  if (h > 0) return `${sign}${h}h ${m}m`
+  if (m > 0) return `${sign}${m}m ${s}s`
+  return `${sign}${s}s`
+}
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes < 0) return '0 B'
@@ -265,65 +278,10 @@ function fmtPct(v: number, clamp100 = true): string {
   return n.toFixed(1) + '%'
 }
 
-function fmtLoad(v: number | string): string {
+function fmtWidth(v: unknown): string {
   const n = Number(v)
-  if (!Number.isFinite(n)) return String(v ?? '-')
-  return n.toFixed(2)
-}
-
-function pushHistory(arr: number[], val: number) {
-  arr.push(val)
-  if (arr.length > 60) arr.shift()
-}
-
-function cssColor(_name: string, fallback: string): string {
-  return fallback
-}
-
-/** Fixed series colors — same for legend + canvas (theme-independent). */
-const SERIES = {
-  cpu: '#60a5fa',
-  mem: '#2dd4bf',
-  tx: '#f59e0b',
-  rx: '#4ade80',
-} as const
-
-function drawChart() {
-  const canvas = chartCanvas.value
-  if (!canvas) return
-  const parent = canvas.parentElement
-  if (!parent) return
-  const w = Math.max(parent.clientWidth - 0, 10)
-  const h = 120
-  const dpr = window.devicePixelRatio || 1
-  canvas.width = w * dpr
-  canvas.height = h * dpr
-  canvas.style.width = w + 'px'
-  canvas.style.height = h + 'px'
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.clearRect(0, 0, w, h)
-
-  function draw(data: number[], color: string, maxOverride?: number) {
-    if (data.length < 2) return
-    const max = maxOverride ?? Math.max(1, ...data)
-    ctx.beginPath()
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * (w - 4) + 2
-      const y = h - 4 - (Math.min(v, max) / max) * (h - 10)
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    })
-    ctx.stroke()
-  }
-
-  draw(cpuHistory.value, SERIES.cpu, 100)
-  draw(memHistory.value, SERIES.mem, 100)
-  draw(netTxHistory.value, SERIES.tx)
-  draw(netRxHistory.value, SERIES.rx)
+  if (!Number.isFinite(n)) return '0%'
+  return Math.min(100, Math.max(0, n)) + '%'
 }
 
 async function ensureConnected() {
@@ -333,7 +291,13 @@ async function ensureConnected() {
   connectError.value = ''
   try {
     const sid = await companionStore.ensureMonitor(pid)
-    if (sid) SetMonitorActiveTab(sid, 'overview').catch(() => {})
+    if (sid) {
+      SetMonitorActiveTab(sid, 'overview').catch(() => {})
+      // Resume polling now that this sidebar is visible again.
+      SetMonitorPaused(sid, false).catch(() => {})
+      // Load the disk snapshot so the "all disks" count shows without expanding.
+      loadDisks()
+    }
   } catch (e: any) {
     connectError.value = e?.toString?.() || t('companion.needSsh')
   } finally {
@@ -348,24 +312,31 @@ function openFullMonitor() {
   window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: panel }))
 }
 
-async function onKill(p: any) {
+async function loadDisks() {
+  if (disks.value.length > 0) return
   const sid = sessionId.value
   if (!sid) return
+  diskLoading.value = true
   try {
-    await ElMessageBox.confirm(
-      t('monitor.killConfirm', { name: p.name, pid: p.pid }),
-      t('monitor.kill'),
-      { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
-    )
-    await KillProcess(sid, p.pid, 'term')
-  } catch { /* cancelled */ }
+    disks.value = await GetDisks(sid)
+  } catch {
+    disks.value = []
+  } finally {
+    diskLoading.value = false
+  }
+}
+
+async function toggleDisks() {
+  showDisks.value = !showDisks.value
+  if (showDisks.value) await loadDisks()
 }
 
 let unsub: (() => void) | null = null
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 function bindListeners() {
   unsub?.()
-  unsub =Events.On('session:data', (ev) => { const data: any = ev.data; 
+  unsub = Events.On('session:data', (ev) => { const data: any = ev.data;
     if (data?.id !== sessionId.value) return
     if (typeof data.data === 'string') {
       const connMatch = data.data.match(/\[Connection failed: ([^\]]+)\]/)
@@ -378,6 +349,7 @@ function bindListeners() {
       const payload = JSON.parse(data.data)
       if (payload.type === 'system') {
         systemInfo.value = payload.system
+        hostClockAt.value = Date.now()
         return
       }
       if (payload.type === 'performance') {
@@ -394,7 +366,6 @@ function bindListeners() {
             load5: payload.cpu.load5 ?? '-',
             load15: payload.cpu.load15 ?? '-',
           }
-          pushHistory(cpuHistory.value, payload.cpu.usage || 0)
         }
         if (payload.memory) {
           mem.value = {
@@ -403,7 +374,6 @@ function bindListeners() {
             free: payload.memory.free || 0,
             usage: payload.memory.usage || 0,
           }
-          pushHistory(memHistory.value, payload.memory.usage || 0)
         }
         if (payload.swap) {
           swap.value = {
@@ -419,16 +389,16 @@ function bindListeners() {
             rxTotal: payload.network.rxTotal || 0,
             txTotal: payload.network.txTotal || 0,
           }
-          pushHistory(netRxHistory.value, payload.network.rx || 0)
-          pushHistory(netTxHistory.value, payload.network.tx || 0)
+          if (Array.isArray(payload.nets)) nets.value = payload.nets
         }
-        nextTick(drawChart)
-      }
-      if (payload.type === 'processes' && payload.processes) {
-        processList.value = payload.processes
-        if (payload.summary?.cpu) {
-          cpu.value.processes = payload.summary.cpu.processes || cpu.value.processes
+        if (payload.disk) {
+          disk.value = {
+            total: payload.disk.total || '',
+            used: payload.disk.used || '',
+            usage: payload.disk.usage || 0,
+          }
         }
+        if (Array.isArray(payload.cpus)) cpus.value = payload.cpus
       }
     } catch { /* ignore */ }
    })
@@ -439,22 +409,23 @@ function restoreCache(): boolean {
   const pid = companionStore.activeSshPanelId
   const cached = pid ? companionStore.getMonitorViewCache(pid) : null
   if (!cached) return false
-  systemInfo.value = cached.systemInfo
+  systemInfo.value = cached.systemInfo ?? null
+  hostClockAt.value = cached.systemInfoAt ?? 0
   cpu.value = { ...cached.cpu }
   mem.value = { ...cached.mem }
   swap.value = { ...cached.swap }
   net.value = { ...cached.net }
-  processList.value = [...cached.processList]
-  cpuHistory.value = [...cached.cpuHistory]
-  memHistory.value = [...cached.memHistory]
-  netRxHistory.value = [...cached.netRxHistory]
-  netTxHistory.value = [...cached.netTxHistory]
-  nextTick(drawChart)
+  cpus.value = Array.isArray(cached.cpus) ? [...cached.cpus] : []
+  nets.value = Array.isArray(cached.nets) ? [...cached.nets] : []
+  disks.value = Array.isArray(cached.disks) ? [...cached.disks] : []
+  showCores.value = !!cached.expanded?.cores
+  showNets.value = !!cached.expanded?.nets
+  showDisks.value = !!cached.expanded?.disks
   return true
 }
 
 watch(sessionId, (sid) => {
-  // Re-entering an already-visited tab: restore its cached graphs instead of
+  // Re-entering an already-visited tab: restore its cached values instead of
   // resetting, so switching back shows the previous content instantly.
   if (restoreCache()) {
     if (sid) {
@@ -463,34 +434,37 @@ watch(sessionId, (sid) => {
     }
     return
   }
+  // No cache for this panel yet → clear any stale info from the previously
+  // viewed panel until the new one reports in.
   systemInfo.value = null
-  processList.value = []
-  cpuHistory.value = []
-  memHistory.value = []
-  netRxHistory.value = []
-  netTxHistory.value = []
+  cpus.value = []
+  nets.value = []
+  disks.value = []
+  showCores.value = false
+  showNets.value = false
+  showDisks.value = false
   if (!sid) return
   bindListeners()
   SetMonitorActiveTab(sid, 'overview').catch(() => {})
 })
 
-// Persist the current graphs per SSH panel so a later switch-back can restore them.
+// Persist the current values per SSH panel so a later switch-back can restore them.
 watch(
-  [systemInfo, cpu, mem, swap, net, processList, cpuHistory, memHistory, netRxHistory, netTxHistory],
+  [systemInfo, cpu, mem, swap, net, cpus, nets, disks, showCores, showNets, showDisks],
   () => {
     const pid = companionStore.activeSshPanelId
     if (!pid) return
     companionStore.setMonitorViewCache(pid, {
       systemInfo: systemInfo.value ? { ...systemInfo.value } : null,
+      systemInfoAt: hostClockAt.value || Date.now(),
       cpu: { ...cpu.value },
       mem: { ...mem.value },
       swap: { ...swap.value },
       net: { ...net.value },
-      processList: [...processList.value],
-      cpuHistory: [...cpuHistory.value],
-      memHistory: [...memHistory.value],
-      netRxHistory: [...netRxHistory.value],
-      netTxHistory: [...netTxHistory.value],
+      cpus: [...cpus.value],
+      nets: [...nets.value],
+      disks: [...disks.value],
+      expanded: { cores: showCores.value, nets: showNets.value, disks: showDisks.value },
     })
   },
   { deep: true },
@@ -499,7 +473,6 @@ watch(
 watch(() => companionStore.monitorVisible, (v) => {
   if (v) {
     ensureConnected()
-    nextTick(drawChart)
   }
 })
 
@@ -511,14 +484,30 @@ onMounted(() => {
   bindListeners()
   // Re-mounting after the view was hidden (e.g. switching files<->monitor):
   // restore this panel's cached data since the session didn't change.
-  restoreCache()
+  if (!restoreCache()) {
+    // Fresh (never-visited) panel: start collapsed with no stale detail data.
+    cpus.value = []
+    nets.value = []
+    disks.value = []
+    showCores.value = false
+    showNets.value = false
+    showDisks.value = false
+  }
   if (companionStore.monitorVisible) ensureConnected()
-  window.addEventListener('resize', drawChart)
+  // Drive the live host clock.
+  const tick = () => { clockNow.value = Date.now() }
+  tick()
+  clockTimer = window.setInterval(tick, 1000)
 })
 
 onUnmounted(() => {
   unsub?.()
-  window.removeEventListener('resize', drawChart)
+  if (clockTimer) window.clearInterval(clockTimer)
+  clockTimer = null
+  // The sidebar is hidden — pause the companion monitor session so it stops
+  // polling the remote host until it is shown again.
+  const sid = sessionId.value
+  if (sid) SetMonitorPaused(sid, true).catch(() => {})
 })
 </script>
 
@@ -528,9 +517,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
-  flex-shrink: 0;
+  flex: 1 1 0;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   overflow: hidden;
 }
@@ -581,43 +570,6 @@ onUnmounted(() => {
   box-shadow: 0 0 0 1px var(--accent-subtle) inset;
 }
 
-.sys-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.sys-cell {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg-surface);
-  border-radius: 10px;
-}
-.sys-icon {
-  color: var(--text-muted);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.sys-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.sys-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.sys-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .card {
   background: var(--bg-surface);
   border-radius: 10px;
@@ -627,35 +579,27 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.cpu-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px 6px;
-}
-.cpu-stat {
+.sys-row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
 }
-.cpu-label {
+.sys-label {
   font-size: 10px;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
-.cpu-num {
-  font-size: 13px;
+.sys-value {
+  font-size: 12px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
 }
-.cpu-num.accent { color: var(--chart-2, #60a5fa); }
-.cpu-num.small { font-size: 12px; }
 
 .mem-row { display: flex; flex-direction: column; gap: 4px; }
 .mem-head {
@@ -668,6 +612,7 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
 }
+.mem-val.cpu { color: var(--chart-1, #60a5fa); font-weight: 600; }
 .mem-bar {
   height: 8px;
   border-radius: 999px;
@@ -679,8 +624,27 @@ onUnmounted(() => {
   border-radius: 999px;
   transition: width 0.35s ease;
 }
+.mem-fill.cpu { background: linear-gradient(90deg, #6366f1, #818cf8); }
 .mem-fill.phys { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
 .mem-fill.swap { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
+
+.load-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.load-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.load-val {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
 
 .net-stats {
   display: grid;
@@ -698,96 +662,82 @@ onUnmounted(() => {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.net-num.muted { color: var(--text-secondary); }
 .net-num.tx { color: #f59e0b; }
 .net-num.rx { color: #4ade80; }
 
-.chart-legend {
+.mem-fill.disk { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+
+.expand-toggle {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px 14px;
-  padding: 2px 0 4px;
-  font-size: 12px;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 2px 0;
+  user-select: none;
 }
-.leg {
-  display: inline-flex;
+.expand-toggle:hover { color: var(--text-secondary); }
+.expand-toggle .chev { transition: transform 0.15s ease; flex-shrink: 0; }
+.expand-toggle .chev.open { transform: rotate(90deg); }
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 170px;
+  overflow: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+.detail-row {
+  display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 11px;
+  min-width: 0;
 }
-.swatch {
-  width: 14px;
-  height: 3px;
-  border-radius: 2px;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-.leg-name {
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.multi-canvas {
-  width: 100%;
-  height: 120px;
-  border-radius: 8px;
-  background: var(--bg-base);
-}
-
-.proc-card { flex: 1; min-height: 140px; }
-.proc-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.proc-search { width: 130px; }
-.proc-list {
+.detail-name {
   flex: 1;
-  overflow: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  max-height: 220px;
-}
-.proc-row {
-  display: grid;
-  grid-template-columns: 1fr 48px 40px 40px 24px;
-  gap: 4px;
-  align-items: center;
-  padding: 4px 8px;
-  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
 }
-.proc-row.proc-header {
-  position: sticky;
-  top: 0;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  font-weight: 600;
-  z-index: 1;
+.detail-bar {
+  flex: 1;
+  height: 5px;
+  max-width: 80px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
 }
-.c-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c-pid, .c-cpu, .c-mem { text-align: right; font-variant-numeric: tabular-nums; }
-.kill-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
+.detail-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow));
 }
-.kill-btn:hover { color: var(--el-color-danger); background: var(--bg-hover); }
-.proc-empty {
-  padding: 16px;
-  text-align: center;
+.detail-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  min-width: 40px;
+  text-align: right;
+}
+.detail-sub {
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
+  flex-shrink: 0;
+}
+.detail-sub.tx { color: #f59e0b; }
+.detail-row.net .detail-sub {
+  width: 72px;
+  text-align: right;
+}
+.detail-empty {
+  padding: 6px 0;
   font-size: 11px;
+  color: var(--text-muted);
 }
 </style>

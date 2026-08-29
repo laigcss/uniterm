@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,13 @@ import (
 
 	"golang.org/x/crypto/ssh"
 )
+
+type cpuSample struct{ total, idle uint64 }
+type netSample struct{ rx, tx uint64 }
+
+// Monitor metrics poll interval in seconds. Network byte rates are computed
+// from deltas over this window and divided by it to yield bytes/second.
+const performancePollSec = 3
 
 type monitorState struct {
 	lastCpuTotal  uint64
@@ -23,6 +31,10 @@ type monitorState struct {
 	lastNetRx     uint64
 	lastNetTx     uint64
 	hasPrev       bool
+
+	// Per-core and per-interface deltas for the expandable detail lists.
+	lastPerCpu       map[int]cpuSample
+	lastNetPerIface  map[string]netSample
 
 	// Separate counters for collectProcesses so overview mode
 	// (performance + processes each tick) cannot corrupt deltas.
@@ -52,6 +64,8 @@ type DiskInfo struct {
 	Vendor     string `json:"vendor"`
 	Model      string `json:"model"`
 }
+
+type dfEntry struct{ Used, Total, Mount string; Usage int }
 
 type NetCardInfo struct {
 	Name       string   `json:"name"`
@@ -144,7 +158,7 @@ func (s *MonitorSession) Connect(config ConnectionConfig) error {
 
 	go s.pushSystemInfo()
 
-	s.ticker = time.NewTicker(1 * time.Second)
+	s.ticker = time.NewTicker(performancePollSec * time.Second)
 	go s.pollLoop()
 
 	return nil
@@ -168,7 +182,7 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 	}
 	defer session.Close()
 
-	script := `cat /etc/os-release 2>/dev/null | grep -E '^(PRETTY_NAME|VERSION_ID)=' || true; echo "---"; uname -r; echo "---"; hostname; echo "---"; readlink -f /etc/localtime 2>/dev/null | sed 's|/usr/share/zoneinfo/||' || date +%Z; echo "---"; uname -m; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 || true; echo "---"; nproc; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'cpu MHz' | head -1 || true; echo "---"; awk '/MemTotal:/{print $2}' /proc/meminfo; echo "---"; df -h / 2>/dev/null | awk 'NR==2{print $2}'; echo "---"; ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+'; echo "---"; cat /proc/uptime 2>/dev/null | awk '{print int($1)}'; echo "---"; whoami 2>/dev/null || true`
+	script := `cat /etc/os-release 2>/dev/null | grep -E '^(PRETTY_NAME|VERSION_ID)=' || true; echo "---"; uname -r; echo "---"; hostname; echo "---"; readlink -f /etc/localtime 2>/dev/null | sed 's|/usr/share/zoneinfo/||' || date +%Z; echo "---"; uname -m; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 || true; echo "---"; nproc; echo "---"; cat /proc/cpuinfo 2>/dev/null | grep 'cpu MHz' | head -1 || true; echo "---"; awk '/MemTotal:/{print $2}' /proc/meminfo; echo "---"; df -h / 2>/dev/null | awk 'NR==2{print $2}'; echo "---"; ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+'; echo "---"; cat /proc/uptime 2>/dev/null | awk '{print int($1)}'; echo "---"; whoami 2>/dev/null || true; echo "---"; date +%s`
 	out, err := session.CombinedOutput(script)
 	if err != nil {
 		return nil
@@ -195,6 +209,8 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 	uptimeSecStr := strings.TrimSpace(safeIndex(parts, 11))
 	uptimeSec, _ := strconv.ParseInt(uptimeSecStr, 10, 64)
 	loginUser := strings.TrimSpace(safeIndex(parts, 12))
+	epochSecStr := strings.TrimSpace(safeIndex(parts, 13))
+	epochSec, _ := strconv.ParseInt(epochSecStr, 10, 64)
 
 	osName := "Linux"
 	versionID := ""
@@ -222,6 +238,7 @@ func (s *MonitorSession) collectSystemInfo() map[string]interface{} {
 		"localIP":   localIP,
 		"uptimeSec": uptimeSec,
 		"user":      loginUser,
+		"epochSec":  epochSec,
 	}
 }
 
@@ -233,6 +250,7 @@ func safeIndex(arr []string, idx int) string {
 }
 
 func (s *MonitorSession) pollLoop() {
+	sysTicks := 0
 	for {
 		select {
 		case <-s.quit:
@@ -245,17 +263,27 @@ func (s *MonitorSession) pollLoop() {
 
 			switch tab {
 			case "performance":
-				s.collectPerformance()
+				if !paused {
+					s.collectPerformance()
+				}
 			case "processes":
 				if !paused {
 					s.collectProcesses()
 				}
 			case "overview":
 				// Compact sidebar: gauges/network + process list in one poll tick.
-				s.collectPerformance()
 				if !paused {
+					s.collectPerformance()
 					s.collectProcesses()
 				}
+			}
+
+			// System info is otherwise one-shot at connect; refresh it
+			// periodically (every 30s) so uptime and the other identity fields
+			// keep updating instead of freezing.
+			sysTicks++
+			if sysTicks%(30/performancePollSec) == 0 {
+				s.pushSystemInfo()
 			}
 		}
 	}
@@ -315,11 +343,31 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cpu_user":%s,"cpu_system":%s,"cpu_iowait"
   "$swap_total" "$swap_free" \
   "${disk_total:-}" "${disk_used:-}" "${disk_usage:-0}" \
   "$net_rx" "$net_tx" "$handles" \
-  $loadavg`
+  $loadavg
+echo "---CORE---"
+grep '^cpu[0-9]' /proc/stat || true
+echo "---NET---"
+awk 'NR>2{split($1,a,":"); n=a[1]; if(n!="lo") print n,$2,$10}' /proc/net/dev
+`
 
 	out, err := session.Output(script)
 	if err != nil {
 		return
+	}
+
+	// Peel off the "--CORE--"/"--NET--" detail sections so the leading JSON
+	// can be unmarshalled on its own.
+	outStr := string(out)
+	corePart := ""
+	netPart := ""
+	if idx := strings.Index(outStr, "---CORE---"); idx >= 0 {
+		rest := outStr[idx:]
+		corePart = rest[len("---CORE---"):]
+		out = []byte(outStr[:idx])
+		if idx2 := strings.Index(rest, "---NET---"); idx2 >= 0 {
+			corePart = rest[len("---CORE---"):idx2]
+			netPart = rest[idx2+len("---NET---"):]
+		}
 	}
 
 	type rawMetrics struct {
@@ -374,15 +422,15 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cpu_user":%s,"cpu_system":%s,"cpu_iowait"
 		}
 	}
 
-	// Network rate (bytes per second, since we poll every 1s)
+	// Network rate (bytes per second, over the poll interval)
 	netRxRate := uint64(0)
 	netTxRate := uint64(0)
 	if s.state.hasPrev {
 		if m.NetRx >= s.state.lastNetRx {
-			netRxRate = m.NetRx - s.state.lastNetRx
+			netRxRate = uint64(math.Round(float64(m.NetRx-s.state.lastNetRx) / performancePollSec))
 		}
 		if m.NetTx >= s.state.lastNetTx {
-			netTxRate = m.NetTx - s.state.lastNetTx
+			netTxRate = uint64(math.Round(float64(m.NetTx-s.state.lastNetTx) / performancePollSec))
 		}
 	}
 
@@ -450,6 +498,13 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cpu_user":%s,"cpu_system":%s,"cpu_iowait"
 		},
 	}
 
+	if cpus := s.computePerCore(corePart); len(cpus) > 0 {
+		payload["cpus"] = cpus
+	}
+	if nets := s.computePerNic(netPart); len(nets) > 0 {
+		payload["nets"] = nets
+	}
+
 	jsonData, _ := json.Marshal(payload)
 	s.emitData(jsonData)
 
@@ -462,6 +517,114 @@ printf '{"cpu_total":%s,"cpu_idle":%s,"cpu_user":%s,"cpu_system":%s,"cpu_iowait"
 	s.state.lastNetRx = m.NetRx
 	s.state.lastNetTx = m.NetTx
 	s.state.hasPrev = true
+}
+
+// computePerCore turns the "---CORE---" subsection (one /proc/stat cpuN line
+// per core) into per-core usage percentages using delta-with-previous-sample.
+func (s *MonitorSession) computePerCore(corePart string) []map[string]interface{} {
+	if s.state.lastPerCpu == nil {
+		s.state.lastPerCpu = map[int]cpuSample{}
+	}
+	next := map[int]cpuSample{}
+	usage := map[int]float64{}
+	for _, line := range strings.Split(corePart, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "cpu") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 9 {
+			continue
+		}
+		core, err := strconv.Atoi(strings.TrimPrefix(f[0], "cpu"))
+		if err != nil {
+			continue
+		}
+		var total uint64
+		for i := 1; i <= 8; i++ {
+			n, _ := strconv.ParseUint(f[i], 10, 64)
+			total += n
+		}
+		idle, _ := strconv.ParseUint(f[4], 10, 64)
+		if prev, ok := s.state.lastPerCpu[core]; ok && total >= prev.total {
+			if diff := total - prev.total; diff > 0 {
+				idleDiff := uint64(0)
+				if idle >= prev.idle {
+					idleDiff = idle - prev.idle
+				}
+				if idleDiff > diff {
+					idleDiff = diff
+				}
+				usage[core] = clampPct(float64(diff-idleDiff) / float64(diff) * 100)
+			}
+		}
+		next[core] = cpuSample{total: total, idle: idle}
+	}
+	s.state.lastPerCpu = next
+
+	keys := make([]int, 0, len(usage))
+	for k := range usage {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	result := make([]map[string]interface{}, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, map[string]interface{}{"core": k, "usage": roundFloat(usage[k], 1)})
+	}
+	return result
+}
+
+// computePerNic turns the "---NET---" subsection ("name rx rx tx") into
+// per-interface byte counters and rates, skipping loopback.
+func (s *MonitorSession) computePerNic(netPart string) []map[string]interface{} {
+	if s.state.lastNetPerIface == nil {
+		s.state.lastNetPerIface = map[string]netSample{}
+	}
+	type netStats struct {
+		rateRx, rateTx, rxTotal, txTotal uint64
+	}
+	items := map[string]netStats{}
+	next := map[string]netSample{}
+	for _, line := range strings.Split(netPart, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		name := f[0]
+		rx, _ := strconv.ParseUint(f[1], 10, 64)
+		tx, _ := strconv.ParseUint(f[2], 10, 64)
+		rateRx, rateTx := uint64(0), uint64(0)
+		if prev, ok := s.state.lastNetPerIface[name]; ok {
+			if rx >= prev.rx {
+				rateRx = uint64(math.Round(float64(rx-prev.rx) / performancePollSec))
+			}
+			if tx >= prev.tx {
+				rateTx = uint64(math.Round(float64(tx-prev.tx) / performancePollSec))
+			}
+		}
+		next[name] = netSample{rx: rx, tx: tx}
+		items[name] = netStats{rateRx: rateRx, rateTx: rateTx, rxTotal: rx, txTotal: tx}
+	}
+	s.state.lastNetPerIface = next
+
+	// Stable order: sort NIC names alphabetically for the detail list.
+	names := make([]string, 0, len(items))
+	for n := range items {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	result := make([]map[string]interface{}, 0, len(names))
+	for _, name := range names {
+		st := items[name]
+		result = append(result, map[string]interface{}{
+			"name": name, "rx": st.rateRx, "tx": st.rateTx, "rxTotal": st.rxTotal, "txTotal": st.txTotal,
+		})
+	}
+	return result
 }
 
 func (s *MonitorSession) collectProcesses() {
@@ -953,6 +1116,7 @@ mp=$(lsblk -n -o MOUNTPOINT 2>/dev/null | grep -v '^$' | sort -u | tr '\n' ' ')
 	}
 
 	mountUsage := map[string]struct{ Used, Total string; Usage int }{}
+	dfByDev := map[string]dfEntry{}
 	for _, line := range strings.Split(string(dfOut), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "Filesystem") {
@@ -968,6 +1132,11 @@ mp=$(lsblk -n -o MOUNTPOINT 2>/dev/null | grep -v '^$' | sort -u | tr '\n' ' ')
 				Total: fields[1],
 				Usage: usage,
 			}
+			devName := fields[0]
+			if idx := strings.LastIndex(devName, "/"); idx >= 0 {
+				devName = devName[idx+1:]
+			}
+			dfByDev[devName] = dfEntry{Used: fields[2], Total: fields[1], Usage: usage, Mount: mount}
 		}
 	}
 
@@ -1045,22 +1214,28 @@ mp=$(lsblk -n -o MOUNTPOINT 2>/dev/null | grep -v '^$' | sort -u | tr '\n' ' ')
 						vendor = v
 					}
 
-					usage := mountUsage[mount]
 					disk := DiskInfo{
 						Name:       strings.Repeat("  ", depth) + name,
 						Type:       devType,
 						Size:       formatBytes(sizeBytes),
-						MountPoint: mount,
 						Media:      media,
 						FSType:     fsType,
 						UUID:       uuid,
 						Vendor:     vendor,
 						Model:      model,
 					}
-					if mount != "" {
-						disk.Used = usage.Used
-						disk.Total = usage.Total
-						disk.Usage = usage.Usage
+					// Prefer df (authoritative) for mount point + usage: lsblk JSON can
+					// leave mountpoint empty for filesystems mounted directly on a disk.
+					if d, ok := dfByDev[name]; ok {
+						disk.MountPoint = d.Mount
+						disk.Used = d.Used
+						disk.Total = d.Total
+						disk.Usage = d.Usage
+					} else if mount != "" {
+						disk.MountPoint = mount
+						disk.Used = mountUsage[mount].Used
+						disk.Total = mountUsage[mount].Total
+						disk.Usage = mountUsage[mount].Usage
 					}
 					disks = append(disks, disk)
 

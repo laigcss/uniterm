@@ -26,15 +26,17 @@ export interface FileViewCache {
 }
 export interface MonitorViewCache {
   systemInfo: Record<string, any> | null
+  systemInfoAt: number
   cpu: Record<string, any>
   mem: Record<string, any>
   swap: Record<string, any>
   net: Record<string, any>
-  processList: unknown[]
-  cpuHistory: number[]
-  memHistory: number[]
-  netRxHistory: number[]
-  netTxHistory: number[]
+  // Expandable detail lists / their expansion state, kept per panel so the
+  // sidebar restores them on return.
+  cpus: any[]
+  nets: any[]
+  disks: any[]
+  expanded: { cores: boolean; nets: boolean; disks: boolean }
 }
 
 export const useCompanionStore = defineStore('companion', () => {
