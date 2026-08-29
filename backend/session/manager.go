@@ -70,6 +70,9 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	case "serial":
 		s = NewSerialSession(config.ID)
 
+	case "tcp":
+		s = NewTCPSession(config.ID)
+
 	case "redis":
 		s = NewRedisSession(config.ID)
 

@@ -40,6 +40,8 @@ func ProbeConnection(config ConnectionConfig) (string, error) {
 		return probeSSH(config)
 	case "telnet":
 		return probeTelnet(config)
+	case "tcp":
+		return probeTCP(config)
 	case "ftp":
 		return probeFTP(config)
 	case "s3":
@@ -93,6 +95,17 @@ func probeTelnet(config ConnectionConfig) (string, error) {
 	}
 	conn.Close()
 	return fmt.Sprintf("telnet: %s:%d reachable", config.Host, config.Port), nil
+}
+
+// probeTCP checks that a plain TCP socket to host:port can be established.
+func probeTCP(config ConnectionConfig) (string, error) {
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	conn, err := net.DialTimeout("tcp", addr, 15*time.Second)
+	if err != nil {
+		return "", fmt.Errorf("tcp: %w", err)
+	}
+	conn.Close()
+	return fmt.Sprintf("tcp: %s:%d reachable", config.Host, config.Port), nil
 }
 
 func probeFTP(config ConnectionConfig) (string, error) {

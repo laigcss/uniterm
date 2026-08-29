@@ -298,6 +298,7 @@
       <MenuItem v-if="selectedConn && selectedConn.type === 'mosh'" @click="doConnect">{{ t('sidebar.connectMosh') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'local'" @click="doConnect">{{ t('sidebar.connectLocal') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'serial'" @click="emit('connectSerial')">{{ t('sidebar.connectSerial') }}</MenuItem>
+      <MenuItem v-if="selectedConn && selectedConn.type === 'tcp'" @click="doConnect">{{ t('sidebar.connectTcp') }}</MenuItem>
       <!-- File Transfer -->
       <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectSFTP">{{ t('sidebar.connectSftp') }}</MenuItem>
       <MenuItem v-if="selectedConn && selectedConn.type === 'ftp'" @click="doConnectFTP">{{ t('sidebar.connectFtp') }}</MenuItem>
@@ -447,7 +448,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
-import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow } from '@lucide/vue'
+import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -1807,6 +1808,7 @@ function connIcon(conn: ConnectionConfig) {
     case 'mosh': return Zap
     case 'local': return Laptop
     case 'serial': return Cable
+    case 'tcp': return ArrowLeftRight
     case 'sftp': return FolderUp
     case 'ftp': return FolderUp
     case 'smb': return HardDrive

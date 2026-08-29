@@ -123,7 +123,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
-import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow } from '@lucide/vue'
+import { SquareTerminal, Laptop, FolderUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight } from '@lucide/vue'
 
 const props = defineProps<{
   tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
@@ -201,6 +201,7 @@ const tabIcon = computed(() => {
     if (panel?.type === 'k8s-exec' || panel?.type === 'container-exec') return Box
     if (panel?.type === 'local') return Laptop
     if (panel?.type === 'serial') return Cable
+    if (panel?.type === 'tcp') return ArrowLeftRight
     if (panel?.type === 'telnet') return Terminal
     if (panel?.type === 'mosh') return Zap
     return SquareTerminal
@@ -267,7 +268,7 @@ const canDuplicate = computed(() => {
 })
 
 // Reconnectable panels — terminal types that Panel.vue can re-initiate.
-const TTY_RECONNECT_TYPES: readonly string[] = ['ssh', 'telnet', 'serial', 'mosh', 'local', 'k8s-exec', 'container-exec']
+const TTY_RECONNECT_TYPES: readonly string[] = ['ssh', 'telnet', 'serial', 'mosh', 'local', 'tcp', 'k8s-exec', 'container-exec']
 
 // Whether the tab has a right-click 「重连」(Reconnect). Terminal panels are
 // re-initiated by Panel.vue via the 'panel:reconnect' event; desktop-protocol

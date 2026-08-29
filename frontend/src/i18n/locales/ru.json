@@ -718,6 +718,7 @@
   "session.logStopped": "Запись остановлена, файл: {path}",
   "session.logFailed": "Не удалось переключить журнал: {error}",
   "sidebar.connectSerial": "Подключиться по серийному порту",
+  "sidebar.connectTcp": "Подключиться TCP",
   "monitor.performance": "Производительность",
   "monitor.processes": "Процессы",
   "monitor.system": "Системная информация",

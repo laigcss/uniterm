@@ -718,6 +718,7 @@
   "session.logStopped": "記録を停止しました。{path} に保存",
   "session.logFailed": "ログの切り替えに失敗: {error}",
   "sidebar.connectSerial": "シリアル",
+  "sidebar.connectTcp": "TCP へ接続",
   "monitor.performance": "パフォーマンス",
   "monitor.processes": "プロセス",
   "monitor.system": "システム情報",

@@ -718,6 +718,7 @@
   "session.logStopped": "已停止，檔案儲存至 {path}",
   "session.logFailed": "切換日誌失敗：{error}",
   "sidebar.connectSerial": "序列埠",
+  "sidebar.connectTcp": "連線 TCP",
   "monitor.performance": "效能",
   "monitor.processes": "處理程序",
   "monitor.system": "系統資訊",

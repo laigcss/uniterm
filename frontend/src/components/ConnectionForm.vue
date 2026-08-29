@@ -82,7 +82,7 @@
                 <el-radio-button v-if="isElasticsearch" label="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
+            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
               <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
             </el-form-item>
             <el-form-item
@@ -106,7 +106,7 @@
                 </el-select>
               </el-form-item>
             </template>
-            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
+            <el-form-item v-if="form.type !== 'local' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : (isEsApiKey ? t('conn.esApiKeyPlaceholder') : '')" />
             </el-form-item>
             <template v-if="isElasticsearch">
@@ -398,7 +398,7 @@
               </div>
             </el-form-item>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local' || form.type === 'tcp'"
               :label="t('conn.encoding')"
             >
               <el-select v-model="form.encoding" placeholder="Unicode (UTF-8)">
@@ -426,7 +426,7 @@
                 </el-select>
               </el-form-item>
             </template>
-            <template v-if="form.type === 'telnet' || form.type === 'serial'">
+            <template v-if="form.type === 'telnet' || form.type === 'serial' || form.type === 'tcp'">
               <el-form-item :label="t('conn.localEcho')">
                 <el-switch v-model="form.localEcho" />
               </el-form-item>
@@ -438,7 +438,7 @@
               </el-form-item>
             </template>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'tcp'"
               :label="t('conn.backspaceKey')"
             >
               <el-select v-model="form.backspaceKey">
@@ -517,7 +517,7 @@
               </el-select>
             </el-form-item>
             <el-form-item
-              v-if="['ssh','telnet','serial','mosh','local'].includes(form.type)"
+              v-if="['ssh','telnet','serial','mosh','local','tcp'].includes(form.type)"
               :label="t('conn.logOnConnect')"
             >
               <el-switch v-model="form.logOnConnect" />
@@ -591,7 +591,7 @@ import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, GetPlatform, ListSerialPorts, TestConnection } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { ElInput } from 'element-plus'
 import { msg } from '../services/message'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, CircleCheck, CircleX } from '@lucide/vue'
+import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, Cable, FolderUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import type { K8sContextInfo } from '../types/k8s'
 import IdentityEditDialog from './IdentityEditDialog.vue'
@@ -641,6 +641,7 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => ({
     { type: 'mosh', label: 'Mosh', icon: Zap },
     { type: 'local', label: t('conn.localTerminal'), icon: Laptop },
     { type: 'serial', label: t('serial.title'), icon: Cable },
+    { type: 'tcp', label: 'TCP', icon: ArrowLeftRight },
   ],
   filetransfer: [
     { type: 'ftp', label: 'FTP', icon: FolderUp },
@@ -736,7 +737,7 @@ const showAdvanced = ref(false)
 
 // Connection types that support the "test connection" button (issue #377).
 // local/serial/mosh/vnc/rdp/spice/x11-desktop don't have a non-interactive probe.
-const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container']
+const TESTABLE_TYPES = ['ssh', 'telnet', 'ftp', 's3', 'webdav', 'smb', 'database', 'k8s', 'container', 'tcp']
 // Test-connection result state: 'checking' shows a spinner; 'success'/'error'
 // keep a colored status icon on the button until the next test or a reopen.
 const testStatus = ref<'idle' | 'checking' | 'success' | 'error'>('idle')
@@ -1096,6 +1097,7 @@ watch(() => form.type, (newType) => {
   else if (newType === 'database') form.port = 3306
   else if (newType === 'ftp') form.port = 21
   else if (newType === 'smb') form.port = 445
+  else if (newType === 'tcp') form.port = 23
   if (REMOTE_TYPES.includes(newType) || newType === 'database') {
     form.authType = 'password'
   }

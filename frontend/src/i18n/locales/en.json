@@ -718,6 +718,7 @@
   "session.logStopped": "Log stopped, saved to {path}",
   "session.logFailed": "Failed to toggle log: {error}",
   "sidebar.connectSerial": "Serial",
+  "sidebar.connectTcp": "Connect TCP",
   "monitor.performance": "Performance",
   "monitor.processes": "Processes",
   "monitor.system": "System Info",

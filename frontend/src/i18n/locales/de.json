@@ -718,6 +718,7 @@
   "session.logStopped": "Protokoll gestoppt, Datei: {path}",
   "session.logFailed": "Protokoll-Umschaltung fehlgeschlagen: {error}",
   "sidebar.connectSerial": "Seriell",
+  "sidebar.connectTcp": "Verbinden mit TCP",
   "monitor.performance": "Leistung",
   "monitor.processes": "Prozesse",
   "monitor.system": "Systeminfo",
