@@ -15,6 +15,7 @@
           @pop="popTo"
           @update:namespace="setNamespace"
         />
+        <div v-if="namespaceError" class="k8s-ns-warning" role="status">{{ namespaceError }}</div>
         <K8sResourceList
           :conn-id="connId"
           :frame="topFrame"
@@ -73,25 +74,34 @@ const connId = ref<string>('')
 const error = ref('')
 const initialNamespace = ref<string>(props.tab.namespace || '')
 
-// Namespaces fetched live from the cluster once connected; falls back to a
-// small static set if the list call fails (RBAC-restricted, etc.).
+// Namespaces fetched live from the cluster once connected. If the list call
+// fails (e.g. RBAC restricted to specific namespaces), keep only the context's
+// default namespace so the dropdown still offers a valid target, and surface a
+// non-fatal hint telling the user they can type a namespace manually.
 const fetchedNamespaces = ref<string[]>([])
+const namespaceError = ref('')
 const namespaceOptions = computed(() => {
   const set = new Set<string>()
   for (const n of fetchedNamespaces.value) set.add(n)
-  if (!set.size) { set.add('default'); set.add('kube-system'); set.add('kube-public') }
   if (initialNamespace.value) set.add(initialNamespace.value)
-  return Array.from(set)
+  return Array.from(set).sort()
 })
 
 async function loadNamespaces() {
   if (!connId.value) return
+  namespaceError.value = ''
   try {
     const { status, data } = await k8sClient.requestJSON<any>(connId.value, 'GET', '/api/v1/namespaces?limit=500')
     if (status === 200 && data?.items) {
       fetchedNamespaces.value = data.items.map((n: any) => n.metadata?.name).filter(Boolean).sort()
+    } else {
+      fetchedNamespaces.value = []
+      namespaceError.value = `Failed to list namespaces (HTTP ${status}). You can type a namespace manually.`
     }
-  } catch { /* keep fallback */ }
+  } catch {
+    fetchedNamespaces.value = []
+    namespaceError.value = 'Failed to list namespaces — permission denied? You can type a namespace manually.'
+  }
 }
 
 // ── nav stack ──────────────────────────────────────────────────
@@ -330,5 +340,13 @@ onBeforeUnmount(() => {
 .k8s-connecting {
   padding: 12px;
   opacity: 0.7;
+}
+.k8s-ns-warning {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  border-bottom: 1px solid var(--el-color-warning-light-5, #faecd8);
+  flex-shrink: 0;
 }
 </style>

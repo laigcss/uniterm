@@ -6,6 +6,9 @@
       size="small"
       class="k8s-ns-select"
       placeholder="all namespaces"
+      filterable
+      allow-create
+      default-first-option
       clearable
       @update:model-value="v => $emit('update:namespace', v || '')"
     >
