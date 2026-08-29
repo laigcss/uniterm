@@ -312,12 +312,6 @@
         </div>
         <div class="detail-actions">
           <el-button @click="detailDrawerVisible = false">{{ t('common.cancel') }}</el-button>
-          <Menu ref="signalMenuRef" v-model:visible="signalMenuVisible">
-            <MenuItem @click="onSignal('term')">{{ t('monitor.signalTerm') }}</MenuItem>
-            <MenuItem @click="onSignal('kill')">{{ t('monitor.signalKill') }}</MenuItem>
-            <MenuItem @click="onSignal('hup')">{{ t('monitor.signalHup') }}</MenuItem>
-            <MenuItem @click="onSignal('int')">{{ t('monitor.signalInt') }}</MenuItem>
-          </Menu>
         </div>
       </div>
       <div v-else class="process-detail-empty">{{ t('monitor.noProcessSelected') }}</div>
@@ -334,6 +328,17 @@
 
     <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
       <MenuItem @click="copyContextText(current)">{{ t('terminal.copy') }}</MenuItem>
+    </Menu>
+
+    <!-- Send-signal dropdown for the per-row table button. Kept OUTSIDE the
+         processDetail-scoped drawer (which v-if's until a row is clicked) so it
+         is always mounted and the button in the process table works on first
+         open, independent of whether a process detail has been loaded yet. -->
+    <Menu ref="signalMenuRef" v-model:visible="signalMenuVisible">
+      <MenuItem @click="onSignal('term')">{{ t('monitor.signalTerm') }}</MenuItem>
+      <MenuItem @click="onSignal('kill')">{{ t('monitor.signalKill') }}</MenuItem>
+      <MenuItem @click="onSignal('hup')">{{ t('monitor.signalHup') }}</MenuItem>
+      <MenuItem @click="onSignal('int')">{{ t('monitor.signalInt') }}</MenuItem>
     </Menu>
   </div>
 </template>
