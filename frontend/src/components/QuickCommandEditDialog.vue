@@ -2,7 +2,7 @@
   <el-dialog append-to-body
     v-model="visible"
     :title="editingId ? t('quickCommands.editCommand') : t('quickCommands.addCommand')"
-    width="480px"
+    width="620px"
     :close-on-click-modal="false"
     @close="resetForm"
   >
@@ -12,6 +12,14 @@
           v-model="formName"
           :placeholder="t('quickCommands.namePlaceholder')"
           maxlength="50"
+        />
+      </el-form-item>
+      <el-form-item :label="t('quickCommands.remark')">
+        <el-input
+          v-model="formRemark"
+          type="textarea"
+          :rows="2"
+          :placeholder="t('quickCommands.remarkPlaceholder')"
         />
       </el-form-item>
       <el-form-item :label="t('quickCommands.group')">
@@ -30,7 +38,7 @@
         <el-input
           v-model="formCommand"
           type="textarea"
-          :rows="4"
+          :rows="10"
           :placeholder="t('quickCommands.commandPlaceholder')"
           class="command-textarea"
         />
@@ -75,6 +83,7 @@ const props = defineProps<{
   initialName?: string
   initialCommand?: string
   initialGroupId?: string
+  initialRemark?: string
 }>()
 
 const emit = defineEmits<{
@@ -87,6 +96,7 @@ const visible = computed({
 })
 
 const formName = ref('')
+const formRemark = ref('')
 const formCommand = ref('')
 const formGroupId = ref<string | undefined>(undefined)
 const errorMsg = ref('')
@@ -94,6 +104,7 @@ const errorMsg = ref('')
 watch(visible, (v) => {
   if (v) {
     formName.value = props.initialName || ''
+    formRemark.value = props.initialRemark || ''
     formCommand.value = props.initialCommand || ''
     formGroupId.value = props.initialGroupId || undefined
     errorMsg.value = ''
@@ -106,10 +117,11 @@ function handleSave() {
     errorMsg.value = t('quickCommands.commandRequired')
     return
   }
+  const remark = formRemark.value.trim()
   if (props.editingId) {
-    store.updateCommand(props.editingId, formName.value || undefined, cmd, formGroupId.value || undefined)
+    store.updateCommand(props.editingId, formName.value || undefined, cmd, formGroupId.value || undefined, remark)
   } else {
-    store.addCommand(formName.value || undefined, cmd, formGroupId.value || undefined)
+    store.addCommand(formName.value || undefined, cmd, formGroupId.value || undefined, remark)
   }
   visible.value = false
   resetForm()
@@ -136,6 +148,7 @@ function confirmNewGroup() {
 
 function resetForm() {
   formName.value = ''
+  formRemark.value = ''
   formCommand.value = ''
   formGroupId.value = undefined
   errorMsg.value = ''

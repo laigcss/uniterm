@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "Без группы",
   "quickCommands.command": "Команда",
   "quickCommands.name": "Имя",
+  "quickCommands.remark": "Примечание",
+  "quickCommands.remarkPlaceholder": "Необязательно, доп. описание команды",
   "quickCommands.namePlaceholder": "Необязательно, команда отображается если пусто",
   "quickCommands.commandPlaceholder": "напр. df -h",
   "quickCommands.run": "Выполнить",

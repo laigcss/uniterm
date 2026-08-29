@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "그룹 없음",
   "quickCommands.command": "명령",
   "quickCommands.name": "이름",
+  "quickCommands.remark": "비고",
+  "quickCommands.remarkPlaceholder": "선택 사항, 이 명령에 대한 참고 사항",
   "quickCommands.namePlaceholder": "선택 사항, 비어 있으면 명령 표시",
   "quickCommands.commandPlaceholder": "예: df -h",
   "quickCommands.run": "실행",

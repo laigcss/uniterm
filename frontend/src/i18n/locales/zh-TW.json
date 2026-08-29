@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "無群組",
   "quickCommands.command": "命令",
   "quickCommands.name": "名稱",
+  "quickCommands.remark": "備註",
+  "quickCommands.remarkPlaceholder": "可選，對該命令的補充說明",
   "quickCommands.namePlaceholder": "可選，為空時顯示命令文字",
   "quickCommands.commandPlaceholder": "如 df -h",
   "quickCommands.run": "執行",

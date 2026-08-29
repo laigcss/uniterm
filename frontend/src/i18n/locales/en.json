@@ -1010,6 +1010,8 @@
   "quickCommands.noGroup": "No Group",
   "quickCommands.command": "Command",
   "quickCommands.name": "Name",
+  "quickCommands.remark": "Remark",
+  "quickCommands.remarkPlaceholder": "Optional description for this command",
   "quickCommands.namePlaceholder": "Optional, command text shown if empty",
   "quickCommands.commandPlaceholder": "e.g. df -h",
   "quickCommands.run": "Run",
