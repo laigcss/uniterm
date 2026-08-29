@@ -256,6 +256,21 @@
                   </el-button>
                 </div>
               </el-form-item>
+
+              <el-form-item :label="t('conn.k8sNamespace')">
+                <el-select
+                  v-model="form.k8sNamespace"
+                  filterable
+                  allow-create
+                  default-first-option
+                  clearable
+                  placeholder="Namespace"
+                  style="width: 100%"
+                  @change="onK8sNamespaceInput"
+                >
+                  <el-option v-for="ns in k8sNamespaceOptions" :key="ns" :value="ns" :label="ns" />
+                </el-select>
+              </el-form-item>
             </template>
             <!-- ── Container 字段 ── -->
             <template v-if="form.type === 'container'">
@@ -1012,6 +1027,18 @@ const k8sContextsError = ref('')
 // Guard against watchers wiping restored state during edit-hydration.
 const hydrating = ref(false)
 
+// True once the user hand-edits the namespace field, so that switching the
+// k8s context later doesn't silently overwrite a value they typed.
+const k8sNamespaceTouched = ref(false)
+// Namespace suggestions drawn from the contexts' declared defaults plus the
+// current field value. allow-create lets the user type any namespace.
+const k8sNamespaceOptions = computed(() => {
+  const set = new Set<string>()
+  if (form.k8sNamespace) set.add(form.k8sNamespace)
+  for (const c of k8sContexts.value) if (c.namespace) set.add(c.namespace)
+  return Array.from(set)
+})
+
 watch(() => props.editConfig, (config) => {
   if (config) {
     // Always reset first so fields absent from the config (e.g. an empty
@@ -1206,6 +1233,7 @@ function resetForm() {
   form.k8sConfigInline = ''
   form.k8sContext = ''
   form.k8sNamespace = 'default'
+  k8sNamespaceTouched.value = false
   form.containerTransport = 'ssh'
   form.containerSSHConnId = undefined
   form.containerRuntime = 'docker'
@@ -1297,6 +1325,21 @@ watch(() => form.type, (t) => {
   if (t === 'k8s' && (form.k8sConfigPath || form.k8sConfigInline)) {
     reloadK8sContexts()
   }
+})
+
+function onK8sNamespaceInput() {
+  k8sNamespaceTouched.value = true
+}
+
+// Adopt the selected context's declared default namespace, unless the user has
+// already hand-typed a value. Editing an existing connection runs under
+// hydrating, where the stored namespace must win.
+watch(() => form.k8sContext, (ctxName) => {
+  if (hydrating.value) return
+  if (k8sNamespaceTouched.value) return
+  if (!ctxName) return
+  const ctx = k8sContexts.value.find(c => c.name === ctxName)
+  if (ctx && ctx.namespace) form.k8sNamespace = ctx.namespace
 })
 
 function generateUniqueName(name: string): string {
