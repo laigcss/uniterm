@@ -47,3 +47,9 @@ func (s *RDPSession) Hide() {}
 func (s *RDPSession) SetFullScreen(_ bool) {}
 
 func (s *RDPSession) SetOnFullScreenExit(_ func()) {}
+
+func (s *RDPSession) Invalidate() {}
+
+func (s *RDPSession) Snapshot() (string, error) {
+	return "", fmt.Errorf("RDP is only supported on Windows")
+}
