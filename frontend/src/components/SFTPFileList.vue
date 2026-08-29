@@ -43,7 +43,7 @@
       <el-table
         ref="tableRef"
         :key="locale"
-        :data="filteredFiles"
+        :data="visibleFiles"
         size="small"
         :row-class-name="getRowClassName"
         @row-click="onRowClick"
@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Folder, File, Link, RefreshCw, Eye, Upload } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
@@ -222,6 +222,66 @@ const filteredFiles = computed(() => {
   const q = filterText.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(f => f.name.toLowerCase().includes(q))
+})
+
+// --- Progressive loading ---------------------------------------------------
+// A directory can contain tens of thousands of entries. Rendering the whole
+// list into el-table at once creates an unbounded number of DOM rows, which
+// freezes / crashes the renderer (issue 478). So we only hand el-table a slice
+// of the filtered list and grow it as the user scrolls near the bottom, keeping
+// the rendered DOM bounded regardless of the total entry count.
+const PAGE_SIZE = 200
+const INITIAL_PAGES = 1
+const NEAR_BOTTOM_PX = 300
+
+const visibleCount = ref(INITIAL_PAGES)
+const visibleFiles = computed(() => filteredFiles.value.slice(0, visibleCount.value * PAGE_SIZE))
+
+let scrollWrapEl: HTMLElement | null = null
+
+// el-table scrolls through an internal .el-scrollbar once it has a height; that
+// element is where we must listen for scroll (native scroll does not bubble).
+function bindTableScroll() {
+  const el = (tableRef.value?.$el ?? null) as HTMLElement | null
+  scrollWrapEl = el?.querySelector('.el-scrollbar__wrap') ?? null
+  if (scrollWrapEl && !scrollWrapEl.dataset.lazyBinded) {
+    scrollWrapEl.dataset.lazyBinded = '1'
+    scrollWrapEl.addEventListener('scroll', onTableScroll, { passive: true })
+  }
+}
+
+function onTableScroll() {
+  // Defer to the next frame so the threshold is computed against the scroll
+  // height AFTER any just-triggered batch has been added to the DOM.
+  requestAnimationFrame(loadMoreIfNeeded)
+}
+
+function loadMoreIfNeeded() {
+  if (!scrollWrapEl) return
+  const { scrollTop, clientHeight, scrollHeight } = scrollWrapEl
+  if (scrollHeight - scrollTop - clientHeight < NEAR_BOTTOM_PX) {
+    visibleCount.value += 1
+  }
+}
+
+// Reset to a fresh first batch whenever the underlying dataset or the filter
+// changes, so the table always starts at the top again.
+watch(filteredFiles, () => {
+  visibleCount.value = INITIAL_PAGES
+  // The scroll wrap survives data swaps, but the Keyed locale swap below
+  // remounts el-table and its scrollbar, so re-resolve the listener target.
+  nextTick(bindTableScroll)
+})
+
+// <el-table :key="locale"> remounts the table on locale switch, creating a new
+// scrollbar element that needs the scroll listener re-attached.
+watch(locale, () => {
+  visibleCount.value = INITIAL_PAGES
+  nextTick(bindTableScroll)
+})
+
+onMounted(() => {
+  nextTick(bindTableScroll)
 })
 
 function isSelected(row: FileItem): boolean {
