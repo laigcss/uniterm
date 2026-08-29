@@ -268,7 +268,7 @@ jobs:
           contents:
             - src: bin/uniTerm
               dst: /usr/bin/uniterm
-            - src: build/linux/uniterm.desktop
+            - src: build/linux/uniTerm.desktop
               dst: /usr/share/applications/uniterm.desktop
             - src: build/appicon.png
               dst: /usr/share/icons/hicolor/128x128/apps/uniterm.png

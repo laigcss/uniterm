@@ -1,8 +1,9 @@
 [Desktop Entry]
 Name=uniTerm
 Comment=Lightweight All-in-One Terminal Emulator
-Exec=/usr/bin/uniterm
-Icon=uniterm
+Exec=/usr/local/bin/uniTerm
+Icon=uniTerm
 Terminal=false
 Type=Application
 Categories=System;TerminalEmulator;
+StartupWMClass=uniterm

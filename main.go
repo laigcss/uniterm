@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -27,6 +28,12 @@ var devBuild = Version == "dev"
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// Linux desktop icon, embedded so a bare binary (no deb/rpm) can register its
+// own desktop integration at startup instead of relying on installation.
+//
+//go:embed build/appicon.png
+var linuxAppIcon []byte
 
 func main() {
 	// Capture top-level panics
@@ -62,6 +69,14 @@ func main() {
 	maxW, maxH := 0, 0
 	if runtime.GOOS == "linux" {
 		maxW, maxH = 9999, 9999
+
+		// Linux desktop integration: deb/rpm installs place a .desktop entry in
+		// the XDG data dirs, so the dock/launcher icon comes from there. For a
+		// bare binary that is never installed, register the entry into the
+		// user's home so the app still shows an icon when launched directly.
+		if exe, err := os.Executable(); err == nil {
+			ensureLinuxDesktopIntegration(exe)
+		}
 	}
 
 	// On macOS, install the standard App + Edit menus. The Edit menu is what
@@ -138,6 +153,13 @@ func main() {
 		Windows: application.WindowsOptions{
 			WebviewUserDataPath: webviewDataPath,
 		},
+		// Fixed program name so the window's WM_CLASS stays "uniterm" — the
+		// .desktop files (installed or self-registered) set StartupWMClass to the
+		// same value, which is what lets the dock/taskbar associate the running
+		// window with the app icon.
+		Linux: application.LinuxOptions{
+			ProgramName: "uniterm",
+		},
 	})
 
 	if appMenu != nil {
@@ -196,4 +218,79 @@ func startPprofIfDev() {
 			log.Writef("pprof listener failed: %v", err)
 		}
 	}()
+}
+
+// linuxDesktopEntry is the [Desktop Entry] file written for a self-registered
+// (bare binary) install. Exec is filled with the running binary's path.
+const linuxDesktopEntry = `[Desktop Entry]
+Name=uniTerm
+Comment=Lightweight All-in-One Terminal Emulator
+Exec=%s
+Icon=uniTerm
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+StartupWMClass=uniterm
+`
+
+// ensureLinuxDesktopIntegration registers a bare Linux binary into the user's
+// desktop environment so the dock/launcher shows an icon when the app is run
+// without being installed (deb/rpm). Desktop handlers (GNOME Shell, KDE, XFCE
+// Panel, file managers) only associate a running window with an icon through a
+// .desktop entry matched by StartupWMClass; GTK4/Wails has no runtime API to
+// set a window icon directly.
+//
+// Entries already present in the XDG data dirs (i.e. an installed package)
+// take precedence — in that case we do nothing rather than overwriting them.
+// Writing happens on the user's home ("portable app" / AppImage convention).
+func ensureLinuxDesktopIntegration(execPath string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	if linuxDesktopRegistered(home) {
+		return
+	}
+
+	appsDir := filepath.Join(home, ".local/share/applications")
+	iconDir := filepath.Join(home, ".local/share/icons/hicolor/128x128/apps")
+	os.MkdirAll(appsDir, 0700)
+	os.MkdirAll(iconDir, 0700)
+
+	desktopPath := filepath.Join(appsDir, "uniTerm.desktop")
+	iconPath := filepath.Join(iconDir, "uniTerm.png")
+
+	if err := os.WriteFile(desktopPath, []byte(fmt.Sprintf(linuxDesktopEntry, execPath)), 0644); err != nil {
+		log.Writef("linux desktop integration: write %s failed: %v", desktopPath, err)
+		return
+	}
+	if err := os.WriteFile(iconPath, linuxAppIcon, 0644); err != nil {
+		log.Writef("linux desktop integration: write %s failed: %v", iconPath, err)
+		return
+	}
+
+	// Best-effort refresh so the entry is picked up without a re-login. These
+	// tools may be missing/wrong on some distros; failures are not fatal.
+	exec.Command("update-desktop-database", appsDir).Run()
+	exec.Command("gtk-update-icon-cache", "-t", "-f", filepath.Join(home, ".local/share/icons/hicolor")).Run()
+}
+
+// linuxDesktopRegistered reports whether a uniTerm.desktop entry already exists
+// in any XDG data directory (system dirs from XDG_DATA_DIRS/defaults, plus the
+// user-level dir). An installed deb/rpm satisfies this, so a bare binary skips
+// self-registration and lets the packaged entry win.
+func linuxDesktopRegistered(home string) bool {
+	dataDirs := os.Getenv("XDG_DATA_DIRS")
+	if dataDirs == "" {
+		dataDirs = "/usr/local/share:/usr/share"
+	}
+	for _, dir := range filepath.SplitList(dataDirs) {
+		if p, err := os.Stat(filepath.Join(dir, "applications", "uniTerm.desktop")); err == nil && !p.IsDir() {
+			return true
+		}
+	}
+	if p, err := os.Stat(filepath.Join(home, ".local/share/applications", "uniTerm.desktop")); err == nil && !p.IsDir() {
+		return true
+	}
+	return false
 }
