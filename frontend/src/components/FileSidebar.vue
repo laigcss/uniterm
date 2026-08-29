@@ -56,7 +56,8 @@
       </div>
 
       <!-- Transfer history / progress panel (pinned at the sidebar bottom) -->
-      <div class="transfer-panel">
+      <div ref="transferPanelRef" class="transfer-panel" :style="{ height: transferHeight + 'px' }">
+        <div class="transfer-panel-resize" @mousedown.prevent="onTransferResizeStart" />
         <div class="transfer-panel-head">
           <span>{{ t('companion.transfers') }}</span>
           <div class="transfer-panel-actions">
@@ -152,6 +153,27 @@ const settingsStore = useSettingsStore()
 
 const connecting = ref(false)
 const connectError = ref('')
+// Transfer panel: default height (px), adjustable by dragging its top edge.
+const transferHeight = ref(200)
+const transferPanelRef = ref<HTMLDivElement | null>(null)
+
+function onTransferResizeStart(e: MouseEvent) {
+  const el = transferPanelRef.value
+  if (!el) return
+  const startY = e.clientY
+  const startH = el.offsetHeight
+  const maxH = el.parentElement ? Math.max(el.parentElement.clientHeight - 60, 120) : 600
+  function onMove(ev: MouseEvent) {
+    transferHeight.value = Math.min(Math.max(startH + (startY - ev.clientY), 120), maxH)
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 const cwd = ref('')
 const files = ref<FileItem[]>([])
 const loading = ref(false)
@@ -1160,12 +1182,20 @@ onUnmounted(() => {
 }
 .transfer-panel {
   flex-shrink: 0;
-  max-height: 42%;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface, var(--bg-elevated));
   min-height: 0;
+}
+.transfer-panel-resize {
+  height: 5px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  background: transparent;
+}
+.transfer-panel-resize:hover {
+  background: var(--bg-hover);
 }
 .transfer-panel-head {
   display: flex;

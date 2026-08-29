@@ -33,6 +33,52 @@
             <span class="detail-value">{{ d.value }}</span>
           </div>
         </div>
+
+        <!-- Expandable: all cores / all NICs / all disks -->
+        <div class="perf-extras">
+          <template v-if="selectedPerf === 'cpu'">
+            <div class="perf-sub-toggle" @click="showCores = !showCores">
+              <ChevronRight :size="14" class="chev" :class="{ open: showCores }" />
+              <span>{{ t('monitor.allCores') }} ({{ cpus.length }})</span>
+            </div>
+            <div v-if="showCores" class="perf-sub-list">
+              <div v-for="c in cpus" :key="c.core" class="perf-sub-row">
+                <span class="sub-name">CPU {{ c.core }}</span>
+                <div class="sub-bar"><div class="sub-fill" :style="{ width: fmtWidth(c.usage) }" /></div>
+                <span class="sub-val">{{ c.usage }}%</span>
+              </div>
+            </div>
+          </template>
+
+          <template v-else-if="selectedPerf === 'network'">
+            <div class="perf-sub-toggle" @click="showNets = !showNets">
+              <ChevronRight :size="14" class="chev" :class="{ open: showNets }" />
+              <span>{{ t('monitor.allNetworks') }} ({{ nets.length }})</span>
+            </div>
+            <div v-if="showNets" class="perf-sub-list">
+              <div v-for="n in nets" :key="n.name" class="perf-sub-row net">
+                <span class="sub-name" :title="n.name">{{ n.name }}</span>
+                <span class="sub-val">↓{{ formatBytes(n.rx) }}/s</span>
+                <span class="sub-val tx">↑{{ formatBytes(n.tx) }}/s</span>
+              </div>
+            </div>
+          </template>
+
+          <template v-else-if="selectedPerf === 'disk'">
+            <div class="perf-sub-toggle" @click="toggleDisks">
+              <ChevronRight :size="14" class="chev" :class="{ open: showDisks }" />
+              <span>{{ t('monitor.allDisks') }} ({{ mountedDisks.length }})</span>
+            </div>
+            <div v-if="showDisks" class="perf-sub-list">
+              <div v-if="diskLoading" class="perf-sub-empty">{{ t('monitor.loading') }}</div>
+              <div v-for="d in mountedDisks" v-else :key="d.name + d.mountPoint" class="perf-sub-row">
+                <span class="sub-name" :title="d.name">{{ d.mountPoint || d.name }}</span>
+                <div class="sub-bar"><div class="sub-fill" :style="{ width: fmtWidth(d.usage) }" /></div>
+                <span class="sub-val">{{ d.used }} / {{ d.total }}</span>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -84,6 +130,13 @@
         </el-table-column>
         <el-table-column prop="mem" :label="t('monitor.mem')" sortable width="90">
           <template #default="{ row }">{{ row.mem }}%</template>
+        </el-table-column>
+        <el-table-column :label="''" width="86" align="center" class-name="proc-act-cell">
+          <template #default="{ row }">
+            <el-button size="small" @click.stop="onTableSignal(row, $event)">
+              {{ t('monitor.sendSignal') }}
+            </el-button>
+          </template>
         </el-table-column>
       </el-table>
     </div>
@@ -259,9 +312,6 @@
         </div>
         <div class="detail-actions">
           <el-button @click="detailDrawerVisible = false">{{ t('common.cancel') }}</el-button>
-          <el-button type="primary" @click.stop="signalMenuRef?.toggle($event.currentTarget)">
-            {{ t('monitor.sendSignal') }}<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
-          </el-button>
           <Menu ref="signalMenuRef" v-model:visible="signalMenuVisible">
             <MenuItem @click="onSignal('term')">{{ t('monitor.signalTerm') }}</MenuItem>
             <MenuItem @click="onSignal('kill')">{{ t('monitor.signalKill') }}</MenuItem>
@@ -292,7 +342,8 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
 import { SetMonitorActiveTab, SetMonitorPaused, GetProcessDetail, KillProcess, GetPorts, GetDisks, GetNetworkCards } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
-import { ArrowDown, Close, RefreshRight } from '@element-plus/icons-vue'
+import { Close, RefreshRight } from '@element-plus/icons-vue'
+import { ChevronRight } from '@lucide/vue'
 import { useI18n } from '../i18n'
 
 import Menu from './Menu.vue'
@@ -336,12 +387,26 @@ const netRxHistory = ref<number[]>([])
 const netTxHistory = ref<number[]>([])
 
 // Current values (performance tab)
-const currentCpu = ref({ usage: 0, cores: 0, processes: 0, handles: 0, load1: '-', load5: '-', load15: '-' })
+const currentCpu = ref({ usage: 0, total: 0, user: 0, system: 0, iowait: 0, cores: 0, processes: 0, handles: 0, load1: '-', load5: '-', load15: '-' })
 const currentMem = ref({ total: 0, used: 0, free: 0, usage: 0, cached: 0, buffers: 0 })
+const currentSwap = ref({ total: 0, used: 0, usage: 0 })
 const currentDisk = ref({ total: '', used: '', usage: 0 })
-const currentNet = ref({ rx: 0, tx: 0 })
+const currentNet = ref({ rx: 0, tx: 0, rxTotal: 0, txTotal: 0 })
 const processList = ref<any[]>([])
 const systemInfo = ref<Record<string, any> | null>(null)
+
+// Expandable detail lists: per-core / per-NIC (live from perf payload) and
+// per-disk (fetched on-demand via GetDisks when expanded).
+const cpus = ref<any[]>([])
+const nets = ref<any[]>([])
+const disks = ref<any[]>([])
+const diskLoading = ref(false)
+const showCores = ref(false)
+const showNets = ref(false)
+const showDisks = ref(false)
+
+// Only directories with a mount point are shown in the disk detail list.
+const mountedDisks = computed(() => disks.value.filter((d: any) => d.mountPoint))
 
 // Summary values for processes tab (independent from performance tab)
 const processSummaryCpu = ref({ usage: 0, cores: 0, processes: 0, load1: '-', load5: '-', load15: '-' })
@@ -408,7 +473,11 @@ const currentPerf = computed(() => {
           { label: t('monitor.handleCount'), value: String(currentCpu.value.handles) },
           { label: t('monitor.load1'), value: String(currentCpu.value.load1 ?? '-') },
           { label: t('monitor.load5'), value: String(currentCpu.value.load5 ?? '-') },
-          { label: t('monitor.load15'), value: String(currentCpu.value.load15 ?? '-') }
+          { label: t('monitor.load15'), value: String(currentCpu.value.load15 ?? '-') },
+          { label: t('companion.cpuUser'), value: (currentCpu.value.user ?? 0) + '%' },
+          { label: t('companion.cpuSystem'), value: (currentCpu.value.system ?? 0) + '%' },
+          { label: t('companion.cpuIowait'), value: (currentCpu.value.iowait ?? 0) + '%' },
+          { label: t('companion.cpuTotal'), value: (currentCpu.value.total ?? currentCpu.value.usage ?? 0) + '%' }
         ]
       }
     case 'memory':
@@ -423,7 +492,10 @@ const currentPerf = computed(() => {
           { label: t('monitor.used'), value: currentMem.value.used.toFixed(2) + ' GB' },
           { label: t('monitor.free'), value: currentMem.value.free.toFixed(2) + ' GB' },
           { label: t('monitor.cached'), value: (currentMem.value.cached?.toFixed(2) ?? '-') + ' GB' },
-          { label: t('monitor.buffers'), value: (currentMem.value.buffers?.toFixed(2) ?? '-') + ' GB' }
+          { label: t('monitor.buffers'), value: (currentMem.value.buffers?.toFixed(2) ?? '-') + ' GB' },
+          { label: t('companion.swapMem'), value: currentSwap.value.total
+            ? currentSwap.value.used.toFixed(2) + ' / ' + currentSwap.value.total.toFixed(2) + ' GB (' + (currentSwap.value.usage ?? 0) + '%)'
+            : '-' }
         ]
       }
     case 'disk':
@@ -448,7 +520,9 @@ const currentPerf = computed(() => {
         yMin: 0,
         details: [
           { label: t('monitor.rx'), value: formatBytes(currentNet.value.rx) + '/s' },
-          { label: t('monitor.tx'), value: formatBytes(currentNet.value.tx) + '/s' }
+          { label: t('monitor.tx'), value: formatBytes(currentNet.value.tx) + '/s' },
+          { label: t('companion.netTxTotal'), value: formatBytes(currentNet.value.txTotal ?? 0) },
+          { label: t('companion.netRxTotal'), value: formatBytes(currentNet.value.rxTotal ?? 0) }
         ]
       }
     default:
@@ -467,6 +541,23 @@ function formatBytes(bytes: number): string {
 function formatIo(val: number | undefined): string {
   if (val == null) return '-'
   return formatBytes(val)
+}
+
+function formatUptime(sec: number | undefined): string {
+  const s = Number(sec || 0)
+  if (!s) return ''
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (d > 0) return `${d}d ${h}h ${m}m`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+function fmtWidth(v: unknown): string {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '0%'
+  return Math.min(100, Math.max(0, n)) + '%'
 }
 
 const filteredProcesses = computed(() => {
@@ -514,10 +605,13 @@ const systemGroups = computed(() => {
     {
       title: t('monitor.system'),
       items: [
+        { label: t('monitor.user'), value: systemInfo.value.user || '' },
+        { label: t('companion.uptime'), value: formatUptime(systemInfo.value.uptimeSec) },
         { label: t('monitor.os'), value: systemInfo.value.os || '' },
         { label: t('monitor.version'), value: systemInfo.value.version || '' },
         { label: t('monitor.kernel'), value: systemInfo.value.kernel || '' },
         { label: t('monitor.hostname'), value: systemInfo.value.hostname || '' },
+        { label: t('monitor.localIP'), value: systemInfo.value.localIP || '' },
         { label: t('monitor.timezone'), value: systemInfo.value.timezone || '' }
       ].filter(i => i.value)
     },
@@ -532,13 +626,7 @@ const systemGroups = computed(() => {
         { label: t('monitor.diskTotal'), value: systemInfo.value.diskTotal || '' }
       ].filter(i => i.value)
     },
-    {
-      title: t('monitor.network'),
-      items: [
-        { label: t('monitor.localIP'), value: systemInfo.value.localIP || '' }
-      ].filter(i => i.value)
-    }
-  ].filter(g => g.items.length > 0)
+    ].filter(g => g.items.length > 0)
 })
 
 const killMessage = computed(() => {
@@ -560,6 +648,11 @@ async function onProcessRowClick(row: any) {
   selectedProcess.value = row
   await fetchProcessDetail(row.pid)
   detailDrawerVisible.value = true
+}
+
+function onTableSignal(row: any, e: MouseEvent) {
+  selectedProcess.value = row
+  signalMenuRef.value?.toggle(e.currentTarget as HTMLElement)
 }
 
 async function fetchProcessDetail(pid: number) {
@@ -602,6 +695,19 @@ async function confirmKill() {
     killDialogVisible.value = false
   } catch (e: any) {
     msg.error(e?.message || 'Failed to send signal')
+  }
+}
+
+async function toggleDisks() {
+  showDisks.value = !showDisks.value
+  if (!showDisks.value || disks.value.length > 0) return
+  diskLoading.value = true
+  try {
+    disks.value = await GetDisks(props.sessionId)
+  } catch {
+    disks.value = []
+  } finally {
+    diskLoading.value = false
   }
 }
 
@@ -787,6 +893,9 @@ onMounted(() => {
           currentMem.value = payload.memory
           pushHistory(memHistory.value, payload.memory.usage || 0)
         }
+        if (payload.swap) {
+          currentSwap.value = payload.swap
+        }
         if (payload.disk) {
           currentDisk.value = payload.disk
           pushHistory(diskHistory.value, payload.disk.usage || 0)
@@ -795,7 +904,9 @@ onMounted(() => {
           currentNet.value = payload.network
           pushHistory(netRxHistory.value, payload.network.rx || 0)
           pushHistory(netTxHistory.value, payload.network.tx || 0)
+          if (Array.isArray(payload.nets)) nets.value = payload.nets
         }
+        if (Array.isArray(payload.cpus)) cpus.value = payload.cpus
       }
       if (payload.type === 'processes' && payload.processes) {
         processList.value = payload.processes
@@ -1000,6 +1111,90 @@ watch(activeTab, (tab) => {
   user-select: text;
 }
 
+/* Expandable per-core / per-NIC / per-disk lists */
+.perf-extras {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.perf-sub-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  user-select: none;
+  padding: 2px 0 6px;
+}
+.perf-sub-toggle:hover { color: var(--text-primary); }
+.perf-sub-toggle .chev { transition: transform 0.15s ease; }
+.perf-sub-toggle .chev.open { transform: rotate(90deg); }
+.perf-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.perf-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  min-width: 0;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+.perf-sub-row:hover {
+  background: var(--bg-hover);
+}
+.sub-name {
+  flex: 1;
+  min-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+}
+.sub-bar {
+  flex: 1;
+  height: 6px;
+  max-width: 160px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.sub-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow));
+  transition: width 0.3s ease;
+}
+.sub-val {
+  min-width: 56px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.sub-val.tx { color: #f59e0b; }
+.perf-sub-row.net .sub-val {
+  width: 104px;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+.perf-sub-empty {
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* Processes pane */
 .processes-pane {
   flex-direction: column;
@@ -1199,10 +1394,6 @@ watch(activeTab, (tab) => {
   padding: 12px 16px;
   border-top: 1px solid var(--border-subtle);
   margin-top: 12px;
-}
-
-.dropdown-icon {
-  margin-left: 4px;
 }
 
 .process-detail-empty {
