@@ -15,6 +15,7 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/store"
 )
@@ -186,6 +187,28 @@ func main() {
 		Mac: application.MacWindow{
 			TitleBar: macTitleBar,
 		},
+	})
+
+	// Wails v3 delivers OS file drops to Go-side window-event listeners rather
+	// than (as v2 did) auto-forwarding them to the frontend. Re-emit the dropped
+	// absolute paths under the original v2 event name so `Events.On(...)` pickers
+	// (FileSidebar, SFTP tab) keep receiving them for path-based upload.
+	window.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		filenames := event.Context().DroppedFiles()
+		if len(filenames) == 0 {
+			return
+		}
+		x, y, elementID := 0, 0, ""
+		if details := event.Context().DropTargetDetails(); details != nil {
+			x, y = details.X, details.Y
+			elementID = details.ElementID
+		}
+		w3app.Event.Emit("common:WindowFilesDropped", map[string]any{
+			"x":         x,
+			"y":         y,
+			"elementId": elementID,
+			"filenames": filenames,
+		})
 	})
 
 	// Wire the bound App back to the runtime before registering it as a service:
