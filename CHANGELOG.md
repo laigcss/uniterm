@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.0-alpha
+## v1.9.0
 
 ### What's Changed
 
@@ -11,10 +11,15 @@
 - Database: query execution history — a panel that records executed SQL and re-runs it with one click. (@iCarrear)
 - Database: inline cell editing with batch apply. (@iCarrear)
 - Container: added the WSLC (Windows WSL2 Container) runtime. (@boltomli)
-- File transfer: open remote files in your own external editor, with changes auto-uploaded back (SFTP / FTP / SMB / WebDAV / S3).
+- SFTP: open and edit files in your own external editor with auto-upload on save; auto-detects a dozen-plus text editors (VSCode, Sublime Text, etc.) and supports custom launch commands.
 - Terminal: raw TCP console session — connect a plain socket to host:port and send raw bytes, with encoding, newline mode, local echo, and backspace options.
 
 **Improvements**
+- SFTP: quick-locate files by typing the first letter of a name (case-insensitive, folders listed first; press again to cycle), in both SFTP panes and the file sidebar.
+- SFTP: the file list now shows type / permission / owner / group columns.
+- SFTP: file encoding auto-detect now strictly decodes the whole file, so valid UTF-8 is no longer misjudged as GBK when a multi-byte character crosses the sample boundary.
+- SFTP: progressive loading for large directories to prevent freezing / crashing on thousands of entries.
+- SFTP / Monitor: encrypted private keys now work for authentication.
 - RDP: native window follows moves, clips to the client area, and no longer steals the foreground; menus / dialogs show a snapshot instead of a black area. (@boltomli)
 - Updated to Wails v3 (frontend on Vite 8).
 - Themes: added built-in Xshell, MobaXterm and FinalShell color schemes, now folded into the standard Dark / Light groups. (@iCarrear)
@@ -36,8 +41,6 @@
 - Terminal: pasting content now auto-scrolls to the newest output (the bottom).
 - Terminal: highlighting now covers indented lines and paths with special characters.
 - Terminal: after resizing the window, the terminal now refills the new size instead of leaving a large blank area.
-- SFTP: progressive loading for large directories to prevent freezing / crashing on thousands of entries.
-- SFTP / Monitor: encrypted private keys now work for authentication.
 - K8s: namespaces stay usable when list permission is restricted.
 - History: wrapped command lines are joined so extraction isn't truncated.
 - Connection: "Save & Connect" persists edits; test-connection error toast auto-dismisses.
@@ -56,10 +59,15 @@ Thanks to @iCarrear, @boltomli, @surenwuyuwuqiu, and @wangxufeng for their contr
 - 数据库：新增查询执行历史面板，记录已执行 SQL，可一键重跑。（@iCarrear）
 - 数据库：结果表格支持行内编辑与批量应用。（@iCarrear）
 - 容器：容器管理新增 WSLC（Windows WSL2 Container）运行时支持。（@boltomli）
-- 文件传输：支持用你自己的外部编辑器打开远程文件，改动保存后自动回传到远端（适配 SFTP / FTP / SMB / WebDAV / S3）。
+- SFTP：支持外部编辑器打开编辑文件并自动回传，支持自动检测 VSCode、Sublime Text 等 10 余种文本编辑器及自定义启动命令。
 - 终端：新增原始 TCP 控制台会话，连接 `host:port` 后直接收发原始字节流，支持编码、换行模式、本地回显与退格键设置。
 
 **改进**
+- SFTP：支持按名称首字母快速定位文件（不区分大小写、目录优先，再按同一字母循环查找），SFTP 双栏与文件边栏均可用。
+- SFTP：文件列表新增 类型 / 权限 / 属主 / 属组 等列。
+- SFTP：编码自动检测改为对整份文件做严格 UTF-8 解码，避免多字节字符跨过采样边界时把合法 UTF-8 误判为 GBK 而显示乱码。
+- SFTP：大目录采用渐进式加载，避免上千条目时卡死或崩溃。
+- SFTP / 监控：加密私钥现在可用于认证。
 - RDP：原生窗口随窗口移动、裁切在客户区内且不再抢占前台；菜单 / 弹窗打开时显示快照而非黑块。（@boltomli）
 - 界面框架升级至 Wails v3（前端基于 Vite 8）。
 - 主题：新增 Xshell、MobaXterm、FinalShell 内置配色方案，并入标准的 深色 / 浅色 分组。（@iCarrear）
@@ -81,8 +89,6 @@ Thanks to @iCarrear, @boltomli, @surenwuyuwuqiu, and @wangxufeng for their contr
 - 终端：粘贴内容后自动滚动到最新输出（底部）。
 - 终端：文本高亮现在覆盖缩进行与含特殊字符的路径。
 - 终端：调整窗口大小后，终端画面会自动重新铺满，不再留下大片空白。
-- SFTP：大目录采用渐进式加载，避免上千条目时卡死或崩溃。
-- SFTP / 监控：加密私钥现在可用于认证。
 - K8s：列表权限受限时命名空间仍可正常访问。
 - 历史：换行的命令会拼回一行，命令提取不再截断。
 - 连接：「保存并连接」会持久化编辑；测试连接错误提示自动关闭。
