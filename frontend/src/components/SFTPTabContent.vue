@@ -327,35 +327,18 @@ function detectEncoding(bytes: Uint8Array): { encoding: Encoding, hasBom: boolea
   for (let i = 0; i < checkLen; i++) { if (bytes[i] === 0) nullCount++ }
   if (nullCount > checkLen * 0.3) return { encoding: 'utf-16le', hasBom: false }
 
-  // Try UTF-8 first (most common). Use non-fatal mode so valid UTF-8
-  // sequences are accepted even if some bytes might be interpreted as
-  // legacy encodings. WebView2's TextDecoder(fatal:true) may be overly
-  // strict for certain byte sequences.
+  // Detect UTF-8 by strict-decoding the whole file. fatal decode throws as soon
+  // as it hits an invalid sequence, so it is reliable for GBK (which almost
+  // always fails) and, unlike a fixed-size sample, never misjudges a valid
+  // UTF-8 file whose bytes happen to end mid a multi-byte character near the
+  // sample boundary (issue #701).
   try {
-    const sample = bytes.slice(0, 8192)
-    // Quick check: valid UTF-8 lead/trail byte pattern
-    let i = 0
-    let valid = true
-    while (i < sample.length) {
-      const b = sample[i]
-      if (b < 0x80) { i++; continue }
-      let trailing: number
-      if ((b & 0xE0) === 0xC0) trailing = 1
-      else if ((b & 0xF0) === 0xE0) trailing = 2
-      else if ((b & 0xF8) === 0xF0) trailing = 3
-      else { valid = false; break }
-      if (i + trailing >= sample.length) { valid = false; break }
-      for (let j = 1; j <= trailing; j++) {
-        if ((sample[i + j] & 0xC0) !== 0x80) { valid = false; break }
-      }
-      if (!valid) break
-      i += trailing + 1
-    }
-    if (valid) return { encoding: 'utf-8', hasBom: false }
-  } catch { /* fall through */ }
-
-  // Try GBK/GB18030 — common for Chinese text on Windows
-  return { encoding: 'gbk', hasBom: false }
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    return { encoding: 'utf-8', hasBom: false }
+  } catch {
+    // Not valid UTF-8 — most likely GBK for Chinese text on Windows.
+    return { encoding: 'gbk', hasBom: false }
+  }
 }
 
 function detectLineEnding(text: string): LineEnding {
