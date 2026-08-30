@@ -60,8 +60,13 @@
       <div ref="transferPanelRef" class="transfer-panel" :style="{ height: transferHeight + 'px' }">
         <div class="transfer-panel-resize" @mousedown.prevent="onTransferResizeStart" />
         <div class="transfer-panel-head">
-          <span>{{ t('companion.transfers') }}</span>
           <div class="transfer-panel-actions">
+            <button
+              class="companion-action-btn"
+              :disabled="!sessionId"
+              :title="t('companion.openSftpTab')"
+              @click="openStandaloneSftp"
+            >{{ t('companion.openSftpTab') }}</button>
             <button
               class="companion-action-btn"
               :disabled="!transferTasks.length"
@@ -562,6 +567,14 @@ function unbindFileDrop() {
   if (!fileDropBound) return
   try { fileDropUnsub?.(); fileDropUnsub = null } catch { /* ignore */ }
   fileDropBound = false
+}
+
+// Open the current companion's SFTP as a standalone tab, mirroring the SSH
+// tab's context-menu action (which reconnects via app:connect-sftp).
+function openStandaloneSftp() {
+  const panel = panelStore.getPanel(companionStore.activeSshPanelId)
+  if (!panel) return
+  window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: panel }))
 }
 
 function clearFinishedTransfers() {
@@ -1209,7 +1222,7 @@ onUnmounted(() => {
 .transfer-panel-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 6px 8px 4px;
   font-size: 12px;
   font-weight: 600;

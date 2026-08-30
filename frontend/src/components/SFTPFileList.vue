@@ -51,12 +51,13 @@
         :key="locale"
         :data="visibleFiles"
         size="small"
+        border
         :row-class-name="getRowClassName"
         @row-click="onRowClick"
         @row-dblclick="onRowDblClick"
         @row-contextmenu="onRowContextMenu"
       >
-      <el-table-column :label="t('sftp.name')" min-width="160" sortable :sort-method="sortByName">
+      <el-table-column :label="t('sftp.name')" min-width="160" sortable :sort-method="sortByName" show-overflow-tooltip>
         <template #default="{ row }">
           <div class="name-cell" :draggable="true" @dragstart="onDragStart($event, row)">
             <el-icon v-if="isSymlink(row)"><Link :size="14" /></el-icon>
@@ -64,19 +65,38 @@
             <el-icon v-else><File :size="14" /></el-icon>
             <div class="name-info">
               <span class="file-name" :class="{ selected: isSelected(row) }">{{ row.name }}</span>
-              <span class="file-mode">{{ row.mode }}</span>
             </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column :label="t('sftp.modified')" width="150" sortable :sort-method="sortByTime">
+      <el-table-column :label="t('sftp.type')" width="90" sortable :sort-method="sortByType" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ formatDate(row.modTime) }}
+          <span class="cell-secondary">{{ fileTypeLabel(row) }}</span>
         </template>
       </el-table-column>
-      <el-table-column :label="t('sftp.size')" width="70" align="right" sortable :sort-method="sortBySize">
+      <el-table-column :label="t('sftp.modified')" width="150" sortable :sort-method="sortByTime" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ row.isDir ? '-' : formatSize(row.size) }}
+          <span class="cell-secondary">{{ formatDate(row.modTime) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('sftp.size')" width="70" align="right" sortable :sort-method="sortBySize" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="cell-secondary">{{ row.isDir ? '-' : formatSize(row.size) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('sftp.permission')" width="110" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="cell-secondary">{{ row.mode || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('sftp.owner')" width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="cell-secondary">{{ row.owner || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('sftp.group')" width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="cell-secondary">{{ row.group || '-' }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -409,6 +429,22 @@ function formatSize(bytes: number): string {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
 }
 
+// File type column: based purely on the filename suffix (no MIME detection).
+// Directories and symlinks have no suffix, so label them explicitly. The '..'
+// row has no type.
+function fileTypeLabel(row: FileItem): string {
+  if (row.name === '..') return ''
+  if (isSymlink(row)) return t('sftp.link')
+  if (row.isDir) return t('sftp.folder')
+  const dot = row.name.lastIndexOf('.')
+  if (dot <= 0 || dot === row.name.length - 1) return '-'
+  return row.name.slice(dot + 1).toLowerCase()
+}
+
+function sortByType(a: FileItem, b: FileItem): number {
+  return fileTypeLabel(a).toLowerCase().localeCompare(fileTypeLabel(b).toLowerCase())
+}
+
 function onRowClick(row: FileItem, _column: any, event: MouseEvent) {
   const index = filteredFiles.value.findIndex(f => f.name === row.name)
   if (event.ctrlKey || event.metaKey) {
@@ -525,6 +561,15 @@ function onDragStart(event: DragEvent, row: FileItem) {
 /* Brief highlight shown while a quick-located row is in view (issue #700). */
 :deep(.quick-target-row) td {
   background-color: rgba(var(--color-primary, 64, 158, 255), 0.14);
+}
+/* Non-name columns read dimmer than the file name (issue #702). */
+.cell-secondary {
+  color: var(--el-text-color-secondary, #909399);
+}
+/* Keep the `border` prop on el-table (column drag-resize needs it) but hide the
+   visible vertical lines only on the data rows, keeping the header's. */
+:deep(.el-table--border .el-table__body .el-table__cell) {
+  border-right: none;
 }
 .filter-bar {
   display: flex;

@@ -31,6 +31,13 @@ type SFTPSession struct {
 	transfers  map[string]*TransferTask
 	taskSeq    int64
 	sem        chan struct{} // concurrency limiter, nil = unlimited
+
+	// UID/GID -> name cache read from the remote /etc/passwd and /etc/group
+	// (issue #702). Loaded once on Connect; a missing/unreadable entry falls
+	// back to the numeric id.
+	userMapOnce sync.Once
+	userMap     map[int]string
+	groupMap    map[int]string
 }
 
 func NewSFTPSession(id string) *SFTPSession {
@@ -100,6 +107,8 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 
 	s.sshClient = client
 	s.sftpClient = sc
+	// Preload remote user/group name maps so list owners show names, not numbers.
+	s.loadUserGroupMaps()
 	if wd, err := sc.Getwd(); err == nil {
 		s.cwd = wd
 	}
@@ -307,16 +316,78 @@ func (s *SFTPSession) nextTaskID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, atomic.AddInt64(&s.taskSeq, 1))
 }
 
-func resolveOwnerGroup(fi os.FileInfo) (string, string) {
+// --- UID/GID -> name resolution (issue #702) --------------------------------
+// A remote listing only yields numeric UID/GID, so owners render as "1000".
+// Translate them to names by reading the remote /etc/passwd and /etc/group
+// over SFTP once, cached for this connection. Unreadable or unresolved entries
+// fall back to the numeric value.
+
+func (s *SFTPSession) loadUserGroupMaps() {
+	s.userMapOnce.Do(func() {
+		users := map[int]string{}
+		groups := map[int]string{}
+		if s.sftpClient != nil {
+			if data := s.readRemoteText("/etc/passwd"); data != nil {
+				parseLinuxNameMap(data, users, 2)
+			}
+			if data := s.readRemoteText("/etc/group"); data != nil {
+				parseLinuxNameMap(data, groups, 2)
+			}
+		}
+		s.userMap = users
+		s.groupMap = groups
+	})
+}
+
+// readRemoteText reads a small remote file over SFTP, returning nil on failure.
+func (s *SFTPSession) readRemoteText(p string) []byte {
+	f, err := s.sftpClient.Open(p)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// parseLinuxNameMap parses `/etc/passwd`-style lines (`name:x:<id>:...`) into
+// an id->name map. `idIndex` points at the numeric id field.
+func parseLinuxNameMap(data []byte, out map[int]string, idIndex int) {
+	for _, line := range strings.Split(string(data), "\n") {
+		parts := strings.Split(line, ":")
+		if len(parts) < idIndex+1 || parts[0] == "" {
+			continue
+		}
+		id, err := strconv.Atoi(parts[idIndex])
+		if err != nil || id < 0 {
+			continue
+		}
+		if _, exists := out[id]; !exists {
+			out[id] = parts[0]
+		}
+	}
+}
+
+func (s *SFTPSession) resolveOwnerGroup(fi os.FileInfo) (string, string) {
+	stat, ok := fi.Sys().(*sftp.FileStat)
+	if !ok {
+		return "", ""
+	}
 	owner := ""
+	// UID/GID 0 is root, so resolve unconditionally (a > 0 guard would hide it).
+	if name, ok := s.userMap[int(stat.UID)]; ok {
+		owner = name
+	} else {
+		owner = fmt.Sprintf("%d", stat.UID)
+	}
 	group := ""
-	if stat, ok := fi.Sys().(*sftp.FileStat); ok {
-		if stat.UID > 0 {
-			owner = fmt.Sprintf("%d", stat.UID)
-		}
-		if stat.GID > 0 {
-			group = fmt.Sprintf("%d", stat.GID)
-		}
+	if name, ok := s.groupMap[int(stat.GID)]; ok {
+		group = name
+	} else {
+		group = fmt.Sprintf("%d", stat.GID)
 	}
 	return owner, group
 }
@@ -363,7 +434,7 @@ func (s *SFTPSession) listRemoteUnlocked(dir string) (FileListResult, error) {
 	}
 	files := make([]FileItem, 0, len(infos))
 	for _, fi := range infos {
-		owner, group := resolveOwnerGroup(fi)
+		owner, group := s.resolveOwnerGroup(fi)
 		isDir := fi.IsDir()
 		if fi.Mode()&os.ModeSymlink != 0 {
 			if target, err := s.sftpClient.Stat(path.Join(dir, fi.Name())); err == nil {
@@ -416,8 +487,14 @@ func (s *SFTPSession) ListLocal(dir string) (FileListResult, error) {
 			modTime = fi.ModTime()
 		}
 		owner := ""
+		// Windows reports the owner as "COMPUTERNAME\user", which is verbose in
+		// the owner column; keep only the user part.
 		if currentUser, err := osUser.Current(); err == nil {
-			owner = currentUser.Username
+			if i := strings.LastIndexByte(currentUser.Username, '\\'); i >= 0 {
+				owner = currentUser.Username[i+1:]
+			} else {
+				owner = currentUser.Username
+			}
 		}
 		isDir := e.IsDir()
 		if fi != nil && fi.Mode()&os.ModeSymlink != 0 {
