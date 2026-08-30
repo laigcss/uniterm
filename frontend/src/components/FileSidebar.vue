@@ -12,7 +12,8 @@
       <div
         class="file-body"
         :class="{ 'drag-active': dragOver }"
-        style="--wails-drop-target: drop"
+        :id="FILE_DROP_ID"
+        data-file-drop-target
         @dragenter.prevent="onDragEnter"
         @dragleave.prevent="onDragLeave"
         @dragover.prevent="onDragOver"
@@ -186,6 +187,10 @@ let refreshDebounce: ReturnType<typeof setTimeout> | null = null
 let lastWailsDropAt = 0
 let fileDropBound = false
 let fileDropUnsub: (() => void) | null = null
+// Unique id on this component's drop zone. Wails v3 forwards the id of the
+// element the file was dropped on via common:WindowFilesDropped, so keep only
+// the drops that actually landed on this sidebar (SFTP panes are also targets).
+const FILE_DROP_ID = 'file-sidebar-drop'
 
 const sessionId = computed(() => companionStore.currentSftpSessionId)
 const transferKey = computed(() => companionStore.transferKey || 'companion-sftp')
@@ -536,9 +541,13 @@ function bindFileDrop() {
   if (fileDropBound) return
   try {
     fileDropUnsub = Events.On('common:WindowFilesDropped', (ev) => {
-      const d = ev.data as { x: number; y: number; filenames: string[] }
+      const d = ev.data as { x: number; y: number; elementId?: string; filenames: string[] }
       if (!companionStore.filesVisible || !sessionId.value) return
       if (!d?.filenames?.length) return
+      // Only react to drops that landed on this sidebar's own drop zone; the
+      // SFTP tab's remote pane is also a data-file-drop-target and shares the
+      // same event.
+      if (d.elementId && d.elementId !== FILE_DROP_ID) return
       lastWailsDropAt = Date.now()
       clearDragState()
       uploadLocalPaths(d.filenames)

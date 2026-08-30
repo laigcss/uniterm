@@ -45,6 +45,8 @@
       </div>
       <div
         class="remote-pane"
+        :id="remoteDropId"
+        data-file-drop-target
         @dragover.prevent="onDragOver"
         @dragenter.prevent="onDragEnter('remote')"
         @dragleave="onDragLeave('remote')"
@@ -251,7 +253,7 @@ import {
   SftpLocalGetContent, SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
   SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
   SftpOpenExternalEditor, OpenExternalEditorLocal,
-  WriteTempFile, SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer, ListSessions,
+  SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer, ListSessions,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import SFTPFileList from './SFTPFileList.vue'
@@ -289,6 +291,13 @@ let dragEnterLocalCount = 0
 let dragEnterRemoteCount = 0
 let dragDroppedInternally = false
 const dialogMode = ref<'local' | 'remote'>('remote')
+let nativeDropUnsub: (() => void) | null = null
+
+// Unique id on this tab's remote-pane drop zone. Wails v3 forwards the id of the
+// element a file was dropped on via common:WindowFilesDropped, and the file
+// sidebar also acts as a drop target, so only keep drops that landed here.
+const remoteDropId = (crypto.randomUUID?.() ||
+  `sftp-remote-drop-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
 function joinPath(base: string, name: string): string {
   if (base.endsWith('/') || base.endsWith('\\')) return base + name
@@ -736,6 +745,8 @@ onUnmounted(() => {
   unsubscribe?.()
   unsubscribeStatus?.()
   unsubscribeExt?.()
+  nativeDropUnsub?.()
+  nativeDropUnsub = null
 })
 
 // With KeepAlive, only the active instance should listen for global document
@@ -743,13 +754,17 @@ onUnmounted(() => {
 onActivated(() => {
   document.addEventListener('dragstart', onDragStart)
   document.addEventListener('dragend', clearDragState)
-  document.addEventListener('drop', onDocumentDrop)
+  // OS file drops (resource manager) are delivered by Wails via this event, routed
+  // to the drop zone whose id matches, then uploaded by absolute local path.
+  nativeDropUnsub?.()
+  nativeDropUnsub = Events.On('common:WindowFilesDropped', onNativeFileDrop)
 })
 
 onDeactivated(() => {
   document.removeEventListener('dragstart', onDragStart)
   document.removeEventListener('dragend', clearDragState)
-  document.removeEventListener('drop', onDocumentDrop)
+  nativeDropUnsub?.()
+  nativeDropUnsub = null
 })
 
 async function fetchLocalDrives() {
@@ -1638,126 +1653,32 @@ function onChmod(item: FileItem) {
   )
 }
 
-// Read a directory entry's children in full. readEntries() returns batches,
-// so keep pulling until an empty batch signals end of the directory.
-function readAllEntries(entry: any): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    const reader = entry.createReader()
-    const all: any[] = []
-    const readBatch = () => {
-      try {
-        reader.readEntries((batch: any[]) => {
-          if (!batch || batch.length === 0) { resolve(all); return }
-          all.push(...batch)
-          readBatch()
-        }, () => { if (all.length) resolve(all); else reject(new Error('readEntries failed')) })
-      } catch (e) { reject(e) }
-    }
-    readBatch()
-  })
-}
-
-// Upload a single dropped file entry's content via the temp-file round trip.
-function uploadFileEntryContent(sid: string, fileEntry: any, remotePath: string) {
-  fileEntry.file((f: File) => readAndUpload(f, remotePath), () => msg.error('Failed to read dropped file'))
-}
-
-// Recursively upload an entry tree rooted at `entry` into `remoteBase`.
-// Directories are mkdir'd on the remote side; files upload their content.
-// Internal name conflicts default to overwrite/merge (no nested prompts).
-async function uploadEntryTree(sid: string, entry: any, remoteBase: string) {
-  if (entry.isFile) {
-    uploadFileEntryContent(sid, entry, remoteBase)
-    return
-  }
-  try {
-    await SftpMakeDir(sid, remoteBase)
-  } catch { /* directory may already exist — merge */ }
-  const children = await readAllEntries(entry)
-  for (const child of children) {
-    await uploadEntryTree(sid, child, remoteBase + '/' + child.name)
-  }
-}
-
-// Entry point for OS drops (desktop / file explorer). Captures dataTransfer
-// synchronously because it becomes unreadable after the first await, then
-// uploads files by content and folders by walking the entry tree.
-async function handleExternalDrop(e: DragEvent) {
-  const dt = e.dataTransfer
-  if (!dt) return
+// OS file drops (resource manager / desktop) arrive via Wails v3's native pipe.
+// Wails forwards the absolute local paths, which we upload directly from disk
+// via SftpPut — memory-bounded and recursive for folders — instead of reading
+// the file content into the webview and base64-ing it (which crashed on very
+// large files; issue #699).
+async function onNativeFileDrop(ev: any) {
+  const d = ev?.data as { x: number; y: number; elementId?: string; filenames: string[] }
+  if (!d?.filenames?.length) return
+  // Only react to drops that landed on this tab's own remote pane; the file
+  // sidebar is also a data-file-drop-target sharing this same event.
+  if (d.elementId && d.elementId !== remoteDropId) return
   const sid = panel.value?.sessionId
   if (!sid) return
 
-  // Synchronously snapshot the drop before any await.
-  const topLevel: any[] = []
-  const plainFiles: File[] = []
-  const items = dt.items
-  if (items) {
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]
-      if (it.kind === 'file' && typeof (it as any)?.webkitGetAsEntry === 'function') {
-        let entry: any = null
-        try { entry = it.webkitGetAsEntry() } catch { entry = null }
-        if (entry) topLevel.push(entry)
-      }
-    }
-  }
-  if (topLevel.length === 0 && dt.files) {
-    for (let i = 0; i < dt.files.length; i++) plainFiles.push(dt.files[i])
-  }
-
-  // Top-level conflict check only.
-  const names = topLevel.length ? topLevel.map(en => en.name) : plainFiles.map(f => f.name)
-  const action = await checkRemoteConflicts(names)
+  const fileNames = d.filenames.map(fp =>
+    fp.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop() || 'upload')
+  const action = await checkRemoteConflicts(fileNames)
   if (action === 'cancel') return
-  const existingNames = remoteFiles.value.map(f => f.name)
-
-  if (topLevel.length) {
-    for (const entry of topLevel) {
-      let name = entry.name
-      if (action === 'rename' && existingNames.includes(entry.name)) {
-        name = autoRename(entry.name, existingNames)
-      }
-      existingNames.push(name)
-      await uploadEntryTree(sid, entry, cwd.value + '/' + name)
-    }
-  } else {
-    for (const f of plainFiles) {
-      let name = f.name
-      if (action === 'rename' && existingNames.includes(f.name)) {
-        name = autoRename(f.name, existingNames)
-      }
-      existingNames.push(name)
-      readAndUpload(f, cwd.value + '/' + name)
-    }
+  const existing = remoteFiles.value.map(f => f.name)
+  for (let i = 0; i < d.filenames.length; i++) {
+    let name = fileNames[i]
+    if (action === 'rename' && existing.includes(name)) name = autoRename(name, existing)
+    existing.push(name)
+    // recursive=false: SftpPut auto-upgrades to recursive for directories.
+    SftpPut(sid, d.filenames[i], joinPath(cwd.value, name), false)
   }
-}
-
-async function onDocumentDrop(e: DragEvent) {
-  if (!dragDroppedInternally) {
-    const dt = e.dataTransfer
-    const hasExternal = dt && dragSource.value === null && (dt.files?.length > 0 || (dt.items?.length ?? 0) > 0)
-    if (hasExternal) {
-      e.preventDefault()
-      await handleExternalDrop(e)
-    }
-  }
-}
-
-async function readAndUpload(file: File, remotePath: string) {
-  const sid = panel.value?.sessionId
-  if (!sid) return
-  const reader = new FileReader()
-  reader.onload = async () => {
-    const base64 = (reader.result as string).split(',')[1]
-    try {
-      const tmpPath = await WriteTempFile(file.name, base64)
-      SftpPut(sid, tmpPath, remotePath, false)
-    } catch (e) {
-      msg.error('Failed to prepare file for upload')
-    }
-  }
-  reader.readAsDataURL(file)
 }
 
 function onDragOver(e: DragEvent) {
@@ -1850,17 +1771,13 @@ async function onDropRemote(e: DragEvent) {
   dragDroppedInternally = true
   clearDragState()
 
-  // Detect an OS drop (desktop / file explorer) synchronously — the webview
-  // clears DataTransfer once the handler awaits, so snapshot entries up front.
-  // Use item.kind === 'file' to tell OS drops apart from internal element drags,
-  // which carry a 'string' item (webkitGetAsEntry exists on string items too).
+  // OS file drops (resource manager) are handled natively via
+  // common:WindowFilesDropped (onNativeFileDrop) so we upload by absolute path;
+  // skip the HTML5 content path that base64-escapes whole files into memory.
   const dt = e.dataTransfer
   const hasFileItems = !!(dt && dt.items && [...dt.items].some(it => it.kind === 'file'))
   const hasRawFiles = !!(dt && dt.files && dt.files.length > 0)
-  if (hasFileItems || hasRawFiles) {
-    await handleExternalDrop(e)
-    return
-  }
+  if (hasFileItems || hasRawFiles) return
 
   // Internal SFTP file drag
   const data = e.dataTransfer?.getData('application/sftp-file')
