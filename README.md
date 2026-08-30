@@ -79,7 +79,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Terminal | Telnet | Remote terminal for legacy devices and embedded systems |
 | Terminal | Mosh | Server connections over high-latency or intermittent networks |
 | Terminal | Serial | Serial port terminal with configurable baud rate and other parameters |
-| Terminal | Raw TCP (v1.9.0-alpha) | Raw TCP console that opens a plain socket and transceives raw bytes |
+| Terminal | Raw TCP | Raw TCP console that opens a plain socket and transceives raw bytes |
 | Terminal | Local | PowerShell, CMD, Git Bash, and other local shells |
 | Terminal | WSL | Open installed WSL distributions via local terminal |
 | File Transfer | SFTP | Server file management and transfer |
@@ -99,12 +99,12 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Database | rqlite | Lightweight distributed DB built on SQLite with Raft consensus |
 | Database | Redis | In-memory key-value store with visual key browsing and editing |
 | Database | MongoDB | Document database with tree browsing, query editor, and inline editing |
-| Database | Elasticsearch (v1.9.0-alpha) | Distributed search and analytics engine with index and document management |
+| Database | Elasticsearch | Distributed search and analytics engine with index and document management |
 | Containers | Kubernetes | Cluster resource browsing and management, Pod logs and exec, performance metrics |
 | Containers | Docker | Container and image management, on the local machine or remote hosts over SSH |
 | Containers | Podman | Docker-compatible container engine, on the local machine or remote hosts over SSH |
 | Containers | nerdctl (containerd) | containerd container management with namespace switching |
-| Containers | WSLC (v1.9.0-alpha) | Windows WSL2 Container runtime |
+| Containers | WSLC | Windows WSL2 Container runtime |
 
 Oracle Database support is implemented with a pure Go driver. uniTerm does not bundle Oracle Database, Oracle Instant Client, OJDBC, wallet files, or Oracle brand assets; users are responsible for their own Oracle licenses, credentials, and database access.
 
