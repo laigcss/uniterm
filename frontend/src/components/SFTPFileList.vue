@@ -1,5 +1,11 @@
 <template>
-  <div class="sftp-file-list">
+  <div
+    ref="listRootRef"
+    class="sftp-file-list"
+    tabindex="0"
+    @keydown="onListKeydown"
+    @click="onListClick"
+  >
     <div class="filter-bar">
       <el-input
         v-model="filterText"
@@ -273,6 +279,82 @@ watch(filteredFiles, () => {
   nextTick(bindTableScroll)
 })
 
+// --- Quick locate (issue #700) ----------------------------------------------
+// Pressing a letter key while the list has focus jumps to the first entry whose
+// name starts with that letter (case-insensitive, dirs listed first), like
+// Windows Explorer. Pressing the same letter again cycles to the next match.
+const listRootRef = ref<HTMLElement | null>(null)
+const quickTargetName = ref<string | null>(null)
+let quickKey = ''
+let quickIndex = -1
+let quickTimer: ReturnType<typeof setTimeout> | null = null
+const QUICK_RESET_MS = 1200
+
+function onListClick(e: MouseEvent) {
+  // Focus the list on click so letter keys locate within it, but only when the
+  // click lands on the table itself (not the filter/breadcrumb/clipboard bars
+  // or other controls), so we never steal focus while the user is editing.
+  const t = e.target as HTMLElement
+  if (t.closest && !t.closest('.table-wrapper')) return
+  listRootRef.value?.focus({ preventScroll: true })
+}
+
+function onListKeydown(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null
+  // Never hijack typing that is going somewhere else (filter box, editors).
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  const k = e.key
+  if (k.length !== 1 || !/[\x00-\x7F]/.test(k)) return // printable single char only
+  e.preventDefault()
+  locateByKey(k.toLowerCase())
+}
+
+function locateByKey(key: string) {
+  // Candidate indices in display order (skip the '..' row).
+  const matches: number[] = []
+  filteredFiles.value.forEach((f, i) => {
+    if (f.name !== '..' && f.name.toLowerCase().startsWith(key)) matches.push(i)
+  })
+  if (!matches.length) return
+
+  if (quickKey !== key) {
+    // New letter: start from the first match.
+    quickKey = key
+    quickIndex = matches[0]
+  } else {
+    // Same letter again: cycle to the next match.
+    const pos = matches.indexOf(quickIndex)
+    quickIndex = pos >= 0 ? matches[(pos + 1) % matches.length] : matches[0]
+  }
+
+  // Reset the "repeated same key" state after a short pause.
+  if (quickTimer) clearTimeout(quickTimer)
+  quickTimer = setTimeout(() => {
+    quickKey = ''
+    quickIndex = -1
+    quickTargetName.value = null
+  }, QUICK_RESET_MS)
+
+  scrollToIndex(quickIndex)
+}
+
+function scrollToIndex(index: number) {
+  const target = filteredFiles.value[index]
+  if (!target) return
+  // Make sure the row is actually rendered (progressive loading).
+  const pages = Math.ceil((index + 1) / PAGE_SIZE)
+  if (visibleCount.value < pages) visibleCount.value = pages
+  // Select it (reuses the existing selection highlight) and flag it briefly.
+  selectedItems.value = [target]
+  quickTargetName.value = target.name
+  nextTick(() => {
+    const el = (tableRef.value?.$el ?? null) as HTMLElement | null
+    const tr = el?.querySelectorAll('.el-table__body tr')[index] as HTMLElement | undefined
+    tr?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
 // <el-table :key="locale"> remounts the table on locale switch, creating a new
 // scrollbar element that needs the scroll listener re-attached.
 watch(locale, () => {
@@ -409,10 +491,10 @@ function doUpload() { emit('upload'); ctxMenuVisible.value = false }
 function doRefresh() { emit('refresh'); ctxMenuVisible.value = false }
 
 function getRowClassName({ row }: { row: FileItem }): string {
-  if (props.cutItemNames && props.cutItemNames.includes(row.name)) {
-    return 'cut-item-row'
-  }
-  return ''
+  const cls: string[] = []
+  if (props.cutItemNames && props.cutItemNames.includes(row.name)) cls.push('cut-item-row')
+  if (row.name === quickTargetName.value) cls.push('quick-target-row')
+  return cls.join(' ')
 }
 
 function onDragStart(event: DragEvent, row: FileItem) {
@@ -435,6 +517,14 @@ function onDragStart(event: DragEvent, row: FileItem) {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+/* The list root is focusable so letter keys can quick-locate; hide the ring. */
+.sftp-file-list:focus {
+  outline: none;
+}
+/* Brief highlight shown while a quick-located row is in view (issue #700). */
+:deep(.quick-target-row) td {
+  background-color: rgba(var(--color-primary, 64, 158, 255), 0.14);
 }
 .filter-bar {
   display: flex;
