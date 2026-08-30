@@ -1351,7 +1351,7 @@
   "es.deleteSuccess": "Document deleted",
   "es.invalidJSON": "Invalid JSON",
   "es.deleteConfirm": "Delete this document?",
-  "companion.clearTransfers": "모두 지우기",
+  "companion.clearTransfers": "완료 항목 지우기",
   "companion.openSftpTab": "SFTP 탭 열기",
   "companion.connecting": "연결 중…",
   "companion.cpuAvg": "CPU 평균",

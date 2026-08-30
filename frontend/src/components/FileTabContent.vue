@@ -11,7 +11,7 @@
         <div v-if="dragOverLocal" class="drop-overlay">
           <span>{{ t('sftp.dropHere') }}</span>
         </div>
-        <SFTPFileList
+        <FileList
           mode="local"
           breadcrumb-mode="local"
           :breadcrumb-path="localCwd"
@@ -55,7 +55,7 @@
         <div v-if="dragOverRemote" class="drop-overlay">
           <span>{{ t('sftp.dropHere') }}</span>
         </div>
-        <SFTPFileList
+        <FileList
           mode="remote"
           breadcrumb-mode="remote"
           :breadcrumb-path="cwd"
@@ -90,155 +90,75 @@
         />
       </div>
     </div>
-    <SFTPTransferProgress :tasks="transferTasks" @cancel="onCancelTransfer" @pause="onPauseTransfer" @resume="onResumeTransfer" />
+    <TransferPanel
+      v-model:height="transferHeight"
+      resizable
+      :tasks="transferTasks"
+      @cancel="onCancelTransfer"
+      @pause="onPauseTransfer"
+      @resume="onResumeTransfer"
+      @clearCompleted="clearFinishedTransfers"
+    />
 
-    <!-- Custom Dialog -->
-    <el-dialog append-to-body
-      v-model="dialogVisible"
+    <!-- Custom Dialog (shared) -->
+    <FileGenericDialog
+      v-model:visible="dialogVisible"
       :title="dialogTitle"
-      width="400px"
-      :close-on-click-modal="false"
+      :type="dialogType === 'delete' ? 'message' : 'input'"
+      :input-value="dialogInput"
+      :placeholder="dialogPlaceholder"
+      :message="dialogMessage"
+      @update:inputValue="(v: string) => dialogInput = v"
+      @confirm="onDialogConfirm"
+      @cancel="dialogVisible = false"
       @closed="onDialogClosed"
-    >
-      <template v-if="dialogType === 'delete'">
-        <p>{{ dialogMessage }}</p>
-      </template>
-      <template v-else-if="dialogType === 'chmod'">
-        <div class="chmod-file-info">
-          <span class="chmod-filename">{{ dialogItem?.name }}</span>
-          <span v-if="dialogItem?.owner || dialogItem?.group" class="chmod-ownergroup">{{ dialogItem?.owner || '-' }}:{{ dialogItem?.group || '-' }}</span>
-        </div>
-        <el-form class="chmod-form" label-width="80px">
-          <el-form-item label="Owner">
-            <el-checkbox v-model="chmodOwnerR">Read</el-checkbox>
-            <el-checkbox v-model="chmodOwnerW">Write</el-checkbox>
-            <el-checkbox v-model="chmodOwnerX">Execute</el-checkbox>
-          </el-form-item>
-          <el-form-item label="Group">
-            <el-checkbox v-model="chmodGroupR">Read</el-checkbox>
-            <el-checkbox v-model="chmodGroupW">Write</el-checkbox>
-            <el-checkbox v-model="chmodGroupX">Execute</el-checkbox>
-          </el-form-item>
-          <el-form-item label="Other">
-            <el-checkbox v-model="chmodOtherR">Read</el-checkbox>
-            <el-checkbox v-model="chmodOtherW">Write</el-checkbox>
-            <el-checkbox v-model="chmodOtherX">Execute</el-checkbox>
-          </el-form-item>
-          <el-form-item :label="t('sftp.dialog.chmodOctal')">
-            <el-input
-              v-model="chmodOctalInput"
-              class="chmod-octal-input"
-              maxlength="3"
-              :placeholder="'644'"
-              @input="onOctalInput"
-            />
-          </el-form-item>
-        </el-form>
-      </template>
-      <template v-else>
-        <el-input v-model="dialogInput" :placeholder="dialogPlaceholder" @keyup.enter="onDialogConfirm" />
-      </template>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('sftp.dialog.cancel') }}</el-button>
-        <el-button type="primary" @click="onDialogConfirm">{{ t('sftp.dialog.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    />
 
-    <!-- Editor Dialog -->
-    <el-dialog append-to-body
-      v-model="editorVisible"
-      :title="editorTitle"
-      width="80%"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <div class="editor-container">
-        <div ref="editorLineNumbers" class="editor-line-numbers">{{ editorLineNumbersText }}</div>
-        <textarea
-          ref="editorTextarea"
-          v-model="editorContent"
-          class="editor-textarea"
-          :class="{ 'editor-textarea-wrap': editorWrapEnabled }"
-          spellcheck="false"
-          :wrap="editorWrapEnabled ? 'soft' : 'off'"
-          @scroll="onEditorScroll"
-          @input="onEditorInput"
-        ></textarea>
-      </div>
-      <div ref="editorMirror" class="editor-mirror" aria-hidden="true"></div>
-      <template #footer>
-        <div class="editor-footer">
-          <div class="editor-footer-left">
-            <el-button
-              size="small"
-              class="editor-external-btn"
-              @click="onSwitchToExternalEditor"
-            >{{ t('sftp.editExternal') }}</el-button>
-            <el-checkbox v-model="editorWrapEnabled">{{ t('sftp.edit.wrap') }}</el-checkbox>
-            <el-select v-model="editorEncoding" style="width: 100px">
-              <el-option label="UTF-8" value="utf-8" />
-              <el-option label="UTF-16 LE" value="utf-16le" />
-              <el-option label="UTF-16 BE" value="utf-16be" />
-              <el-option label="GBK" value="gbk" />
-            </el-select>
-            <el-select v-model="editorLineEnding" style="width: 140px">
-              <el-option label="LF (Linux/macOS)" value="lf" />
-              <el-option label="CRLF (Windows)" value="crlf" />
-              <el-option label="CR (old Mac)" value="cr" />
-            </el-select>
-          </div>
-          <div class="editor-footer-buttons">
-            <el-button @click="editorVisible = false">{{ t('sftp.dialog.cancel') }}</el-button>
-            <el-button :loading="editorSaving" @click="onEditorSave(false)">{{ t('sftp.edit.save') }}</el-button>
-            <el-button type="primary" :loading="editorSaving" @click="onEditorSave(true)">{{ t('sftp.edit.saveClose') }}</el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
+    <!-- Change permission dialog (shared with the file sidebar) -->
+    <FileChmodDialog
+      v-model:visible="chmodVisible"
+      :name="chmodItem?.name"
+      :owner="chmodItem?.owner"
+      :group="chmodItem?.group"
+      :mode="chmodItem?.mode"
+      @confirm="onChmodConfirm"
+    />
 
-    <!-- Conflict Dialog -->
-    <el-dialog append-to-body
-      v-model="conflictVisible"
-      :title="t('sftp.dialog.conflictTitle')"
-      width="450px"
-      :close-on-click-modal="false"
-    >
-      <p>{{ t('sftp.dialog.conflictPrompt') }}</p>
-      <ul class="conflict-list">
-        <li v-for="f in conflictFiles" :key="f">{{ f }}</li>
-      </ul>
-      <template #footer>
-        <el-button @click="onConflictResolve('cancel')">{{ t('sftp.dialog.cancel') }}</el-button>
-        <el-button @click="onConflictResolve('overwrite')">{{ t('sftp.dialog.conflictOverwrite') }}</el-button>
-        <el-button type="primary" @click="onConflictResolve('rename')">{{ t('sftp.dialog.conflictRename') }}</el-button>
-      </template>
-    </el-dialog>
+    <!-- Editor Dialog (shared CodeMirror editor) -->
+    <FileEditorDialog
+      ref="fileEditorRef"
+      v-model:visible="editorVisible"
+      :session-id="panel?.sessionId"
+      :mode="editorMode"
+      @saved="onEditorSaved"
+    />
 
-    <!-- New File Dialog -->
-    <el-dialog append-to-body
-      v-model="newFileVisible"
+    <!-- Conflict Dialog (shared) -->
+    <FileConflictDialog
+      v-model:visible="conflictVisible"
+      :files="conflictFiles"
+      @resolve="onConflictResolve"
+    />
+
+    <!-- New File Dialog (shared) -->
+    <FileGenericDialog
+      v-model:visible="newFileVisible"
       :title="t('sftp.dialog.newFileTitle')"
-      width="400px"
-      :close-on-click-modal="false"
-      destroy-on-close
+      type="input"
+      :input-value="newFileName"
+      :placeholder="t('sftp.dialog.newFilePrompt')"
+      :error="newFileError"
+      :loading="newFileCreating"
+      @update:inputValue="(v: string) => newFileName = v"
+      @confirm="onNewFileCreate"
+      @cancel="newFileVisible = false"
       @closed="newFileError = ''"
-    >
-      <el-input
-        v-model="newFileName"
-        :placeholder="t('sftp.dialog.newFilePrompt')"
-        @keyup.enter="onNewFileCreate"
-      />
-      <p v-if="newFileError" style="color: var(--el-color-danger); margin-top: 8px;">{{ newFileError }}</p>
-      <template #footer>
-        <el-button @click="newFileVisible = false">{{ t('sftp.dialog.cancel') }}</el-button>
-        <el-button type="primary" :loading="newFileCreating" @click="onNewFileCreate">{{ t('sftp.dialog.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 
 import { msg } from '../services/message'
 import { usePanelStore } from '../stores/panelStore'
@@ -250,17 +170,22 @@ import {
   SftpChangeRemoteDir, SftpChangeLocalDir,
   SftpMakeDir, SftpRemove, SftpRename, SftpChmod,
   SftpLocalRemove, SftpLocalRename, SftpLocalMkdir,
-  SftpLocalGetContent, SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
-  SftpGet, SftpPut, SftpPutContent, SftpGetContent, SftpCopy, SftpMove,
+  SftpLocalPutContent, SftpLocalCopy, SftpLocalMove,
+  SftpGet, SftpPut, SftpPutContent, SftpCopy, SftpMove,
   SftpOpenExternalEditor, OpenExternalEditorLocal,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer, ListSessions,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
-import SFTPFileList from './SFTPFileList.vue'
-import SFTPTransferProgress from './SFTPTransferProgress.vue'
-import type { FileItem } from './SFTPFileList.vue'
+import FileList from './FileList.vue'
+import TransferPanel from './TransferPanel.vue'
+import FileChmodDialog from './FileChmodDialog.vue'
+import FileEditorDialog from './FileEditorDialog.vue'
+import FileGenericDialog from './FileGenericDialog.vue'
+import FileConflictDialog from './FileConflictDialog.vue'
+import type { FileItem } from './FileList.vue'
 import { Events } from '@wailsio/runtime'
 import type { TransferTaskUI } from '../stores/panelStore'
+import { useTransferTaskEvents } from '../composables/useTransferTasks'
 
 const props = defineProps<{
   panelId: string
@@ -270,6 +195,17 @@ const panelStore = usePanelStore()
 const settingsStore = useSettingsStore()
 const localStateStore = useLocalStateStore()
 const transferTasks = panelStore.getTransferTasks(props.panelId)
+const transferHeight = ref(200)
+const transferEvents = useTransferTaskEvents(
+  () => transferTasks,
+  () => panel.value?.sessionId,
+  (status, type) => {
+    if (status === 'done') {
+      if (type === 'download') onRefreshLocal()
+      else onRefreshRemote()
+    }
+  },
+)
 const { t } = useI18n()
 const panel = computed(() => panelStore.getPanel(props.panelId))
 
@@ -304,100 +240,10 @@ function joinPath(base: string, name: string): string {
   return base + '/' + name
 }
 
-function fromBase64(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-type Encoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'gbk'
-type LineEnding = 'lf' | 'crlf' | 'cr'
-
-function detectEncoding(bytes: Uint8Array): { encoding: Encoding, hasBom: boolean } {
-  if (bytes.length >= 2) {
-    if (bytes[0] === 0xFF && bytes[1] === 0xFE) return { encoding: 'utf-16le', hasBom: true }
-    if (bytes[0] === 0xFE && bytes[1] === 0xFF) return { encoding: 'utf-16be', hasBom: true }
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    return { encoding: 'utf-8', hasBom: true }
-  }
-  let nullCount = 0
-  const checkLen = Math.min(bytes.length, 1024)
-  for (let i = 0; i < checkLen; i++) { if (bytes[i] === 0) nullCount++ }
-  if (nullCount > checkLen * 0.3) return { encoding: 'utf-16le', hasBom: false }
-
-  // Detect UTF-8 by strict-decoding the whole file. fatal decode throws as soon
-  // as it hits an invalid sequence, so it is reliable for GBK (which almost
-  // always fails) and, unlike a fixed-size sample, never misjudges a valid
-  // UTF-8 file whose bytes happen to end mid a multi-byte character near the
-  // sample boundary (issue #701).
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-    return { encoding: 'utf-8', hasBom: false }
-  } catch {
-    // Not valid UTF-8 — most likely GBK for Chinese text on Windows.
-    return { encoding: 'gbk', hasBom: false }
-  }
-}
-
-function detectLineEnding(text: string): LineEnding {
-  let crlf = 0, lf = 0, cr = 0
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '\r' && text[i + 1] === '\n') { crlf++; i++ }
-    else if (text[i] === '\n') lf++
-    else if (text[i] === '\r') cr++
-  }
-  if (crlf > lf && crlf > cr) return 'crlf'
-  if (cr > lf && cr > crlf) return 'cr'
-  return 'lf'
-}
-
-function decodeContent(bytes: Uint8Array, enc: Encoding): string {
-  if (enc === 'gbk') {
-    try { return new TextDecoder('gbk').decode(bytes) }
-    catch { return new TextDecoder('gb18030').decode(bytes) }
-  }
-  return new TextDecoder(enc === 'utf-16le' ? 'utf-16le' : enc === 'utf-16be' ? 'utf-16be' : 'utf-8').decode(bytes)
-}
-
-function encodeContent(text: string, enc: Encoding, lineEnding: LineEnding): string {
-  let normalized = text
-  if (lineEnding === 'crlf') normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
-  else if (lineEnding === 'cr') normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r')
-  else normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-
-  if (enc === 'utf-8' || enc === 'gbk') {
-    // Always encode as UTF-8 here. The backend will re-encode to GBK
-    // when needed (TextEncoder only supports UTF-8 in browsers).
-    return toBase64(normalized)
-  }
-  const buf = new Uint8Array(normalized.length * 2 + 2)
-  let pos = 0
-  buf[pos++] = enc === 'utf-16le' ? 0xFF : 0xFE
-  buf[pos++] = enc === 'utf-16le' ? 0xFE : 0xFF
-  for (let i = 0; i < normalized.length; i++) {
-    const code = normalized.charCodeAt(i)
-    buf[pos++] = enc === 'utf-16le' ? (code & 0xFF) : ((code >> 8) & 0xFF)
-    buf[pos++] = enc === 'utf-16le' ? ((code >> 8) & 0xFF) : (code & 0xFF)
-  }
-  let binary = ''
-  for (let i = 0; i < pos; i++) binary += String.fromCharCode(buf[i])
-  return btoa(binary)
-}
-
-function toBase64(str: string): string {
-  const bytes = new TextEncoder().encode(str)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary)
-}
 
 // Dialog state
 const dialogVisible = ref(false)
-const dialogType = ref<'rename' | 'mkdir' | 'chmod' | 'delete'>('rename')
+const dialogType = ref<'rename' | 'mkdir' | 'delete'>('rename')
 const dialogTitle = ref('')
 const dialogMessage = ref('')
 const dialogInput = ref('')
@@ -422,113 +268,15 @@ const localCutItemNames = computed(() =>
 const clipboardCount = computed(() => clipboard.value?.items.length ?? 0)
 const localClipboardCount = computed(() => localClipboard.value?.items.length ?? 0)
 
-// Editor dialog state
+// Editor dialog (shared FileEditorDialog with CodeMirror)
 const editorVisible = ref(false)
-const editorTitle = ref('')
-const editorPath = ref('')
 const editorMode = ref<'local' | 'remote'>('remote')
-const editorContent = ref('')
-const editorRawBytes = ref<Uint8Array | null>(null)
-const editorSaving = ref(false)
-const editorLineNumbers = ref<HTMLElement | null>(null)
-const editorTextarea = ref<HTMLTextAreaElement | null>(null)
-const editorMirror = ref<HTMLDivElement | null>(null)
-const editorWrapEnabled = ref(true)
-const editorEncoding = ref<Encoding>('utf-8')
-const editorLineEnding = ref<LineEnding>('lf')
-const editorVisualLines = ref<number[]>([])
-const LINE_HEIGHT = 24
+const fileEditorRef = ref<{ open: (path: string, title: string, mode?: 'remote' | 'local') => Promise<void> } | null>(null)
 
-const editorLineCount = computed(() => {
-  if (!editorContent.value) return 1
-  return (editorContent.value.match(/\n/g) || []).length + 1
-})
-
-const editorLineNumbersText = computed(() => {
-  if (editorWrapEnabled.value && editorVisualLines.value.length > 0) {
-    let lastNum = -1
-    const lines = editorVisualLines.value.map(n => {
-      const isFirst = n !== lastNum
-      lastNum = n
-      return isFirst ? String(n) : ''
-    })
-    return lines.join('\n')
-  }
-  const lines: string[] = []
-  const count = editorLineCount.value
-  for (let i = 1; i <= count; i++) {
-    lines.push(String(i))
-  }
-  return lines.join('\n')
-})
-
-const editorMinHeight = computed(() => '')
-
-// Re-decode content when user switches encoding
-watch(editorEncoding, (newEnc) => {
-  if (editorRawBytes.value) {
-    editorContent.value = decodeContent(editorRawBytes.value, newEnc)
-  }
-})
-
-// Sync editorMode from the source that set it (remote edit sets 'remote', local sets 'local')
-
-function computeVisualLines() {
-  if (!editorWrapEnabled.value || !editorMirror.value || !editorTextarea.value) return
-  const textareaWidth = editorTextarea.value.clientWidth
-  if (textareaWidth <= 0) return
-
-  const lines = editorContent.value.split('\n')
-  const result: number[] = []
-  const mirror = editorMirror.value
-  mirror.style.width = textareaWidth + 'px'
-  const cs = getComputedStyle(editorTextarea.value!)
-  mirror.style.fontFamily = cs.fontFamily
-  mirror.style.fontSize = cs.fontSize
-  mirror.style.lineHeight = cs.lineHeight
-
-  for (let i = 0; i < lines.length; i++) {
-    const testEl = document.createElement('div')
-    testEl.textContent = lines[i] || ' '
-    mirror.appendChild(testEl)
-    const h = testEl.offsetHeight
-    mirror.removeChild(testEl)
-    const visualLines = Math.max(1, Math.round(h / LINE_HEIGHT))
-    for (let j = 0; j < visualLines; j++) {
-      result.push(i + 1)
-    }
-  }
-  editorVisualLines.value = result
+function onEditorSaved() {
+  if (editorMode.value === 'local') onRefreshLocal()
+  else onRefreshRemote()
 }
-
-function onEditorInput() {
-  if (editorWrapEnabled.value) {
-    requestAnimationFrame(computeVisualLines)
-  }
-}
-
-function onEditorScroll() {
-  if (editorLineNumbers.value && editorTextarea.value) {
-    editorLineNumbers.value.scrollTop = editorTextarea.value.scrollTop
-  }
-}
-
-watch(editorWrapEnabled, (enabled) => {
-  if (enabled) {
-    nextTick(() => {
-      requestAnimationFrame(computeVisualLines)
-    })
-  } else {
-    editorVisualLines.value = []
-  }
-})
-
-watch(editorVisible, (visible) => {
-  if (!visible) {
-    editorWrapEnabled.value = true
-    editorVisualLines.value = []
-  }
-})
 
 // New File dialog state
 const newFileVisible = ref(false)
@@ -542,58 +290,9 @@ const conflictVisible = ref(false)
 const conflictFiles = ref<string[]>([])
 const conflictResolve = ref<((action: 'overwrite' | 'rename' | 'cancel') => void) | null>(null)
 
-// Chmod checkbox state
-const chmodOwnerR = ref(false)
-const chmodOwnerW = ref(false)
-const chmodOwnerX = ref(false)
-const chmodGroupR = ref(false)
-const chmodGroupW = ref(false)
-const chmodGroupX = ref(false)
-const chmodOtherR = ref(false)
-const chmodOtherW = ref(false)
-const chmodOtherX = ref(false)
-
-const chmodOctal = computed(() => {
-  const o = (chmodOwnerR.value ? 4 : 0) + (chmodOwnerW.value ? 2 : 0) + (chmodOwnerX.value ? 1 : 0)
-  const g = (chmodGroupR.value ? 4 : 0) + (chmodGroupW.value ? 2 : 0) + (chmodGroupX.value ? 1 : 0)
-  const t = (chmodOtherR.value ? 4 : 0) + (chmodOtherW.value ? 2 : 0) + (chmodOtherX.value ? 1 : 0)
-  return String(o) + String(g) + String(t)
-})
-
-// Editable octal input (e.g. "644"); kept in sync with the checkbox grid both ways.
-const chmodOctalInput = ref('000')
-
-function applyOctal(digits: string) {
-  const nums = digits.split('').map(Number)
-  chmodOwnerR.value = !!(nums[0] & 4); chmodOwnerW.value = !!(nums[0] & 2); chmodOwnerX.value = !!(nums[0] & 1)
-  chmodGroupR.value = !!(nums[1] & 4); chmodGroupW.value = !!(nums[1] & 2); chmodGroupX.value = !!(nums[1] & 1)
-  chmodOtherR.value = !!(nums[2] & 4); chmodOtherW.value = !!(nums[2] & 2); chmodOtherX.value = !!(nums[2] & 1)
-}
-
-// User typing in the octal field: strip invalid chars, apply once 3 digits are present.
-function onOctalInput() {
-  chmodOctalInput.value = chmodOctalInput.value.replace(/[^0-7]/g, '').slice(0, 3)
-  if (chmodOctalInput.value.length === 3) applyOctal(chmodOctalInput.value)
-}
-
-// Checkbox grid -> octal field. No feedback loop: when applyOctal sets the grid,
-// the value written back equals what the user typed, so the field is unchanged.
-watch(chmodOctal, (v) => { chmodOctalInput.value = v })
-
-function parseMode(mode: string) {
-  // mode example: "drwxr-xr-x" or "-rw-r--r--" — strip leading file type char
-  const m = mode.length >= 10 ? mode.slice(1) : mode
-  chmodOwnerR.value = m[0] === 'r'
-  chmodOwnerW.value = m[1] === 'w'
-  chmodOwnerX.value = m[2] === 'x' || m[2] === 's'
-  chmodGroupR.value = m[3] === 'r'
-  chmodGroupW.value = m[4] === 'w'
-  chmodGroupX.value = m[5] === 'x' || m[5] === 's'
-  chmodOtherR.value = m[6] === 'r'
-  chmodOtherW.value = m[7] === 'w'
-  chmodOtherX.value = m[8] === 'x' || m[8] === 't'
-  chmodOctalInput.value = chmodOctal.value
-}
+// Change-permission dialog state (rendered by the shared FileChmodDialog).
+const chmodVisible = ref(false)
+const chmodItem = ref<FileItem | null>(null)
 
 let unsubscribe: (() => void) | null = null
 let unsubscribeStatus: (() => void) | null = null
@@ -612,7 +311,7 @@ onMounted(async () => {
     }
    })
 
-  unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
+  unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data;
     if (payload.id !== panel.value?.sessionId) return
     // Connection failed messages from backend (SFTP/FTP async connect errors)
     const connMatch = payload.data.match(/\[Connection failed: ([^\]]+)\]/)
@@ -620,76 +319,10 @@ onMounted(async () => {
       msg.error(connMatch[1])
       return
     }
-    const match = payload.data.match(/\x1b\]633;S([^\x07]*)\x07/)
-    if (!match) return
-    try {
-      const msg = JSON.parse(match[1])
-      if (msg.type === 'sftp:transfer') {
-        if (msg.event === 'start') {
-          const existing = transferTasks.find(t => t.id === msg.taskId)
-          if (existing) {
-            existing.status = 'running'
-            existing.speed = ''
-            existing.eta = ''
-            existing.lastBytes = 0
-            existing.lastTime = Date.now()
-          } else {
-            transferTasks.push({
-              id: msg.taskId,
-              type: msg.tfType,
-              name: msg.name,
-              percentage: 0,
-              speed: '',
-              eta: '',
-              status: 'running',
-              lastBytes: 0,
-              lastTime: Date.now(),
-              total: msg.total || 0
-            })
-          }
-        } else if (msg.event === 'progress') {
-          const existing = transferTasks.find(t => t.id === msg.taskId)
-          if (existing) {
-            existing.total = msg.total || existing.total
-            existing.percentage = existing.total > 0 ? Math.round((msg.progress / existing.total) * 100) : 0
-            const now = Date.now()
-            const elapsed = (now - existing.lastTime) / 1000
-            if (elapsed >= 0.5) {
-              const bytesSince = msg.progress - existing.lastBytes
-              const bytesPerSec = bytesSince / elapsed
-              existing.speed = formatSpeed(bytesPerSec)
-              if (bytesPerSec > 0 && existing.total > 0) {
-                const remaining = (existing.total - msg.progress) / bytesPerSec
-                existing.eta = formatETA(remaining)
-              }
-              existing.lastBytes = msg.progress
-              existing.lastTime = now
-            }
-          }
-        } else if (msg.event === 'complete') {
-          const existing = transferTasks.find(t => t.id === msg.taskId)
-          if (existing) {
-            const st = msg.status as string
-            existing.status = st === 'done' ? 'done' : st === 'cancelled' ? 'cancelled' : st === 'paused' ? 'paused' : 'error'
-            existing.percentage = existing.status === 'done' ? 100 : existing.percentage
-            if (existing.status === 'done') {
-              if (existing.type === 'download') {
-                onRefreshLocal()
-              } else {
-                onRefreshRemote()
-              }
-            }
-            if (existing.status !== 'running' && existing.status !== 'paused') {
-              setTimeout(() => {
-                const idx = transferTasks.findIndex(t => t.id === msg.taskId)
-                if (idx >= 0) transferTasks.splice(idx, 1)
-              }, 5000)
-            }
-          }
-        }
-      }
-    } catch {}
-   })
+  })
+
+  // Transfer-task bookkeeping is shared with the file sidebar.
+  transferEvents.bind()
 
   // External-editor status events from the backend (started / uploaded / closed)
   unsubscribeExt = Events.On('sftp:extedit', (ev) => {
@@ -703,26 +336,39 @@ onMounted(async () => {
     }
   })
 
-  // Proactively check if session is already connected (race: event may have fired before listener registered)
-  const sid = panel.value?.sessionId
-  if (sid) {
-    fetchLocalDrives()
-    try {
-      const sessions = await ListSessions()
-      const sess = sessions.find(s => s.id === sid)
-      if (sess && sess.status === 'connected') {
-        onRefreshLocal()
-        onRefreshRemote().then(() => doInitialAutoNav())
-      }
-    } catch {}
-  }
+  // Proactively check if session is already connected (race: event may have fired
+  // before the listener registered). The initial load is resumed from the
+  // sessionId watch when the panel binds its session id (S3 connects so fast that
+  // 'connected' can fire before that binding).
+  await probeConnectAndLoad()
 })
 
-watch(() => panel.value?.sessionId, (newId, oldId) => {
+watch(() => panel.value?.sessionId, async (newId, oldId) => {
   if (newId && !oldId) {
     fetchLocalDrives()
+    await probeConnectAndLoad()
   }
-})
+}, { immediate: true })
+
+// A fast-connecting session (e.g. S3) can emit session:status 'connected' before
+// this panel binds its sessionId, so the connected-event handler and a mount-time
+// probe that runs while sid is still undefined both miss it. Once we know the id,
+// check whether the session is already up and, if so, run the initial load.
+let probeRan = false
+async function probeConnectAndLoad() {
+  if (probeRan || initialNavDone) return
+  const sid = panel.value?.sessionId
+  if (!sid) return
+  try {
+    const sessions = await ListSessions()
+    const sess = sessions.find(s => s.id === sid)
+    if (sess && sess.status === 'connected') {
+      probeRan = true
+      onRefreshLocal()
+      onRefreshRemote().then(() => doInitialAutoNav())
+    }
+  } catch { /* ignore */ }
+}
 
 onUnmounted(() => {
   unsubscribe?.()
@@ -905,18 +551,12 @@ function onRemoveBookmark(mode: 'local' | 'remote', path: string) {
   settingsStore.removeSftpBookmark(mode, path)
 }
 
-function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec < 1024) return Math.round(bytesPerSec) + ' B/s'
-  if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' KB/s'
-  if (bytesPerSec < 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s'
-  return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s'
-}
-
-function formatETA(seconds: number): string {
-  if (seconds < 1) return ''
-  if (seconds < 60) return Math.round(seconds) + 's'
-  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's'
-  return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm'
+function clearFinishedTransfers() {
+  const tasks = transferTasks
+  for (let i = tasks.length - 1; i >= 0; i--) {
+    const st = tasks[i].status
+    if (st === 'done' || st === 'error' || st === 'cancelled') tasks.splice(i, 1)
+  }
 }
 
 async function onCancelTransfer(taskId: string) {
@@ -1233,25 +873,6 @@ async function onPaste() {
 
 // --- Editor handlers ---
 
-function isBinaryContent(bytes: Uint8Array): boolean {
-  const sample = bytes.slice(0, 8192)
-  if (!sample.length) return false
-  let nullCount = 0
-  let nonPrintable = 0
-  for (let i = 0; i < sample.length; i++) {
-    const c = sample[i]
-    if (c < 0x09 || (c > 0x0D && c < 0x20)) nonPrintable++
-  }
-  if (nonPrintable > sample.length * 0.3) return true
-  return false
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
 async function onEditFile(item: FileItem) {
   if (item.isDir) return
   const sid = panel.value?.sessionId
@@ -1261,35 +882,10 @@ async function onEditFile(item: FileItem) {
     msg.warning(t('sftp.edit.fileTooLarge'))
     return
   }
-  if (item.size > 500 * 1024) {
-    const ok = window.confirm(t('sftp.edit.fileLargeWarning', { size: formatFileSize(item.size) }))
-    if (!ok) return
-  }
 
-  editorPath.value = joinPath(cwd.value, item.name)
-  editorTitle.value = t('sftp.dialog.editTitle', { path: editorPath.value })
-  editorContent.value = ''
-  editorVisible.value = true
-
-  try {
-    const rawB64 = await SftpGetContent(sid, editorPath.value)
-    const bytes = fromBase64(rawB64)
-    if (isBinaryContent(bytes)) {
-      editorVisible.value = false
-      msg.warning(t('sftp.edit.binaryFile'))
-      return
-    }
-    const detected = detectEncoding(bytes)
-    editorEncoding.value = detected.encoding
-    editorRawBytes.value = bytes
-    editorMode.value = 'remote'
-    const text = decodeContent(bytes, detected.encoding)
-    editorLineEnding.value = detectLineEnding(text)
-    editorContent.value = text
-  } catch (e: any) {
-    editorVisible.value = false
-    msg.error(e?.toString() || 'Failed to read file')
-  }
+  editorMode.value = 'remote'
+  const path = joinPath(cwd.value, item.name)
+  await fileEditorRef.value?.open(path, t('sftp.dialog.editTitle', { path }), 'remote')
 }
 
 // openExternalEditor launches the configured external editor on a remote file
@@ -1350,40 +946,6 @@ async function onLocalEditExternal(item: FileItem) {
   await openLocalExternalEditor(joinPath(localCwd.value, item.name))
 }
 
-// Switch from the built-in editor to the external editor: close the dialog and
-// open the same file in the configured external editor. Remote files go through
-// the download→auto-upload flow; local files are opened in place.
-function onSwitchToExternalEditor() {
-  if (!editorPath.value) return
-  editorVisible.value = false
-  if (editorMode.value === 'local') {
-    openLocalExternalEditor(editorPath.value)
-  } else {
-    openExternalEditor(editorPath.value)
-  }
-}
-
-async function onEditorSave(close: boolean) {
-  const sid = panel.value?.sessionId
-  if (!sid) return
-  editorSaving.value = true
-  try {
-    if (editorMode.value === 'local') {
-      await SftpLocalPutContent(sid, editorPath.value, encodeContent(editorContent.value, editorEncoding.value, editorLineEnding.value), editorEncoding.value)
-      onRefreshLocal()
-    } else {
-      await SftpPutContent(sid, editorPath.value, encodeContent(editorContent.value, editorEncoding.value, editorLineEnding.value), editorEncoding.value)
-      onRefreshRemote()
-    }
-    msg.success(t('sftp.edit.saveSuccess'))
-    if (close) editorVisible.value = false
-  } catch (e: any) {
-    msg.error(e?.toString() || 'Failed to save file')
-  } finally {
-    editorSaving.value = false
-  }
-}
-
 // --- Local file handlers ---
 
 async function onLocalEditFile(item: FileItem) {
@@ -1394,25 +956,9 @@ async function onLocalEditFile(item: FileItem) {
     msg.warning(t('sftp.edit.fileTooLarge'))
     return
   }
-  editorPath.value = joinPath(localCwd.value, item.name)
-  editorTitle.value = t('sftp.dialog.editTitle', { path: editorPath.value })
   editorMode.value = 'local'
-  editorContent.value = ''
-  editorVisible.value = true
-  try {
-    const rawB64 = await SftpLocalGetContent(sid, editorPath.value)
-    const bytes = fromBase64(rawB64)
-    if (isBinaryContent(bytes)) { editorVisible.value = false; msg.warning(t('sftp.edit.binaryFile')); return }
-    const detected = detectEncoding(bytes)
-    editorEncoding.value = detected.encoding
-    editorRawBytes.value = bytes
-    const text = decodeContent(bytes, detected.encoding)
-    editorLineEnding.value = detectLineEnding(text)
-    editorContent.value = text
-  } catch (e: any) {
-    editorVisible.value = false
-    msg.error(e?.toString() || 'Failed to read file')
-  }
+  const path = joinPath(localCwd.value, item.name)
+  await fileEditorRef.value?.open(path, t('sftp.dialog.editTitle', { path }), 'local')
 }
 
 function onLocalNewFile() {
@@ -1516,7 +1062,7 @@ async function onNewFileCreate() {
 
 // Dialog helpers
 function openDialog(
-  type: 'rename' | 'mkdir' | 'chmod' | 'delete',
+  type: 'rename' | 'mkdir' | 'delete',
   title: string,
   inputValue: string = '',
   placeholder: string = '',
@@ -1573,13 +1119,18 @@ async function onDialogConfirm() {
         } catch (e) { console.error('mkdir:', e) }
       }
       break
-    case 'chmod':
-      try {
-        await SftpChmod(sid, joinPath(baseDir, dialogItem.value!.name), chmodOctal.value)
-        onRefreshRemote()
-      } catch (e) { console.error('chmod:', e) }
-      break
     case 'delete':
+      // Cancel any in-flight transfer of these files first — otherwise
+      // SftpRemove can block forever while a transfer holds the SFTP handle.
+      {
+        const names = new Set(dialogItems.value.filter(i => i.name !== '..').map(i => i.name))
+        for (const task of [...transferTasks]) {
+          if ((task.status === 'running' || task.status === 'paused') && names.has(task.name)) {
+            try { await SftpCancelTransfer(sid, task.id) } catch { /* ignore */ }
+            task.status = 'cancelled'
+          }
+        }
+      }
       for (const item of dialogItems.value) {
         const itemPath = joinPath(baseDir, item.name)
         try {
@@ -1626,14 +1177,22 @@ function onMkdir() {
   openDialog('mkdir', t('sftp.dialog.mkdirTitle'), '', t('sftp.dialog.mkdirPrompt'))
 }
 function onChmod(item: FileItem) {
-  dialogItem.value = item
-  parseMode(item.mode)
-  openDialog(
-    'chmod',
-    t('sftp.dialog.chmodTitle'),
-    '',
-    t('sftp.dialog.chmodPrompt', { name: item.name })
-  )
+  chmodItem.value = item
+  chmodVisible.value = true
+}
+
+async function onChmodConfirm(octal: string) {
+  const sid = panel.value?.sessionId
+  const item = chmodItem.value
+  if (!sid || !item) return
+  chmodItem.value = null
+  const isLocal = dialogMode.value === 'local'
+  const baseDir = isLocal ? localCwd.value : cwd.value
+  try {
+    await SftpChmod(sid, joinPath(baseDir, item.name), octal)
+    if (isLocal) onRefreshLocal()
+    else onRefreshRemote()
+  } catch (e) { console.error('chmod:', e) }
 }
 
 // OS file drops (resource manager / desktop) arrive via Wails v3's native pipe.
@@ -1828,122 +1387,4 @@ async function onDropRemote(e: DragEvent) {
   border-radius: var(--radius-md);
 }
 
-.editor-container {
-  display: flex;
-  height: 55vh;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.editor-container:focus-within {
-  border-color: var(--el-color-primary);
-}
-.editor-line-numbers {
-  flex-shrink: 0;
-  min-width: 36px;
-  padding: 12px 8px 12px 12px;
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 24px;
-  color: var(--text-disabled);
-  background: var(--el-fill-color-light);
-  text-align: right;
-  overflow: hidden;
-  user-select: none;
-  white-space: pre;
-}
-.editor-textarea {
-  flex: 1;
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 24px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-primary);
-  border: none;
-  padding: 12px;
-  white-space: pre;
-  overflow-x: auto;
-  resize: none;
-  outline: none;
-  overflow-y: auto;
-  tab-size: 4;
-}
-
-.conflict-list {
-  max-height: 200px;
-  overflow-y: auto;
-  margin: 8px 0;
-  padding-left: 20px;
-}
-.conflict-list li {
-  font-size: 13px;
-  padding: 2px 0;
-  color: var(--text-secondary);
-  font-family: monospace;
-}
-
-.editor-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-.editor-footer-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.editor-footer-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.editor-textarea-wrap {
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  overflow-x: hidden;
-}
-
-.editor-mirror {
-  position: fixed;
-  top: -9999px;
-  left: -9999px;
-  visibility: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  padding: 0;
-}
-</style>
-
-<style>
-.chmod-file-info {
-  text-align: center;
-  margin-bottom: 16px;
-}
-.chmod-filename {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  font-family: var(--font-mono, monospace);
-}
-.chmod-ownergroup {
-  display: block;
-  font-size: 11px;
-  color: var(--text-disabled);
-  margin-top: 2px;
-}
-.chmod-form {
-  margin-top: 4px;
-}
-.chmod-form .el-form-item {
-  margin-bottom: 12px;
-}
-.chmod-octal-input {
-  width: 120px;
-}
-.chmod-octal-input .el-input__inner {
-  font-family: var(--font-mono, monospace);
-  font-weight: 700;
-  letter-spacing: 2px;
-}
 </style>

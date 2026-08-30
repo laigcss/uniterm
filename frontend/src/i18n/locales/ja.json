@@ -1351,7 +1351,7 @@
   "es.deleteSuccess": "Document deleted",
   "es.invalidJSON": "Invalid JSON",
   "es.deleteConfirm": "Delete this document?",
-  "companion.clearTransfers": "すべてクリア",
+  "companion.clearTransfers": "完了をクリア",
   "companion.openSftpTab": "SFTPタブを開く",
   "companion.connecting": "接続中…",
   "companion.cpuAvg": "CPU平均",

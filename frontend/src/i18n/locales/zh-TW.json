@@ -1351,7 +1351,7 @@
   "es.deleteSuccess": "文件已刪除",
   "es.invalidJSON": "無效的 JSON 格式",
   "es.deleteConfirm": "確定刪除此文件嗎？",
-  "companion.clearTransfers": "全部清除",
+  "companion.clearTransfers": "清除已完成",
   "companion.openSftpTab": "開啟獨立分頁",
   "companion.connecting": "正在連線…",
   "companion.cpuAvg": "CPU 平均",

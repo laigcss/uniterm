@@ -23,11 +23,17 @@ import { properties } from '@codemirror/legacy-modes/mode/properties'
 import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
 import { nginx } from '@codemirror/legacy-modes/mode/nginx'
+import { clike } from '@codemirror/legacy-modes/mode/clike'
+import { go } from '@codemirror/legacy-modes/mode/go'
+import { rust } from '@codemirror/legacy-modes/mode/rust'
+import { ruby } from '@codemirror/legacy-modes/mode/ruby'
 
 const props = defineProps<{
   modelValue: string
   filePath?: string
   compact?: boolean
+  lang?: string
+  wrap?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -50,6 +56,39 @@ function extOf(path: string): string {
   if (lower === 'nginx.conf' || lower.endsWith('.nginx')) return 'nginx'
   const i = lower.lastIndexOf('.')
   return i >= 0 ? lower.slice(i + 1) : ''
+}
+
+// Force a specific highlight mode; matches the extension-based picks. 'text' or
+// anything unknown yields no language extension (plain text).
+function languageFor(id?: string) {
+  switch (id) {
+    case 'json': return json()
+    case 'js': return javascript()
+    case 'ts': return javascript({ typescript: true })
+    case 'html': return html()
+    case 'css': return css()
+    case 'xml': return xml()
+    case 'md': return markdown()
+    case 'py': return python()
+    case 'sql': return sql()
+    case 'yaml': return yaml()
+    case 'sh': return StreamLanguage.define(shell)
+    case 'conf': return StreamLanguage.define(properties)
+    case 'toml': return StreamLanguage.define(toml)
+    case 'dockerfile': return StreamLanguage.define(dockerFile)
+    case 'nginx': return StreamLanguage.define(nginx)
+    case 'c': return StreamLanguage.define((clike as any).c)
+    case 'cpp': return StreamLanguage.define((clike as any).cpp)
+    case 'csharp': return StreamLanguage.define((clike as any).csharp)
+    case 'dart': return StreamLanguage.define((clike as any).dart)
+    case 'java': return StreamLanguage.define((clike as any).java)
+    case 'kotlin': return StreamLanguage.define((clike as any).kotlin)
+    case 'scala': return StreamLanguage.define((clike as any).scala)
+    case 'go': return StreamLanguage.define(go)
+    case 'rust': return StreamLanguage.define(rust)
+    case 'ruby': return StreamLanguage.define(ruby)
+    default: return []
+  }
 }
 
 function languageExtension(path: string) {
@@ -126,7 +165,7 @@ function buildExtensions(path: string) {
     bracketMatching(),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     oneDark,
-    languageExtension(path),
+    props.lang ? languageFor(props.lang) : languageExtension(path),
     keymap.of([
       {
         key: 'Mod-Enter',
@@ -177,7 +216,7 @@ function buildExtensions(path: string) {
         backgroundColor: 'rgba(64, 158, 255, 0.45) !important',
       },
     }),
-    EditorView.lineWrapping,
+    ...(props.wrap === false ? [] : [EditorView.lineWrapping]),
   ]
 }
 
@@ -213,7 +252,7 @@ watch(() => props.modelValue, (v) => {
   setDoc(v ?? '')
 })
 
-watch(() => props.filePath, async () => {
+watch(() => [props.filePath, props.lang, props.wrap], async () => {
   const text = view?.state.doc.toString() ?? props.modelValue
   await nextTick()
   createEditor()

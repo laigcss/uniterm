@@ -66,7 +66,6 @@ function onConfirm() {
 </script>
 
 <style scoped>
-/* Line-numbered editor — copied from SFTPTabContent.vue (editor-container/line-numbers/textarea) */
 .editor-container {
   display: flex;
   height: 55vh;

@@ -23,7 +23,7 @@
           <span>{{ preparingUpload ? t('companion.preparingUpload') : t('sftp.dropHere') }}</span>
         </div>
 
-        <SFTPFileList
+        <FileList
           mode="remote"
           breadcrumb-mode="remote"
           :breadcrumb-path="cwd"
@@ -57,83 +57,70 @@
       </div>
 
       <!-- Transfer history / progress panel (pinned at the sidebar bottom) -->
-      <div ref="transferPanelRef" class="transfer-panel" :style="{ height: transferHeight + 'px' }">
-        <div class="transfer-panel-resize" @mousedown.prevent="onTransferResizeStart" />
-        <div class="transfer-panel-head">
-          <div class="transfer-panel-actions">
-            <button
-              class="companion-action-btn"
-              :disabled="!sessionId"
-              :title="t('companion.openSftpTab')"
-              @click="openStandaloneSftp"
-            >{{ t('companion.openSftpTab') }}</button>
-            <button
-              class="companion-action-btn"
-              :disabled="!transferTasks.length"
-              :title="t('companion.clearTransfers')"
-              @click="clearFinishedTransfers"
-            >{{ t('companion.clearTransfers') }}</button>
-          </div>
-        </div>
-        <div v-if="!transferTasks.length" class="transfer-empty">{{ t('companion.noTransfers') }}</div>
-        <SFTPTransferProgress
-          v-else
-          :tasks="transferTasks"
-          @cancel="onCancelTransfer"
-          @pause="onPauseTransfer"
-          @resume="onResumeTransfer"
-        />
-      </div>
+      <TransferPanel
+        v-model:height="transferHeight"
+        resizable
+        :tasks="transferTasks"
+        @cancel="onCancelTransfer"
+        @pause="onPauseTransfer"
+        @resume="onResumeTransfer"
+        @clearCompleted="clearFinishedTransfers"
+      >
+        <template #actions>
+          <button
+            class="filter-icon-btn"
+            :disabled="!sessionId"
+            :title="t('companion.openSftpTab')"
+            @click="openStandaloneSftp"
+          ><el-icon><ExternalLink :size="14" /></el-icon></button>
+        </template>
+      </TransferPanel>
     </template>
 
-    <!-- Remote file editor -->
-    <el-dialog
-      append-to-body
-      v-model="editorVisible"
-      :title="editorTitle"
-      width="80%"
-      :close-on-click-modal="false"
-      destroy-on-close
-      class="companion-editor-dialog"
-      @opened="onEditorOpened"
-    >
-      <div class="companion-editor-meta" v-if="editorLangLabel">
-        <span class="lang-badge">{{ editorLangLabel }}</span>
-      </div>
-      <SyntaxEditor
-        v-if="editorVisible"
-        ref="syntaxEditorRef"
-        v-model="editorContent"
-        :file-path="editorPath"
-      />
-      <template #footer>
-        <div class="companion-editor-footer">
-          <div class="companion-editor-opts">
-            <el-select v-model="editorEncoding" style="width: 110px">
-              <el-option label="UTF-8" value="utf-8" />
-              <el-option label="UTF-16 LE" value="utf-16le" />
-              <el-option label="UTF-16 BE" value="utf-16be" />
-              <el-option label="GBK" value="gbk" />
-            </el-select>
-            <el-select v-model="editorLineEnding" style="width: 150px">
-              <el-option label="LF (Linux/macOS)" value="lf" />
-              <el-option label="CRLF (Windows)" value="crlf" />
-              <el-option label="CR (old Mac)" value="cr" />
-            </el-select>
-          </div>
-          <div>
-            <el-button @click="editorVisible = false">{{ t('sftp.dialog.cancel') }}</el-button>
-            <el-button type="primary" :loading="editorSaving" @click="onEditorSave">{{ t('sftp.edit.save') }}</el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
+    <!-- Change permission dialog (shared with the full SFTP tab) -->
+    <FileChmodDialog
+      v-model:visible="chmodVisible"
+      :name="chmodItem?.name"
+      :owner="chmodItem?.owner"
+      :group="chmodItem?.group"
+      :mode="chmodItem?.mode"
+      @confirm="onChmodConfirm"
+    />
+
+    <!-- Generic dialog (rename / new dir / new file / delete) -->
+    <FileGenericDialog
+      v-model:visible="genDlg.visible"
+      :title="genDlg.title"
+      :type="genDlg.type"
+      :input-value="genDlg.inputValue"
+      :placeholder="genDlg.placeholder"
+      :message="genDlg.message"
+      @update:inputValue="(v: string) => genDlg.inputValue = v"
+      @confirm="onGenericConfirm"
+      @cancel="onGenericCancel"
+    />
+
+    <!-- Overwrite/rename conflict dialog -->
+    <FileConflictDialog
+      v-model:visible="conflictVisible"
+      :files="conflictFiles"
+      @resolve="onConflictResolve"
+    />
+
+    <!-- Remote file editor (shared CodeMirror dialog) -->
+    <FileEditorDialog
+      ref="fileEditorRef"
+      v-model:visible="editorVisible"
+      :session-id="sessionId"
+      mode="remote"
+      @saved="onRefresh"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ExternalLink } from '@lucide/vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { useCompanionStore } from '../stores/companionStore'
@@ -141,16 +128,20 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
   SftpListRemote, SftpChangeRemoteDir,
-  SftpMakeDir, SftpRemove, SftpRename, SftpChmod, SftpPutContent, SftpGetContent,
+  SftpMakeDir, SftpRemove, SftpRename, SftpChmod, SftpPutContent,
   SftpGet, SftpPut, WriteTempFile, CreateTempUpload, AppendTempUpload,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer,
   OpenMultipleFilesDialog, OpenDirectoryDialog, ListSessions,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
-import SFTPFileList from './SFTPFileList.vue'
-import type { FileItem } from './SFTPFileList.vue'
-import SFTPTransferProgress from './SFTPTransferProgress.vue'
+import FileList from './FileList.vue'
+import type { FileItem } from './FileList.vue'
+import TransferPanel from './TransferPanel.vue'
+import FileChmodDialog from './FileChmodDialog.vue'
+import FileEditorDialog from './FileEditorDialog.vue'
+import FileGenericDialog from './FileGenericDialog.vue'
+import FileConflictDialog from './FileConflictDialog.vue'
 import { Events } from '@wailsio/runtime'
-import SyntaxEditor from './SyntaxEditor.vue'
+import { useTransferTaskEvents } from '../composables/useTransferTasks'
 
 const { t } = useI18n()
 const companionStore = useCompanionStore()
@@ -161,24 +152,6 @@ const connecting = ref(false)
 const connectError = ref('')
 // Transfer panel: default height (px), adjustable by dragging its top edge.
 const transferHeight = ref(200)
-const transferPanelRef = ref<HTMLDivElement | null>(null)
-
-function onTransferResizeStart(e: MouseEvent) {
-  const el = transferPanelRef.value
-  if (!el) return
-  const startY = e.clientY
-  const startH = el.offsetHeight
-  const maxH = el.parentElement ? Math.max(el.parentElement.clientHeight - 60, 120) : 600
-  function onMove(ev: MouseEvent) {
-    transferHeight.value = Math.min(Math.max(startH + (startY - ev.clientY), 120), maxH)
-  }
-  function onUp() {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
 
 const cwd = ref('')
 const files = ref<FileItem[]>([])
@@ -200,6 +173,11 @@ const FILE_DROP_ID = 'file-sidebar-drop'
 const sessionId = computed(() => companionStore.currentSftpSessionId)
 const transferKey = computed(() => companionStore.transferKey || 'companion-sftp')
 const transferTasks = computed(() => panelStore.getTransferTasks(transferKey.value))
+const transferEvents = useTransferTaskEvents(
+  () => transferTasks.value,
+  () => sessionId.value,
+  (status) => { if (status === 'done') scheduleRefresh(400) },
+)
 const activeTransferCount = computed(() =>
   transferTasks.value.filter(t => t.status === 'running' || t.status === 'paused').length
 )
@@ -365,26 +343,66 @@ function autoRename(targetName: string, existingNames: string[]): string {
   return candidate
 }
 
+// --- Shared dialogs (rename / new dir / new file / delete / conflict) ---
+const genDlg = reactive<{
+  visible: boolean
+  type: 'input' | 'message'
+  title: string
+  inputValue: string
+  placeholder: string
+  message: string
+  resolve: ((r: { ok: boolean; value?: string }) => void) | null
+}>({ visible: false, type: 'input', title: '', inputValue: '', placeholder: '', message: '', resolve: null })
+
+function openGeneric(opts: { type?: 'input' | 'message'; title: string; inputValue?: string; placeholder?: string; message?: string }): Promise<{ ok: boolean; value?: string }> {
+  return new Promise((resolve) => {
+    genDlg.type = opts.type || 'input'
+    genDlg.title = opts.title
+    genDlg.inputValue = opts.inputValue || ''
+    genDlg.placeholder = opts.placeholder || ''
+    genDlg.message = opts.message || ''
+    genDlg.resolve = resolve
+    genDlg.visible = true
+  })
+}
+
+function onGenericConfirm() {
+  const value = genDlg.inputValue
+  const resolve = genDlg.resolve
+  genDlg.visible = false
+  genDlg.resolve = null
+  resolve?.({ ok: true, value })
+}
+
+function onGenericCancel() {
+  const resolve = genDlg.resolve
+  genDlg.visible = false
+  genDlg.resolve = null
+  resolve?.({ ok: false })
+}
+
+const conflictVisible = ref(false)
+const conflictFiles = ref<string[]>([])
+let conflictResolve: ((a: 'overwrite' | 'rename' | 'cancel') => void) | null = null
+
+function showConflictDialog(conflicts: string[]): Promise<'overwrite' | 'rename' | 'cancel'> {
+  return new Promise((resolve) => {
+    conflictFiles.value = conflicts
+    conflictResolve = resolve
+    conflictVisible.value = true
+  })
+}
+
+function onConflictResolve(action: 'overwrite' | 'rename' | 'cancel') {
+  conflictVisible.value = false
+  if (conflictResolve) { conflictResolve(action); conflictResolve = null }
+}
+
 async function resolveConflicts(fileNames: string[]): Promise<'overwrite' | 'rename' | 'cancel'> {
   const existing = files.value.map(f => f.name)
   const conflicts = fileNames.filter(n => existing.includes(n))
   if (!conflicts.length) return 'overwrite'
-  try {
-    await ElMessageBox.confirm(
-      `${t('sftp.dialog.conflictPrompt')}\n${conflicts.slice(0, 8).join('\n')}${conflicts.length > 8 ? '\n...' : ''}`,
-      t('sftp.dialog.conflictTitle'),
-      {
-        distinguishCancelAndClose: true,
-        confirmButtonText: t('sftp.dialog.conflictOverwrite'),
-        cancelButtonText: t('sftp.dialog.conflictRename'),
-        type: 'warning',
-      }
-    )
-    return 'overwrite'
-  } catch (action) {
-    if (action === 'cancel') return 'rename'
-    return 'cancel'
-  }
+  return showConflictDialog(conflicts)
 }
 
 function onDragEnter(e: DragEvent) {
@@ -607,16 +625,10 @@ async function onDownloadTo(items: FileItem[]) {
 async function onRename(item: FileItem) {
   const sid = sessionId.value
   if (!sid) return
-  try {
-    const { value } = await ElMessageBox.prompt(t('sftp.rename'), t('sftp.rename'), {
-      inputValue: item.name,
-      confirmButtonText: t('sftp.dialog.confirm'),
-      cancelButtonText: t('sftp.dialog.cancel'),
-    })
-    if (!value || value === item.name) return
-    await SftpRename(sid, joinPath(cwd.value, item.name), joinPath(cwd.value, value))
-    scheduleRefresh()
-  } catch { /* cancelled */ }
+  const r = await openGeneric({ title: t('sftp.rename'), inputValue: item.name })
+  if (!r.ok || !r.value || r.value === item.name) return
+  await SftpRename(sid, joinPath(cwd.value, item.name), joinPath(cwd.value, r.value))
+  scheduleRefresh()
 }
 
 async function onDelete(items: FileItem[]) {
@@ -624,12 +636,8 @@ async function onDelete(items: FileItem[]) {
   if (!sid) return
   const targets = items.filter(i => i.name !== '..')
   if (!targets.length) return
-  try {
-    await ElMessageBox.confirm(
-      t('sftp.dialog.deleteConfirmMixed', { count: targets.length }),
-      t('sftp.dialog.deleteTitle'),
-      { type: 'warning', confirmButtonText: t('sftp.dialog.confirm'), cancelButtonText: t('sftp.dialog.cancel') }
-    )
+  const r = await openGeneric({ type: 'message', title: t('sftp.dialog.deleteTitle'), message: t('sftp.dialog.deleteConfirmMixed', { count: targets.length }) })
+  if (!r.ok) return
     const names = new Set(targets.map(i => i.name))
     // Stop any in-flight upload/download of these files first — otherwise
     // SftpRemove can block forever while the transfer holds the SFTP handle.
@@ -665,196 +673,48 @@ async function onDelete(items: FileItem[]) {
       }
     }
     scheduleRefresh(300)
-  } catch { /* cancelled */ }
 }
 
 async function onMkdir() {
   const sid = sessionId.value
   if (!sid) return
-  try {
-    const { value } = await ElMessageBox.prompt(t('sftp.newDirectory'), t('sftp.newDirectory'), {
-      confirmButtonText: t('sftp.dialog.confirm'),
-      cancelButtonText: t('sftp.dialog.cancel'),
-    })
-    if (!value) return
-    await SftpMakeDir(sid, joinPath(cwd.value, value))
-    scheduleRefresh()
-  } catch { /* cancelled */ }
+  const r = await openGeneric({ title: t('sftp.newDirectory') })
+  if (!r.ok || !r.value) return
+  await SftpMakeDir(sid, joinPath(cwd.value, r.value))
+  scheduleRefresh()
 }
 
 async function onNewFile() {
   const sid = sessionId.value
   if (!sid) return
-  try {
-    const { value } = await ElMessageBox.prompt(t('sftp.newFile'), t('sftp.newFile'), {
-      confirmButtonText: t('sftp.dialog.confirm'),
-      cancelButtonText: t('sftp.dialog.cancel'),
-    })
-    if (!value) return
-    await SftpPutContent(sid, joinPath(cwd.value, value), '', 'utf-8')
-    scheduleRefresh()
-  } catch { /* cancelled */ }
+  const r = await openGeneric({ title: t('sftp.newFile') })
+  if (!r.ok || !r.value) return
+  await SftpPutContent(sid, joinPath(cwd.value, r.value), '', 'utf-8')
+  scheduleRefresh()
 }
 
-async function onChmod(item: FileItem) {
+const chmodVisible = ref(false)
+const chmodItem = ref<FileItem | null>(null)
+
+function onChmod(item: FileItem) {
+  chmodItem.value = item
+  chmodVisible.value = true
+}
+
+async function onChmodConfirm(octal: string) {
   const sid = sessionId.value
-  if (!sid) return
+  const item = chmodItem.value
+  if (!sid || !item) return
+  chmodItem.value = null
   try {
-    const { value } = await ElMessageBox.prompt(t('sftp.changePermission'), t('sftp.changePermission'), {
-      inputValue: '644',
-      confirmButtonText: t('sftp.dialog.confirm'),
-      cancelButtonText: t('sftp.dialog.cancel'),
-    })
-    if (!value) return
-    await SftpChmod(sid, joinPath(cwd.value, item.name), value)
+    await SftpChmod(sid, joinPath(cwd.value, item.name), octal)
     scheduleRefresh()
-  } catch { /* cancelled */ }
+  } catch { /* ignore */ }
 }
 
-// ── Remote file editor ──
-type Encoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'gbk'
-type LineEnding = 'lf' | 'crlf' | 'cr'
-
+// ── Remote file editor (shared FileEditorDialog) ──
 const editorVisible = ref(false)
-const editorTitle = ref('')
-const editorPath = ref('')
-const editorContent = ref('')
-const editorRawBytes = ref<Uint8Array | null>(null)
-const editorSaving = ref(false)
-const editorEncoding = ref<Encoding>('utf-8')
-const editorLineEnding = ref<LineEnding>('lf')
-const syntaxEditorRef = ref<{ focus: () => void } | null>(null)
-
-const editorLangLabel = computed(() => {
-  const path = editorPath.value
-  if (!path) return ''
-  const base = path.replace(/\\/g, '/').split('/').pop() || ''
-  const lower = base.toLowerCase()
-  if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) return 'Dockerfile'
-  if (lower === '.bashrc' || lower === '.zshrc' || lower === '.profile') return 'Shell'
-  const i = lower.lastIndexOf('.')
-  const ext = i >= 0 ? lower.slice(i + 1) : ''
-  const map: Record<string, string> = {
-    json: 'JSON', jsonc: 'JSON', js: 'JavaScript', ts: 'TypeScript',
-    sh: 'Shell', bash: 'Shell', zsh: 'Shell',
-    conf: 'Config', cfg: 'Config', ini: 'INI', properties: 'Properties',
-    yml: 'YAML', yaml: 'YAML', xml: 'XML', html: 'HTML', css: 'CSS',
-    py: 'Python', sql: 'SQL', md: 'Markdown', toml: 'TOML',
-    service: 'Config', vue: 'Vue',
-  }
-  return map[ext] || (ext ? ext.toUpperCase() : '')
-})
-
-function onEditorOpened() {
-  nextTick(() => syntaxEditorRef.value?.focus())
-}
-
-function fromBase64(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-function toBase64(str: string): string {
-  const bytes = new TextEncoder().encode(str)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-  return btoa(binary)
-}
-
-function isBinaryContent(bytes: Uint8Array): boolean {
-  const sample = bytes.slice(0, 8192)
-  if (!sample.length) return false
-  let nonPrintable = 0
-  for (let i = 0; i < sample.length; i++) {
-    const c = sample[i]
-    if (c < 0x09 || (c > 0x0D && c < 0x20)) nonPrintable++
-  }
-  return nonPrintable > sample.length * 0.3
-}
-
-function detectEncoding(bytes: Uint8Array): Encoding {
-  if (bytes.length >= 2) {
-    if (bytes[0] === 0xFF && bytes[1] === 0xFE) return 'utf-16le'
-    if (bytes[0] === 0xFE && bytes[1] === 0xFF) return 'utf-16be'
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return 'utf-8'
-  try {
-    const sample = bytes.slice(0, 8192)
-    let i = 0
-    let valid = true
-    while (i < sample.length) {
-      const b = sample[i]
-      if (b < 0x80) { i++; continue }
-      let trailing: number
-      if ((b & 0xE0) === 0xC0) trailing = 1
-      else if ((b & 0xF0) === 0xE0) trailing = 2
-      else if ((b & 0xF8) === 0xF0) trailing = 3
-      else { valid = false; break }
-      if (i + trailing >= sample.length) { valid = false; break }
-      for (let j = 1; j <= trailing; j++) {
-        if ((sample[i + j] & 0xC0) !== 0x80) { valid = false; break }
-      }
-      if (!valid) break
-      i += trailing + 1
-    }
-    if (valid) return 'utf-8'
-  } catch { /* fall through */ }
-  return 'gbk'
-}
-
-function detectLineEnding(text: string): LineEnding {
-  let crlf = 0, lf = 0, cr = 0
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '\r' && text[i + 1] === '\n') { crlf++; i++ }
-    else if (text[i] === '\n') lf++
-    else if (text[i] === '\r') cr++
-  }
-  if (crlf > lf && crlf > cr) return 'crlf'
-  if (cr > lf && cr > crlf) return 'cr'
-  return 'lf'
-}
-
-function decodeContent(bytes: Uint8Array, enc: Encoding): string {
-  if (enc === 'gbk') {
-    try { return new TextDecoder('gbk').decode(bytes) }
-    catch { return new TextDecoder('gb18030').decode(bytes) }
-  }
-  return new TextDecoder(enc === 'utf-16le' ? 'utf-16le' : enc === 'utf-16be' ? 'utf-16be' : 'utf-8').decode(bytes)
-}
-
-function encodeContent(text: string, enc: Encoding, lineEnding: LineEnding): string {
-  let normalized = text
-  if (lineEnding === 'crlf') normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
-  else if (lineEnding === 'cr') normalized = text.replace(/\r\n/g, '\n').replace(/\n/g, '\r')
-  else normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  if (enc === 'utf-8' || enc === 'gbk') return toBase64(normalized)
-  const buf = new Uint8Array(normalized.length * 2 + 2)
-  let pos = 0
-  buf[pos++] = enc === 'utf-16le' ? 0xFF : 0xFE
-  buf[pos++] = enc === 'utf-16le' ? 0xFE : 0xFF
-  for (let i = 0; i < normalized.length; i++) {
-    const code = normalized.charCodeAt(i)
-    buf[pos++] = enc === 'utf-16le' ? (code & 0xFF) : ((code >> 8) & 0xFF)
-    buf[pos++] = enc === 'utf-16le' ? ((code >> 8) & 0xFF) : (code & 0xFF)
-  }
-  let binary = ''
-  for (let i = 0; i < pos; i++) binary += String.fromCharCode(buf[i])
-  return btoa(binary)
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-watch(editorEncoding, (newEnc) => {
-  if (editorVisible.value && editorRawBytes.value) {
-    editorContent.value = decodeContent(editorRawBytes.value, newEnc)
-  }
-})
+const fileEditorRef = ref<{ open: (path: string, title: string, mode?: 'remote' | 'local') => Promise<void> } | null>(null)
 
 async function onEditFile(item: FileItem) {
   if (item.isDir) return
@@ -864,54 +724,8 @@ async function onEditFile(item: FileItem) {
     msg.warning(t('sftp.edit.fileTooLarge'))
     return
   }
-  if (item.size > 500 * 1024) {
-    const ok = window.confirm(t('sftp.edit.fileLargeWarning', { size: formatFileSize(item.size) }))
-    if (!ok) return
-  }
-  editorPath.value = joinPath(cwd.value, item.name)
-  editorTitle.value = t('sftp.dialog.editTitle', { path: editorPath.value })
-  editorContent.value = ''
-  editorRawBytes.value = null
-  editorVisible.value = true
-  try {
-    const rawB64 = await SftpGetContent(sid, editorPath.value)
-    const bytes = fromBase64(rawB64)
-    if (isBinaryContent(bytes)) {
-      editorVisible.value = false
-      msg.warning(t('sftp.edit.binaryFile'))
-      return
-    }
-    const detected = detectEncoding(bytes)
-    editorEncoding.value = detected
-    editorRawBytes.value = bytes
-    const text = decodeContent(bytes, detected)
-    editorLineEnding.value = detectLineEnding(text)
-    editorContent.value = text
-  } catch (e: any) {
-    editorVisible.value = false
-    msg.error(e?.toString() || 'Failed to read file')
-  }
-}
-
-async function onEditorSave() {
-  const sid = sessionId.value
-  if (!sid) return
-  editorSaving.value = true
-  try {
-    await SftpPutContent(
-      sid,
-      editorPath.value,
-      encodeContent(editorContent.value, editorEncoding.value, editorLineEnding.value),
-      editorEncoding.value,
-    )
-    msg.success(t('sftp.edit.saveSuccess'))
-    editorVisible.value = false
-    onRefresh()
-  } catch (e: any) {
-    msg.error(e?.toString() || 'Failed to save file')
-  } finally {
-    editorSaving.value = false
-  }
+  const path = joinPath(cwd.value, item.name)
+  await fileEditorRef.value?.open(path, t('sftp.dialog.editTitle', { path }), 'remote')
 }
 
 async function onCancelTransfer(taskId: string) {
@@ -930,19 +744,6 @@ async function onResumeTransfer(taskId: string) {
   try { await SftpResumeTransfer(sid, taskId) } catch {}
 }
 
-function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec < 1024) return Math.round(bytesPerSec) + ' B/s'
-  if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' KB/s'
-  return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s'
-}
-
-function formatETA(seconds: number): string {
-  if (seconds < 1) return ''
-  if (seconds < 60) return Math.round(seconds) + 's'
-  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's'
-  return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm'
-}
-
 let unsubStatus: (() => void) | null = null
 let unsubData: (() => void) | null = null
 
@@ -957,7 +758,7 @@ function bindListeners() {
       connectError.value = t('sftp.connectError')
     }
    })
-  unsubData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
+  unsubData =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data;
     if (payload.id !== sessionId.value) return
     const connMatch = payload.data.match(/\[Connection failed: ([^\]]+)\]/)
     if (connMatch) {
@@ -965,64 +766,10 @@ function bindListeners() {
       msg.error(connMatch[1])
       return
     }
-    const match = payload.data.match(/\x1b\]633;S([^\x07]*)\x07/)
-    if (!match) return
-    try {
-      const m = JSON.parse(match[1])
-      if (m.type !== 'sftp:transfer') return
-      const tasks = transferTasks.value
-      if (m.event === 'start') {
-        const existing = tasks.find(t => t.id === m.taskId)
-        if (existing) {
-          existing.status = 'running'
-          existing.lastBytes = 0
-          existing.lastTime = Date.now()
-        } else {
-          tasks.push({
-            id: m.taskId,
-            type: m.tfType,
-            name: m.name,
-            percentage: 0,
-            speed: '',
-            eta: '',
-            status: 'running',
-            lastBytes: 0,
-            lastTime: Date.now(),
-            total: m.total || 0,
-          })
-          // Cap history length
-          while (tasks.length > 80) tasks.shift()
-        }
-              } else if (m.event === 'progress') {
-        const existing = tasks.find(t => t.id === m.taskId)
-        if (existing) {
-          existing.total = m.total || existing.total
-          existing.percentage = existing.total > 0 ? Math.round((m.progress / existing.total) * 100) : 0
-          const now = Date.now()
-          const elapsed = (now - existing.lastTime) / 1000
-          if (elapsed >= 0.5) {
-            const bytesPerSec = (m.progress - existing.lastBytes) / elapsed
-            existing.speed = formatSpeed(bytesPerSec)
-            if (bytesPerSec > 0 && existing.total > 0) {
-              existing.eta = formatETA((existing.total - m.progress) / bytesPerSec)
-            }
-            existing.lastBytes = m.progress
-            existing.lastTime = now
-          }
-        }
-      } else if (m.event === 'complete') {
-        const existing = tasks.find(t => t.id === m.taskId)
-        if (existing) {
-          const st = m.status as string
-          existing.status = st === 'done' ? 'done' : st === 'cancelled' ? 'cancelled' : st === 'paused' ? 'paused' : 'error'
-          if (existing.status === 'done') {
-            existing.percentage = 100
-            scheduleRefresh(400)
-          }
-        }
-      }
-    } catch { /* ignore */ }
-   })
+  })
+
+  // Transfer tasks (start/progress/complete) are tracked by the shared composable.
+  transferEvents.bind()
 }
 
 /** Restore this panel's cached listing; returns true if a non-empty cache existed. */
@@ -1123,27 +870,25 @@ onUnmounted(() => {
   gap: 2px;
   align-items: center;
 }
-.companion-action-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: inline-flex;
+.filter-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
   align-items: center;
-  position: relative;
-  font-size: 11px;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
 }
-.companion-action-btn:hover {
-  background: var(--bg-hover);
+.filter-icon-btn:hover {
   color: var(--text-primary);
-}
-.companion-action-btn.active {
-  color: var(--accent, #22d3ee);
   background: var(--bg-hover);
 }
-.companion-action-btn:disabled {
+.filter-icon-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
