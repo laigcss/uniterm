@@ -29,7 +29,7 @@
               v-else-if="activeTab.type === 'workspace'"
               :tab="activeTab"
             />
-            <SFTPTabContent
+            <FileTabContent
               v-else-if="activeTab.type === 'sftp'"
               :key="activeTab.id"
               :panel-id="activeTab.panelId"
@@ -163,7 +163,7 @@ import Sidebar from './components/Sidebar.vue'
 import TerminalTabContent from './components/TerminalTabContent.vue'
 import SettingsTabContent from './components/SettingsTabContent.vue'
 import WorkspaceContent from './components/WorkspaceContent.vue'
-import SFTPTabContent from './components/SFTPTabContent.vue'
+import FileTabContent from './components/FileTabContent.vue'
 import RDPTabContent from './components/RDPTabContent.vue'
 import VNCTabContent from './components/VNCTabContent.vue'
 import SPICETabContent from './components/SPICETabContent.vue'

@@ -23,7 +23,7 @@
         <el-icon><Upload :size="14" /></el-icon>
       </button>
     </div>
-    <SFTPPathBreadcrumb
+    <PathBreadcrumb
       v-if="breadcrumbMode"
       :path="breadcrumbPath || ''"
       :drives="breadcrumbDrives"
@@ -162,7 +162,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Folder, File, Link, RefreshCw, Eye, Upload } from '@lucide/vue'
 import { useI18n } from '../i18n'
-import SFTPPathBreadcrumb from './SFTPPathBreadcrumb.vue'
+import PathBreadcrumb from './PathBreadcrumb.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'

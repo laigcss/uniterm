@@ -1351,7 +1351,7 @@
   "es.deleteSuccess": "Document deleted",
   "es.invalidJSON": "Invalid JSON",
   "es.deleteConfirm": "Delete this document?",
-  "companion.clearTransfers": "Borrar todo",
+  "companion.clearTransfers": "Borrar completadas",
   "companion.openSftpTab": "Abrir pestaña SFTP",
   "companion.connecting": "Conectando…",
   "companion.cpuAvg": "CPU promedio",
