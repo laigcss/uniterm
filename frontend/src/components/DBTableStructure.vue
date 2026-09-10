@@ -259,7 +259,7 @@ async function loadSchema() {
     const result = await GetTableSchema(props.sessionId, props.dbName, props.tableName)
     if (!cancelled) {
       schema.value = result
-      const pks = result.columns.filter(c => c.isPrimary).map(c => c.name)
+      const pks = result.columns.filter((c: { isPrimary?: boolean; name: string }) => c.isPrimary).map((c: { name: string }) => c.name)
       emit('schemaLoaded', pks)
     }
   } catch (e) {

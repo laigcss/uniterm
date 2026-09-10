@@ -276,6 +276,23 @@
               <el-button size="small" @click="openChangePassword">{{ t('config.changePassword') }}</el-button>
             </div>
           </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.hostKeyStrategy') }}</div>
+              <div class="setting-desc">{{ t('settings.hostKeyStrategyDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select
+                :model-value="settingsStore.settings.hostKeyStrategy || 'accept-new'"
+                @update:model-value="(v: string) => { settingsStore.settings.hostKeyStrategy = v as any; settingsStore.save() }"
+              >
+                <el-option :label="t('settings.hostKeyAcceptNew')" value="accept-new" />
+                <el-option :label="t('settings.hostKeyStrict')" value="strict" />
+                <el-option :label="t('settings.hostKeyOff')" value="off" />
+              </el-select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -623,6 +640,46 @@
               </el-input>
             </div>
           </div>
+
+          <!-- F4: 终端录制与回放 -->
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.autoRecord') }}</div>
+              <div class="setting-desc">{{ t('settings.autoRecordHint') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch
+                :model-value="settingsStore.settings.autoRecord ?? false"
+                @update:model-value="(v: boolean) => { settingsStore.settings.autoRecord = v; settingsStore.save() }"
+              />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.recordingsDir') }}</div>
+              <div class="setting-desc">{{ t('settings.recordingsDirHint') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input
+                :model-value="settingsStore.settings.recordingsDir ?? ''"
+                :placeholder="'~/.uniterm/records/'"
+                class="dir-input"
+                @update:model-value="(v: string) => { settingsStore.settings.recordingsDir = v; settingsStore.save() }"
+                clearable
+              />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('record.list') }}</div>
+              <div class="setting-desc">{{ t('record.sensitiveWarning') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-button @click="openRecordList">{{ t('record.manage') }}</el-button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -796,6 +853,12 @@
         <TunnelEditDialog v-model="tunnelDialogVisible" :editing-id="editingTunnelId" />
       </div>
 
+      <!-- MCP Servers -->
+      <div v-if="settingsStore.activeCategory === 'mcp'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.mcp') }}</h2>
+        <MCPServerSettings />
+      </div>
+
       <!-- 关于 -->
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
@@ -914,6 +977,16 @@
                 :max="100"
                 @change="settingsStore.save()"
               />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.localRiskGuard') }}</div>
+              <div class="setting-desc">{{ t('settings.localRiskGuardDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch :model-value="settingsStore.settings.ai.localRiskGuardEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.ai.localRiskGuardEnabled = v; settingsStore.save() }" />
             </div>
           </div>
 
@@ -1110,7 +1183,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft } from '@lucide/vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft, Plug } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -1119,6 +1192,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { warnIfInsecureBaseURL } from '../stores/aiStore'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS, SIDEBAR_TAB_ORDER, SIDEBAR_TAB_DEFAULTS } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { backendErrorText } from '../utils/backendError'
@@ -1136,13 +1210,14 @@ import DataDirDialog from './DataDirDialog.vue'
 import IdentityEditDialog from './IdentityEditDialog.vue'
 import ProxyEditDialog from './ProxyEditDialog.vue'
 import TunnelEditDialog from './TunnelEditDialog.vue'
+import MCPServerSettings from './MCPServerSettings.vue'
 import { useCredentialStore } from '../stores/credentialStore'
 import { useIdentityStore } from '../stores/identityStore'
 import { useProxyStore } from '../stores/proxyStore'
 import { useTunnelStore } from '../stores/tunnelStore'
 import type { Tunnel, TunnelMode } from '../stores/tunnelStore'
 import type { Identity } from '../types/identity'
-import { Browser } from '@wailsio/runtime'
+import { Browser, Events } from '@wailsio/runtime'
 import type { Proxy } from '../types/proxy'
 
 const settingsStore = useSettingsStore()
@@ -1348,7 +1423,7 @@ onMounted(async () => {
   // this host; fall back to the curated presets if detection returns nothing.
   try {
     const editors = await ListExternalEditors()
-    detectedEditors.value = (editors || []).map(e => ({ label: e.label, value: e.value }))
+    detectedEditors.value = (editors || []).map((e: { label: string; value: string }) => ({ label: e.label, value: e.value }))
   } catch {
     detectedEditors.value = []
   }
@@ -1417,6 +1492,15 @@ async function pickLogDir() {
     }
   } catch (e: any) {
     msg.error(String(e?.message ?? e))
+  }
+}
+
+// F4: 打开录制列表弹窗（通过 Wails 事件触发 App.vue 中挂载的 RecordList）。
+function openRecordList() {
+  try {
+    Events.Emit('app:open-record-list')
+  } catch {
+    window.dispatchEvent(new CustomEvent('app:open-record-list'))
   }
 }
 
@@ -1543,6 +1627,7 @@ const categories = computed(() => {
     { key: 'identities', label: t('settings.identities'), icon: Key },
     { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'tunnels', label: t('settings.tunnels'), icon: ArrowRightLeft },
+    { key: 'mcp', label: t('settings.mcp'), icon: Plug },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
@@ -1696,6 +1781,8 @@ async function removeModelConfirm(model: AIModelConfig) {
 }
 
 function saveModel() {
+  // S3: 保存前校验 baseURL scheme，明文 http（非本地）弹警告不阻断。
+  warnIfInsecureBaseURL(modelForm.baseURL)
   if (editingModel.value) {
     settingsStore.updateModel(editingModel.value.id, { ...modelForm })
   } else {
@@ -1736,7 +1823,7 @@ async function fetchModelList() {
   modelSuggestions.value = []
   try {
     const models = await FetchModels(modelForm.apiKey, modelForm.baseURL, modelForm.protocol, modelForm.proxyId || '')
-    modelSuggestions.value = (models || []).map(m => ({
+    modelSuggestions.value = (models || []).map((m: { display_name?: string; id: string }) => ({
       value: m.display_name || m.id
     }))
     msg.success(t('settings.fetchModelsSuccess', { count: modelSuggestions.value.length }))

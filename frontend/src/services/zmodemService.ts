@@ -74,7 +74,7 @@ export function startZmodemService(options: ZmodemServiceOptions) {
           ? Promise.resolve(pendingPaths)
           : OpenMultipleFilesDialog().catch((err: any) => dialogCancelToEmpty(err, []))
 
-        uploadPaths.then(async (paths) => {
+        uploadPaths.then(async (paths: string[] | undefined) => {
           if (!paths || paths.length === 0) {
             zsession.abort()
             await SessionEndZmodem(sessionId).catch(() => {})

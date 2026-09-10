@@ -46,7 +46,7 @@ function makeLine(cells: Array<Partial<PreviewBufferCell>>) {
   return {
     isWrapped: false,
     getCell(x: number): PreviewBufferCell | undefined {
-      return cells[x]
+      return cells[x] as PreviewBufferCell | undefined
     },
     translateToString(): string {
       return ''
@@ -129,7 +129,7 @@ describe('colorToCss', () => {
 })
 
 describe('lineToRuns', () => {
-  function cell(over: Partial<PreviewBufferCell>): PreviewBufferCell {
+  function cell(over: Partial<PreviewBufferCell> & Record<string, any>): PreviewBufferCell {
     return {
       getWidth: () => 1,
       getChars: () => 'a',

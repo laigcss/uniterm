@@ -411,10 +411,10 @@ function restoreCache(): boolean {
   if (!cached) return false
   systemInfo.value = cached.systemInfo ?? null
   hostClockAt.value = cached.systemInfoAt ?? 0
-  cpu.value = { ...cached.cpu }
-  mem.value = { ...cached.mem }
-  swap.value = { ...cached.swap }
-  net.value = { ...cached.net }
+  cpu.value = { ...cached.cpu } as typeof cpu.value
+  mem.value = { ...cached.mem } as typeof mem.value
+  swap.value = { ...cached.swap } as typeof swap.value
+  net.value = { ...cached.net } as typeof net.value
   cpus.value = Array.isArray(cached.cpus) ? [...cached.cpus] : []
   nets.value = Array.isArray(cached.nets) ? [...cached.nets] : []
   disks.value = Array.isArray(cached.disks) ? [...cached.disks] : []

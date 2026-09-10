@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -213,17 +211,15 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		return answers, nil
 	}
 
-	authMethods := makeSSHAuthMethods(config, kbCallback)
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
 		User:            config.User,
-		Auth:            authMethods,
+		AuthMethods:     makeSSHAuthMethods(config, kbCallback),
+		HostKeyStrategy: config.HostKeyStrategy,
 		Timeout:         30 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
-		return dialFirstHop(addr, config.Proxy)
+		Proxy:           config.Proxy,
+		CipherFallback:  true,
 	})
 	if err != nil {
 		s.setStatus(StatusError)

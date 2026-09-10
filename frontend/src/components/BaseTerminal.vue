@@ -23,6 +23,22 @@
       <span>{{ t('sftp.dropHere') }}</span>
     </div>
 
+    <!-- F4: 录制按钮 + 录制中指示器 -->
+    <div class="terminal-record-bar">
+      <button
+        class="record-btn"
+        :class="{ recording: isRecording }"
+        :title="isRecording ? t('record.stop') : t('record.start')"
+        @click="toggleRecording"
+      >
+        <span class="record-dot" :class="{ pulsing: isRecording }"></span>
+      </button>
+      <template v-if="isRecording">
+        <span class="record-label">REC</span>
+        <span class="record-time">{{ formattedRecordTime }}</span>
+      </template>
+    </div>
+
     <!-- Search bar -->
     <div v-show="searchVisible" class="terminal-search-bar">
       <input
@@ -130,7 +146,7 @@ import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { msg } from '../services/message'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
-import { highlight } from '../composables/useHighlight'
+import { highlightAdaptive } from '../composables/useHighlight'
 import { onTerminalKey, formatKeyBinding } from '../composables/useKeyboardShortcuts'
 import type { ShortcutAction } from '../types/settings'
 import { useSessionStore } from '../stores/sessionStore'
@@ -150,8 +166,10 @@ import {
   getManagedTerminal,
   transferTerminal,
   bumpOnDataGeneration,
+  subscribeSessionData,
+  unsubscribeSessionData,
 } from '../services/terminalManager'
-import { getXtermTheme } from '../composables/useTerminal'
+import { getXtermTheme } from '../utils/xtermTheme'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { stripCursorBlink } from '../utils/cursor'
 import { applyBackspaceKey } from '../utils/backspaceKey'
@@ -162,7 +180,7 @@ import {
   sanitizeLiveTerminalOutput,
 } from '../utils/terminalSanitize'
 import { useTerminalInput } from '../composables/useTerminalInput'
-import { useSuggestions, quickCommandCache } from '../composables/useSuggestions'
+import { useSuggestions } from '../composables/useSuggestions'
 import TerminalSuggestion from './TerminalSuggestion.vue'
 import TerminalGutter from './TerminalGutter.vue'
 import { startZmodemService } from '../services/zmodemService'
@@ -172,6 +190,7 @@ import ZmodemTransfer from './ZmodemTransfer.vue'
 import TerminalScreenPreview from './TerminalScreenPreview.vue'
 import { Browser, Clipboard, Events } from '@wailsio/runtime'
 import { ChevronUp, ChevronDown, X } from '@lucide/vue'
+import { TerminalRecorder } from '../services/terminalRecorder'
 
 const props = defineProps<{
   mode: 'ssh' | 'sftp' | 'local'
@@ -281,6 +300,20 @@ let savedViewportY: number | null = null
 let savedBaseY: number | null = null
 let unsubscribe: (() => void) | null = null
 let statusUnsubscribe: (() => void) | null = null
+// P2 节流：session:data 累积 + rAF 批量写出。
+// 高频输出（cat 大文件）时每块数据同步走 stripBlink→ED3→highlight→write，
+// 8 分屏 = 8 个监听器全广播，CPU 热点 + 事件风暴。改为累积到 dataBuffer，
+// 在 rAF 回调中合并一次写出；窗口隐藏时 rAF 暂停，用 setTimeout 兜底。
+const dataBuffer: string[] = []
+let rafScheduled = false
+let rafId: number | null = null
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+let flushFallbackTimer: ReturnType<typeof setTimeout> | null = null
+// 窗口隐藏时 rAF 不触发，最长累积 100ms 强制 flush，避免后台终端输出停滞。
+const FLUSH_FALLBACK_MS = 100
+
+// onSessionData 在 onMounted 内定义，watch(sessionId) 需要重新订阅时引用。
+let onSessionDataFn: ((data: string) => void) | null = null
 let onDocumentMouseDown: ((e: MouseEvent) => void) | null = null
 let onTerminalAuxClick: ((e: MouseEvent) => void) | null = null
 let onOpenSearch: ((e: Event) => void) | null = null
@@ -972,7 +1005,7 @@ onMounted(() => {
 
   // Initialize terminal input handling for SSH
   if (props.mode === 'ssh') {
-    const smartOn = settingsStore.settings.terminal.smartCompletion ?? true
+
     terminalInput = useTerminalInput(terminal, {
       mode: props.mode,
       sessionId: props.sessionId,
@@ -1000,7 +1033,7 @@ onMounted(() => {
         // Apply syntax highlighting when restoring history so it matches
         // newly arriving lines after a tab switch.
         const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-        writeStamped(hlOn ? highlight(history) : history)
+        writeStamped(hlOn ? highlightAdaptive(history) : history)
       }
     }
     // Always sync writtenChunks to prevent onActivated from replaying
@@ -1013,11 +1046,7 @@ onMounted(() => {
     // may hold stale dimensions from the previous container.
     ;[50, 150, 300, 600, 1000, 2000].forEach(d => setTimeout(() => {
       if (!terminal) return
-      const el = terminalRef.value
-      const inDOM = el ? document.contains(el) : false
-      const hasXterm = el?.querySelector('.xterm') ? true : false
-      const kids = el?.children.length ?? 0
-      const rect = el?.getBoundingClientRect()
+
       getFitAddon()?.fit()
       const sessionId = props.sessionId
       if (sessionId && terminal.cols > 0 && terminal.rows > 0) {
@@ -1042,10 +1071,11 @@ onMounted(() => {
     const sidNow = props.sessionId
     const gen = sidNow ? bumpOnDataGeneration(sidNow) : 0
 
-    keyHandlerDispose = terminal.attachCustomKeyEventHandler(handleTerminalKey)
+    if (terminal) {
+      keyHandlerDispose = terminal.attachCustomKeyEventHandler(handleTerminalKey) as unknown as { dispose(): void } | null
 
-    // Input handling
-    onDataDispose = terminal.onData((data) => {
+      // Input handling
+      onDataDispose = terminal.onData((data) => {
       // ── Stale callback guard (terminal-shared) ──
       // Check against the MANAGED terminal's current generation.
       // If another component (e.g. KeepAlive-cached) has registered
@@ -1076,15 +1106,17 @@ onMounted(() => {
           zmodemDirection = 'upload'
           // Recreate the zmodem service so on_detect sees the new direction.
           if (props.sessionId) {
-            disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId)
+            const zsid = props.sessionId
+            disposeZmodemService(zsid, false).then(() => {
+              initZmodemService(zsid)
             })
           }
         } else if (/^(?:sudo\s+)?sz\b/.test(line)) {
           zmodemDirection = 'download'
           if (props.sessionId) {
-            disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId)
+            const zsid = props.sessionId
+            disposeZmodemService(zsid, false).then(() => {
+              initZmodemService(zsid)
             })
           }
         }
@@ -1176,7 +1208,8 @@ onMounted(() => {
         }
       }
     }
-  })
+    })
+    }
 
   } // end bindListeners
 
@@ -1233,12 +1266,93 @@ onMounted(() => {
   }
   document.addEventListener('auxclick', onTerminalAuxClick)
 
-  // Session data
-  unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
+  // Session data — P2 节流：累积 + rAF 批量写出
+  // Zmodem 检测需逐块识别协议头，不能批量，在入队前做。
+  // 普通数据累积到 dataBuffer，rAF 回调合并一次写出。
+  const flushDataBuffer = () => {
+    // 取消所有待触发的调度
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    if (flushTimer) {
+      clearTimeout(flushTimer)
+      flushTimer = null
+    }
+    if (flushFallbackTimer) {
+      clearTimeout(flushFallbackTimer)
+      flushFallbackTimer = null
+    }
+    rafScheduled = false
+    if (dataBuffer.length === 0) return
+    if (!terminal) {
+      dataBuffer.length = 0
+      return
+    }
+
+    // 合并所有缓冲数据
+    const merged = dataBuffer.length === 1 ? dataBuffer[0] : dataBuffer.join('')
+    dataBuffer.length = 0
+
+    // 走原有处理链：stripBlink → ED3 → ED2 → sanitize → highlight → write
+    // Filter ED3 (erase scrollback).
+    let data = stripCursorBlink(merged, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, '')
+    // For ED2 (clear screen) in the main buffer, replace with scrolling
+    // to preserve scrollback history. In alternate screen (vim, less,
+    // k9s), pass through unchanged — the app manages its own screen.
+    if (data.includes('\x1b[2J') && terminal.buffer.active.type !== 'alternate') {
+      const rows = terminal.rows
+      const scrollClear = '\n'.repeat(rows) + '\x1b[H'
+      data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
+      data = data.replace(/\x1b\[2J/g, scrollClear)
+    }
+    // Drop U+FFFD + binary garbage. See utils/terminalSanitize for the
+    // full filter chain (box-drawing / braille preservation, control-char
+    // stripping, etc.). Live path skips the blank-line collapse step.
+    data = sanitizeLiveTerminalOutput(data)
+    if (props.mode === 'sftp') {
+      const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
+      if (cleaned) {
+        writeStamped(cleaned)
+      }
+      writtenChunks++
+    } else {
+      // Extract history commands from SSH output
+      if (props.mode === 'ssh' && terminalInput) {
+        terminalInput.handleSessionData(data)
+        // Close suggestions if we entered an alternate screen app (vim, k9s, etc.)
+        if (terminalInput.isInAlternateScreen()) {
+          suggestions.close()
+        }
+      }
+      const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
+      writeStamped(hlOn ? highlightAdaptive(data) : data)
+      writtenChunks++
+      if (props.mode === 'ssh' && props.onSessionStatus) {
+        // onSessionData is handled by the consumer via EventsOn if needed
+      }
+    }
+  }
+
+  // 调度一次 flush：可见时用 rAF（与渲染对齐），隐藏时用 setTimeout（rAF 暂停）
+  const scheduleFlush = () => {
+    rafScheduled = true
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      rafId = requestAnimationFrame(flushDataBuffer)
+    } else {
+      flushTimer = setTimeout(flushDataBuffer, 16)
+    }
+    // 兜底：窗口隐藏或 rAF 未及时触发时，强制 flush
+    flushFallbackTimer = setTimeout(() => {
+      if (rafScheduled) flushDataBuffer()
+    }, FLUSH_FALLBACK_MS)
+  }
+
+  const onSessionData = (rawData: string) => {
     if (!isActive.value) {
       // Mark notification dot on the tab when inactive terminal receives output
-      // Only process events for this instance's session (events are global)
-      if (payload.id === props.sessionId && props.sessionId) {
+      // (subscribeSessionData 已按 id 分发，无需再过滤 payload.id)
+      if (props.sessionId) {
         // Find the panel by sessionId (panels Map is keyed by panelId)
         let panelId: string | null = null
         for (const [id, p] of panelStore.panels) {
@@ -1259,7 +1373,7 @@ onMounted(() => {
       }
       return
     }
-    if (payload.id !== props.sessionId || !terminal) return
+    if (!terminal) return
 
     // 取消后 2 秒内吞掉所有数据，防止残余二进制乱码
     if (Date.now() < zmodemCancellingUntil) {
@@ -1274,13 +1388,14 @@ onMounted(() => {
 
     // Zmodem detection: scan for HEX header in normal terminal output.
     // Skip if the service was aborted (waiting for the next rz/sz command).
+    // Zmodem 需逐块识别协议头，不能批量合并，在入队前做检测。
     const activeZmodem = zmodemService && zmodemStore.getActiveTransfer(props.sessionId || '')
     if (zmodemService && !activeZmodem && !zmodemService.isAborted?.()) {
       if (isZmodemStarting) {
         // Already detected header and waiting for SessionStartZmodem / on_detect.
         // Feed subsequent data to sentry so it can complete detection without
         // re-processing the header heuristic on every retry frame.
-        zmodemService.consume(payload.data)
+        zmodemService.consume(rawData)
         return
       }
       // Real ZMODEM headers always contain the ZDLE control byte (0x18)
@@ -1291,7 +1406,7 @@ onMounted(() => {
       // ZMODEM mode and made the sentry write protocol bytes back to the
       // server, crashing the remote shell (issue #242).
       const ZMODEM_HEX_RE = /\*{2,}\x18[ABC][0-9a-fA-F]{10,}/
-      if (ZMODEM_HEX_RE.test(payload.data)) {
+      if (ZMODEM_HEX_RE.test(rawData)) {
         console.debug('[zmodem] header detected, entering transfer mode')
         isZmodemStarting = true
         if (zmodemStartTimer) clearTimeout(zmodemStartTimer)
@@ -1301,7 +1416,7 @@ onMounted(() => {
         const sid = props.sessionId
         if (sid) {
           // Consume immediately to avoid losing data during async handoff
-          zmodemService.consume(payload.data)
+          zmodemService.consume(rawData)
           import('../../bindings/github.com/ys-ll/uniterm/app').then(({ SessionStartZmodem }) => {
             SessionStartZmodem(sid).catch(() => {})
           })
@@ -1317,44 +1432,44 @@ onMounted(() => {
       return
     }
 
-    // Filter ED3 (erase scrollback).
-    let data = stripCursorBlink(payload.data, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, '')
-    // For ED2 (clear screen) in the main buffer, replace with scrolling
-    // to preserve scrollback history. In alternate screen (vim, less,
-    // k9s), pass through unchanged — the app manages its own screen.
-    if (data.includes('\x1b[2J') && terminal.buffer.active.type !== 'alternate') {
-      const rows = terminal.rows
-      const scrollClear = '\n'.repeat(rows) + '\x1b[H'
-      data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
-      data = data.replace(/\x1b\[2J/g, scrollClear)
+    // 普通数据：累积到缓冲队列，rAF 批量写出
+    // F4: 录制写入原始 session:data（未经 sanitize/highlight），保证回放忠实。
+    //     走 terminalRecorder 内部串行队列，不阻塞 rAF 渲染主路径。
+    if (isRecording.value) {
+      terminalRecorder.writeData(rawData)
     }
-// Drop U+FFFD + binary garbage. See utils/terminalSanitize for the
-    // full filter chain (box-drawing / braille preservation, control-char
-    // stripping, etc.). Live path skips the blank-line collapse step.
-    data = sanitizeLiveTerminalOutput(data)
-    if (props.mode === 'sftp') {
-      const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
-      if (cleaned) {
-        writeStamped(cleaned)
-      }
-      writtenChunks++
-    } else {
-      // Extract history commands from SSH output
-      if (props.mode === 'ssh' && terminalInput) {
-        terminalInput.handleSessionData(data)
-        // Close suggestions if we entered an alternate screen app (vim, k9s, etc.)
-        if (terminalInput.isInAlternateScreen()) {
-          suggestions.close()
-        }
-      }
-      const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      writeStamped(hlOn ? highlight(data) : data)
-      writtenChunks++
-      if (props.mode === 'ssh' && props.onSessionStatus) {
-        // onSessionData is handled by the consumer via EventsOn if needed
-      }
+    dataBuffer.push(rawData)
+    if (!rafScheduled) {
+      scheduleFlush()
     }
-  })
+  }
+
+  // 按 session id 订阅（terminalManager 单点全局监听 + Map 分发，
+  // 避免 8 分屏每个 BaseTerminal 都监听全局事件再过滤 id）
+  onSessionDataFn = onSessionData
+  if (props.sessionId) {
+    subscribeSessionData(props.sessionId, onSessionData)
+  }
+  unsubscribe = () => {
+    if (props.sessionId) {
+      unsubscribeSessionData(props.sessionId, onSessionData)
+    }
+    // 清理待触发的 rAF / timer，避免卸载后仍写出
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    if (flushTimer) {
+      clearTimeout(flushTimer)
+      flushTimer = null
+    }
+    if (flushFallbackTimer) {
+      clearTimeout(flushFallbackTimer)
+      flushFallbackTimer = null
+    }
+    rafScheduled = false
+    dataBuffer.length = 0
+  }
 
   // SSH/Local: session status events
   if (props.mode === 'ssh' || props.mode === 'local') {
@@ -1374,6 +1489,10 @@ onMounted(() => {
           SessionResize(props.sessionId, terminal.cols, terminal.rows).catch(() => {})
         }
         resize()
+        // F4: autoRecord 开启时，连接成功后自动开始录制。
+        if (!isRecording.value && settingsStore.settings.autoRecord) {
+          startRecording().catch(() => {})
+        }
       } else if (payload.status === 'error') {
         retryOnEnter = true
         if (props.onSessionStatus) {
@@ -1521,7 +1640,7 @@ onActivated(() => {
     if (total > writtenChunks) {
       const tail = sessionStore.getDataFromChunk(props.sessionId, writtenChunks)
       const hlOn = (settingsStore.settings.terminal.highlightEnabled ?? true) && props.mode !== 'local'
-      writeStamped(hlOn ? highlight(tail) : tail)
+      writeStamped(hlOn ? highlightAdaptive(tail) : tail)
       writtenChunks = total
     }
   }
@@ -1579,6 +1698,23 @@ onDeactivated(() => {
   // Mark inactive so session event handlers become no-ops.
   nativeDrop.unbind()
   isActive.value = false
+  // P2 节流：切到后台时取消待 flush 的 rAF/timer，清空缓冲。
+  // 未写入的数据会通过 onActivated 的 sessionStore 回放补回（writtenChunks
+  // 未 ++，回放 tail 会包含这些数据），不会丢失也不会重复。
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  if (flushFallbackTimer) {
+    clearTimeout(flushFallbackTimer)
+    flushFallbackTimer = null
+  }
+  rafScheduled = false
+  dataBuffer.length = 0
   // Capture viewport position before listeners are torn down so reactivation
   // can restore the user's scroll position. Reading from the public IBuffer
   // API avoids depending on internal _core field shape.
@@ -1614,6 +1750,14 @@ watch(() => props.sessionId, (newId, oldId) => {
     // preserved across reconnects. releaseTerminal is intentionally
     // skipped — we want to keep the same terminal instance alive.
     if (newId) transferTerminal(oldId, newId)
+    // P2 节流：取消旧 sessionId 的 data 订阅
+    if (onSessionDataFn) {
+      unsubscribeSessionData(oldId, onSessionDataFn)
+    }
+  }
+  // P2 节流：订阅新 sessionId 的 data（按 id 分发，避免全局广播）
+  if (newId && oldId !== newId && onSessionDataFn) {
+    subscribeSessionData(newId, onSessionDataFn)
   }
   // Reset write tracking when session changes so onActivated replay
   // starts from the correct offset for the new session.
@@ -1632,7 +1776,7 @@ watch(() => props.sessionId, (newId, oldId) => {
     // cursor position tracking returns {0,0}, pinning the suggestion
     // popup to the top-left corner.
     if (props.mode === 'ssh') {
-      const smartOn = settingsStore.settings.terminal.smartCompletion ?? true
+
       terminalInput = useTerminalInput(terminal, {
         mode: props.mode,
         sessionId: newId,
@@ -1812,6 +1956,14 @@ onUnmounted(() => {
   if (onTerminalCopy) window.removeEventListener('terminal:copy', onTerminalCopy)
   if (onTerminalPaste) window.removeEventListener('terminal:paste', onTerminalPaste)
   suggestions.close()
+  // F4: 组件卸载时停止录制，避免录制文件未关闭。
+  if (isRecording.value) {
+    stopRecording().catch(() => {})
+  }
+  if (recordTimerId) {
+    clearInterval(recordTimerId)
+    recordTimerId = null
+  }
   if (!zmodemStore.getActiveTransfer(props.sessionId || '')) {
     disposeZmodemService(props.sessionId || '')
   }
@@ -1886,6 +2038,64 @@ const supportsOutputLog = computed(() =>
 
 const isOutputLogOn = ref(false)
 const outputLogPath = ref('')
+
+// ── F4: 终端录制 ──────────────────────────────────────────────────
+const terminalRecorder = new TerminalRecorder()
+const isRecording = ref(false)
+const recordElapsedSec = ref(0)
+let recordTimerId: ReturnType<typeof setInterval> | null = null
+const formattedRecordTime = computed(() => {
+  const s = recordElapsedSec.value
+  const mm = Math.floor(s / 60).toString().padStart(2, '0')
+  const ss = (s % 60).toString().padStart(2, '0')
+  return `${mm}:${ss}`
+})
+
+async function toggleRecording() {
+  if (isRecording.value) {
+    await stopRecording()
+  } else {
+    await startRecording()
+  }
+}
+
+async function startRecording() {
+  const sid = props.sessionId
+  if (!sid || !terminal) return
+  try {
+    const cols = terminal.cols || 80
+    const rows = terminal.rows || 24
+    await terminalRecorder.start(sid, cols, rows)
+    isRecording.value = true
+    recordElapsedSec.value = 0
+    if (recordTimerId) clearInterval(recordTimerId)
+    recordTimerId = setInterval(() => { recordElapsedSec.value++ }, 1000)
+    msg.success(t('record.started'))
+  } catch (e: any) {
+    msg.error(t('record.startFailed', { error: String(e?.message ?? e) }))
+  }
+}
+
+async function stopRecording() {
+  try {
+    const path = await terminalRecorder.stop()
+    isRecording.value = false
+    if (recordTimerId) {
+      clearInterval(recordTimerId)
+      recordTimerId = null
+    }
+    if (path) {
+      msg.copyable(t('record.stopped', { path }), 'success')
+    }
+  } catch (e: any) {
+    msg.error(t('record.stopFailed', { error: String(e?.message ?? e) }))
+    isRecording.value = false
+    if (recordTimerId) {
+      clearInterval(recordTimerId)
+      recordTimerId = null
+    }
+  }
+}
 
 async function refreshOutputLogState() {
   const pid = props.panelId
@@ -2059,6 +2269,69 @@ defineExpose({
    * `clip` makes the box a non-scroll-container, so the offset cannot exist. */
   overflow: clip;
   position: relative;
+}
+
+/* F4: 录制按钮 + 指示器（左上角浮层） */
+.terminal-record-bar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(20, 23, 29, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+  z-index: 50;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.record-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+}
+.record-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.record-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+  transition: background 0.15s;
+}
+.record-btn.recording .record-dot {
+  background: #e53935;
+}
+.record-dot.pulsing {
+  animation: record-pulse 1.2s ease-in-out infinite;
+}
+@keyframes record-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.record-label {
+  color: #e53935;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.record-time {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  min-width: 38px;
 }
 
 /* Search bar */

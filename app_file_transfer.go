@@ -26,37 +26,11 @@ import (
 
 // SFTP direct API — called from frontend without terminal layer
 
-// fileTransferSession is the common interface for all file-transfer sessions
-// (SFTP, FTP, SMB, WebDAV, S3). Every direct Sftp* app method dispatches through
-// this contract, so protocol-agnostic features (like the external editor below)
-// work across every file-transfer backend without per-protocol code.
-type fileTransferSession interface {
-	ListRemote(dir string) (session.FileListResult, error)
-	ListLocal(dir string) (session.FileListResult, error)
-	ChangeRemoteDir(dir string) (session.FileListResult, error)
-	ChangeLocalDir(dir string) (session.FileListResult, error)
-	ListLocalDrives() ([]session.FileItem, error)
-	MakeDir(dir string) error
-	Remove(path string, recursive bool) error
-	Rename(oldPath, newPath string) error
-	Chmod(path string, mode os.FileMode) error
-	LocalRemove(path string, recursive bool) error
-	LocalRename(oldPath, newPath string) error
-	LocalMkdir(dir string) error
-	LocalGetContent(path string) ([]byte, error)
-	LocalPutContent(path string, content []byte) error
-	LocalCopy(oldPath, newPath string) error
-	LocalMove(oldPath, newPath string) error
-	Get(remotePath, localPath string, recursive bool) (string, error)
-	Put(localPath, remotePath string, recursive bool) (string, error)
-	PutContent(remotePath string, content []byte) error
-	GetContent(remotePath string) ([]byte, error)
-	Copy(oldPath, newPath string) error
-	Move(oldPath, newPath string) error
-	CancelTransfer(taskID string) error
-	PauseTransfer(taskID string) error
-	ResumeTransfer(taskID string) error
-}
+// fileTransferSession is the common interface for all file-transfer sessions.
+// The contract is defined in backend/session (session.FileTransferSession) so
+// each implementation carries a compile-time assertion; this alias keeps the
+// App-layer call sites unchanged.
+type fileTransferSession = session.FileTransferSession
 
 func (a *App) getSftp(sid string) (fileTransferSession, error) {
 	if a.sessionManager == nil {

@@ -3,7 +3,7 @@ import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import {
   SftpCopy, SftpMove, SftpRename, SftpRemove, SftpMakeDir, SftpPutContent,
-  SftpPut, SftpGet, SftpChmod,
+  SftpPut, SftpGet, SftpChmod, SftpListLocal,
   SftpLocalCopy, SftpLocalMove, SftpLocalRename, SftpLocalRemove, SftpLocalMkdir, SftpLocalPutContent,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
@@ -443,7 +443,7 @@ export function useFilePanel(opts: FilePanelOptions) {
     try {
       const localPaths = await OpenMultipleFilesDialog()
       if (!localPaths?.length) return
-      const names = localPaths.map(fp => fp.replace(/\\/g, '/').split('/').pop() || 'upload')
+      const names = localPaths.map((fp: string) => fp.replace(/\\/g, '/').split('/').pop() || 'upload')
       const action = await conflicts.resolveConflicts(names, files.value.map(f => f.name))
       if (action === 'cancel') return
       const existing = files.value.map(f => f.name)
@@ -473,7 +473,7 @@ export function useFilePanel(opts: FilePanelOptions) {
       let targetNames: string[] = []
       try {
         const result = await SftpListLocal(id, dir)
-        targetNames = result.files.map(f => f.name)
+        targetNames = result.files.map((f: { name: string }) => f.name)
       } catch { /* if listing fails, proceed without conflict prompting */ }
       const clashes = fileNames.filter(n => targetNames.includes(n))
       let action: 'overwrite' | 'rename' | 'cancel' = 'overwrite'
@@ -805,7 +805,7 @@ export function useNativeFileDrop(opts: {
     if (bound) return
     try {
       unsub = Events.On('common:WindowFilesDropped', (ev) => {
-        const d = ev.data as { elementId?: string; filenames: string[] }
+        const d = ev.data as unknown as { elementId?: string; filenames: string[] }
         if (!opts.isActive() || !d?.filenames?.length) return
         if (d.elementId && opts.elementId && d.elementId !== opts.elementId) return
         opts.upload(d.filenames)

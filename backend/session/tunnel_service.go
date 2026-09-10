@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
+
 	"sync"
 	"time"
 
@@ -53,34 +53,18 @@ func (ts *TunnelService) Start(sessionID string, sshConfig ConnectionConfig, tar
 	}
 
 	// 1. Establish SSH connection
-	authMethods := makeSSHAuthMethods(sshConfig, nil)
-	addr := net.JoinHostPort(sshConfig.Host, strconv.Itoa(sshConfig.Port))
-	clientConfig := &ssh.ClientConfig{
+	client, err := dialSSH(DialSSHOptions{
+		Host:            sshConfig.Host,
+		Port:            sshConfig.Port,
 		User:            sshConfig.User,
-		Auth:            authMethods,
+		AuthMethods:     makeSSHAuthMethods(sshConfig, nil),
+		HostKeyStrategy: sshConfig.HostKeyStrategy,
 		Timeout:         30 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config: sshAlgorithms(),
-	}
-
-	conn, err := dialFirstHop(addr, upstream)
+		Proxy:           upstream,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("tunnel ssh dial: %w", err)
 	}
-	// TCP keepalive: same interval as direct SSH sessions, so an idle tunnel
-	// (e.g. forwarding a single long-lived vim/editor session through a jump
-	// host) doesn't get silently dropped by a firewall/NAT idle timeout.
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(sshKeepAliveInterval)
-	}
-
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
-	if err != nil {
-		conn.Close()
-		return 0, fmt.Errorf("tunnel ssh handshake: %w", err)
-	}
-	client := ssh.NewClient(sshConn, chans, reqs)
 
 	// 2. Listen on random local port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

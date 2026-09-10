@@ -80,13 +80,29 @@ func Do(ctx context.Context, client *http.Client, base, method, path string, bod
 	// successful response. Production logs only status, method, path,
 	// byte count, latency.
 	if debugK8sREST {
-		preview := b
-		if len(preview) > 300 {
-			preview = preview[:300]
+		// S4: never log the response body of Secret / ConfigMap
+		// resources — even a 300-byte preview can leak credentials or
+		// sensitive config. Emit a fixed placeholder instead.
+		if isSensitiveResourcePath(path) {
+			log.Writef("[k8s] %s %s%s -> %d bytes=%d body=*** redacted ***", method, base, path, resp.StatusCode, len(b))
+		} else {
+			preview := b
+			if len(preview) > 300 {
+				preview = preview[:300]
+			}
+			log.Writef("[k8s] %s %s%s -> %d bytes=%d body=%s", method, base, path, resp.StatusCode, len(b), string(preview))
 		}
-		log.Writef("[k8s] %s %s%s -> %d bytes=%d body=%s", method, base, path, resp.StatusCode, len(b), string(preview))
 	} else {
 		log.Writef("[k8s] %s %s%s -> %d bytes=%d dur=%s", method, base, path, resp.StatusCode, len(b), time.Since(start))
 	}
 	return resp.StatusCode, b, nil
+}
+
+// isSensitiveResourcePath reports whether the REST path targets a Kubernetes
+// resource kind whose body may carry secrets/config (S4). Used to suppress
+// the debug body preview so credentials never land in the log file.
+// Matches e.g. `/api/v1/namespaces/default/secrets/my-token` or
+// `/api/v1/namespaces/default/configmaps/app-config`.
+func isSensitiveResourcePath(path string) bool {
+	return strings.Contains(path, "/secrets/") || strings.Contains(path, "/configmaps/")
 }

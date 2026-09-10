@@ -14,7 +14,8 @@ const browserWriter: ClipboardWriter = async (text) => {
 const wailsWriter: ClipboardWriter = async (text) => {
   let ok = false
   try {
-    ok = await Clipboard.SetText(text)
+    await Clipboard.SetText(text)
+    ok = true
   } catch {
     ok = false
   }

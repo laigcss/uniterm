@@ -69,7 +69,7 @@ import { Play, Clipboard, Copy } from '@lucide/vue'
 import { useSuggestions, type HistoryEntry } from '../composables/useSuggestions'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
-import { useQuickCommandStore } from '../stores/quickCommandStore'
+
 import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
@@ -83,7 +83,7 @@ const { t } = useI18n()
 const suggestions = useSuggestions()
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
-const qcStore = useQuickCommandStore()
+
 
 const searchQuery = ref('')
 const selectedIds = ref<Set<string>>(new Set())

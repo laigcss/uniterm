@@ -27,7 +27,7 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
+            <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget as HTMLElement)">
               <el-icon><Filter :size="14" /></el-icon>
             </span>
             <Menu ref="filterMenuRef" align="end" v-model:visible="showFilterMenu">
@@ -43,7 +43,7 @@
             </Menu>
           </template>
         </el-input>
-        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget)">
+        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget as HTMLElement)">
           <Plus :size="15" />
         </button>
         <!-- New-connection menu — Menu.vue, teleported + anchored right-edge (align=end). -->
@@ -292,6 +292,7 @@
     <ExportDialog v-model:visible="showExportDialog" />
     <ImportDialog v-model:visible="showImportDialog" />
     <CustomThemeEditor v-model="themeEditorVisible" :source-theme-id="themeEditorSourceId" />
+    <BatchExecuteDialog v-model="showBatchDialog" :hosts="batchHosts" />
 
     <!-- Tab-strip context menu: toggle which sidebar tabs are shown.
          Reuses the same AppSettings.sidebarTabs as the Settings page card.
@@ -335,6 +336,8 @@
       <MenuItem v-if="selectedConn && selectedConn.type === 'ssh'" @click="doConnectMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
       <MenuItem v-if="selectedConn && isConnOpen(selectedConn.id)" @click="doLocateSession">{{ t('sidebar.locateSession') }}</MenuItem>
       <MenuDivider />
+      <MenuItem v-if="selectedIds.size > 1" @click="doBatchExecute">{{ t('batch.contextMenu') }}</MenuItem>
+      <MenuDivider v-if="selectedIds.size > 1" />
       <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && doEdit()">{{ t('sidebar.edit') }}</MenuItem>
       <MenuItem @click="doDuplicate">{{ t('sidebar.duplicate') }}</MenuItem>
       <MenuDivider />
@@ -468,7 +471,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, provide } from 'vue'
 import { X, ChevronRight, ChevronDown, Filter, Check, Network, Zap, Clock, Plus, Palette, SquareTerminal, Terminal, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Laptop, LaptopMinimal, Cable, Pencil, MoreHorizontal, FolderTree, ShipWheel, Boxes, AppWindow, ArrowLeftRight, ArrowRightLeft } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
-import { msg } from '../services/message'
+
 import { useConnectionStore } from '../stores/connectionStore'
 import type { GroupTreeNode } from '../stores/connectionStore'
 import { usePanelStore } from '../stores/panelStore'
@@ -478,6 +481,7 @@ import { useI18n } from '../i18n'
 import ConnectionForm from './ConnectionForm.vue'
 import ExportDialog from './ExportDialog.vue'
 import ImportDialog from './ImportDialog.vue'
+import BatchExecuteDialog from './BatchExecuteDialog.vue'
 import QuickCommandsPanel from './QuickCommandsPanel.vue'
 import TunnelsPanel from './TunnelsPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
@@ -1014,10 +1018,6 @@ function onListKeydown(e: KeyboardEvent) {
   }
 }
 
-function findConnById(id: string | null): ConnectionConfig | undefined {
-  if (!id) return undefined
-  return connectionStore.connections.find(c => c.id === id)
-}
 
 // ── Drag & drop ──
 const dragOverGroupId = ref<string | null>(null)
@@ -1395,6 +1395,19 @@ function doConnectMonitor() {
   }
 }
 
+// ── Batch execute ──
+const showBatchDialog = ref(false)
+const batchHosts = ref<ConnectionConfig[]>([])
+
+function doBatchExecute() {
+  const ids = getSelectedConnectionIds()
+  const conns = ids.map(id => connectionStore.connections.find(c => c.id === id)).filter(Boolean) as ConnectionConfig[]
+  if (conns.length === 0) return
+  batchHosts.value = conns
+  closeMenu()
+  showBatchDialog.value = true
+}
+
 // Whether the given connection id currently has an open panel/session.
 function isConnOpen(id: string): boolean {
   return openPanelConnIds.value.has(id)
@@ -1606,14 +1619,6 @@ async function confirmNewGroup() {
 // ── Move to (unified dialog for connections and groups) ──
 const changeDialogMode = ref<'connections' | 'group'>('connections')
 
-function onChangeGroupSelect(value: string | undefined) {
-  if (value === '__new__') {
-    showChangeGroupDialog.value = false
-    changeNewGroupName.value = ''
-    changeNewGroupParentId.value = undefined
-    showChangeNewGroupDialog.value = true
-  }
-}
 
 function doChangeParentGroup() {
   closeMenu()

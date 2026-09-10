@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { reactive } from 'vue'
+import { shallowReactive } from 'vue'
 import type { Panel, PanelStatus, ConnectionConfig } from '../types/workspace'
 import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 
@@ -26,11 +26,13 @@ export interface SPICECache {
   container: HTMLDivElement
 }
 
-const panelState = reactive<{
+// shallowReactive: vncCaches/spiceCaches 持有 RFB/DOM 实例，深层 reactive 代理会破坏实例方法且浪费性能。
+const panelState = shallowReactive<{
   panels: Map<string, Panel>
   transferTasks: Map<string, TransferTaskUI[]>
   proxyAddrs: Map<string, string>
   vncCaches: Map<string, VNCCache>
+  spiceCaches: Map<string, SPICECache>
 }>({
   panels: new Map(),
   transferTasks: new Map(),
@@ -201,6 +203,7 @@ export const usePanelStore = defineStore('panel', () => {
     transferTasks: panelState.transferTasks,
     proxyAddrs: panelState.proxyAddrs,
     vncCaches: panelState.vncCaches,
+    spiceCaches: panelState.spiceCaches,
     getTransferTasks,
     createPanel,
     removePanel,

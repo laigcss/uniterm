@@ -8,7 +8,7 @@
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('es.refresh')" @click="loadIndices">
             <RefreshCw :size="14" />
           </button>
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
             <MoreHorizontal :size="14" />
           </button>
           <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
@@ -86,7 +86,7 @@
             v-if="tabShowMore"
             class="es-tab-more"
             :title="t('tab.more')"
-            @click.stop="moreTabsMenuRef?.toggle($event.currentTarget)"
+            @click.stop="moreTabsMenuRef?.toggle($event.currentTarget as HTMLElement)"
           >
             <MoreHorizontal :size="14" />
           </button>
@@ -293,7 +293,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { RefreshCw, Layers, Code2, MoreHorizontal, ChevronRight, ChevronDown, Database, Plus, Trash2 } from '@lucide/vue'
+import { RefreshCw, Layers, MoreHorizontal, ChevronRight, ChevronDown, Database, Plus, Trash2 } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'

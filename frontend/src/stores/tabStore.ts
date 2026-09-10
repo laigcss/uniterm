@@ -189,22 +189,6 @@ export const useTabStore = defineStore('tab', () => {
     return tab
   }
 
-  // Close a start tab atomically and move a newly-created tab into its
-  // position. Callers should create the new tab first, then call this.
-  function closeStartAndReposition(startTabId: string, newTabId: string) {
-    const startIdx = tabState.tabs.findIndex(t => t.id === startTabId)
-    if (startIdx === -1) return
-    const newIdx = tabState.tabs.findIndex(t => t.id === newTabId)
-    if (newIdx === -1) return
-    // Remove new tab from its current position
-    const [moved] = tabState.tabs.splice(newIdx, 1)
-    // Calculate target: startIdx if new was after start, else startIdx-1
-    const target = newIdx > startIdx ? startIdx : startIdx
-    tabState.tabs.splice(target, 0, moved)
-    // Now remove start tab (its index may have shifted)
-    const curStartIdx = tabState.tabs.findIndex(t => t.id === startTabId)
-    if (curStartIdx >= 0) tabState.tabs.splice(curStartIdx, 1)
-  }
 
   function createSettingsTab(name: string, panelId: string): SettingsTab {
     const tab: SettingsTab = {

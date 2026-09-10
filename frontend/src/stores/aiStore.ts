@@ -1,10 +1,49 @@
 import { defineStore } from 'pinia'
 import { ref, computed, reactive, watch } from 'vue'
-import type { AIMessage, AIConfig, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
+import type { AIMessage, AIConfig, ExecutionMode, InteractionMode, AISession, AIAgentStatus } from '../types/ai'
 import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from './localStateStore'
 import { Events } from '@wailsio/runtime'
 import { t } from '../i18n'
+import { ElMessage } from 'element-plus'
+
+/**
+ * S3: 校验 LLM baseURL 的 URL scheme。
+ *
+ * 非 https:// 且非 localhost/127.0.0.1 时弹警告"明文 HTTP 将暴露 API Key，
+ * 建议使用 https"。不阻断保存——尊重用户选择（本地 Ollama 等场景需要 http），
+ * 但留痕提醒。返回 true 表示安全/本地，false 表示发出了不安全警告。
+ *
+ * 导出供 SettingsTab.vue 的 saveModel 与 aiStore.setConfig 共用。
+ */
+export function warnIfInsecureBaseURL(baseURL: string): boolean {
+  if (!baseURL || typeof baseURL !== 'string') return true
+  const trimmed = baseURL.trim()
+  // https 直接放行
+  if (trimmed.startsWith('https://')) return true
+  // 非 http:// 的也放行（可能是 ws:// 或自定义协议，不归本函数管）
+  if (!trimmed.startsWith('http://')) return true
+  // http:// 但 host 是 localhost / 127.0.0.1 / 0.0.0.0 / [::1] 放行
+  try {
+    // 简单解析：http://host[:port][/path]
+    const rest = trimmed.slice('http://'.length)
+    const hostPort = rest.split('/')[0]
+    const host = hostPort.split(':')[0]
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host === '[::1]' ||
+      host === '::1'
+    ) {
+      return true
+    }
+  } catch {
+    // 解析失败则继续弹警告
+  }
+  ElMessage.warning(t('ai.insecureBaseURLWarning'))
+  return false
+}
 
 /**
  * Estimate token count for a string using character-based heuristics.
@@ -152,6 +191,8 @@ export const useAIStore = defineStore('ai', () => {
   const visible = ref(false)
   const messages = ref<AIMessage[]>([])
   const mode = ref<ExecutionMode>('confirm_dangerous')
+  // F1: AI 交互模式（chat/readonly/agent）。默认 'agent' 保持向后兼容。
+  const interactionMode = ref<InteractionMode>('agent')
   const config = ref<AIConfig>({ ...DEFAULT_CONFIG })
   const isRunning = ref(false)
   const status = ref<AIAgentStatus>('thinking')
@@ -211,6 +252,20 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  // F1: 持久化 interactionMode 到 localStateStore
+  async function saveInteractionMode() {
+    try {
+      useLocalStateStore().update({ aiInteractionMode: interactionMode.value })
+    } catch {
+      // ignore save errors
+    }
+  }
+
+  function setInteractionMode(m: InteractionMode) {
+    interactionMode.value = m
+    saveInteractionMode()
+  }
+
   // Auto-persist AI sidebar visibility whenever it changes
   watch(visible, () => {
     saveVisible()
@@ -234,7 +289,7 @@ export const useAIStore = defineStore('ai', () => {
     lastDebugInfo.value = null
   }
 
-  function setPendingCommand(cmd: { messageId: string; toolId: string; command: string; risk: string; dangerous: boolean }) {
+  function setPendingCommand(cmd: { messageId: string; toolId: string; toolName: string; command: string; risk: string; dangerous: boolean }) {
     pendingCommand.value = cmd
   }
 
@@ -345,6 +400,11 @@ export const useAIStore = defineStore('ai', () => {
       const ls = useLocalStateStore()
       if (!ls.loaded) await ls.init()
       visible.value = ls.state.aiSidebarVisible ?? false
+      // F1: restore interaction mode (default 'agent' for backward compat)
+      const savedMode = ls.state.aiInteractionMode
+      if (savedMode === 'chat' || savedMode === 'readonly' || savedMode === 'agent') {
+        interactionMode.value = savedMode
+      }
     } catch {
       // keep default
     }
@@ -396,6 +456,10 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   function setConfig(updates: Partial<AIConfig>) {
+    // S3: 保存 baseURL 时校验 scheme，明文 http（非本地）弹警告不阻断。
+    if (updates.baseURL !== undefined) {
+      warnIfInsecureBaseURL(updates.baseURL)
+    }
     config.value = { ...config.value, ...updates }
   }
 
@@ -732,6 +796,8 @@ export const useAIStore = defineStore('ai', () => {
     addMessage, addSkillCard, addCommandCard,
     clearMessages,
     mode,
+    interactionMode,
+    setInteractionMode,
     config,
     isRunning,
     status,

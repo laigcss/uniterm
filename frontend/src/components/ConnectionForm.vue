@@ -667,7 +667,7 @@ import type { ConnectionConfig, PostLoginExpectStep } from '../types/session'
 import { OpenFileDialog, OpenPrivateKeyFile, GetPlatform, ListSerialPorts, TestConnection } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { ElInput } from 'element-plus'
 import { msg } from '../services/message'
-import { Plus, Trash2, ChevronDown, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, LaptopMinimal, Cable, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
+import { Plus, Trash2, ChevronRight, FolderOpen, Eye, EyeOff, RefreshCw, Terminal, Monitor, Database, DatabaseZap, Layers, DatabaseSearch, SquareTerminal, Zap, Laptop, LaptopMinimal, Cable, FolderUp, Folders, FileUp, HardDrive, Cloud, Globe, MonitorCloud, MonitorSmartphone, Boxes, ShipWheel, AppWindow, ArrowLeftRight, CircleCheck, CircleX } from '@lucide/vue'
 import { listContexts } from '../services/k8sClient'
 import SyntaxEditor from './SyntaxEditor.vue'
 import type { K8sContextInfo } from '../types/k8s'
@@ -699,7 +699,7 @@ onMounted(() => {
 // ── Platform detection (before allSubTypes so it's available in computed closures) ──
 const isWindows = ref(/windows/i.test(navigator.userAgent) || /win32/i.test(navigator.platform))
 const platform = ref<string>('')
-GetPlatform().then(p => { platform.value = p })
+GetPlatform().then((p: string) => { platform.value = p })
 
 // ── Categories & sub-types ──
 interface SubTypeInfo {
@@ -784,7 +784,7 @@ function selectType(st: SubTypeInfo) {
     form.type = 'container'
     form.containerRuntime = st.containerRuntime as 'docker' | 'podman' | 'nerdctl' | 'wslc'
   } else {
-    form.type = st.type
+    form.type = st.type as ConnectionConfig['type']
   }
 }
 
@@ -1129,11 +1129,6 @@ const groupTreeData = computed<TreeOption[]>(() => {
   ]
 })
 
-const selectedGroupName = computed(() => {
-  if (!form.groupId) return ''
-  const g = connectionStore.groups.find(g => g.id === form.groupId)
-  return g?.name || form.groupId
-})
 
 // New group dialog
 const showNewGroupDialog = ref(false)
@@ -1412,9 +1407,6 @@ watch(selectedGroupId, (val) => {
   form.groupId = val === '__none__' ? undefined : (val || undefined)
 })
 
-function onNodeClick(data: any) {
-  // el-tree-select auto-closes and syncs via v-model
-}
 
 function onGroupSelect(value: string | undefined) {
   if (value === '__new__') {

@@ -3,7 +3,7 @@
     <el-table
       :key="tableKey"
       ref="tableRef"
-      :data="rows"
+      :data="visibleRows"
       border
       size="small"
       height="100%"
@@ -92,6 +92,11 @@
         </template>
       </el-table-column>
     </el-table>
+    <div v-if="rows.length > visibleCount" class="more-bar">
+      <span class="more-info">{{ moreText.showing }}</span>
+      <button class="btn btn-ghost btn-sm" @click="showMore">{{ moreText.more }}</button>
+      <button class="btn btn-ghost btn-sm" @click="showAll">{{ moreText.all }}</button>
+    </div>
   </div>
 </template>
 
@@ -101,7 +106,7 @@ import { Pencil, Trash2 } from '@lucide/vue'
 import type { QueryResultColumn, ColumnInfo } from '../types/database'
 import { useI18n } from '../i18n'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = defineProps<{
   rows: Record<string, any>[]
@@ -125,6 +130,30 @@ const emit = defineEmits<{
 
 const tableRef = ref<any>(null)
 const cellInputEl = ref<HTMLInputElement | null>(null)
+
+// P1: 大结果集分页 — 单元格编辑（双击/input/null 按钮/pending/focus-blur）与
+// el-table slot 深度耦合，迁移 el-table-v2 cellRenderer 风险高（编辑态单元格
+// 滚出可视区会被卸载，focus/blur 行为异常），故采用"显示更多"分页控制 DOM 数量。
+const INITIAL_ROWS = 1000
+const ROW_STEP = 1000
+const visibleCount = ref(INITIAL_ROWS)
+const visibleRows = computed(() => props.rows.slice(0, visibleCount.value))
+function showMore() {
+  visibleCount.value += ROW_STEP
+}
+function showAll() {
+  visibleCount.value = props.rows.length
+}
+const moreText = computed(() => {
+  const isZh = locale.value.startsWith('zh')
+  return {
+    showing: isZh
+      ? `已显示 ${visibleCount.value} / ${props.rows.length} 行`
+      : `Showing ${visibleCount.value} of ${props.rows.length} rows`,
+    more: isZh ? '显示更多' : 'Show more',
+    all: isZh ? '显示全部' : 'Show all',
+  }
+})
 
 const tableKey = computed(() => `edit-${props.canEdit ? 1 : 0}-cols-${props.columns.map(c => c.name).join('|')}`)
 
@@ -343,6 +372,8 @@ watch(() => props.rows, () => {
     pending.clear()
     bumpPending()
   }
+  // P1: 新结果集到达时重置分页到首屏，避免上一次的 visibleCount 残留。
+  visibleCount.value = INITIAL_ROWS
 })
 
 defineExpose({
@@ -363,8 +394,12 @@ defineExpose({
   width: 100%;
   overflow: hidden;
   outline: none;
+  display: flex;
+  flex-direction: column;
 }
 .db-result-table {
+  flex: 1;
+  min-height: 0;
   --el-table-header-bg-color: var(--bg-elevated, var(--bg-surface));
   --el-table-tr-bg-color: var(--bg-surface);
   --el-table-row-hover-bg-color: var(--bg-hover);
@@ -373,6 +408,20 @@ defineExpose({
   --el-table-text-color: var(--text-primary);
   --el-table-bg-color: var(--bg-surface);
   font-size: 12px;
+}
+.more-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 12px;
+}
+.more-info {
+  flex: 1;
+  color: var(--text-secondary);
 }
 .row-actions {
   display: inline-flex;

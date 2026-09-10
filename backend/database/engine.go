@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // parseParams parses "key1=val1&key2=val2" into a map.
@@ -27,15 +29,21 @@ func parseParams(s string) map[string]string {
 }
 
 // BuildDSN builds a DSN string from connection config fields.
+// On error the returned error is passed through log.Redact so a DSN
+// fragment (which carries the password) can never leak back to the
+// caller or front-end via the error string (S4).
 func BuildDSN(dbType, host, user, password, dbName, extraParams string, port int) (string, error) {
 	p, err := NewProvider(dbType)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%s", log.Redact(err.Error()))
 	}
 	return p.DSN(host, port, user, password, dbName, parseParams(extraParams)), nil
 }
 
 // NewDB opens a database/sql connection for the given database type and DSN.
+// The DSN itself is never embedded in the returned error, but driver-level
+// parse errors may echo it — redact defensively so the password segment
+// never escapes (S4).
 func NewDB(dbType, dsn string) (*sql.DB, error) {
 	p, err := NewProvider(dbType)
 	if err != nil {
@@ -43,9 +51,10 @@ func NewDB(dbType, dsn string) (*sql.DB, error) {
 	}
 	db, err := sql.Open(p.DriverName(), dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", dbType, err)
+		return nil, fmt.Errorf("open %s: %s", dbType, log.Redact(err.Error()))
 	}
 	db.SetMaxOpenConns(20)
+
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	db.SetConnMaxIdleTime(2 * time.Minute)

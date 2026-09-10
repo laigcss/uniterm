@@ -69,25 +69,25 @@
           </el-table-column>
           <el-table-column :label="t('container.colActions')" width="172" fixed="right" class-name="k8s-action-cell">
             <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.exec')" @click.stop="openExec(row)">
+              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.exec')" @click.stop="openExec(row as ContainerInfo)">
                 <SquareTerminal :size="14" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.logs')" @click.stop="openLogs(row)">
+              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.logs')" @click.stop="openLogs(row as ContainerInfo)">
                 <ScrollText :size="14" />
               </button>
-              <button v-if="row.state !== 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.start')" @click.stop="runAction(row, 'start')">
+              <button v-if="row.state !== 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.start')" @click.stop="runAction(row as ContainerInfo, 'start')">
                 <Play :size="14" />
               </button>
-              <button v-if="row.state === 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.stop')" @click.stop="runAction(row, 'stop')">
+              <button v-if="row.state === 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.stop')" @click.stop="runAction(row as ContainerInfo, 'stop')">
                 <Square :size="14" />
               </button>
-              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.restart')" @click.stop="runAction(row, 'restart')">
+              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.restart')" @click.stop="runAction(row as ContainerInfo, 'restart')">
                 <Power :size="14" />
               </button>
-              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.rename')" @click.stop="onRename(row)">
+              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.rename')" @click.stop="onRename(row as ContainerInfo)">
                 <Pencil :size="14" />
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.remove')" @click.stop="onRemove(row)">
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.remove')" @click.stop="onRemove(row as ContainerInfo)">
                 <Trash2 :size="14" />
               </button>
             </template>
@@ -120,7 +120,7 @@
           </el-table-column>
           <el-table-column :label="t('container.colActions')" width="38" fixed="right" class-name="k8s-action-cell">
             <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.removeImage')" @click.stop="onRemoveImage(row)">
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.removeImage')" @click.stop="onRemoveImage(row as ContainerImage)">
                 <Trash2 :size="14" />
               </button>
             </template>

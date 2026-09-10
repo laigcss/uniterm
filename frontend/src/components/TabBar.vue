@@ -38,7 +38,7 @@
       ></div>
     </div>
     <div class="tab-more" v-if="tabs.length > 0">
-      <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget)">
+      <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget as HTMLElement)">
         <el-icon class="tab-more-icon"><MoreHorizontal /></el-icon>
       </span>
       <Menu ref="tabMoreRef" v-model:visible="tabMoreVisible" align="end">

@@ -55,7 +55,7 @@
               v-if="docTabsShowMore"
               class="doc-tab-more"
               :title="t('tab.more')"
-              @click.stop="docMoreMenuRef?.toggle($event.currentTarget)"
+              @click.stop="docMoreMenuRef?.toggle($event.currentTarget as HTMLElement)"
             >
               <MoreHorizontal :size="14" />
             </button>
@@ -237,7 +237,7 @@ const activeTable = computed(() => (activeDoc.value?.kind === 'table' ? activeDo
 const leftWidth = ref(220)
 let resizeStartX = 0
 let resizeStartWidth = 0
-let resizing = false
+
 
 function nextId(prefix: string) {
   docSeq += 1
@@ -271,7 +271,7 @@ const ctxMenuVisible = ref(false)
 function ctxIndexFor(id: string) {
   return docs.value.findIndex(d => d.id === id)
 }
-function canCloseOthersOf() {
+function canCloseOthersOf(_id?: string) {
   return docs.value.length > 1
 }
 function canCloseLeftOf(id: string) {
@@ -433,7 +433,7 @@ async function loadSchema(doc: DocTab) {
   try {
     const schema = await GetTableSchema(props.sessionId, doc.dbName, doc.tableName)
     doc.tableColumns = schema.columns
-    doc.primaryKeys = schema.columns.filter(c => c.isPrimary).map(c => c.name)
+    doc.primaryKeys = schema.columns.filter((c: { isPrimary?: boolean; name: string }) => c.isPrimary).map((c: { name: string }) => c.name)
   } catch { /* ignore */ }
 }
 
@@ -560,7 +560,7 @@ function onObjectRemoved(payload: { dbName: string; tableName?: string; kind: 't
 function onResizeStart(e: MouseEvent) {
   resizeStartX = e.clientX
   resizeStartWidth = leftWidth.value
-  resizing = true
+
   document.addEventListener('mousemove', onResizeMove)
   document.addEventListener('mouseup', onResizeEnd)
 }
@@ -571,7 +571,7 @@ function onResizeMove(e: MouseEvent) {
 }
 
 function onResizeEnd() {
-  resizing = false
+
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
 }

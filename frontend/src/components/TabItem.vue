@@ -56,7 +56,7 @@
       :class="{ 'tab-close-right-ghost': !hovered || tab.locked }"
       @click.stop="$emit('close', tab.id)"
     ><X /></button>
-    <Menu ref="ctxMenuRef" root-class="right-shortcuts" v-model:visible="ctxMenuVisible" v-slot="{ current }">
+    <Menu ref="ctxMenuRef" root-class="right-shortcuts" v-model:visible="ctxMenuVisible" v-slot>
       <!-- ① 标签类操作 -->
       <MenuItem v-if="canDuplicate" :shortcut="menuShortcut('duplicateSession')" @click="onDuplicate">
         {{ t('tab.duplicate') }}
@@ -125,9 +125,9 @@ import {
   RDPSetFullScreen,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
-import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
+import type { Tab, TerminalTab, RDPTab } from '../types/workspace'
 import { connectFileMenuKey, fileTransferProto } from '../utils/fileTransferUtils'
-import type { ConnectionConfig } from '../types/session'
+
 import { useDuplicateSession } from '../composables/useDuplicateSession'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -136,7 +136,7 @@ import { Clipboard } from '@wailsio/runtime'
 import { SquareTerminal, Laptop, LaptopMinimal, FolderUp, FolderOpen, Folders, FileUp, HardDrive, Cloud, Globe, Monitor, MonitorCloud, MonitorSmartphone, Settings, Database, DatabaseZap, Layers, DatabaseSearch, Activity, Terminal, Zap, X, ArrowDownUp, LayoutDashboard, Cable, SquarePlus, Lock, ShipWheel, Box, Boxes, AppWindow, ArrowLeftRight, Radio } from '@lucide/vue'
 
 const props = defineProps<{
-  tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
+  tab: Tab
   isActive: boolean
   hasNotification?: boolean
   showClose?: boolean
@@ -270,7 +270,7 @@ const showBroadcastIcon = computed(() =>
 
 const hasActiveTransfers = computed(() => {
   if (props.tab.type === 'workspace') return false
-  const tasks = panelStore.getTransferTasks(props.tab.panelId)
+  const tasks = panelStore.getTransferTasks((props.tab as TerminalTab).panelId)
   return tasks.some(t => t.status === 'running' || t.status === 'paused')
 })
 
@@ -497,7 +497,7 @@ async function copyHostAddress() {
   // Wails clipboard, falling back to the browser API when the runtime is
   // absent (plain dev in a browser) or the call fails.
   let ok = false
-  try { ok = await Clipboard.SetText(host) } catch { ok = false }
+  try { await Clipboard.SetText(host); ok = true } catch { ok = false }
   if (!ok) {
     try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
   }

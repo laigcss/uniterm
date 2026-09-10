@@ -12,28 +12,30 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	stdsync "sync"
 	"sync/atomic"
 	"time"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"golang.org/x/crypto/ssh"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/importer"
 	"github.com/ys-ll/uniterm/backend/k8s"
 	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/mcp"
 	"github.com/ys-ll/uniterm/backend/platform"
 	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/ys-ll/uniterm/backend/sync"
 	"github.com/ys-ll/uniterm/backend/update"
 	"github.com/ys-ll/uniterm/backend/utils"
+	"golang.org/x/crypto/ssh"
 )
 
 type App struct {
@@ -57,6 +59,7 @@ type App struct {
 	recentStore          *store.RecentStore
 	syncService          *sync.SyncService
 	tunnelService        *session.TunnelService
+	mcpManager           *mcp.MCPManager
 	mainHwnd             uintptr
 	originalWndProc      uintptr
 	wndProcCb            uintptr // keep alive to prevent GC
@@ -122,6 +125,7 @@ func NewApp(webviewDataPath string) *App {
 		panelAutoTriggered: make(map[string]bool),
 		k8sManager:         k8s.NewManager(),
 		containerManager:   container.NewManager(),
+		mcpManager:         mcp.NewManager(),
 		errCh:              make(chan error, 16),
 	}
 }
@@ -164,6 +168,13 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 
 	a.sessionManager = session.NewSessionManager()
 	a.tunnelService = session.NewTunnelService()
+
+	// S1: wire the Wails event emitter into the session package so SSH
+	// host-key changes can surface a `session:hostkey-changed` event to
+	// the frontend for the TOFU confirmation dialog.
+	session.SetHostKeyEmitter(func(name string, payload any) {
+		a.emit(name, payload)
+	})
 
 	// Defer EventsEmit from WndProc to avoid blocking the modal resize/move loop.
 	a.moveResizeCh = make(chan string, 10)
@@ -240,6 +251,9 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		// respects the user's choice from a prior run.
 		if settings, err := ss.Load(); err == nil {
 			a.SetDefaultSessionLogDir(settings.Terminal.SessionLogDir)
+			// S1: prime the SSH host-key verification policy from persisted
+			// settings so the very first connection honors the user's choice.
+			session.SetDefaultHostKeyStrategy(session.ParseHostKeyStrategy(settings.HostKeyStrategy))
 		}
 	}
 
@@ -630,6 +644,9 @@ func (a *App) shutdown() {
 	}
 	if a.sessionManager != nil {
 		a.sessionManager.CloseAll()
+	}
+	if a.mcpManager != nil {
+		a.mcpManager.StopAll()
 	}
 	cleanupExtEditsOnExit()
 	session.CleanupSSHX11Server()
@@ -1331,6 +1348,10 @@ func (a *App) SaveSettings(settings store.AppSettings) error {
 	}
 	err := a.settingsStore.Save(settings)
 	if err == nil {
+		// S1: keep the live SSH host-key policy in sync with the persisted
+		// value so the next connection picks up the new strategy without a
+		// restart.
+		session.SetDefaultHostKeyStrategy(session.ParseHostKeyStrategy(settings.HostKeyStrategy))
 		a.triggerAutoSync()
 	}
 	return err
@@ -1341,6 +1362,14 @@ func (a *App) LoadSettings() (store.AppSettings, error) {
 		return store.AppSettings{}, fmt.Errorf("settings store not initialized")
 	}
 	return a.settingsStore.Load()
+}
+
+// AcceptHostKeyChange replaces the recorded SSH host key for host:port with
+// the new key, after the user confirmed the change in the frontend's
+// "host key changed" dialog (S1). Subsequent connections will trust the new
+// key without prompting.
+func (a *App) AcceptHostKeyChange(host, port, keyType, newKeyB64 string) error {
+	return session.AcceptHostKeyChange(host, port, keyType, newKeyB64)
 }
 
 // QuickCommandsStore methods
@@ -1362,7 +1391,6 @@ func (a *App) LoadQuickCommands() (store.QuickCommandData, error) {
 	}
 	return a.quickCommandsStore.Load()
 }
-
 
 // CommandsStore methods
 

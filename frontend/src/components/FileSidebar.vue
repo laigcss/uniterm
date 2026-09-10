@@ -114,7 +114,7 @@
     <FileEditorDialog
       ref="fileEditorRef"
       v-model:visible="editorVisible"
-      :session-id="sessionId"
+      :session-id="sessionId ?? undefined"
       mode="remote"
       @saved="onRefresh"
     />
@@ -170,7 +170,7 @@ const transferKey = computed(() => companionStore.transferKey || 'companion-sftp
 const transferTasks = computed(() => panelStore.getTransferTasks(transferKey.value))
 const transferEvents = useTransferTaskEvents(
   () => transferTasks.value,
-  () => sessionId.value,
+  () => sessionId.value ?? undefined,
   (status) => { if (status === 'done') scheduleRefresh(400) },
 )
 const LIST_TIMEOUT_MS = 20000
@@ -361,7 +361,7 @@ watch(sessionId, async (sid) => {
   bindListeners()
   try {
     const sessions = await ListSessions()
-    const sess = sessions.find(s => s.id === sid)
+    const sess = sessions.find((s: { id: string; status: string }) => s.id === sid)
     if (sess?.status === 'connected') await onRefresh()
     else scheduleRefreshRetry()
   } catch {

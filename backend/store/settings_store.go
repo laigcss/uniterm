@@ -161,6 +161,18 @@ type AppSettings struct {
 	// builds (which lack this field) still load; a nil map means "use the
 	// frontend defaults" (everything visible).
 	SidebarTabs map[string]bool `json:"sidebarTabs,omitempty"`
+	// HostKeyStrategy controls SSH host-key verification. Empty means
+	// "accept-new" (TOFU). Other values: "strict", "off". See
+	// backend/session/hostkey.go. Omitempty so older settings.json files
+	// still load; the backend defaults to accept-new when empty (S1).
+	HostKeyStrategy string `json:"hostKeyStrategy,omitempty"`
+	// AutoRecord enables automatic terminal recording on new sessions (F4).
+	// Pointer + omitempty so older settings.json files still load; the
+	// frontend defaults to false when nil.
+	AutoRecord *bool `json:"autoRecord,omitempty"`
+	// RecordingsDir overrides the default directory for terminal recordings
+	// (~/.uniterm/records/). Empty means use the default. (F4)
+	RecordingsDir string `json:"recordingsDir,omitempty"`
 }
 
 type SFTPBookmarks struct {

@@ -1,20 +1,19 @@
-import { chat, AVAILABLE_TOOLS, ChatCancelledError, ChatTimeoutError } from './llm'
-import { executeCommand, startCommand, captureTerminal, collectOutput, sendTerminalKey } from './terminalAgent'
-import type { ExecuteResult } from './terminalAgent'
+import { chat, ChatCancelledError, ChatTimeoutError } from './llm'
+import { executeCommand, startCommand } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSkillStore } from '../stores/skillStore'
-import { GetSkillFile, ListSkillFiles } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { AIMessage } from '../types/ai'
 import { Events } from '@wailsio/runtime'
-import {
-  InputValidationError,
-  validateRequiredString,
-  validateObject,
-} from '../utils/runtimeTypeCheck'
+import { InputValidationError } from '../utils/runtimeTypeCheck'
+import { assessLocalRisk } from './localRisk'
+import { toolRegistry, AVAILABLE_TOOLS, EXECUTION_TOOLS, WRITE_TOOLS, DANGEROUS_TOOLS } from './tools'
+import { capToolResult, formatExecuteResult } from './tools/_shared'
+import type { ToolContext, RiskLevel } from './tools/types'
+import { hasMCPTools, getMCPToolSchemas, isMCPTool } from './mcp/registry'
 
 // Global token listener management: only one runAgent instance should receive
 // ai:token events at a time. Registering a new listener automatically cancels
@@ -76,15 +75,45 @@ function hasActiveSession(): boolean {
   return !!panel?.sessionId
 }
 
-type RiskLevel = 'read' | 'write' | 'dangerous'
+// RiskLevel is now imported from ./tools/types (A3 refactor).
 
 export const VALID_RISK: readonly RiskLevel[] = ['read', 'write', 'dangerous']
 
-export function getRisk(tu: { name: string; input: Record<string, unknown> }): RiskLevel {
-  if (tu.name !== 'execute_command' && tu.name !== 'start_command') return 'dangerous'
-  const risk = tu.input.risk
+// S2: normalize the model-declared risk field into one of the three literal
+// levels. Unknown / missing / wrong-typed → 'dangerous' (default-closed).
+function normalizeRisk(risk: unknown): RiskLevel {
   if (risk === 'read' || risk === 'write' || risk === 'dangerous') return risk
-  return 'dangerous' // default-closed: unknown / missing / wrong-typed → dangerous
+  return 'dangerous'
+}
+
+// S2: take the stricter of two risk levels (dangerous > write > read).
+function maxRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
+  const order: Record<RiskLevel, number> = { read: 0, write: 1, dangerous: 2 }
+  return order[a] >= order[b] ? a : b
+}
+
+// S2: read the local-risk-guard toggle from settings. Defaults to true when
+// the store isn't initialised yet (e.g. unit tests without pinia) or when the
+// field is absent — the guard is opt-OUT, not opt-IN.
+function isLocalRiskGuardEnabled(): boolean {
+  try {
+    return useSettingsStore().settings.ai.localRiskGuardEnabled !== false
+  } catch {
+    return true
+  }
+}
+
+// `command` is optional so existing callers/tests that only pass the tool-use
+// shape still work; when omitted, the local pattern guard is skipped and we
+// fall back to trusting the model-declared risk alone (backwards-compatible).
+export function getRisk(tu: { name: string; input: Record<string, unknown> }, command?: string): RiskLevel {
+  if (tu.name !== 'execute_command' && tu.name !== 'start_command') return 'dangerous'
+  const modelRisk = normalizeRisk(tu.input.risk)
+  if (!command) return modelRisk
+  if (!isLocalRiskGuardEnabled()) return modelRisk
+  const localRisk = assessLocalRisk(command)
+  // 本地防线永不低于模型声明：取更严格者。
+  return maxRisk(modelRisk, localRisk)
 }
 
 function shouldConfirm(risk: RiskLevel): boolean {
@@ -99,165 +128,8 @@ function shouldConfirm(risk: RiskLevel): boolean {
 }
 
 // ---- Tool input validators (FE-P0-3) ----
-// Hand-rolled shape checks for the 7 most-used tools. The LLM is untrusted;
-// `tu.input.command as string` would yield "[object Object]" for `command: {}`.
-// On any failure we throw InputValidationError so the dispatch site can
-// surface the error back to the model and continue the agent loop.
-
-interface ExecuteCommandInput {
-  command: string
-  timeout: number
-  head_lines: number
-  tail_lines: number
-  panel?: string
-}
-
-function validateExecuteCommandInput(raw: unknown): ExecuteCommandInput {
-  const obj = validateObject(raw, 'execute_command input')
-  return {
-    command: validateRequiredString(obj.command, 'command'),
-    timeout: typeof obj.timeout === 'number' && Number.isFinite(obj.timeout) && obj.timeout > 0 ? obj.timeout : 60,
-    head_lines: typeof obj.head_lines === 'number' && Number.isFinite(obj.head_lines) ? obj.head_lines : 50,
-    tail_lines: typeof obj.tail_lines === 'number' && Number.isFinite(obj.tail_lines) ? obj.tail_lines : 300,
-    panel: typeof obj.panel === 'string' ? obj.panel : undefined,
-  }
-}
-
-interface StartCommandInput {
-  command: string
-  panel?: string
-}
-
-function validateStartCommandInput(raw: unknown): StartCommandInput {
-  const obj = validateObject(raw, 'start_command input')
-  return {
-    command: validateRequiredString(obj.command, 'command'),
-    panel: typeof obj.panel === 'string' ? obj.panel : undefined,
-  }
-}
-
-interface SendTerminalKeyInput {
-  input?: string
-  control?: 'ctrl_c' | 'ctrl_d' | 'enter'
-  send_enter: boolean
-  panel?: string
-}
-
-function validateSendTerminalKeyInput(raw: unknown): SendTerminalKeyInput {
-  const obj = validateObject(raw, 'send_terminal_key input')
-  const control = obj.control
-  let validatedControl: 'ctrl_c' | 'ctrl_d' | 'enter' | undefined
-  if (control === undefined) {
-    validatedControl = undefined
-  } else if (control === 'ctrl_c' || control === 'ctrl_d' || control === 'enter') {
-    validatedControl = control
-  } else {
-    throw new InputValidationError(`control must be one of ctrl_c, ctrl_d, enter`)
-  }
-  return {
-    input: typeof obj.input === 'string' ? obj.input : undefined,
-    control: validatedControl,
-    send_enter: typeof obj.send_enter === 'boolean' ? obj.send_enter : true,
-    panel: typeof obj.panel === 'string' ? obj.panel : undefined,
-  }
-}
-
-interface AskUserInput {
-  question: string
-  header?: string
-  options: Array<{ label: string; description: string }>
-  multiSelect: boolean
-}
-
-function validateAskUserInput(raw: unknown): AskUserInput {
-  const obj = validateObject(raw, 'ask_user input')
-  const rawOptions = obj.options
-  const options: Array<{ label: string; description: string }> = []
-  if (Array.isArray(rawOptions)) {
-    for (const item of rawOptions) {
-      if (item && typeof item === 'object' && !Array.isArray(item)) {
-        const o = item as Record<string, unknown>
-        const label = typeof o.label === 'string' ? o.label : ''
-        const description = typeof o.description === 'string' ? o.description : ''
-        if (label) options.push({ label, description })
-      }
-    }
-  }
-  return {
-    question: validateRequiredString(obj.question, 'question'),
-    header: typeof obj.header === 'string' ? obj.header : undefined,
-    options,
-    multiSelect: typeof obj.multiSelect === 'boolean' ? obj.multiSelect : false,
-  }
-}
-
-interface SaveSkillInput {
-  name: string
-  description: string
-  body: string
-}
-
-function validateSaveSkillInput(raw: unknown): SaveSkillInput {
-  const obj = validateObject(raw, 'save_skill input')
-  return {
-    name: validateRequiredString(obj.name, 'name'),
-    description: validateRequiredString(obj.description, 'description'),
-    body: validateRequiredString(obj.body, 'body'),
-  }
-}
-
-interface UseSkillInput {
-  name: string
-}
-
-function validateUseSkillInput(raw: unknown): UseSkillInput {
-  const obj = validateObject(raw, 'use_skill input')
-  return { name: validateRequiredString(obj.name, 'name') }
-}
-
-interface ReadSkillFileInput {
-  name: string
-  path: string
-}
-
-function validateReadSkillFileInput(raw: unknown): ReadSkillFileInput {
-  const obj = validateObject(raw, 'read_skill_file input')
-  return {
-    name: validateRequiredString(obj.name, 'name'),
-    path: validateRequiredString(obj.path, 'path'),
-  }
-}
-
-// F-312: cap the bytes stored in a tool message so a single tool call can't
-// blow up the conversation computed. The model can still see the beginning
-// and end of long output; the in-between is dropped with a clear marker.
-// 32 KB total, 8 KB head, 16 KB tail — biased to the tail because error
-// messages and final state almost always live at the bottom of terminal output.
-const TOOL_RESULT_MAX_BYTES = 32 * 1024
-const TOOL_RESULT_HEAD_BYTES = 8 * 1024
-const TOOL_RESULT_TAIL_BYTES = 16 * 1024
-
-function capToolResult(text: string): string {
-  if (text.length <= TOOL_RESULT_MAX_BYTES) return text
-  const head = text.slice(0, TOOL_RESULT_HEAD_BYTES)
-  const tail = text.slice(text.length - TOOL_RESULT_TAIL_BYTES)
-  const omitted = text.length - TOOL_RESULT_HEAD_BYTES - TOOL_RESULT_TAIL_BYTES
-  return `${head}\n\n─────── [已截断: 工具结果共 ${text.length} 字节, 已省略 ${omitted} 字节] ────────\n调整工具参数（如 head_lines / tail_lines）或分段调用以查看被截断部分。\n\n${tail}`
-}
-
-function formatExecuteResult(result: ExecuteResult): string {
-  if (!result.timedOut) {
-    return `${result.output}\n\n[COMMAND COMPLETED]`
-  }
-  // Put the timeout guidance right after the status line so the AI sees the
-  // verdict before reading the follow-up advice.
-  return `${result.output}\n\n[COMMAND TIMED OUT]\n\n`
-    + `⚠️ The command did not finish within the timeout and may still be running.\n`
-    + `Do not resend the same command.\n`
-    + `• If the output shows progress (percentages, scrolling filenames, etc.) → use collect_output to keep waiting\n`
-    + `• If the output shows a password/confirmation prompt → use send_terminal_key to respond\n`
-    + `• If the command is stuck and unresponsive → use interrupt_command to cancel`
-}
+// Tool input validators + capToolResult + formatExecuteResult have been moved
+// to ./tools/*.ts (A3 refactor). agent.ts now dispatches via toolRegistry.
 
 function getShellName(path?: string): string {
   if (!path) return 'Unknown'
@@ -383,7 +255,80 @@ function buildSystemPrompt(): string {
     shellPath.toLowerCase().includes('cmd')
   )
   const isWindowsOpenSSH = isWindowsOpenSSHPanel(activePanel)
-  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell, isWindowsOpenSSH) + buildSkillIndex()
+  return store.systemPrompt + getShellGuidance(shellPath, isWindowsShell, isWindowsOpenSSH) + buildSkillIndex() + buildInteractionModePrompt() + buildMCPToolsPrompt()
+}
+
+/**
+ * F3: 当有 MCP 工具注册时，在 system prompt 末尾注入 MCP 工具说明。
+ * 让 AI 知道它有外部工具可用，并提示这些工具来自外部 server。
+ */
+function buildMCPToolsPrompt(): string {
+  if (!hasMCPTools()) return ''
+  return '\n\n=== MCP TOOLS ===\nYou also have access to MCP tools from external servers. These tools extend your capabilities with additional functions provided by external MCP servers. Tool names follow the pattern mcp__<server>__<tool>. Call them like any other tool when the task matches their description.'
+}
+
+/**
+ * F1: 根据 interactionMode 在 system prompt 末尾注入模式约束提示。
+ * agent 模式不注入（走现有 risk + 确认逻辑，保持向后兼容）。
+ */
+function buildInteractionModePrompt(): string {
+  const store = useAIStore()
+  switch (store.interactionMode) {
+    case 'chat':
+      return '\n\n=== INTERACTION MODE: CHAT ===\nYou are in Chat mode. You CANNOT execute any commands. You can only view terminal output (capture_terminal/collect_output) and answer questions. Do NOT call execute_command, start_command, send_terminal_key, interrupt_command, save_skill, or use_skill. If the user asks you to perform an action that requires running a command, explain what command they should run themselves.'
+    case 'readonly':
+      return '\n\n=== INTERACTION MODE: READ-ONLY ===\nYou are in Read-Only mode. You can only execute READ-ONLY commands (e.g., ls, cat, grep, ps, df). Write and dangerous commands (rm, mv, chmod, kill, >redirect, save_skill, start_command, send_terminal_key, interrupt_command) are PROHIBITED and will be rejected. If a task requires a write/dangerous command, tell the user what to run instead.'
+    case 'agent':
+    default:
+      return '' // 走现有 risk + 确认逻辑
+  }
+}
+
+/**
+ * F1: 根据 interactionMode 判定是否拒绝该工具调用。
+ * 返回拒绝原因字符串；返回 null 表示放行。
+ * agent 模式永远放行（走现有 risk + 确认逻辑）。
+ *
+ * readonly 模式下 execute_command 按命令本身 localRisk 判定：
+ *   - read 类命令（ls/cat/grep/...）放行
+ *   - write/dangerous 类命令拒绝
+ */
+function rejectToolByInteractionMode(tu: { name: string; input: Record<string, unknown> }): string | null {
+  const store = useAIStore()
+  switch (store.interactionMode) {
+    case 'chat':
+      if (EXECUTION_TOOLS.has(tu.name)) {
+        return `[Chat mode] Tool "${tu.name}" is disabled. Chat mode only allows viewing terminal output and answering questions. Tell the user what command to run themselves.`
+      }
+      // F3: MCP 工具与外部进程交互，chat 模式下禁用。
+      if (isMCPTool(tu.name)) {
+        return `[Chat mode] MCP tool "${tu.name}" is disabled. Chat mode only allows viewing terminal output and answering questions.`
+      }
+      return null
+    case 'readonly':
+      // 写类 + 危险类工具一律拒绝
+      if (WRITE_TOOLS.has(tu.name) || DANGEROUS_TOOLS.has(tu.name)) {
+        return `[Read-Only mode] Tool "${tu.name}" is prohibited. Read-Only mode only allows read-only commands. Tell the user what command to run themselves.`
+      }
+      // F3: MCP 工具归为写类（与外部进程交互），readonly 模式下禁用。
+      if (isMCPTool(tu.name)) {
+        return `[Read-Only mode] MCP tool "${tu.name}" is prohibited. Read-Only mode only allows read-only commands.`
+      }
+      // execute_command 按命令 localRisk 判定
+      if (tu.name === 'execute_command' || tu.name === 'start_command') {
+        const cmd = typeof tu.input.command === 'string' ? tu.input.command : ''
+        if (cmd) {
+          const localRisk = assessLocalRisk(cmd)
+          if (localRisk !== 'read') {
+            return `[Read-Only mode] Command "${cmd.slice(0, 80)}" was assessed as ${localRisk}. Read-Only mode only allows read-only commands. Tell the user what command to run themselves.`
+          }
+        }
+      }
+      return null
+    case 'agent':
+    default:
+      return null
+  }
 }
 
 /**
@@ -536,7 +481,7 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
     const chatOptions: any = {
       system: buildSystemPrompt(),
       messages: store.conversation,
-      tools: AVAILABLE_TOOLS,
+      tools: [...AVAILABLE_TOOLS, ...getMCPToolSchemas()],
       onChunk: (chunk: string) => {
         if (store.stopRequested) return
         if (streamedText) return // already handled by ai:token events
@@ -656,358 +601,53 @@ export async function runAgent(userInput: string, skillName?: string, skillBody?
       return true
     }
 
-    if (tu.name === 'execute_command') {
-      let validated: ExecuteCommandInput
-      try {
-        validated = validateExecuteCommandInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const command = validated.command
-      // Honor the model-provided timeout as-is (no clamping); the validator
-      // falls back to 60s when the argument is missing or invalid.
-      const timeoutMs = validated.timeout * 1000
-      const headLines = validated.head_lines
-      const tailLines = validated.tail_lines
-      const risk = getRisk(tu)
-
-      if (shouldConfirm(risk)) {
-        store.setPendingCommand({
-          messageId: assistantMsg.id,
-          toolId: tu.id,
-          toolName: tu.name,
-          command,
-          risk,
-          dangerous: risk === 'dangerous'
-        })
-        store.status = 'confirming'
-        assistantMsg.tool_calls = [{
-          id: tu.id,
-          type: 'function' as const,
-          function: {
-            name: tu.name,
-            arguments: JSON.stringify(tu.input)
-          }
-        }]
-        store.isRunning = false
-        cleanupStreamListeners()
-        return
-      }
-
-      try {
-        store.status = 'executing'
-        const panelTitle = validated.panel
-        const result = await executeCommand(command, timeoutMs, headLines, tailLines, () => store.stopRequested, panelTitle)
-        if (result.cancelled || store.stopRequested) {
-          store.addMessage({
-            id: `msg-${Date.now()}`,
-            role: 'tool',
-            content: '[INTERRUPTED]'
-          })
-          store.isRunning = false
-          cleanupStreamListeners()
-          return
-        }
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(formatExecuteResult(result)),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error executing command: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'start_command') {
-      let validated: StartCommandInput
-      try {
-        validated = validateStartCommandInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const command = validated.command
-      const risk = getRisk(tu)
-
-      if (shouldConfirm(risk)) {
-        store.setPendingCommand({
-          messageId: assistantMsg.id,
-          toolId: tu.id,
-          toolName: tu.name,
-          command,
-          risk,
-          dangerous: risk === 'dangerous'
-        })
-        store.status = 'confirming'
-        assistantMsg.tool_calls = [{
-          id: tu.id,
-          type: 'function' as const,
-          function: {
-            name: tu.name,
-            arguments: JSON.stringify(tu.input)
-          }
-        }]
-        store.isRunning = false
-        cleanupStreamListeners()
-        return
-      }
-
-      try {
-        store.status = 'executing'
-        const panelTitle = validated.panel
-        const result = await startCommand(command, panelTitle)
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(result.output || '(command started)'),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error starting command: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'capture_terminal') {
-      const tailLines = (tu.input.tail_lines as number) ?? 200
-      try {
-        store.status = 'executing'
-        const panelTitle = tu.input.panel as string | undefined
-        const result = captureTerminal(tailLines, panelTitle)
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(result.output || '(terminal is empty)'),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error capturing terminal: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'collect_output') {
-      // Honor the model-provided timeout as-is (no clamping); `|| 30` falls
-      // back to 30s when the argument is missing or invalid.
-      const timeoutMs = ((tu.input.timeout as number) || 30) * 1000
-      const headLines = (tu.input.head_lines as number) ?? 100
-      const tailLines = (tu.input.tail_lines as number) ?? 300
-      try {
-        store.status = 'executing'
-        const panelTitle = tu.input.panel as string | undefined
-        const result = await collectOutput(timeoutMs, headLines, tailLines, () => store.stopRequested, panelTitle)
-        if (store.stopRequested) {
-          store.addMessage({
-            id: `msg-${Date.now()}`,
-            role: 'tool',
-            content: '[INTERRUPTED]'
-          })
-          store.isRunning = false
-          cleanupStreamListeners()
-          return
-        }
-        const status = result.completed ? '[COMMAND COMPLETED]' : '[COMMAND STILL RUNNING]'
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(`${result.output}\n\n${status}`),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error collecting output: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'send_terminal_key') {
-      let validated: SendTerminalKeyInput
-      try {
-        validated = validateSendTerminalKeyInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const input = validated.input
-      const control = validated.control
-      const sendEnter = validated.send_enter
-      try {
-        store.status = 'executing'
-        const panelTitle = validated.panel
-        const result = await sendTerminalKey(
-          input,
-          control,
-          sendEnter,
-          panelTitle
-        )
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(result.output || '(input sent)'),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error sending terminal input: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'interrupt_command') {
-      try {
-        store.status = 'executing'
-        const panelTitle = tu.input.panel as string | undefined
-        const result = await sendTerminalKey(undefined, 'ctrl_c', true, panelTitle)
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(result.output || 'Sent Ctrl+C to interrupt the running command.'),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error sending Ctrl+C: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'ask_user') {
-      let validated: AskUserInput
-      try {
-        validated = validateAskUserInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const question = validated.question
-      const header = validated.header
-      const options = validated.options
-      const multiSelect = validated.multiSelect
-
-      store.setPendingQuestion({
-        messageId: assistantMsg.id,
-        toolId: tu.id,
-        question,
-        header,
-        options,
-        multiSelect,
+    const tool = toolRegistry.get(tu.name)
+    if (!tool) {
+      // Unknown tool — original if-else chain silently skipped unmatched names.
+      // Emit an error tool message so the model learns the available set.
+      store.addMessage({
+        id: `msg-${Date.now()}`,
+        role: 'tool',
+        content: `[Error: unknown tool "${tu.name}"]. Available tools: ${Array.from(toolRegistry.keys()).join(', ')}.`,
+        tool_call_id: tu.id
       })
-      assistantMsg.tool_calls = [{
-        id: tu.id,
-        type: 'function' as const,
-        function: {
-          name: tu.name,
-          arguments: JSON.stringify(tu.input)
-        }
-      }]
-      store.status = 'confirming'
-      store.isRunning = false
-      cleanupStreamListeners()
+      continue
+    }
+
+    // F1: interactionMode 过滤 — chat/readonly 模式拒绝执行类/写类工具。
+    // agent 模式 rejectToolByInteractionMode 永远返回 null，行为与改动前一致。
+    const modeRejectReason = rejectToolByInteractionMode(tu)
+    if (modeRejectReason) {
+      store.addMessage({
+        id: `msg-${Date.now()}`,
+        role: 'tool',
+        content: modeRejectReason,
+        tool_call_id: tu.id
+      })
+      continue
+    }
+
+    let validated
+    try {
+      validated = tool.validate(tu.input)
+    } catch (e: any) {
+      if (e instanceof InputValidationError) { handleInvalidInput(e.message); continue }
+      throw e
+    }
+
+    const ctx: ToolContext = {
+      store,
+      assistantMsg,
+      toolUseId: tu.id,
+      rawInput: tu.input,
+      capToolResult,
+      cleanupStreamListeners,
+      getRisk,
+      shouldConfirm,
+    }
+    const result = await tool.execute(ctx, validated)
+    if (result.kind === 'pause' || result.kind === 'stop') {
       return
-    } else if (tu.name === 'save_skill') {
-      let validated: SaveSkillInput
-      try {
-        validated = validateSaveSkillInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const name = validated.name
-      const description = validated.description
-      const body = validated.body
-      try {
-        store.status = 'executing'
-        const skillStore = useSkillStore()
-        await skillStore.saveByAgent(name, description, body)
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Skill saved: ${name}] The user can now invoke it with /${name}.`,
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error saving skill: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'use_skill') {
-      let validated: UseSkillInput
-      try {
-        validated = validateUseSkillInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const name = validated.name
-      try {
-        const skillStore = useSkillStore()
-        const meta = skillStore.skills.find(s => s.name === name)
-        if (!meta) throw new Error(`skill "${name}" not found`)
-        if (!meta.enabled) throw new Error(`skill "${name}" is disabled`)
-        if (!meta.modelInvocable) throw new Error(`skill "${name}" is not model-invocable; the user must run it manually via /${name}`)
-        const body = await skillStore.getBody(name)
-        const files = await ListSkillFiles(name)
-        store.addSkillCard(name, 'auto')
-        const manifest = [
-          body,
-          files.references.length ? `\n\nREFERENCES:\n${files.references.map(f => `- ${f}`).join('\n')}` : '',
-          files.scripts.length ? `\n\nSCRIPTS:\n${files.scripts.map(f => `- ${f}`).join('\n')}` : '',
-        ].join('')
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(`[Skill loaded: ${name}]\n${manifest}`),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error loading skill: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
-    } else if (tu.name === 'read_skill_file') {
-      let validated: ReadSkillFileInput
-      try {
-        validated = validateReadSkillFileInput(tu.input)
-      } catch (e: any) {
-        if (e instanceof InputValidationError) { if (handleInvalidInput(e.message)) continue }
-        throw e
-      }
-      const name = validated.name
-      const path = validated.path
-      try {
-        const content = await GetSkillFile(name, path)
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: capToolResult(`[Skill file: ${name}/${path}]\n${content}`),
-          tool_call_id: tu.id
-        })
-      } catch (e: any) {
-        store.addMessage({
-          id: `msg-${Date.now()}`,
-          role: 'tool',
-          content: `[Error reading skill file: ${e.message ?? e}]`,
-          tool_call_id: tu.id
-        })
-      }
     }
   }
 

@@ -25,7 +25,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rhnvrm/simples3"
 	"github.com/studio-b12/gowebdav"
-	"golang.org/x/crypto/ssh"
+
 
 	"github.com/cloudsoda/go-smb2"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -84,18 +84,17 @@ func probeSSH(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
-	authMethods := makeSSHAuthMethods(config, kb)
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            authMethods,
-		Timeout:         15 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
 	// Honor a materialized proxy (set by App.materializeProxy) on the first hop,
 	// mirroring the terminal session's dial path.
-	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
-		return dialFirstHop(addr, config.Proxy)
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
+		User:            config.User,
+		AuthMethods:     makeSSHAuthMethods(config, kb),
+		HostKeyStrategy: config.HostKeyStrategy,
+		Timeout:         15 * time.Second,
+		Proxy:           config.Proxy,
+		CipherFallback:  true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("ssh: %w", err)
@@ -111,16 +110,15 @@ func probeSFTP(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
-	authMethods := makeSSHAuthMethods(config, kb)
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
 		User:            config.User,
-		Auth:            authMethods,
+		AuthMethods:     makeSSHAuthMethods(config, kb),
+		HostKeyStrategy: config.HostKeyStrategy,
 		Timeout:         15 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
-		return dialFirstHop(addr, config.Proxy)
+		Proxy:           config.Proxy,
+		CipherFallback:  true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("sftp: %w", err)
@@ -140,16 +138,15 @@ func probeSCP(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
-	authMethods := makeSSHAuthMethods(config, kb)
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
 		User:            config.User,
-		Auth:            authMethods,
+		AuthMethods:     makeSSHAuthMethods(config, kb),
+		HostKeyStrategy: config.HostKeyStrategy,
 		Timeout:         15 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-	client, err := dialSSHWithCipherFallback(addr, clientConfig, func() (net.Conn, error) {
-		return dialFirstHop(addr, config.Proxy)
+		Proxy:           config.Proxy,
+		CipherFallback:  true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("scp: %w", err)

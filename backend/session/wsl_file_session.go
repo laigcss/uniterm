@@ -53,10 +53,15 @@ type WSLFileSession struct {
 	connectCancel context.CancelFunc
 }
 
-// compile-time guarantees that the WSL file session satisfies the Session
-// contract. (fileTransferSession is asserted at runtime via getSftp and lives
-// in the app package, so it can't be referenced here.)
-var _ Session = (*WSLFileSession)(nil)
+// compile-time guarantees that the WSL file session satisfies both the
+// generic Session contract and the FileTransferSession contract. The
+// file-transfer assertion lives here (Windows-only) because the non-Windows
+// stub in wsl_file_session_stub.go intentionally does not implement the
+// file-transfer methods.
+var (
+	_ Session             = (*WSLFileSession)(nil)
+	_ FileTransferSession = (*WSLFileSession)(nil)
+)
 
 func NewWSLFileSession(id string) *WSLFileSession {
 	return &WSLFileSession{

@@ -121,10 +121,20 @@ function sgrFgEffect(seq: string): 'set' | 'clear' | 'unchanged' {
 
 type HighlightSegmentOpts = { skipBrace?: boolean }
 
-function highlightPlainSegment(text: string, opts: HighlightSegmentOpts = {}): string {
+// P2 节流：大块数据降级阈值。超过此阈值只做 URL + IPv4/IPv6/host 高亮，
+// 跳过 error/success/warning/info/path/datetime/string/brace 等复杂正则，
+// 避免大文件输出（cat 大文件）时 CPU 热点。
+const LARGE_DATA_THRESHOLD = 4096
+const SIMPLE_PATTERNS = PATTERNS.slice(0, 2) // url + host/IPv4/IPv6
+
+function highlightPlainSegment(
+  text: string,
+  opts: HighlightSegmentOpts = {},
+  allPatterns: { sgr: string; regexes: RegExp[] }[] = PATTERNS,
+): string {
   type MatchEntry = { start: number; end: number; sgr: string }
   const allMatches: MatchEntry[] = []
-  const patterns = opts.skipBrace ? PATTERNS.filter((p) => p.sgr !== C.brace) : PATTERNS
+  const patterns = opts.skipBrace ? allPatterns.filter((p) => p.sgr !== C.brace) : allPatterns
   for (const { sgr, regexes } of patterns) {
     for (const regex of regexes) {
       regex.lastIndex = 0
@@ -157,7 +167,11 @@ function highlightPlainSegment(text: string, opts: HighlightSegmentOpts = {}): s
   return highlighted
 }
 
-function highlightPlainText(text: string, opts: HighlightSegmentOpts = {}): string {
+function highlightPlainText(
+  text: string,
+  opts: HighlightSegmentOpts = {},
+  allPatterns: { sgr: string; regexes: RegExp[] }[] = PATTERNS,
+): string {
   const segments = segmentText(text)
   let result = ''
   // Track whether the upstream application already set a non-default
@@ -172,7 +186,7 @@ function highlightPlainText(text: string, opts: HighlightSegmentOpts = {}): stri
       }
       result += seg.text
     } else if (!colored) {
-      result += highlightPlainSegment(seg.text, opts)
+      result += highlightPlainSegment(seg.text, opts, allPatterns)
     } else {
       result += seg.text
     }
@@ -188,7 +202,10 @@ const SGR_ONLY_LINE = /^(?:[^\x1b]|\x1b\[[\d;]*m)*$/
 const FENCE_OPEN = /^\s{0,3}(`{3,}|~{3,})/
 const INDENTED_CODE_LINE = /^ {4,}\S/
 
-export function highlight(text: string): string {
+export function highlight(
+  text: string,
+  allPatterns: { sgr: string; regexes: RegExp[] }[] = PATTERNS,
+): string {
   // Process line by line to avoid cross-line regex matches.
   const lines = text.split(/(\r?\n)/)
   let result = ''
@@ -219,12 +236,21 @@ export function highlight(text: string): string {
           // Brace/bracket colour injects SGR noise that some TUI apps
           // misinterpret, so keep skipping it here — but colour the
           // remaining tokens normally.
-          result += highlightPlainText(line, { skipBrace: true })
+          result += highlightPlainText(line, { skipBrace: true }, allPatterns)
         } else {
-          result += highlightPlainText(line)
+          result += highlightPlainText(line, {}, allPatterns)
         }
       }
     }
   }
   return result
+}
+
+// P2 节流：自适应高亮。大块数据（> 4KB，例如 cat 大文件）只做 URL + IPv4
+// 简单高亮，跳过 10+ 组复杂正则，避免 CPU 热点；小块数据走完整高亮。
+export function highlightAdaptive(data: string): string {
+  if (data.length > LARGE_DATA_THRESHOLD) {
+    return highlight(data, SIMPLE_PATTERNS)
+  }
+  return highlight(data)
 }

@@ -217,6 +217,10 @@ type ConnectionConfig struct {
 	//                 /bin/sh -c on the remote).
 	X11DesktopDesktopType string `json:"x11DesktopDesktopType,omitempty"`
 	X11DesktopCustomCmd   string `json:"x11DesktopCustomCmd,omitempty"`
+	// HostKeyStrategy overrides the global SSH host-key verification policy
+	// for this connection. Empty means: use the AppSettings default
+	// (accept-new / strict / off). See backend/session/hostkey.go.
+	HostKeyStrategy string `json:"hostKeyStrategy,omitempty"`
 }
 
 // ConnectionStoreData is the top-level structure persisted to connections.json.

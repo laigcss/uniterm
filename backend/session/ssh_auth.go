@@ -28,7 +28,7 @@ func makeSSHAuthMethods(config ConnectionConfig, kbCallback ssh.KeyboardInteract
 }
 
 // buildAuthMethods returns the auth methods used by non-interactive SIP sessions
-// (SFTP, server monitor) that dial via dialSSHTCP. It shares parsePrivateKeyFile
+// (SFTP, SCP, server monitor) that dial via dialSSH. It shares parsePrivateKeyFile
 // with the interactive SSH session so an encrypted private key + its passphrase
 // (config.Password) authenticates identically everywhere — the "秘钥加密码" case
 // from issue #647. Unlike makeSSHAuthMethods it has no keyboard-interactive

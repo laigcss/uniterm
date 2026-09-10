@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -16,9 +16,34 @@ import (
 	"time"
 
 	"github.com/mattn/go-ieproxy"
+	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/ys-ll/uniterm/backend/store"
 )
+
+// warnIfInsecureBaseURL logs a warning when baseURL uses plaintext http://
+// against a non-local host. S3: respects user choice (does not block), but
+// leaves an audit trail in ~/.uniterm/uniterm.log so a leaked API key via
+// social-engineered baseURL is at least visible after the fact.
+// Local hosts (localhost, 127.0.0.1, 0.0.0.0, ::1) are exempt so local
+// Ollama / LM Studio setups stay silent.
+func warnIfInsecureBaseURL(baseURL string) {
+	if baseURL == "" {
+		return
+	}
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return
+	}
+	if u.Scheme != "http" {
+		return
+	}
+	host := u.Hostname()
+	if host == "" || host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1" {
+		return
+	}
+	log.Writef("[S3] WARNING: ChatCompletion called with plaintext http baseURL host=%q (API key sent in cleartext); user chose to proceed", host)
+}
 
 // llmProxy is the Proxy function for the shared LLM transport. It resolves
 // the OS system proxy (Windows registry / macOS system config, including PAC
@@ -116,6 +141,9 @@ func injectCacheControl(reqBody map[string]interface{}) {
 // events for each token while collecting the full message. It returns the
 // complete message JSON when the stream ends (backward-compatible).
 func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, protocol string, userAgent string, proxyID string) (string, error) {
+	// S3: audit-log plaintext http baseURL (non-local) without blocking.
+	warnIfInsecureBaseURL(baseURL)
+
 	// Parse the incoming request body (always Anthropic format from frontend)
 	var reqBody map[string]interface{}
 	if err := json.Unmarshal([]byte(requestJSON), &reqBody); err != nil {
@@ -208,63 +236,48 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 		url = base + "/v1/messages"
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
-	defer cancel()
+	ctx, cleanup := a.prepareSSEContext()
+	defer cleanup()
 
-	// F-308: atomic pointer swap so overlapping ChatCompletion calls
-	// don't clobber each other's cancel function.
-	myCancel := cancel
-	a.chatCancel.Store(&myCancel)
-	defer func() {
-		a.chatCancel.CompareAndSwap(&myCancel, nil)
-	}()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(modifiedJSON))
-	if err != nil {
-		return "", err
+	headers := map[string]string{
+		"x-api-key":         apiKey,
+		"anthropic-version": "2023-06-01",
+		"anthropic-beta":    "prompt-caching-2024-07-31",
+		"User-Agent":        userAgent,
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
-	req.Header.Set("User-Agent", userAgent)
-
-	// Use the shared client so this path honors the same system/env proxy
-	// resolution and connection pool as the OpenAI/Responses paths.
-	res, err := client.Do(req)
+	res, scanner, err := doSSERequest(ctx, client, url, modifiedJSON, headers)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
-		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		// F-305: cap error-body reads at 64 KiB.
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
-		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
+	state := &streamState{}
+	result, err := runSSEStream(scanner, state, a.emit, newAnthropicEventMapper())
+	if err != nil {
+		return "", err
+	}
+	if result != "" {
+		return result, nil
 	}
 
-	var contentBlocks []map[string]interface{}
+	// Stream ended without message_stop — emit a best-effort final message if any
+	// blocks were accumulated (mirrors the original fallback behaviour).
+	if len(state.contentBlocks) > 0 {
+		return finalizeStreamMessage(state)
+	}
+	return "", fmt.Errorf("stream ended without message_stop")
+}
+
+// newAnthropicEventMapper builds the Anthropic Messages API SSE event mapper.
+// Per-call state (currentBlock / currentBlockIndex) is captured in the closure;
+// the shared streamState holds the accumulated content blocks, role and usage.
+func newAnthropicEventMapper() sseLineMapper {
 	var currentBlock map[string]interface{}
-	var messageRole string
-	var usage map[string]interface{}
 	currentBlockIndex := -1
-
-	scanner := bufio.NewScanner(res.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		dataStr := line[6:]
-
+	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
 		var event map[string]interface{}
 		if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
-			continue
+			return streamAction{}
 		}
 
 		eventType, _ := event["type"].(string)
@@ -272,14 +285,14 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 		switch eventType {
 		case "message_start":
 			if msg, ok := event["message"].(map[string]interface{}); ok {
-				messageRole, _ = msg["role"].(string)
+				state.messageRole, _ = msg["role"].(string)
 			}
 
 		case "content_block_start":
 			currentBlockIndex++
 			if block, ok := event["content_block"].(map[string]interface{}); ok {
 				currentBlock = block
-				a.emit("ai:block_start", map[string]interface{}{
+				emit("ai:block_start", map[string]interface{}{
 					"index":         currentBlockIndex,
 					"content_block": block,
 				})
@@ -297,7 +310,7 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 					}
 					currentBlock["text"] = currentBlock["text"].(string) + text
 				}
-				a.emit("ai:token", map[string]interface{}{
+				emit("ai:token", map[string]interface{}{
 					"text":  text,
 					"index": currentBlockIndex,
 				})
@@ -322,59 +335,41 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 						}
 					}
 				}
-				contentBlocks = append(contentBlocks, currentBlock)
+				state.contentBlocks = append(state.contentBlocks, currentBlock)
 				currentBlock = nil
 			}
 
 		case "message_delta":
 			if u, ok := event["usage"].(map[string]interface{}); ok {
-				usage = u
+				state.usage = u
 			}
 			if delta, ok := event["delta"].(map[string]interface{}); ok {
 				if stopReason, ok := delta["stop_reason"].(string); ok {
-					a.emit("ai:done", map[string]interface{}{
+					emit("ai:done", map[string]interface{}{
 						"message": map[string]interface{}{
-							"role":    messageRole,
-							"content": contentBlocks,
+							"role":    state.messageRole,
+							"content": state.contentBlocks,
 						},
-						"usage":       usage,
+						"usage":       state.usage,
 						"stop_reason": stopReason,
 					})
 				}
 			}
 
 		case "message_stop":
-			fullMessage := map[string]interface{}{
-				"role":    messageRole,
-				"content": contentBlocks,
-			}
-			resultJSON, err := json.Marshal(fullMessage)
+			result, err := finalizeStreamMessage(state)
 			if err != nil {
-				return "", fmt.Errorf("marshal full message: %w", err)
+				return streamAction{err: err}
 			}
-			return string(resultJSON), nil
+			return streamAction{done: true, result: result}
 
 		case "error":
 			errData, _ := event["error"].(map[string]interface{})
 			errMsg, _ := errData["message"].(string)
-			return "", fmt.Errorf("stream error: %s", errMsg)
+			return streamAction{err: fmt.Errorf("stream error: %s", errMsg)}
 		}
+		return streamAction{}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-
-	if len(contentBlocks) > 0 {
-		fullMessage := map[string]interface{}{
-			"role":    messageRole,
-			"content": contentBlocks,
-		}
-		resultJSON, _ := json.Marshal(fullMessage)
-		return string(resultJSON), nil
-	}
-
-	return "", fmt.Errorf("stream ended without message_stop")
 }
 
 // marshalAnthropicFinalMessage encodes a final message using a pooled
@@ -547,131 +542,100 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		return "", fmt.Errorf("marshal openai request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
-	defer cancel()
+	ctx, cleanup := a.prepareSSEContext()
+	defer cleanup()
 
-	// F-308: register our cancel in the App-level pointer and only
-	// clear it on the way out if no one replaced us. The previous code
-	// stored a single context.CancelFunc under a mutex and unconditionally
-	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
-	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
-	myCancel := cancel
-	a.chatCancel.Store(&myCancel)
-	defer func() {
-		// CAS the slot back to nil, but only if it still points at our
-		// own cancel — a newer call may have already taken over the slot.
-		a.chatCancel.CompareAndSwap(&myCancel, nil)
-	}()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
-	if err != nil {
-		return "", err
+	headers := map[string]string{
+		"Authorization": "Bearer " + apiKey,
+		"User-Agent":    userAgent,
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	res, err := client.Do(req)
+	res, scanner, err := doSSERequest(ctx, client, url, requestJSON, headers)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
-		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		// F-305: cap the error-body read at 64 KiB so a hostile or
-		// buggy upstream returning a multi-GB error body can't OOM
-		// the Go process.
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
-		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
+	state := &streamState{messageRole: "assistant"}
+
+	// F-320: typed payload (frontend reads event.message.role).
+	a.emit("ai:message_start", aiMessageStartEvent{
+		Role: "assistant",
+	})
+
+	result, err := runSSEStream(scanner, state, a.emit, newOpenAIChatEventMapper())
+	if err != nil {
+		return "", err
+	}
+	if result != "" {
+		return result, nil
 	}
 
-	// --- Parse OpenAI SSE stream, emit Anthropic-format events ---
-	var contentBlocks []map[string]interface{}
+	// Stream ended without [DONE] / finish_reason — emit a best-effort final
+	// message if any blocks were accumulated (mirrors the original fallback).
+	if len(state.contentBlocks) > 0 {
+		return finalizeStreamMessage(state)
+	}
+	return "", fmt.Errorf("stream ended without completion")
+}
+
+// newOpenAIChatEventMapper builds the OpenAI Chat Completions SSE event mapper.
+// Per-call state (currentBlock, activeToolCalls, per-block text/input buffers
+// for F-307 O(n) accumulation) is captured in the closure; the shared streamState
+// holds the accumulated content blocks and role.
+func newOpenAIChatEventMapper() sseLineMapper {
 	var currentBlock map[string]interface{}
-	var messageRole = "assistant"
 	currentBlockIndex := -1
-	activeToolCalls := make(map[int]map[string]interface{}) // index -> accumulating tool_call
+	activeToolCalls := make(map[int]map[string]interface{})
 	// F-307: per-block text and input buffers so accumulation is O(n)
-	// instead of O(n²) string concat per token. Flushed to the block
-	// map on content_block_stop / finish_reason.
-	var currentTextBuf, currentInputBuf bytes.Buffer
-	// Per-tool input buffer so each tool_call's argument concat stays
-	// O(n). Keyed by the tool's index — multiple tool_calls can run
-	// in parallel (one per idx).
+	// instead of O(n²) string concat per token.
+	var currentTextBuf bytes.Buffer
+	// Per-tool input buffer so each tool_call's argument concat stays O(n).
 	toolInputBufs := make(map[int]*bytes.Buffer)
 
-	scanner := bufio.NewScanner(res.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	flushCurrentTextBlock := func() {
+	flushCurrentTextBlock := func(state *streamState) {
 		if currentBlock == nil {
 			return
 		}
 		if t, _ := currentBlock["type"].(string); t == "text" && currentTextBuf.Len() > 0 {
 			currentBlock["text"] = currentTextBuf.String()
 		}
-		contentBlocks = append(contentBlocks, currentBlock)
+		state.contentBlocks = append(state.contentBlocks, currentBlock)
 		currentBlock = nil
 		currentTextBuf.Reset()
 	}
 
-	// Emit message_start at the beginning
-	// F-320: typed payload (frontend reads event.message.role).
-	a.emit("ai:message_start", aiMessageStartEvent{
-		Role: "assistant",
-	})
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		dataStr := line[6:]
-
+	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
 		if strings.TrimSpace(dataStr) == "[DONE]" {
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
-				flushCurrentTextBlock()
-				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+				flushCurrentTextBlock(state)
+				emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
-				contentBlocks = append(contentBlocks, tc)
-				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+				state.contentBlocks = append(state.contentBlocks, tc)
+				emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
 
-			// Emit message_delta and message_stop
-			// F-320: typed payload.
-			a.emit("ai:done", aiDoneEvent{
-				Message: map[string]interface{}{
-					"role":    messageRole,
-					"content": contentBlocks,
-				},
-				StopReason: "end_turn",
-			})
-
-			fullMessage := map[string]interface{}{
-				"role":    messageRole,
-				"content": contentBlocks,
+			emitStreamDone(emit, state, "end_turn")
+			result, err := finalizeStreamMessage(state)
+			if err != nil {
+				return streamAction{err: err}
 			}
-			resultJSON, _ := json.Marshal(fullMessage)
-			return string(resultJSON), nil
+			return streamAction{done: true, result: result}
 		}
 
 		var ev openaiStreamEvent
 		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
-			continue
+			return streamAction{}
 		}
 		if len(ev.Choices) == 0 {
-			continue
+			return streamAction{}
 		}
 		choice := ev.Choices[0]
 		delta := choice.Delta
@@ -681,8 +645,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if currentBlock == nil || currentBlock["type"] != "text" {
 				// Close previous block if any
 				if currentBlock != nil {
-					flushCurrentTextBlock()
-					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+					flushCurrentTextBlock(state)
+					emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -692,16 +656,13 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					"text": "",
 				}
 				currentTextBuf.Reset()
-				// F-320: typed payload.
-				a.emit("ai:block_start", aiBlockStartEvent{
+				emit("ai:block_start", aiBlockStartEvent{
 					Index:        currentBlockIndex,
 					ContentBlock: currentBlock,
 				})
 			}
 			currentTextBuf.WriteString(delta.Content)
-			// F-320: typed struct + dropped unused fields — see
-			// chatCompletionAnthropic for rationale.
-			a.emit("ai:token", aiTokenEvent{
+			emit("ai:token", aiTokenEvent{
 				Text:  delta.Content,
 				Index: currentBlockIndex,
 			})
@@ -717,8 +678,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 			if _, exists := activeToolCalls[idx]; !exists {
 				// Close current text block if open
 				if currentBlock != nil {
-					flushCurrentTextBlock()
-					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+					flushCurrentTextBlock(state)
+					emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -729,8 +690,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					"name":  "",
 					"input": "",
 				}
-				// F-320: typed payload.
-				a.emit("ai:block_start", aiBlockStartEvent{
+				emit("ai:block_start", aiBlockStartEvent{
 					Index: currentBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -752,8 +712,7 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 					toolInputBufs[idx] = buf
 				}
 				buf.WriteString(args)
-				// F-320: typed payload.
-				a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
+				emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 					PartialJSON: args,
 				})
 			}
@@ -764,8 +723,8 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		if finishReason != "" && finishReason != "null" {
 			// Close any open text block
 			if currentBlock != nil {
-				flushCurrentTextBlock()
-				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+				flushCurrentTextBlock(state)
+				emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
@@ -787,14 +746,13 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 						tc["input"] = inputObj
 					}
 				}
-				contentBlocks = append(contentBlocks, tc)
-				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+				state.contentBlocks = append(state.contentBlocks, tc)
+				emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
 			toolInputBufs = nil
-			currentInputBuf.Reset()
 
 			stopReason := "end_turn"
 			if finishReason == "tool_calls" {
@@ -805,41 +763,15 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 				stopReason = "end_turn"
 			}
 
-			// F-320: typed payload.
-			a.emit("ai:done", aiDoneEvent{
-				Message: map[string]interface{}{
-					"role":    messageRole,
-					"content": contentBlocks,
-				},
-				StopReason: stopReason,
-			})
-
-			fullMessage := map[string]interface{}{
-				"role":    messageRole,
-				"content": contentBlocks,
+			emitStreamDone(emit, state, stopReason)
+			result, err := finalizeStreamMessage(state)
+			if err != nil {
+				return streamAction{err: err}
 			}
-			resultJSON, _ := json.Marshal(fullMessage)
-			return string(resultJSON), nil
+			return streamAction{done: true, result: result}
 		}
+		return streamAction{}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-
-	if len(contentBlocks) > 0 || len(activeToolCalls) > 0 {
-		for _, tc := range activeToolCalls {
-			contentBlocks = append(contentBlocks, tc)
-		}
-		fullMessage := map[string]interface{}{
-			"role":    messageRole,
-			"content": contentBlocks,
-		}
-		resultJSON, _ := json.Marshal(fullMessage)
-		return string(resultJSON), nil
-	}
-
-	return "", fmt.Errorf("stream ended without completion")
 }
 
 // anthropicToolToResponses converts an Anthropic tool definition to the
@@ -975,117 +907,91 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		return "", fmt.Errorf("marshal responses request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
-	defer cancel()
+	ctx, cleanup := a.prepareSSEContext()
+	defer cleanup()
 
-	// F-308: register our cancel in the App-level pointer and only
-	// clear it on the way out if no one replaced us. The previous code
-	// stored a single context.CancelFunc under a mutex and unconditionally
-	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
-	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
-	myCancel := cancel
-	a.chatCancel.Store(&myCancel)
-	defer func() {
-		// CAS the slot back to nil, but only if it still points at our
-		// own cancel — a newer call may have already taken over the slot.
-		a.chatCancel.CompareAndSwap(&myCancel, nil)
-	}()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
-	if err != nil {
-		return "", err
+	headers := map[string]string{
+		"Authorization": "Bearer " + apiKey,
+		"User-Agent":    userAgent,
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("User-Agent", userAgent)
-
-	res, err := client.Do(req)
+	res, scanner, err := doSSERequest(ctx, client, url, requestJSON, headers)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
-		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		// F-305: cap the error-body read at 64 KiB so a hostile or
-		// buggy upstream returning a multi-GB error body can't OOM
-		// the Go process.
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
-		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
+	state := &streamState{messageRole: "assistant"}
+
+	a.emit("ai:message_start", aiMessageStartEvent{
+		Role: "assistant",
+	})
+
+	result, err := runSSEStream(scanner, state, a.emit, newResponsesEventMapper())
+	if err != nil {
+		return "", err
+	}
+	if result != "" {
+		return result, nil
 	}
 
-	// --- Parse Responses SSE stream, emit Anthropic-format events ---
-	var contentBlocks []map[string]interface{}
+	// Stream ended without response.completed — emit a best-effort final
+	// message if any blocks were accumulated (mirrors the original fallback).
+	if len(state.contentBlocks) > 0 {
+		return finalizeStreamMessage(state)
+	}
+	return "", fmt.Errorf("stream ended without completion")
+}
+
+// newResponsesEventMapper builds the OpenAI Responses API SSE event mapper.
+// Per-call state (output_index → block/index maps, per-block text/input buffers
+// for F-307 O(n) accumulation) is captured in the closure; the shared streamState
+// holds the accumulated content blocks.
+func newResponsesEventMapper() sseLineMapper {
 	// Map Responses output_index -> our content block index / accumulating block.
 	blockByOutputIdx := make(map[int]map[string]interface{})
 	idxByOutputIdx := make(map[int]int)
 	nextBlockIndex := 0
 	// F-307: parallel maps of *bytes.Buffer so text/input accumulation
-	// is O(n) instead of O(n²) string concat per token. Outputs may run
-	// in parallel (different output_index) so a single shared buffer
-	// doesn't work — keep one per output_index.
+	// is O(n) instead of O(n²) string concat per token.
 	textBufs := make(map[int]*bytes.Buffer)
 	inputBufs := make(map[int]*bytes.Buffer)
 
-	scanner := bufio.NewScanner(res.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	// F-320: typed payload.
-	a.emit("ai:message_start", aiMessageStartEvent{
-		Role: "assistant",
-	})
-
-	finish := func(stopReason string) (string, error) {
-		fullMessage := map[string]interface{}{
+	finish := func(state *streamState, emit func(string, ...any), stopReason string) streamAction {
+		resultJSON, err := json.Marshal(map[string]interface{}{
 			"role":    "assistant",
-			"content": contentBlocks,
-		}
-		resultJSON, err := json.Marshal(fullMessage)
+			"content": state.contentBlocks,
+		})
 		if err != nil {
-			return "", fmt.Errorf("marshal final message: %w", err)
+			return streamAction{err: fmt.Errorf("marshal final message: %w", err)}
 		}
 		// F-320: typed payload with json.RawMessage so the
 		// already-marshaled message bytes pass through untouched.
-		a.emit("ai:done", struct {
-			Message    json.RawMessage `json:"message"`
-			StopReason string          `json:"stop_reason"`
-		}{
-			Message:    json.RawMessage(resultJSON),
-			StopReason: stopReason,
-		})
-		return string(resultJSON), nil
+		emitStreamDoneRaw(emit, resultJSON, stopReason)
+		return streamAction{done: true, result: string(resultJSON)}
 	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		dataStr := line[6:]
+	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
 		if strings.TrimSpace(dataStr) == "[DONE]" {
-			continue
+			return streamAction{}
 		}
 
 		var ev responsesStreamEvent
 		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
-			continue
+			return streamAction{}
 		}
 
 		switch ev.Type {
 		case "response.output_item.added":
 			var item responsesStreamItem
 			if err := json.Unmarshal(ev.Item, &item); err != nil {
-				continue
+				return streamAction{}
 			}
 			switch item.Type {
 			case "message":
 				block := map[string]interface{}{"type": "text", "text": ""}
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
-				// F-320: typed payload.
-				a.emit("ai:block_start", aiBlockStartEvent{
+				emit("ai:block_start", aiBlockStartEvent{
 					Index:        nextBlockIndex,
 					ContentBlock: block,
 				})
@@ -1099,8 +1005,7 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				}
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
-				// F-320: typed payload.
-				a.emit("ai:block_start", aiBlockStartEvent{
+				emit("ai:block_start", aiBlockStartEvent{
 					Index: nextBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -1114,22 +1019,18 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		case "response.output_text.delta":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				continue
+				return streamAction{}
 			}
 			if ev.Delta == "" {
-				continue
+				return streamAction{}
 			}
-			// F-307: append to per-block *bytes.Buffer instead of
-			// O(n²) string concatenation. Flushed on output_item.done.
 			buf, ok := textBufs[ev.OutputIndex]
 			if !ok {
 				buf = &bytes.Buffer{}
 				textBufs[ev.OutputIndex] = buf
 			}
 			buf.WriteString(ev.Delta)
-			// F-320: typed struct + dropped unused fields — see
-			// chatCompletionAnthropic for rationale.
-			a.emit("ai:token", aiTokenEvent{
+			emit("ai:token", aiTokenEvent{
 				Text:  ev.Delta,
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
@@ -1137,10 +1038,10 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		case "response.function_call_arguments.delta":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				continue
+				return streamAction{}
 			}
 			if ev.Delta == "" {
-				continue
+				return streamAction{}
 			}
 			buf, ok := inputBufs[ev.OutputIndex]
 			if !ok {
@@ -1148,17 +1049,15 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				inputBufs[ev.OutputIndex] = buf
 			}
 			buf.WriteString(ev.Delta)
-			// F-320: typed payload.
-			a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
+			emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 				PartialJSON: ev.Delta,
 			})
 
 		case "response.output_item.done":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				continue
+				return streamAction{}
 			}
-			// F-307: flush per-block buffers once into the block map.
 			if buf, ok := textBufs[ev.OutputIndex]; ok {
 				if buf.Len() > 0 {
 					block["text"] = buf.String()
@@ -1181,40 +1080,28 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 				}
 				delete(inputBufs, ev.OutputIndex)
 			}
-			contentBlocks = append(contentBlocks, block)
-			// F-320: typed payload.
-			a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+			state.contentBlocks = append(state.contentBlocks, block)
+			emit("ai:content_block_stop", aiContentBlockStopEvent{
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
 			delete(blockByOutputIdx, ev.OutputIndex)
 
 		case "response.completed":
 			stopReason := "end_turn"
-			for _, b := range contentBlocks {
+			for _, b := range state.contentBlocks {
 				if b["type"] == "tool_use" {
 					stopReason = "tool_use"
 					break
 				}
 			}
-			return finish(stopReason)
+			return finish(state, emit, stopReason)
 
 		case "response.failed", "error":
-			// Marshal the typed event back out for the error message; the
-			// caller doesn't need the original map shape.
 			body, _ := json.Marshal(ev)
-			return "", fmt.Errorf("responses stream error: %s", string(body))
+			return streamAction{err: fmt.Errorf("responses stream error: %s", string(body))}
 		}
+		return streamAction{}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-
-	if len(contentBlocks) > 0 {
-		return finish("end_turn")
-	}
-
-	return "", fmt.Errorf("stream ended without completion")
 }
 
 // CancelChatStream cancels the currently active ChatCompletion stream.

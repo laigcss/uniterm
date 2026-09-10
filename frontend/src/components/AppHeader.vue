@@ -268,8 +268,8 @@ async function linuxMaximise() {
     // Before native maximise, set max size to current screen dimensions
     // to prevent GTK from clamping to the wrong monitor's size.
     try {
-      const screens = await Screens.GetAll()
-      const current = screens.find((s: { isCurrent: boolean }) => s.isCurrent) || screens[0]
+      const screens = (await Screens.GetAll()) as unknown as { isCurrent: boolean; width: number; height: number }[]
+      const current = screens.find(s => s.isCurrent) || screens[0]
       if (current) {
         Window.SetMaxSize(current.width, current.height)
       }
@@ -310,7 +310,7 @@ async function onClose() {
           h('div', { style: 'display:flex;flex-direction:column;gap:10px' }, [
             h('span', t('app.closeConfirm')),
             h(ElCheckbox, {
-              'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
+              'onUpdate:modelValue': (v: any) => { dontShowAgain.value = v }
             }, () => t('app.dontShowAgain'))
           ]),
           t('app.closeTitle'),

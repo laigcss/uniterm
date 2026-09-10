@@ -10,7 +10,7 @@
         class="qc-search-input"
         @keydown="onListKeydown"
       />
-      <button class="qc-icon-btn" :title="t('quickCommands.addCommand')" @click.stop="addMenuRef?.toggle($event.currentTarget)">
+      <button class="qc-icon-btn" :title="t('quickCommands.addCommand')" @click.stop="addMenuRef?.toggle($event.currentTarget as HTMLElement)">
         <Plus :size="15" />
       </button>
       <Menu ref="addMenuRef" v-model:visible="addMenuVisible" align="end">
@@ -163,18 +163,18 @@
     <!-- Context menu (right-click on commands / groups) -->
     <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
       <template v-if="current && (current as CtxPayload).kind === 'command'">
-        <MenuItem @click="runCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.run') }}</MenuItem>
-        <MenuItem @click="pasteCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.paste') }}</MenuItem>
-        <MenuItem @click="copyCommand((current as CtxPayload).cmd); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
+        <MenuItem @click="runCommand((current as CtxPayload).cmd!); ctxMenuVisible = false">{{ t('quickCommands.run') }}</MenuItem>
+        <MenuItem @click="pasteCommand((current as CtxPayload).cmd!); ctxMenuVisible = false">{{ t('quickCommands.paste') }}</MenuItem>
+        <MenuItem @click="copyCommand((current as CtxPayload).cmd!); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
         <MenuDivider />
-        <MenuItem @click="editCommand((current as CtxPayload).cmd)">{{ t('quickCommands.editCommand') }}</MenuItem>
-        <MenuItem class="danger" @click="deleteCommand((current as CtxPayload).cmd)">{{ t('quickCommands.deleteCommand') }}</MenuItem>
+        <MenuItem @click="editCommand((current as CtxPayload).cmd!)">{{ t('quickCommands.editCommand') }}</MenuItem>
+        <MenuItem class="danger" @click="deleteCommand((current as CtxPayload).cmd!)">{{ t('quickCommands.deleteCommand') }}</MenuItem>
       </template>
 
       <template v-else-if="current && (current as CtxPayload).kind === 'group'">
-        <MenuItem @click="addCommand((current as CtxPayload).group.id)">{{ t('quickCommands.addCommand') }}</MenuItem>
-        <MenuItem @click="renameGroup((current as CtxPayload).group)">{{ t('quickCommands.renameGroup') }}</MenuItem>
-        <MenuItem class="danger" @click="deleteGroupDialog((current as CtxPayload).group)">{{ t('quickCommands.deleteGroup') }}</MenuItem>
+        <MenuItem @click="addCommand((current as CtxPayload).group!.id)">{{ t('quickCommands.addCommand') }}</MenuItem>
+        <MenuItem @click="renameGroup((current as CtxPayload).group!)">{{ t('quickCommands.renameGroup') }}</MenuItem>
+        <MenuItem class="danger" @click="deleteGroupDialog((current as CtxPayload).group!)">{{ t('quickCommands.deleteGroup') }}</MenuItem>
       </template>
     </Menu>
 
@@ -273,9 +273,11 @@ function persistCollapsedGroups() {
 const ctxMenuVisible = ref(false)
 const ctxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 // Right-click context menu payload (command or group), exposed via Menu slot `current`.
-type CtxPayload =
-  | { kind: 'command'; cmd: QuickCommand }
-  | { kind: 'group'; group: QuickCommandGroup }
+type CtxPayload = {
+  kind: 'command' | 'group'
+  cmd?: QuickCommand
+  group?: QuickCommandGroup
+}
 
 const deleteGroupDialogVisible = ref(false)
 const deletingGroup = ref<QuickCommandGroup | null>(null)

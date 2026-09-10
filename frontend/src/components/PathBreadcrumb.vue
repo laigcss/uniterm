@@ -27,7 +27,7 @@
         <span
           v-else-if="isWindowsPath && item === pathParts[0]"
           class="breadcrumb-part breadcrumb-drive"
-          @click.stop="driveMenuRef?.toggle($event.currentTarget)"
+          @click.stop="driveMenuRef?.toggle($event.currentTarget as HTMLElement)"
         >
           {{ item }}
           <span class="drive-arrow">&#9660;</span>
@@ -45,7 +45,7 @@
         v-if="bookmarkMode"
         class="bookmark-btn"
         :title="t('sftp.bookmark.title')"
-        @click.stop="bookmarkMenuRef?.toggle($event.currentTarget)"
+        @click.stop="bookmarkMenuRef?.toggle($event.currentTarget as HTMLElement)"
       >
         <Bookmark :size="14" :class="{ 'bookmark-active': hasCurrentPathBookmarked }" />
       </button>
@@ -104,7 +104,7 @@
         </template>
       </MenuItem>
       <MenuItem
-        v-if="savedPaths.length === 0"
+        v-if="savedPaths?.length === 0"
         class="bookmark-empty"
       >
         {{ t('sftp.bookmark.empty') }}

@@ -2,7 +2,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { SearchAddon } from '@xterm/addon-search'
-import { getXtermTheme } from '../composables/useTerminal'
+import { Events } from '@wailsio/runtime'
+import { getXtermTheme } from '../utils/xtermTheme'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
@@ -378,4 +379,51 @@ export function bumpOnDataGeneration(sessionId: string): number {
   if (!managed) return 0
   const next = ++managed.onDataGeneration
   return next
+}
+
+// ── P2 节流：session:data 按 session id 订阅分发 ──
+// 8 分屏 = 8 个 BaseTerminal，原先每个都监听全局 `session:data` 事件再过滤
+// id，导致每块数据被广播到所有监听器。改为单点全局监听 + Map<sessionId,
+// Set<handler>> 索引，按 id 分发给对应订阅者，避免 O(n) 广播 + 过滤。
+const sessionDataSubscribers = new Map<string, Set<(data: string) => void>>()
+let sessionDataGlobalUnsub: (() => void) | null = null
+
+function ensureSessionDataGlobalListener(): void {
+  if (sessionDataGlobalUnsub) return
+  sessionDataGlobalUnsub = Events.On('session:data', (ev: { data: { id: string; data: string } }) => {
+    const payload = ev.data
+    if (!payload || !payload.id) return
+    const subs = sessionDataSubscribers.get(payload.id)
+    if (!subs || subs.size === 0) return
+    // 复制一份再遍历，避免回调中 unsubscribe 修改 Set 导致迭代异常
+    for (const h of Array.from(subs)) {
+      try {
+        h(payload.data)
+      } catch (e) {
+        console.error('[terminalManager] session:data subscriber error', e)
+      }
+    }
+  })
+}
+
+/** 订阅指定 session 的 data 事件。handler 只会收到属于该 sessionId 的数据。 */
+export function subscribeSessionData(sessionId: string, handler: (data: string) => void): void {
+  if (!sessionId) return
+  let subs = sessionDataSubscribers.get(sessionId)
+  if (!subs) {
+    subs = new Set()
+    sessionDataSubscribers.set(sessionId, subs)
+  }
+  subs.add(handler)
+  ensureSessionDataGlobalListener()
+}
+
+/** 取消订阅。当 sessionId 没有任何订阅者时清理 Map 条目。 */
+export function unsubscribeSessionData(sessionId: string, handler: (data: string) => void): void {
+  const subs = sessionDataSubscribers.get(sessionId)
+  if (!subs) return
+  subs.delete(handler)
+  if (subs.size === 0) {
+    sessionDataSubscribers.delete(sessionId)
+  }
 }

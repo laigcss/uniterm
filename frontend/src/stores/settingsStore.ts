@@ -270,7 +270,8 @@ function mergeSettings(loaded: AppSettings): AppSettings {
     ai: {
       maxTurns: loaded.ai?.maxTurns ?? DEFAULT_SETTINGS.ai.maxTurns,
       models: loaded.ai?.models?.length ? loaded.ai.models : DEFAULT_SETTINGS.ai.models,
-      activeModelId: loaded.ai?.activeModelId || DEFAULT_SETTINGS.ai.activeModelId
+      activeModelId: loaded.ai?.activeModelId || DEFAULT_SETTINGS.ai.activeModelId,
+      localRiskGuardEnabled: loaded.ai?.localRiskGuardEnabled ?? DEFAULT_SETTINGS.ai.localRiskGuardEnabled
     },
     keyboard: {
       ...DEFAULT_KEYBOARD,
@@ -291,6 +292,9 @@ function mergeSettings(loaded: AppSettings): AppSettings {
     sidebarTabs: {
       ...DEFAULT_SETTINGS.sidebarTabs,
       ...(loaded.sidebarTabs || {})
-    }
+    },
+    hostKeyStrategy: loaded.hostKeyStrategy ?? DEFAULT_SETTINGS.hostKeyStrategy,
+    autoRecord: loaded.autoRecord ?? DEFAULT_SETTINGS.autoRecord,
+    recordingsDir: loaded.recordingsDir ?? DEFAULT_SETTINGS.recordingsDir
   }
 }

@@ -6,7 +6,7 @@
 
       <!-- Search row -->
     <div class="start-search-row">
-      <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
+      <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget as HTMLElement)">
         <el-icon><Filter :size="14" /></el-icon>
         <span>{{ filterDisplay }}</span>
       </span>
@@ -42,7 +42,7 @@
           <el-icon><Laptop :size="14" /></el-icon>
           {{ t('conn.startLocalTerminal') }}
         </button>
-        <button class="start-action-btn-dropdown-arrow" @click.stop="shellMenuRef?.toggle($event.currentTarget)">
+        <button class="start-action-btn-dropdown-arrow" @click.stop="shellMenuRef?.toggle($event.currentTarget as HTMLElement)">
           <el-icon><ChevronDown :size="12" /></el-icon>
         </button>
         <Menu ref="shellMenuRef" v-model:visible="shellMenuVisible">
@@ -433,7 +433,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { msg } from '../services/message'
+
 import type { StartTab } from '../types/workspace'
 import type { ConnectionConfig, ConnectionGroup } from '../types/session'
 import { useConnectionStore } from '../stores/connectionStore'
@@ -461,6 +461,7 @@ const emit = defineEmits<{
   'edit-connection': [config: ConnectionConfig]
   'change-group': [config: ConnectionConfig]
   'change-group-ids': [ids: string[]]
+  'change-group-parent': [groupId: string]
 }>()
 
 const { t } = useI18n()
@@ -718,10 +719,6 @@ const groupCards = computed(() => {
   return { groups, ungroupedCount, isGroupView, currentGroupId: props.tab.groupId }
 })
 
-function getGroupName(groupId: string): string {
-  if (groupId === '__ungrouped__') return t('conn.noGroup')
-  return connectionStore.groups.find(g => g.id === groupId)?.name || ''
-}
 
 // ── Navigation ──
 function onCardClick(config: ConnectionConfig, e: MouseEvent, prefix = 'conn:') {
@@ -1155,9 +1152,6 @@ function doNewConnInGroup() {
   emit('new-connection', { groupId: groupContextTarget.value.id })
 }
 
-// Group context menu: Change Parent Group
-const showChangeParentDialog = ref(false)
-const changeParentTargetId = ref<string | undefined>(undefined)
 
 function doChangeGroupParent() {
   if (!groupContextTarget.value) return
@@ -1258,11 +1252,6 @@ async function doDeleteBulk() {
   selectedIds.value = new Set()
 }
 
-function doChangeGroup(config: ConnectionConfig | null) {
-  if (!config) return
-  closeContextMenu()
-  emit('change-group', config)
-}
 
 function doDuplicate(config: ConnectionConfig | null) {
   if (!config) return
@@ -1270,18 +1259,7 @@ function doDuplicate(config: ConnectionConfig | null) {
   const newConfig = { ...config, id: '', name: config.name + ' (Copy)' }
   connectionStore.add(newConfig)
 }
-async function doDelete(config: ConnectionConfig | null) {
-  if (!config) return
-  closeContextMenu()
-  try {
-    await ElMessageBox.confirm(
-      `${t('sidebar.deleteConfirm', { count: 1 })}`,
-      '',
-      { confirmButtonText: t('sidebar.delete'), cancelButtonText: 'Cancel', type: 'warning' }
-    )
-    connectionStore.remove(config.id)
-  } catch { /* cancelled */ }
-}
+
 </script>
 
 <style scoped>

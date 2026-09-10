@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
+
 	"os"
 	"path"
 	"path/filepath"
@@ -70,16 +70,15 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		return err
 	}
 
-	clientConfig := &ssh.ClientConfig{
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
 		User:            config.User,
-		Auth:            authMethods,
+		AuthMethods:     authMethods,
+		HostKeyStrategy: config.HostKeyStrategy,
 		Timeout:         30 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Config:          sshAlgorithms(),
-	}
-
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	client, err := dialSSHTCP(addr, clientConfig, config.Proxy)
+		Proxy:           config.Proxy,
+	})
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("ssh dial: %w", err)

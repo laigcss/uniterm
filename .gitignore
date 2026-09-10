@@ -56,6 +56,10 @@ Thumbs.db
 # Go build artifacts
 *.exe~
 *.test
+/uniterm
+
+# TypeScript incremental build cache
+*.tsbuildinfo
 
 # Development plugins (VcXsrv)
 plugins/

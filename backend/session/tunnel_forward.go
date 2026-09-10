@@ -211,32 +211,30 @@ func (ts *TunnelService) dialChain(chain []ConnectionConfig, upstream *SocksProx
 	for i, cfg := range chain {
 		addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 
-		var raw net.Conn
-		var err error
+		var dial func() (net.Conn, error)
 		if i == 0 {
-			raw, err = dialFirstHop(addr, upstream)
+			// First hop: direct or through the upstream proxy.
+			upstream := upstream
+			dial = func() (net.Conn, error) { return dialFirstHop(addr, upstream) }
 		} else {
-			raw, err = prev.Dial("tcp", addr)
-		}
-		if err != nil {
-			closeClients(clients)
-			return nil, nil, fmt.Errorf("dial %s: %w", addr, err)
+			// Subsequent hops: dial through the previous SSH client.
+			prevClient := prev
+			dial = func() (net.Conn, error) { return prevClient.Dial("tcp", addr) }
 		}
 
-		clientConfig := &ssh.ClientConfig{
+		client, err := dialSSH(DialSSHOptions{
+			Host:            cfg.Host,
+			Port:            cfg.Port,
 			User:            cfg.User,
-			Auth:            makeSSHAuthMethods(cfg, nil),
+			AuthMethods:     makeSSHAuthMethods(cfg, nil),
+			HostKeyStrategy: cfg.HostKeyStrategy,
 			Timeout:         30 * time.Second,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Config:          sshAlgorithms(),
-		}
-		sshConn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
+			Dial:            dial,
+		})
 		if err != nil {
-			raw.Close()
 			closeClients(clients)
 			return nil, nil, fmt.Errorf("ssh handshake %s: %w", addr, err)
 		}
-		client := ssh.NewClient(sshConn, chans, reqs)
 		clients = append(clients, client)
 		prev = client
 	}

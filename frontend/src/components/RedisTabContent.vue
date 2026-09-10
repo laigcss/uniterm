@@ -628,13 +628,13 @@ async function onSave() {
   saving.value = true
   try {
     const key = selectedKey.value
-    const t = selectedKeyInfo.value?.type
-    switch (t) {
+    const keyType = selectedKeyInfo.value?.type
+    switch (keyType) {
       case 'string': await RedisSetString(props.sessionId, key, stringValue.value); break
       case 'hash': {
         const current = await RedisGetHashAll(props.sessionId, key)
-        const toDelete = current.filter(e => !hashEntries.value.find(h => h.field === e.field))
-        if (toDelete.length > 0) await RedisHashDel(props.sessionId, key, toDelete.map(e => e.field))
+        const toDelete = current.filter((e: { field: string }) => !hashEntries.value.find(h => h.field === e.field))
+        if (toDelete.length > 0) await RedisHashDel(props.sessionId, key, toDelete.map((e: { field: string }) => e.field))
         for (const e of hashEntries.value) { if (e.field) await RedisHashSet(props.sessionId, key, e.field, e.value) }
         break
       }
@@ -646,16 +646,16 @@ async function onSave() {
       }
       case 'set': {
         const current = await RedisGetSetAll(props.sessionId, key)
-        const r = current.filter(m => !setEntries.value.includes(m))
-        const a = setEntries.value.filter(m => !current.includes(m))
+        const r = current.filter((m: string) => !setEntries.value.includes(m))
+        const a = setEntries.value.filter((m: string) => !current.includes(m))
         if (r.length > 0) await RedisSetRemove(props.sessionId, key, r)
         if (a.length > 0) await RedisSetAdd(props.sessionId, key, a)
         break
       }
       case 'zset': {
         const current = await RedisGetSortedSetRange(props.sessionId, key, '-inf', '+inf')
-        const r = current.filter(m => !zsetEntries.value.find(z => z.member === m.member))
-        if (r.length > 0) await RedisZSetRemove(props.sessionId, key, r.map(m => m.member))
+        const r = current.filter((m: { member: string }) => !zsetEntries.value.find(z => z.member === m.member))
+        if (r.length > 0) await RedisZSetRemove(props.sessionId, key, r.map((m: { member: string }) => m.member))
         if (zsetEntries.value.length > 0) await RedisZSetAdd(props.sessionId, key, zsetEntries.value)
         break
       }

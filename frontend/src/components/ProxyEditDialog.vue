@@ -4,7 +4,7 @@
     :model-value="visible"
     :title="proxy ? t('settings.editProxy') : t('settings.addProxy')"
     width="480px"
-    @update:model-value="v => emit('update:visible', v)"
+    @update:model-value="(v: boolean) => emit('update:visible', v)"
   >
     <el-form label-width="90px">
       <el-form-item :label="t('conn.name')">
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { reactive, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { ElMessage } from 'element-plus'
 import { useProxyStore } from '../stores/proxyStore'

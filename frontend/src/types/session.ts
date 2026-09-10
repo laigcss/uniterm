@@ -6,6 +6,12 @@ export interface ConnectionGroup {
   parentId?: string
 }
 
+export interface GroupTreeNode {
+  group: ConnectionGroup
+  connections: ConnectionConfig[]
+  children: GroupTreeNode[]
+}
+
 export interface PostLoginExpectStep {
   expect: string
   send: string
@@ -17,11 +23,11 @@ export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'wsl' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'wsl' | 'wsl-file' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
   host: string
   port: number
   user: string
-  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity'
+  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity' | 'apikey'
   password?: string
   keyPath?: string
   keyContent?: string // inline private-key text (authType === 'keyText')
@@ -84,6 +90,7 @@ export interface ConnectionConfig {
   // and passes them in CreateSession.
   initialCols?: number
   initialRows?: number
+  deferConnect?: boolean
   tunnelSSHUser?: string
   tunnelSSHPassword?: string
   // SFTP max concurrent transfers (0 = unlimited)
@@ -126,6 +133,8 @@ export interface ConnectionConfig {
   // Telnet-specific options
   telnetNegotiationMode?: 'active' | 'passive'
   telnetSendMode?: 'character' | 'line'
+  telnetLocalEcho?: boolean
+  telnetNewlineMode?: 'cr' | 'crlf'
   // Shared terminal options
   localEcho?: boolean
   newlineMode?: 'cr' | 'crlf'

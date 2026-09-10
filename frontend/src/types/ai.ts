@@ -1,5 +1,14 @@
 export type ExecutionMode = 'confirm_all' | 'confirm_write' | 'confirm_dangerous' | 'bypass'
 
+/**
+ * F1: AI 交互模式（与 ExecutionMode 正交的总体能力开关）。
+ *   - 'chat'     : 纯对话，禁用所有执行类工具，仅可查看终端输出与回答问题
+ *   - 'readonly' : 只读，仅允许读类工具，写/危险命令一律拒绝
+ *   - 'agent'    : 全自主，走现有 risk + 确认模式（ExecutionMode）逻辑
+ * 默认 'agent'，保持与改动前行为完全一致。
+ */
+export type InteractionMode = 'chat' | 'readonly' | 'agent'
+
 export type AIAgentStatus = 'thinking' | 'outputting' | 'executing' | 'confirming'
 
 export interface AIConfig {

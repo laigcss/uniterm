@@ -96,7 +96,7 @@ func TestBuildAuthMethods(t *testing.T) {
 
 // TestMakeSSHAuthMethodsKeyText locks in that the interactive SSH entrypoint —
 // shared by direct SSH sessions, tunnels (tunnel_forward/tunnel_service), mosh,
-// connection testing and dialSSHTCP — parses inline keyText the same way it does
+// connection testing and dialSSH — parses inline keyText the same way it does
 // a key file, instead of silently skipping it. makeSSHAuthMethods only appends a
 // public-key method when parseAuthKeySigner succeeds (keyText isn't a recognized
 // case elsewhere), so a valid keyText must yield exactly one method and invalid
@@ -104,9 +104,9 @@ func TestBuildAuthMethods(t *testing.T) {
 // This is what makes keyText portable across the whole connect surface (#720).
 func TestMakeSSHAuthMethodsKeyText(t *testing.T) {
 	cases := []struct {
-		name       string
-		config     ConnectionConfig
-		wantCount  int
+		name      string
+		config    ConnectionConfig
+		wantCount int
 	}{
 		{"valid plain keyText", ConnectionConfig{AuthType: "keyText", KeyContent: newKeyText(t, "")}, 1},
 		{"valid encrypted keyText + passphrase", ConnectionConfig{AuthType: "keyText", KeyContent: newKeyText(t, "pp"), Password: "pp"}, 1},

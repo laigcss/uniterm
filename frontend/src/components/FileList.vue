@@ -46,63 +46,70 @@
           <el-button @click="pasteLoading ? emit('cancelPaste') : emit('cancelLoad')">{{ t('sftp.cancel') }}</el-button>
         </div>
       </div>
-      <el-table
-        ref="tableRef"
-        :key="locale"
-        :data="visibleFiles"
-        size="small"
-        border
-        :row-class-name="getRowClassName"
-        @row-click="onRowClick"
-        @row-dblclick="onRowDblClick"
-        @row-contextmenu="onRowContextMenu"
-      >
-      <el-table-column :label="t('sftp.name')" min-width="160" sortable :sort-method="sortByName" show-overflow-tooltip>
-        <template #default="{ row }">
-          <div class="name-cell" :draggable="true" @dragstart="onDragStart($event, row)">
-            <el-icon v-if="isSymlink(row)"><Link :size="14" /></el-icon>
-            <el-icon v-else-if="row.isDir"><Folder :size="14" /></el-icon>
-            <el-icon v-else><File :size="14" /></el-icon>
-            <div class="name-info">
-              <span class="file-name" :class="{ selected: isSelected(row) }">{{ row.name }}</span>
+      <div class="fl-table" :key="locale">
+        <div class="fl-thead">
+          <div class="fl-row fl-head-row">
+            <div class="fl-cell fl-cell-name fl-th" @click="toggleSort('name')">
+              <span>{{ t('sftp.name') }}</span>
+              <el-icon v-if="sortKey === 'name'" class="fl-sort-icon"><ArrowUp v-if="sortOrder === 'asc'" /><ArrowDown v-else /></el-icon>
             </div>
+            <div class="fl-cell fl-cell-type fl-th" @click="toggleSort('type')">
+              <span>{{ t('sftp.type') }}</span>
+              <el-icon v-if="sortKey === 'type'" class="fl-sort-icon"><ArrowUp v-if="sortOrder === 'asc'" /><ArrowDown v-else /></el-icon>
+            </div>
+            <div class="fl-cell fl-cell-modified fl-th" @click="toggleSort('modified')">
+              <span>{{ t('sftp.modified') }}</span>
+              <el-icon v-if="sortKey === 'modified'" class="fl-sort-icon"><ArrowUp v-if="sortOrder === 'asc'" /><ArrowDown v-else /></el-icon>
+            </div>
+            <div class="fl-cell fl-cell-size fl-th fl-th-right" @click="toggleSort('size')">
+              <span>{{ t('sftp.size') }}</span>
+              <el-icon v-if="sortKey === 'size'" class="fl-sort-icon"><ArrowUp v-if="sortOrder === 'asc'" /><ArrowDown v-else /></el-icon>
+            </div>
+            <div class="fl-cell fl-cell-permission fl-th"><span>{{ t('sftp.permission') }}</span></div>
+            <div class="fl-cell fl-cell-owner fl-th"><span>{{ t('sftp.owner') }}</span></div>
+            <div class="fl-cell fl-cell-group fl-th"><span>{{ t('sftp.group') }}</span></div>
           </div>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.type')" width="90" sortable :sort-method="sortByType" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ fileTypeLabel(row) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.modified')" width="150" sortable :sort-method="sortByTime" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ formatDate(row.modTime) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.size')" width="70" align="right" sortable :sort-method="sortBySize" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ row.isDir ? '-' : formatSize(row.size) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.permission')" width="110" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ row.mode || '-' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.owner')" width="100" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ row.owner || '-' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('sftp.group')" width="100" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="cell-secondary">{{ row.group || '-' }}</span>
-        </template>
-      </el-table-column>
-    </el-table>
+        </div>
+        <RecycleScroller
+          ref="scrollerRef"
+          class="fl-tbody"
+          :items="filteredFiles"
+          :item-size="36"
+          key-field="name"
+        >
+          <template #default="{ item, index }">
+            <div
+              class="fl-row fl-body-row"
+              :class="getRowClassName(item)"
+              :draggable="true"
+              @click="onRowClick(item, index, $event)"
+              @dblclick="onRowDblClick(item)"
+              @contextmenu="onRowContextMenu(item, $event)"
+              @dragstart="onDragStart($event, item)"
+            >
+              <div class="fl-cell fl-cell-name">
+                <div class="name-cell">
+                  <el-icon v-if="isSymlink(item)"><Link :size="14" /></el-icon>
+                  <el-icon v-else-if="item.isDir"><Folder :size="14" /></el-icon>
+                  <el-icon v-else><File :size="14" /></el-icon>
+                  <div class="name-info">
+                    <span class="file-name" :class="{ selected: isSelected(item) }">{{ item.name }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="fl-cell fl-cell-type"><span class="cell-secondary">{{ fileTypeLabel(item) }}</span></div>
+              <div class="fl-cell fl-cell-modified"><span class="cell-secondary">{{ formatDate(item.modTime) }}</span></div>
+              <div class="fl-cell fl-cell-size"><span class="cell-secondary">{{ item.isDir ? '-' : formatSize(item.size) }}</span></div>
+              <div class="fl-cell fl-cell-permission"><span class="cell-secondary">{{ item.mode || '-' }}</span></div>
+              <div class="fl-cell fl-cell-owner"><span class="cell-secondary">{{ item.owner || '-' }}</span></div>
+              <div class="fl-cell fl-cell-group"><span class="cell-secondary">{{ item.group || '-' }}</span></div>
+            </div>
+          </template>
+        </RecycleScroller>
+      </div>
     </div>
 
-    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" @contextmenu.stop v-slot="{ current }">
+    <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" @contextmenu.stop v-slot>
         <template v-if="menuType === 'file'">
           <MenuItem @click="doEdit">{{ t('sftp.edit') }}</MenuItem>
           <MenuItem @click="doEditExternal">{{ t('sftp.editExternal') }}</MenuItem>
@@ -170,7 +177,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { Folder, File, Link, RefreshCw, Eye, Upload, MoreHorizontal } from '@lucide/vue'
+import { Folder, File, Link, RefreshCw, Eye, Upload, MoreHorizontal, ArrowUp, ArrowDown } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import PathBreadcrumb from './PathBreadcrumb.vue'
 import Menu from './Menu.vue'
@@ -248,9 +255,20 @@ const ctxMenuVisible = ref(false)
 const menuType = ref<'file' | 'dir' | 'batch' | 'empty'>('file')
 const moreMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const moreMenuVisible = ref(false)
-const tableRef = ref<any>(null)
+const scrollerRef = ref<any>(null)
+// P1: 列排序状态（替代 el-table 内置 sortable）
+const sortKey = ref<'name' | 'type' | 'modified' | 'size' | null>(null)
+const sortOrder = ref<'asc' | 'desc'>('asc')
+function toggleSort(key: 'name' | 'type' | 'modified' | 'size') {
+  if (sortKey.value === key) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortKey.value = key
+    sortOrder.value = 'asc'
+  }
+}
 
-const targetSide = computed(() => props.mode === 'local' ? t('sftp.remote') : t('sftp.local'))
+
 const sendToKey = computed(() => props.mode === 'local' ? 'sftp.sendToRemote' : 'sftp.sendToLocal')
 
 const filteredFiles = computed(() => {
@@ -269,58 +287,30 @@ const filteredFiles = computed(() => {
     list = list.filter(f => f.name === '..' || (!f.name.startsWith('.') && !f.isHidden))
   }
   const q = filterText.value.trim().toLowerCase()
-  if (!q) return list
-  return list.filter(f => f.name.toLowerCase().includes(q))
+  if (q) {
+    list = list.filter(f => f.name.toLowerCase().includes(q))
+  }
+  // P1: 列排序（替代 el-table sortable + sort-method）
+  if (sortKey.value) {
+    const dir = sortOrder.value === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      if (a.name === '..') return -1
+      if (b.name === '..') return 1
+      let cmp = 0
+      if (sortKey.value === 'name') cmp = sortByName(a, b)
+      else if (sortKey.value === 'type') cmp = sortByType(a, b)
+      else if (sortKey.value === 'modified') cmp = sortByTime(a, b)
+      else if (sortKey.value === 'size') cmp = sortBySize(a, b)
+      return cmp * dir
+    })
+  }
+  return list
 })
 
 // --- Progressive loading ---------------------------------------------------
-// A directory can contain tens of thousands of entries. Rendering the whole
-// list into el-table at once creates an unbounded number of DOM rows, which
-// freezes / crashes the renderer (issue 478). So we only hand el-table a slice
-// of the filtered list and grow it as the user scrolls near the bottom, keeping
-// the rendered DOM bounded regardless of the total entry count.
-const PAGE_SIZE = 200
-const INITIAL_PAGES = 1
-const NEAR_BOTTOM_PX = 300
-
-const visibleCount = ref(INITIAL_PAGES)
-const visibleFiles = computed(() => filteredFiles.value.slice(0, visibleCount.value * PAGE_SIZE))
-
-let scrollWrapEl: HTMLElement | null = null
-
-// el-table scrolls through an internal .el-scrollbar once it has a height; that
-// element is where we must listen for scroll (native scroll does not bubble).
-function bindTableScroll() {
-  const el = (tableRef.value?.$el ?? null) as HTMLElement | null
-  scrollWrapEl = el?.querySelector('.el-scrollbar__wrap') ?? null
-  if (scrollWrapEl && !scrollWrapEl.dataset.lazyBinded) {
-    scrollWrapEl.dataset.lazyBinded = '1'
-    scrollWrapEl.addEventListener('scroll', onTableScroll, { passive: true })
-  }
-}
-
-function onTableScroll() {
-  // Defer to the next frame so the threshold is computed against the scroll
-  // height AFTER any just-triggered batch has been added to the DOM.
-  requestAnimationFrame(loadMoreIfNeeded)
-}
-
-function loadMoreIfNeeded() {
-  if (!scrollWrapEl) return
-  const { scrollTop, clientHeight, scrollHeight } = scrollWrapEl
-  if (scrollHeight - scrollTop - clientHeight < NEAR_BOTTOM_PX) {
-    visibleCount.value += 1
-  }
-}
-
-// Reset to a fresh first batch whenever the underlying dataset or the filter
-// changes, so the table always starts at the top again.
-watch(filteredFiles, () => {
-  visibleCount.value = INITIAL_PAGES
-  // The scroll wrap survives data swaps, but the Keyed locale swap below
-  // remounts el-table and its scrollbar, so re-resolve the listener target.
-  nextTick(bindTableScroll)
-})
+// P1: 已改用 RecycleScroller 虚拟滚动，无需递增分页；filteredFiles 直接作为
+// 虚拟列表的 items，渲染 DOM 数量恒定（仅可视区 + 少量缓冲），不再随目录大小
+// 线性增长，超大目录不再卡死。原 PAGE_SIZE/visibleCount/bindTableScroll 逻辑移除。
 
 // --- Quick locate (issue #700) ----------------------------------------------
 // Pressing a letter key while the list has focus jumps to the first entry whose
@@ -385,28 +375,22 @@ function locateByKey(key: string) {
 function scrollToIndex(index: number) {
   const target = filteredFiles.value[index]
   if (!target) return
-  // Make sure the row is actually rendered (progressive loading).
-  const pages = Math.ceil((index + 1) / PAGE_SIZE)
-  if (visibleCount.value < pages) visibleCount.value = pages
-  // Select it (reuses the existing selection highlight) and flag it briefly.
+  // P1: RecycleScroller 自带虚拟滚动，直接 scrollToItem 即可，无需先扩页。
   selectedItems.value = [target]
   quickTargetName.value = target.name
   nextTick(() => {
-    const el = (tableRef.value?.$el ?? null) as HTMLElement | null
-    const tr = el?.querySelectorAll('.el-table__body tr')[index] as HTMLElement | undefined
-    tr?.scrollIntoView({ block: 'nearest' })
+    scrollerRef.value?.scrollToItem(index)
   })
 }
 
-// <el-table :key="locale"> remounts the table on locale switch, creating a new
-// scrollbar element that needs the scroll listener re-attached.
+// <div class="fl-table" :key="locale"> remounts the virtual table on locale
+// switch so the head labels re-render in the new language.
 watch(locale, () => {
-  visibleCount.value = INITIAL_PAGES
-  nextTick(bindTableScroll)
+  // no-op: :key="locale" handles remount; RecycleScroller needs no scroll rebind.
 })
 
 onMounted(() => {
-  nextTick(bindTableScroll)
+  // P1: RecycleScroller manages its own scroll listener; nothing to bind here.
 })
 
 function isSelected(row: FileItem): boolean {
@@ -468,8 +452,7 @@ function sortByType(a: FileItem, b: FileItem): number {
   return fileTypeLabel(a).toLowerCase().localeCompare(fileTypeLabel(b).toLowerCase())
 }
 
-function onRowClick(row: FileItem, _column: any, event: MouseEvent) {
-  const index = filteredFiles.value.findIndex(f => f.name === row.name)
+function onRowClick(row: FileItem, index: number, event: MouseEvent) {
   if (event.ctrlKey || event.metaKey) {
     const idx = selectedItems.value.findIndex(s => s.name === row.name)
     if (idx >= 0) {
@@ -499,7 +482,7 @@ function onRowDblClick(row: FileItem) {
   }
 }
 
-function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
+function onRowContextMenu(row: FileItem, event: MouseEvent) {
   if (row.name === '..') {
     // Show empty area menu for parent directory
     event.preventDefault()
@@ -527,7 +510,7 @@ function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
 function onEmptyAreaContextMenu(event: MouseEvent, force = false) {
   const target = event.target as HTMLElement
   // Only show empty menu if not clicking on a row (unless forced)
-  if (!force && target.closest('tr')) return
+  if (!force && target.closest('.fl-body-row')) return
   event.stopPropagation()
   selectedItems.value = []
   menuType.value = 'empty'
@@ -548,7 +531,7 @@ function doCopyToClipboard() { emit('copyToClipboard', [...selectedItems.value])
 function doCutToClipboard() { emit('cutToClipboard', [...selectedItems.value]); ctxMenuVisible.value = false }
 function doPaste() { emit('paste'); ctxMenuVisible.value = false }
 
-function getRowClassName({ row }: { row: FileItem }): string {
+function getRowClassName(row: FileItem): string {
   const cls: string[] = []
   if (props.cutItemNames && props.cutItemNames.includes(row.name)) cls.push('cut-item-row')
   if (row.name === quickTargetName.value) cls.push('quick-target-row')
@@ -581,17 +564,12 @@ function onDragStart(event: DragEvent, row: FileItem) {
   outline: none;
 }
 /* Brief highlight shown while a quick-located row is in view (issue #700). */
-:deep(.quick-target-row) td {
+:deep(.quick-target-row) {
   background-color: rgba(var(--color-primary, 64, 158, 255), 0.14);
 }
 /* Non-name columns read dimmer than the file name (issue #702). */
 .cell-secondary {
   color: var(--el-text-color-secondary, #909399);
-}
-/* Keep the `border` prop on el-table (column drag-resize needs it) but hide the
-   visible vertical lines only on the data rows, keeping the header's. */
-:deep(.el-table--border .el-table__body .el-table__cell) {
-  border-right: none;
 }
 .filter-bar {
   display: flex;
@@ -662,6 +640,87 @@ function onDragStart(event: DragEvent, row: FileItem) {
   color: var(--text-disabled);
 }
 
+/* P1: 虚拟滚动表格样式（替代 el-table） */
+.fl-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border-subtle, var(--el-border-color-lighter));
+  background: transparent;
+  overflow: hidden;
+}
+.fl-thead {
+  flex-shrink: 0;
+  background: var(--el-table-header-bg-color, transparent);
+  border-bottom: 1px solid var(--border-subtle, var(--el-border-color-lighter));
+}
+.fl-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+.fl-head-row {
+  height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-regular, var(--text-secondary));
+}
+.fl-body-row {
+  height: 36px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: default;
+  border-bottom: 1px solid var(--el-border-color-lighter, rgba(0, 0, 0, 0.06));
+}
+.fl-body-row:hover {
+  background: var(--bg-hover, var(--el-table-row-hover-bg-color));
+}
+.fl-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.fl-cell-name {
+  flex: 1;
+  min-width: 160px;
+}
+.fl-cell-type { width: 90px; }
+.fl-cell-modified { width: 150px; }
+.fl-cell-size { width: 70px; justify-content: flex-end; }
+.fl-cell-permission { width: 110px; }
+.fl-cell-owner { width: 100px; }
+.fl-cell-group { width: 100px; }
+.fl-th {
+  cursor: pointer;
+  user-select: none;
+  gap: 4px;
+}
+.fl-th:hover {
+  color: var(--text-primary);
+}
+.fl-th-right {
+  justify-content: flex-end;
+}
+.fl-sort-icon {
+  color: var(--accent, var(--el-color-primary));
+}
+.fl-tbody {
+  flex: 1;
+  min-height: 0;
+}
+/* RecycleScroller 内部需要确定高度才能虚拟滚动 */
+.fl-tbody :deep(.vue-recycle-scroller) {
+  height: 100%;
+}
+.fl-body-row.cut-item-row {
+  opacity: 0.4;
+}
+
 </style>
 
 <style>
@@ -704,23 +763,6 @@ function onDragStart(event: DragEvent, row: FileItem) {
   color: var(--text-primary);
 }
 
-/* Remove horizontal borders between data rows (keep header border) */
-.sftp-file-list .el-table__inner-wrapper::before {
-  height: 0 !important;
-}
-.sftp-file-list .el-table td.el-table__cell {
-  border-bottom: none !important;
-}
-
-/* Make table fill entire pane with consistent background */
-.sftp-file-list .el-table__body-wrapper {
-  background: transparent;
-}
-.sftp-file-list .el-table__empty-block,
-.sftp-file-list .el-table__empty-text {
-  background: transparent;
-}
-
 /* Override ElMessage popup to match dark theme */
 .el-message {
   background: var(--bg-surface) !important;
@@ -735,13 +777,5 @@ function onDragStart(event: DragEvent, row: FileItem) {
 }
 .el-message--error .el-message__content {
   color: var(--error) !important;
-}
-.el-table tr.cut-item-row {
-  opacity: 0.4;
-}
-
-/* Make table fill pane and keep scrollbar at bottom */
-.sftp-file-list .table-wrapper .el-table {
-  height: 100%;
 }
 </style>

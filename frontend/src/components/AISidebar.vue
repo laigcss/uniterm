@@ -7,7 +7,7 @@
         <button class="ai-action-btn" @click="onNewSession" :title="t('ai.newSession')">
           <el-icon><MessageSquarePlus :size="14" /></el-icon>
         </button>
-        <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget)" >
+        <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget as HTMLElement)" >
           <el-icon><History :size="14" /></el-icon>
         </button>
         <Menu ref="sessionMenuRef" v-model:visible="sessionMenuVisible">
@@ -35,6 +35,18 @@
           <el-icon><X :size="14" /></el-icon>
         </button>
       </div>
+    </div>
+
+    <!-- F1: AI interaction mode switcher (Chat / Read-Only / Agent) -->
+    <div class="ai-mode-bar">
+      <button
+        v-for="opt in interactionModeOptions"
+        :key="opt.value"
+        class="mode-seg-btn"
+        :class="{ active: aiStore.interactionMode === opt.value }"
+        :title="opt.tooltip"
+        @click="onInteractionModeChange(opt.value)"
+      >{{ opt.label }}</button>
     </div>
 
     <div v-show="searchVisible" class="ai-search-bar">
@@ -120,7 +132,7 @@
               <button class="panel-tag-close" @click="onRemovePanelTag(pid)">&times;</button>
             </span>
           </template>
-          <button class="panel-tag-add-btn" :title="t('ai.addTerminal')" @click.stop="addTagMenuRef?.toggle($event.currentTarget)">+</button>
+          <button class="panel-tag-add-btn" :title="t('ai.addTerminal')" @click.stop="addTagMenuRef?.toggle($event.currentTarget as HTMLElement)">+</button>
             <Menu ref="addTagMenuRef" v-model:visible="addTagMenuVisible">
               <MenuItem
                 v-for="p in availableTerminalPanels"
@@ -201,7 +213,7 @@
               <span class="hash-btn-icon">/</span>
             </button>
             <template v-if="settingsStore.settings.ai.models.length > 0">
-              <button class="ghost-btn model-btn" :title="currentModelName" @click.stop="modelMenuRef?.toggle($event.currentTarget)">{{ currentModelName }}</button>
+              <button class="ghost-btn model-btn" :title="currentModelName" @click.stop="modelMenuRef?.toggle($event.currentTarget as HTMLElement)">{{ currentModelName }}</button>
               <Menu ref="modelMenuRef" v-model:visible="modelMenuVisible">
                 <MenuItem
                   v-for="m in settingsStore.settings.ai.models"
@@ -223,7 +235,7 @@
           </button>
           </div>
           <div class="input-actions-right">
-            <button class="ghost-btn mode-btn" :title="modeLabel" @click.stop="modeMenuRef?.toggle($event.currentTarget)">{{ modeLabel }}</button>
+            <button class="ghost-btn mode-btn" :title="modeLabel" @click.stop="modeMenuRef?.toggle($event.currentTarget as HTMLElement)">{{ modeLabel }}</button>
             <Menu ref="modeMenuRef" v-model:visible="modeMenuVisible">
               <MenuItem @click="onModeSelect('confirm_all')">
                 <span class="mode-option mode-confirm">{{ t('ai.confirmAll') }}</span>
@@ -271,7 +283,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent, answerQuestion, dismissQuestion } from '../services/agent'
 import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
-import type { ExecutionMode } from '../types/ai'
+import type { ExecutionMode, InteractionMode } from '../types/ai'
 import AIMessage from './AIMessage.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -560,6 +572,7 @@ async function onSessionRename(id: string) {
 async function onMsgCtxExport() {
   msgCtxMenuVisible.value = false
   const id = aiStore.currentSessionId
+  if (!id) return
   const s = aiStore.sessions.find(x => x.id === id)
   if (!s) return
   try {
@@ -612,6 +625,32 @@ const modeLabel = computed(() => {
     default: return t('ai.confirmDangerous')
   }
 })
+
+// F1: AI interaction mode switcher options (Chat / Read-Only / Agent)
+const interactionModeOptions = computed(() => [
+  { value: 'chat' as InteractionMode, label: t('ai.modeChat'), tooltip: t('ai.modeChatTooltip') },
+  { value: 'readonly' as InteractionMode, label: t('ai.modeReadonly'), tooltip: t('ai.modeReadonlyTooltip') },
+  { value: 'agent' as InteractionMode, label: t('ai.modeAgent'), tooltip: t('ai.modeAgentTooltip') },
+])
+
+// F1: switch interaction mode. Confirm when switching to a MORE restrictive mode
+// (agent → readonly/chat, readonly → chat) to avoid surprising the user.
+async function onInteractionModeChange(mode: InteractionMode) {
+  if (mode === aiStore.interactionMode) return
+  const restrictOrder: Record<InteractionMode, number> = { chat: 0, readonly: 1, agent: 2 }
+  if (restrictOrder[mode] < restrictOrder[aiStore.interactionMode]) {
+    try {
+      await ElMessageBox.confirm(
+        t('ai.modeSwitchConfirm'),
+        t('ai.modeSwitchTitle'),
+        { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
+      )
+    } catch {
+      return // user cancelled
+    }
+  }
+  aiStore.setInteractionMode(mode)
+}
 
 const currentModelName = computed(() => {
   const m = settingsStore.settings.ai.models.find(m => m.id === settingsStore.settings.ai.activeModelId)
@@ -714,7 +753,7 @@ const hashHighlightIndex = ref(0)
 const skillQuery = ref('')
 const skillDropdownVisible = ref(false)
 const skillHighlightIndex = ref(0)
-const activeSkillChip = ref<string | null>(null)
+
 
 const hashMatchingPanels = computed(() => {
   const src = hashDropdownVisible.value && !hashQuery.value
@@ -927,16 +966,6 @@ function onSelectItem(item: SlashItem) {
   onSelectCommand(item.name)
 }
 
-function findLastHashIndex(text: string): number {
-  for (let i = text.length - 1; i >= 0; i--) {
-    if (text[i] === '#') {
-      if (i === 0 || /[\s,;:.(\{\[]/.test(text[i - 1])) {
-        return i
-      }
-    }
-  }
-  return -1
-}
 
 // Detect an active #query at the caret. Works on the DOM text node the caret
 // sits in, so an adjacent hash-tag span never interferes with the check.
@@ -1075,8 +1104,8 @@ function onHashButtonClick() {
     const range = document.createRange()
     range.setStart(textNode, 1)
     range.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    sel?.removeAllRanges()
+    sel?.addRange(range)
   }
   syncInputText(); refreshHashDropdown()
 }
@@ -1102,8 +1131,8 @@ function onSlashButtonClick() {
     const range = document.createRange()
     range.setStart(textNode, 1)
     range.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    sel?.removeAllRanges()
+    sel?.addRange(range)
   }
   syncInputText(); refreshSkillDropdown()
 }
@@ -1375,15 +1404,15 @@ async function onSend() {
   }
 
   if (busy.value) {
-    if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
+  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args ?? undefined)
     aiStore.enqueueMessage(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined)
     clearInput()
     return
   }
   clearInput()
   scrollToBottom()
-  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
-  await runAgent(cmd ? '' : final, skillName, skillBody, cmd ? final : undefined)
+  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args ?? undefined)
+  await runAgent(cmd ? '' : (final ?? ''), skillName ?? undefined, skillBody ?? undefined, cmd ? (final ?? undefined) : undefined)
   scrollToBottom()
 }
 
@@ -1452,7 +1481,7 @@ function onResizeStart(e: MouseEvent) {
 
   function onMouseUp() {
     isResizing.value = false
-    sidebarWidth.value = el.offsetWidth
+    sidebarWidth.value = el!.offsetWidth
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
     window.dispatchEvent(new CustomEvent('split:resize-end'))
@@ -1582,6 +1611,39 @@ defineExpose({ focusInput })
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.5px;
+}
+/* F1: AI interaction mode segmented switcher */
+.ai-mode-bar {
+  display: flex;
+  gap: 2px;
+  padding: 4px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mode-seg-btn {
+  flex: 1;
+  height: 22px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.mode-seg-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.mode-seg-btn.active {
+  background: var(--bg-accent-soft, var(--bg-hover));
+  border-color: var(--accent, var(--border-hover));
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .ai-actions {
   display: flex;

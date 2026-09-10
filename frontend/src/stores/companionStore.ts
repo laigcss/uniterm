@@ -155,7 +155,7 @@ export const useCompanionStore = defineStore('companion', () => {
     if (!sessionId) return false
     try {
       const sessions = await ListSessions()
-      const sess = sessions.find(s => s.id === sessionId)
+      const sess = sessions.find((s: { id: string; status: string }) => s.id === sessionId)
       return sess?.status === 'connected' || sess?.status === 'connecting'
     } catch {
       const st = sessionStore.getStatus(sessionId)

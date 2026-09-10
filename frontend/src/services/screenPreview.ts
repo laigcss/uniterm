@@ -67,7 +67,7 @@ export function buildPalette(theme?: Partial<ITheme>): PreviewPalette {
     'blue', 'magenta', 'cyan', 'white',
     'brightBlack', 'brightRed', 'brightGreen', 'brightYellow',
     'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
-  ].map((key, i) => theme?.[key] || FALLBACK_ANSI16[i] || '#888888') as string[]
+  ].map((key, i) => (theme as Record<string, string | undefined> | undefined)?.[key] || FALLBACK_ANSI16[i] || '#888888') as string[]
   return {
     defaultFg: theme?.foreground || '#ffffff',
     defaultBg: theme?.background || '#000000',

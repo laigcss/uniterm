@@ -210,9 +210,9 @@ describe('watchOutput', () => {
   })
 
   it('resolves when the prompt line reappears after the command', async () => {
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -233,9 +233,9 @@ describe('watchOutput', () => {
   })
 
   it('captures the final screen state, not raw ConPTY redraw frames (issue 624)', async () => {
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -276,9 +276,9 @@ describe('watchOutput', () => {
 
   it('resolves via idle heuristic when prompt differs (e.g. dynamic prompt)', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -297,9 +297,9 @@ describe('watchOutput', () => {
 
   it('does not resolve on the initial prompt alone', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -317,9 +317,9 @@ describe('watchOutput', () => {
 
   it('never resolves early when promptLine is empty (timeout only)', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -339,9 +339,9 @@ describe('watchOutput', () => {
 
   it('times out after timeoutMs', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -360,9 +360,9 @@ describe('watchOutput', () => {
 
   it('ignores events from different sessions', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -428,9 +428,9 @@ describe('executeCommand', () => {
   it('sends the command with no injected marker', async () => {
     const restore = withMockedTime()
 
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => {}
     })
 
@@ -463,9 +463,9 @@ describe('executeCommand', () => {
     vi.mocked(mockGetRemoteOS).mockReturnValue('windows-openssh')
     const restore = withMockedTime()
 
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => {}
     })
 
@@ -484,9 +484,9 @@ describe('executeCommand', () => {
 
   it('returns timedOut=true on timeout', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -519,9 +519,9 @@ describe('executeCommand', () => {
   it('truncates long output on success path', async () => {
     const restore = withMockedTime()
 
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 
@@ -589,9 +589,9 @@ describe('startCommand', () => {
 
   it('returns the final screen state even when the stream carries redraw frames', async () => {
     vi.useFakeTimers()
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
 

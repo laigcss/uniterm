@@ -48,6 +48,11 @@ func Writef(format string, args ...interface{}) {
 	defer mu.Unlock()
 
 	msg := fmt.Sprintf(format, args...)
+	// Redact sensitive values from the message body before writing so
+	// passwords / DSNs / tokens / PEM keys never hit the log file (S4).
+	// The timestamp prefix is added after redaction so the log format
+	// is preserved and only the content field is scrubbed.
+	msg = Redact(msg)
 	line := fmt.Sprintf("%s %s\n", time.Now().Format("2006-01-02 15:04:05.000"), msg)
 
 	if file != nil {

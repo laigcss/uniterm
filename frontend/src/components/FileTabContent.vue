@@ -127,7 +127,7 @@
     <FileEditorDialog
       ref="fileEditorRef"
       v-model:visible="editorVisible"
-      :session-id="panel?.sessionId"
+      :session-id="panel?.sessionId ?? undefined"
       :mode="editorMode"
       @saved="onEditorSaved"
     />
@@ -181,7 +181,7 @@ const transferTasks = panelStore.getTransferTasks(props.panelId)
 const transferHeight = ref(130)
 const transferEvents = useTransferTaskEvents(
   () => transferTasks,
-  () => panel.value?.sessionId,
+  () => panel.value?.sessionId ?? undefined,
   (status, type) => {
     if (status === 'done') {
       if (type === 'download') onRefreshLocal()
@@ -249,7 +249,7 @@ const localListing = useFileListing({
     if (!sid || !/^[A-Za-z]:\\$/.test(dir)) return
     try {
       const drives = await SftpListLocalDrives(sid)
-      localDrives.value = drives.map(d => d.name)
+      localDrives.value = drives.map((d: { name: string }) => d.name)
     } catch {}
   },
 })
@@ -263,7 +263,7 @@ const {
 } = localListing
 
 const remotePanel = useFilePanel({
-  sid: () => panel.value?.sessionId,
+  sid: () => panel.value?.sessionId ?? undefined,
   cwd: remoteListing.cwd,
   files: remoteListing.files,
   refresh: () => onRefreshRemote(),
@@ -276,7 +276,7 @@ const remotePanel = useFilePanel({
   bookmarkMode: 'remote',
 })
 const localPanel = useFilePanel({
-  sid: () => panel.value?.sessionId,
+  sid: () => panel.value?.sessionId ?? undefined,
   cwd: localListing.cwd,
   files: localListing.files,
   refresh: () => onRefreshLocal(),
@@ -285,7 +285,7 @@ const localPanel = useFilePanel({
   dialogs: fileDialogs,
   transferTasks: () => transferTasks,
   openEditor: (path, title) => fileEditorRef.value?.open(path, title, 'local') ?? Promise.resolve(),
-  openExternal: (sid, path, cmd) => OpenExternalEditorLocal(path, cmd),
+  openExternal: (_sid, path, cmd) => OpenExternalEditorLocal(path, cmd),
   bookmarkMode: 'local',
 })
 const {
@@ -373,7 +373,7 @@ async function probeConnectAndLoad() {
   if (!sid) return
   try {
     const sessions = await ListSessions()
-    const sess = sessions.find(s => s.id === sid)
+    const sess = sessions.find((s: { id: string; status: string }) => s.id === sid)
     if (sess && sess.status === 'connected') {
       probeRan = true
       onRefreshLocal()
@@ -410,7 +410,7 @@ async function fetchLocalDrives() {
   if (!sid) return
   try {
     const drives = await SftpListLocalDrives(sid)
-    localDrives.value = drives.map(d => d.name)
+    localDrives.value = drives.map((d: { name: string }) => d.name)
   } catch {}
 }
 

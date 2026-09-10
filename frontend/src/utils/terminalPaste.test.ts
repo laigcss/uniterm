@@ -1,8 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { normalizePastedText, bracketPaste, pasteWithScroll } from './terminalPaste'
 import type { PasteTarget } from './terminalPaste'
 
-function mkTarget(overrides: Partial<PasteTarget> = {}): PasteTarget & { scrollToBottom: ReturnType<typeof vi.fn> } {
+type MockTarget = Omit<PasteTarget, 'write' | 'scrollToBottom'> & {
+  write: Mock
+  scrollToBottom: Mock
+}
+
+function mkTarget(overrides: Partial<MockTarget> = {}): MockTarget {
   return {
     bracketedPasteMode: false,
     write: vi.fn(),

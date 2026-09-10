@@ -119,7 +119,7 @@ const menuStyle = ref({ top: '-9999px', left: '-9999px' })
 // Submenu fly direction is computed per-position from the window edges (which
 // side has more room), not from the static align. See position().
 const mirrorLeft = ref(false)
-const current = ref<unknown>()
+const current = ref<any>()
 // Writable submenu state shared with descendant <MenuSubmenu> rows via provide;
 // MenuSubmenu sets `active` on hover and reads it to show/hide its flyout.
 const submenu = reactive({ active: '' as string })

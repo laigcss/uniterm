@@ -64,8 +64,8 @@
           <pre class="script-error-sql">{{ scriptResult.failedSql }}</pre>
         </template>
         <template v-else>
-          <span class="script-ok">{{ t('db.scriptExecuted', { n: scriptResult.executed }) }}</span>
-          <span class="script-affected">{{ t('db.affectedRowsTotal') }}: {{ scriptResult.affectedTotal }}</span>
+          <span class="script-ok">{{ t('db.scriptExecuted', { n: scriptResult.executed ?? 0 }) }}</span>
+          <span class="script-affected">{{ t('db.affectedRowsTotal') }}: {{ scriptResult.affectedTotal ?? 0 }}</span>
         </template>
       </div>
       <div v-if="execResult" class="result-info">
@@ -89,7 +89,7 @@
             ref="exportBtnRef"
             class="btn btn-ghost btn-icon btn-sm"
             :title="t('db.exportResults')"
-            @click.stop="exportMenuRef?.toggle($event.currentTarget)"
+            @click.stop="exportMenuRef?.toggle($event.currentTarget as HTMLElement)"
           >
             <Download :size="14" />
           </button>
@@ -212,7 +212,17 @@ import { chat } from '../services/llm'
 import { msg } from '../services/message'
 import { loadSqlHistory, pushSqlHistory } from '../composables/useDbSqlHistory'
 import type { QueryResult, ExecResult, ColumnInfo, HistoryEntry } from '../types/database'
-import { ScriptResult } from '../../bindings/github.com/ys-ll/uniterm/backend/database/models'
+
+// ScriptResult comes from wails bindings (JS-only, no .d.ts). Define a local
+// shape covering the fields used by the script-execution UI.
+interface ScriptResult {
+  failedLine?: number | null
+  error?: string
+  failedSql?: string
+  executed?: number
+  affectedTotal?: number
+}
+
 
 const { t } = useI18n()
 
@@ -478,7 +488,7 @@ async function generateSQL() {
       if (schemas[name]) continue
       try {
         const schema = await GetTableSchema(props.sessionId, dbName, name)
-        schemas[name] = schema.columns?.map(c => ({
+        schemas[name] = schema.columns?.map((c: { name: string; type: string; nullable: boolean; comment?: string }) => ({
           name: c.name,
           type: c.type,
           nullable: c.nullable,

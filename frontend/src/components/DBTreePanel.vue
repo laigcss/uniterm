@@ -10,7 +10,7 @@
       <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.refreshDatabases')" @click="refreshAll">
         <RefreshCw :size="14" />
       </button>
-      <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
+      <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
         <MoreHorizontal :size="14" />
       </button>
       <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
@@ -368,8 +368,8 @@ watch(searchQuery, (q) => {
     const all = new Set(databases.value.map(d => d.name))
     for (const db of databases.value) {
       if (!db.loaded) {
-        GetTables(props.sessionId, db.name).then(tables => {
-          db.tables = tables
+        GetTables(props.sessionId, db.name).then((tables: string[]) => {
+          db.tables = tables.map(name => ({ name }))
           db.loaded = true
         }).catch(() => {})
       }

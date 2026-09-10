@@ -136,6 +136,11 @@ export interface AISettings {
   maxTurns: number
   models: AIModelConfig[]
   activeModelId: string
+  // S2: 本地危险命令防线开关。默认开（true）—— agent.ts 的 getRisk 会
+  // 对命令做本地模式匹配，取 max(modelRisk, localRisk)，使被 prompt
+  // injection 劫持的模型无法把 rm -rf 声明为 read 绕过确认。
+  // 用户可在设置页关闭以完全信任模型声明（不推荐）。
+  localRiskGuardEnabled?: boolean
 }
 
 export type ShortcutAction =
@@ -230,7 +235,20 @@ export interface AppSettings {
   // Which connection-sidebar tab icons are visible, keyed by view id.
   // Missing keys fall back to SIDEBAR_TAB_DEFAULTS.
   sidebarTabs: Record<string, boolean>
+  // SSH host-key verification policy (S1).
+  //   'accept-new' (default, TOFU) — first connect records the fingerprint,
+  //     a change surfaces a confirmation dialog carrying old/new fingerprints.
+  //   'strict' — a change is rejected outright (no dialog).
+  //   'off' — host-key verification disabled (legacy InsecureIgnoreHostKey).
+  hostKeyStrategy?: HostKeyStrategy
+  // F4: 终端录制与回放 — 新终端连接时是否自动开始录制。默认 false。
+  autoRecord?: boolean
+  // F4: 录制文件存储目录。空表示使用后端默认 ~/.uniterm/records/。
+  recordingsDir?: string
 }
+
+// SSH host-key verification policy (S1). See AppSettings.hostKeyStrategy.
+export type HostKeyStrategy = 'accept-new' | 'strict' | 'off'
 
 // Default visibility per sidebar view. "connections" is the primary view and
 // is always shown (never hidden by either the settings card or the tab-strip
@@ -295,7 +313,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
         protocol: 'anthropic' as const
       }
     ],
-    activeModelId: 'model-default'
+    activeModelId: 'model-default',
+    localRiskGuardEnabled: true
   },
   keyboard: { ...DEFAULT_KEYBOARD },
   autoCheckUpdate: true,
@@ -308,7 +327,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customTerminalThemes: [],
   defaultLocalShell: '',
   tabCloseButton: 'left',
-  sidebarTabs: { ...SIDEBAR_TAB_DEFAULTS }
+  sidebarTabs: { ...SIDEBAR_TAB_DEFAULTS },
+  hostKeyStrategy: 'accept-new',
+  autoRecord: false,
+  recordingsDir: ''
 }
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }

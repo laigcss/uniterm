@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/ys-ll/uniterm/app'
-import { LocalState } from '../../bindings/github.com/ys-ll/uniterm/backend/store/models'
+
+// bindings 模块无 .d.ts，LocalState 仅用作类型占位。
+type LocalState = any
 
 const DEFAULT: LocalState = {
   sidebarVisible: true,

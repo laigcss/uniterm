@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { inject, computed } from 'vue'
 import { ChevronDown, ChevronRight, MoreHorizontal } from '@lucide/vue'
-import type { GroupTreeNode, ConnectionConfig, ConnectionGroup } from '../types/session'
+import type { GroupTreeNode, ConnectionConfig } from '../types/session'
 
 const props = defineProps<{
   node: GroupTreeNode

@@ -221,7 +221,7 @@ const panelIcon = computed(() => {
 
 function toggleMoreMenu(e: MouseEvent) {
   const opening = !moreMenuVisible.value
-  moreMenuRef.value?.toggle(e.currentTarget)
+  moreMenuRef.value?.toggle(e.currentTarget as HTMLElement)
   if (opening) refreshOutputLogState()
 }
 
@@ -353,7 +353,7 @@ async function retryConnection() {
         shellPath,
         initialCols: 0,
         initialRows: 0,
-      }
+      } as ConnectionConfig
       const info = await CreateSession('local', config)
       panelStore.bindSession(props.panel.id, info.id)
       sessionStore.initSession(info.id)
@@ -362,7 +362,7 @@ async function retryConnection() {
         config.initialCols = size.cols
         config.initialRows = size.rows
       }
-      await SessionStart(info.id, config).catch((e) => {
+      await SessionStart(info.id, config).catch((e: unknown) => {
         baseTerminalRef.value?.write(`\r\n\x1b[31mFailed to start local shell: ${e}\x1b[0m\r\n`)
         CloseSession(info.id).catch(() => {})
       })
@@ -440,7 +440,7 @@ async function retryConnection() {
       config.initialCols = size.cols
       config.initialRows = size.rows
     }
-    await SessionStart(info.id, config).catch((e) => {
+    await SessionStart(info.id, config).catch((e: unknown) => {
       baseTerminalRef.value?.write(`\r\n\x1b[31mReconnect failed: ${e}\x1b[0m\r\n`)
       CloseSession(info.id).catch(() => {})
     })

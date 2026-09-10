@@ -1,9 +1,16 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
 import '@fontsource-variable/jetbrains-mono'
 import { ElDialog } from 'element-plus'
+// P1: vue-virtual-scroller — FileList 等大列表虚拟化
+import { RecycleScroller, DynamicScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+// P3: Element Plus 按需引入 — 全局 API 样式手动补齐
+// ElMessage/ElMessageBox 是 JS API 调用（非模板 <el-xxx> 标签），
+// unplugin-vue-components 的 ElementPlusResolver 只能从模板扫描标签引入样式，
+// 无法覆盖全局 API，故在此手动引入其样式。其余组件样式由 resolver 按需注入。
+import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/message-box/style/css'
 import App from './App.vue'
 import './style.css'
 import { Window } from '@wailsio/runtime'
@@ -20,7 +27,11 @@ if (ElDialog.props) {
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
-app.use(ElementPlus)
+
+// P1: 注册虚拟滚动组件（全局组件，避免每个使用点重复 import）
+app.component('RecycleScroller', RecycleScroller)
+app.component('DynamicScroller', DynamicScroller)
+
 
 const settingsStore = useSettingsStore()
 // Sync locale from navigator before mount (default 'system' → resolves from
