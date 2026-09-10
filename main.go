@@ -123,7 +123,7 @@ func main() {
 	go sweepStaleExtEditDirs()
 
 	w3app := application.New(application.Options{
-		Name:       "uniTerm",
+		Name:       "ai-ops-terminal",
 		Assets:     application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		OnShutdown: app.shutdown,
 		// WebviewUserDataPath is a Windows-only path for WebView2 user data; it is
@@ -136,7 +136,7 @@ func main() {
 		// value, which is what lets the dock/taskbar associate the running
 		// window with the app icon.
 		Linux: application.LinuxOptions{
-			ProgramName: "uniterm",
+			ProgramName: "ai-ops-terminal",
 		},
 	})
 
@@ -164,7 +164,7 @@ func main() {
 	}
 
 	window := w3app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:           "uniTerm",
+		Title:           "ai-ops-terminal",
 		Width:           winW,
 		Height:          winH,
 		X:               savedX,

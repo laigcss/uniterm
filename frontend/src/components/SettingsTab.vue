@@ -863,7 +863,7 @@
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
         <div class="about-content">
-          <div class="about-appname">uniTerm</div>
+          <div class="about-appname">ai-ops-terminal</div>
           <p class="about-desc">{{ t('settings.aboutDesc') }}</p>
           <div class="about-version">
             {{ t('settings.version') }}: {{ updateCheck.updateInfo?.current || '...' }}
@@ -1747,7 +1747,7 @@ const modelForm = reactive({
   model: '',
   apiKey: '',
   protocol: 'anthropic' as 'anthropic' | 'openai' | 'responses',
-  userAgent: 'uniTerm' as string,
+  userAgent: 'ai-ops-terminal' as string,
   proxyId: '' as string,
 })
 
@@ -1809,7 +1809,7 @@ function resetModelForm() {
   modelForm.model = ''
   modelForm.apiKey = ''
   modelForm.protocol = 'anthropic'
-  modelForm.userAgent = 'uniTerm'
+  modelForm.userAgent = 'ai-ops-terminal'
   modelForm.proxyId = ''
   modelSuggestions.value = []
 }

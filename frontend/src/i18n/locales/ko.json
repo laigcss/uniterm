@@ -164,7 +164,7 @@
   "input.copy": "복사",
   "input.paste": "붙여넣기",
   "input.selectAll": "모두 선택",
-  "ai.title": "uniTerm AI",
+  "ai.title": "ai-ops-terminal AI",
   "ai.insecureBaseURLWarning": "평문 HTTP 는 API Key 를 노출합니다. https 사용을 권장",
   "ai.close": "닫기",
   "ai.newSession": "새 세션",

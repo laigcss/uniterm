@@ -164,7 +164,7 @@
   "input.copy": "Copy",
   "input.paste": "Paste",
   "input.selectAll": "Select All",
-  "ai.title": "uniTerm AI",
+  "ai.title": "ai-ops-terminal AI",
   "ai.insecureBaseURLWarning": "Plaintext HTTP will expose your API Key; consider using https",
   "ai.close": "Close",
   "ai.newSession": "New Session",

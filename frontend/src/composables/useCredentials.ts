@@ -187,7 +187,7 @@ export function useCredentials() {
     // rejects and the placeholder status would wrongly pop the encryption
     // dialog. Skip the whole credential flow so the UI renders for debugging.
     if (!credStore.backendAvailable) {
-      console.warn('[uniTerm] Backend unreachable — browser debug mode: credential flow skipped')
+      console.warn('[ai-ops-terminal] Backend unreachable — browser debug mode: credential flow skipped')
       return
     }
     if (credStore.firstRun || credStore.dataDirInfo.firstRun) {

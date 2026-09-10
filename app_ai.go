@@ -151,7 +151,7 @@ func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, 
 	}
 
 	if userAgent == "" {
-		userAgent = "uniTerm"
+		userAgent = "ai-ops-terminal"
 	}
 
 	client, err := a.llmClientFor(proxyID)
@@ -1146,7 +1146,7 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string, proxyID string) ([]M
 	} else {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	req.Header.Set("User-Agent", "uniTerm")
+	req.Header.Set("User-Agent", "ai-ops-terminal")
 
 	// F-208: share the same transport as the LLM clients so the model
 	// list call also benefits from the keep-alive pool; the request

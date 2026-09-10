@@ -164,7 +164,7 @@
   "input.copy": "复制",
   "input.paste": "粘贴",
   "input.selectAll": "全选",
-  "ai.title": "uniTerm AI",
+  "ai.title": "ai-ops-terminal AI",
   "ai.insecureBaseURLWarning": "明文 HTTP 将暴露 API Key，建议使用 https",
   "ai.close": "关闭",
   "ai.newSession": "新建会话",

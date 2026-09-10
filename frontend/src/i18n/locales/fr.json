@@ -164,7 +164,7 @@
   "input.copy": "Copier",
   "input.paste": "Coller",
   "input.selectAll": "Tout sélectionner",
-  "ai.title": "uniTerm IA",
+  "ai.title": "ai-ops-terminal IA",
   "ai.insecureBaseURLWarning": "Le HTTP en clair exposera votre clé API ; envisagez d'utiliser https",
   "ai.close": "Fermer",
   "ai.newSession": "Nouvelle session",

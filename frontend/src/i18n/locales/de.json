@@ -164,7 +164,7 @@
   "input.copy": "Kopieren",
   "input.paste": "Einfügen",
   "input.selectAll": "Alles auswählen",
-  "ai.title": "uniTerm KI",
+  "ai.title": "ai-ops-terminal KI",
   "ai.insecureBaseURLWarning": "Klartext-HTTP exposes Ihren API-Key; verwenden Sie besser https",
   "ai.close": "Schließen",
   "ai.newSession": "Neue Sitzung",
