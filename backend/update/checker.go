@@ -212,9 +212,9 @@ func Check(currentVersion, source string) (*UpdateInfo, error) {
 
 	log.Writef("[update] Check called, current=%s, source=%s", currentVersion, source)
 
-	apiURL := "https://api.github.com/repos/ys-ll/uniterm/releases/latest"
+	apiURL := "https://api.github.com/repos/laigcss/ai-ops-terminal/releases/latest"
 	if source == "gitee" {
-		apiURL = "https://gitee.com/api/v5/repos/ys-l/uniterm/releases/latest"
+		apiURL = "https://gitee.com/api/v5/repos/laigcss/ai-ops-terminal/releases/latest"
 	}
 
 	// F-409: reuse a package-level client with keep-alive; send the
@@ -226,7 +226,7 @@ func Check(currentVersion, source string) (*UpdateInfo, error) {
 		log.Writef("[update] create request error: %v", err)
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uniTerm")
+	req.Header.Set("User-Agent", "ai-ops-terminal")
 	if prev := loadCache(); prev != nil && prev.Source == source && prev.ETag != "" {
 		req.Header.Set("If-None-Match", prev.ETag)
 	}
@@ -268,9 +268,9 @@ func Check(currentVersion, source string) (*UpdateInfo, error) {
 
 	log.Writef("[update] latest=%s", release.TagName)
 
-	releaseURL := "https://github.com/ys-ll/uniterm/releases/latest"
+	releaseURL := "https://github.com/laigcss/ai-ops-terminal/releases/latest"
 	if source == "gitee" {
-		releaseURL = "https://gitee.com/ys-l/uniterm/releases/latest"
+		releaseURL = "https://gitee.com/laigcss/ai-ops-terminal/releases/latest"
 	}
 
 	result := UpdateInfo{

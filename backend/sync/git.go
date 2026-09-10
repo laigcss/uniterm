@@ -114,8 +114,8 @@ func (g *GitRepo) StageAndCommit(msg string) (bool, error) {
 
 	_, err = wt.Commit(msg, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "uniTerm",
-			Email: "uniterm@local",
+			Name:  "ai-ops-terminal",
+			Email: "ai-ops-terminal@local",
 			When:  time.Now(),
 		},
 	})

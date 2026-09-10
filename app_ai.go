@@ -1,7 +1,6 @@
 package main
 
 import (
-
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1182,6 +1181,7 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string, proxyID string) ([]M
 	}
 	return result.Data, nil
 }
+
 // AI Config Store methods
 
 func (a *App) SaveAIConfig(config store.AIConfig) error {
@@ -1207,7 +1207,6 @@ func (a *App) SaveAIConfig(config store.AIConfig) error {
 	a.triggerAutoSync()
 	return nil
 }
-
 
 // SkillsStore methods
 
@@ -1380,4 +1379,3 @@ type responsesStreamEvent struct {
 	Item        json.RawMessage `json:"item"`
 	Delta       string          `json:"delta"`
 }
-
