@@ -227,6 +227,7 @@ import { useUpdateCheck } from './composables/useUpdateCheck'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener, matchDigitShortcut, isRebinding } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import { useDuplicateSession } from './composables/useDuplicateSession'
+import { useTunnelCredentials } from './composables/useTunnelCredentials'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
 import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval } from '../bindings/github.com/ys-ll/uniterm/app'
@@ -665,65 +666,10 @@ function onMcpSessionCreated(payload: { sessionId: string; name?: string; host?:
   panelStore.movePanelToTab(panel.id, tab.id)
 }
 
-function needsCredentialCheck(config: ConnectionConfig): boolean {
-  const inScope = ['ssh', 'mosh', 'sftp', 'scp', 'ftp'].includes(config.type)
-  if (!inScope) return false
-  if ((config.type === 'ssh' || config.type === 'mosh' || config.type === 'scp' || config.type === 'sftp') && (config.authType === 'key' || config.authType === 'keyText')) return false
-  // 身份认证：账密来自身份库，由后端 materializeIdentity 解析，无需补全提示
-  if (config.authType === 'identity' || config.authType === 'kerberos' || config.authType === 'agent') return false
-  return !config.user || !config.password
-}
-
-
-async function ensureCredentials(config: ConnectionConfig): Promise<ConnectionConfig | null> {
-  // 1. Check SSH tunnel connection first
-  if (config.tunnelSSHConnId) {
-    const tunnelConn = connectionStore.connections.find(c => c.id === config.tunnelSSHConnId)
-    if (tunnelConn && needsCredentialCheck(tunnelConn)) {
-      const result = await showCredentialDialog(
-        t('credential.tunnelTitle'),
-        t('credential.tunnelSubtitle', { name: tunnelConn.name }),
-        ['user', 'password'],
-        tunnelConn.user,
-        tunnelConn.password
-      )
-      if (!result) return null
-      // Pass credentials inline so Go can apply them without reading the store
-      config.tunnelSSHUser = result.user || tunnelConn.user
-      config.tunnelSSHPassword = result.password || tunnelConn.password
-      if (result.action === 'save_and_connect') {
-        await connectionStore.update(tunnelConn.id, {
-          user: config.tunnelSSHUser,
-          password: config.tunnelSSHPassword
-        })
-      }
-    }
-  }
-
-  // 2. Check main connection
-  if (!needsCredentialCheck(config)) return config
-
-  const result = await showCredentialDialog(
-    t('credential.title'),
-    [config.name, config.host].filter(Boolean).join(' · '),
-    ['user', 'password'],
-    config.user,
-    config.password
-  )
-  if (!result) return null
-  // Create new object instead of mutating the original (which may be
-  // referenced by the Pinia store). For "save_and_connect" we explicitly
-  // persist via connectionStore.update below.
-  config = {
-    ...config,
-    user: result.user || config.user,
-    password: result.password || config.password
-  }
-  if (result.action === 'save_and_connect') {
-    await connectionStore.update(config.id, { user: config.user, password: config.password })
-  }
-  return config
-}
+// 凭据补全统一在 composables/useTunnelCredentials.ts：终端连接、容器、K8s 等
+// 入口共用同一实现。App.vue 自身的 showCredentialDialog 无法被本组件
+// inject 到，需显式传入。
+const { ensureConnectionCredentials: ensureCredentials } = useTunnelCredentials(showCredentialDialog)
 
 let inputMenuTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement | null = null
 interface InputMenuSelection {
