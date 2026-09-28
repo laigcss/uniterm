@@ -1059,6 +1059,7 @@
   "credential.tunnelTitle": "SSH Tunnel - Credentials Required",
   "credential.tunnelSubtitle": "Tunnel: {name}",
   "credential.authFailedSubtitle": "Authentication failed — enter your credentials again.",
+  "credential.cancelled": "No credentials entered — connection cancelled.",
   "credential.connect": "Connect",
   "conn.categoryFileTransfer": "File Transfer",
   "conn.categoryContainer": "Container",
