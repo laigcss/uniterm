@@ -1,6 +1,11 @@
 <template>
   <div class="db-tree-panel">
     <div class="tree-content">
+      <div class="table-item" :class="{ selected: modelValue === OVERVIEW_KEY }" @click="$emit('update:modelValue', OVERVIEW_KEY)">
+        <span class="table-icon-spacer" />
+        <component :is="Gauge" class="table-icon" :size="'0.875rem'" />
+        <span class="table-name">{{ t('k8s.overview') }}</span>
+      </div>
       <template v-for="group in groups" :key="group.key">
         <div
           class="db-header"
@@ -17,7 +22,7 @@
           <div
             v-for="r in group.resources"
             :key="r.key"
-            class="table-item"
+            class="table-item nested"
             :class="{ selected: modelValue === r.key }"
             @click="$emit('update:modelValue', r.key)"
           >
@@ -37,16 +42,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Gauge,
   Box, Boxes, Layers, GitFork, CirclePlay, Clock, Copy,
   Network, Globe,
   File, FileText, Lock,
   HardDrive, Database,
   Server, Folder, Bell,
   BrickWallShield, Cable, Component, Package2, CircleGauge,
+  Waypoints, Route,
   Package,   // 兜底
 } from '@lucide/vue'
 import { RESOURCES, type ResourceGroup, type ResourceDescriptor } from '../services/k8sResources'
+import { useI18n } from '../i18n'
+import { OVERVIEW_KEY } from '../types/k8s'
 
 defineProps<{ modelValue: string }>()
 defineEmits<{ (e: 'update:modelValue', key: string): void }>()
@@ -57,7 +65,10 @@ interface Group {
   resources: ResourceDescriptor[]
 }
 
-const GROUP_ORDER: ResourceGroup[] = ['workloads', 'network', 'config', 'storage', 'rbac', 'cluster']
+const { t } = useI18n()
+
+// RBAC 低频，排到最后
+const GROUP_ORDER: ResourceGroup[] = ['workloads', 'network', 'config', 'storage', 'cluster', 'rbac']
 const GROUP_LABELS: Record<ResourceGroup, string> = {
   workloads: 'Workloads',
   network: 'Network',
@@ -75,8 +86,8 @@ const groups = computed<Group[]>(() =>
   }))
 )
 
-// 默认全部展开
-const expanded = ref<Set<string>>(new Set(GROUP_ORDER))
+// 默认展开，RBAC 低频默认折叠
+const expanded = ref<Set<string>>(new Set(GROUP_ORDER.filter(g => g !== 'rbac')))
 function toggle(k: string) {
   if (expanded.value.has(k)) expanded.value.delete(k)
   else expanded.value.add(k)
@@ -92,6 +103,7 @@ const ICON_MAP: Record<string, any> = {
   HardDrive, Database,
   Server, Folder, Bell,
   BrickWallShield, Cable, Component, Package2, CircleGauge,
+  Waypoints, Route,
 }
 function iconOf(name: string) {
   return ICON_MAP[name] || Package
@@ -167,8 +179,16 @@ function groupIcon(_g: ResourceGroup) {
 .table-item.selected {
   background: var(--bg-hover);
 }
+/* 二级行（分组下的资源项）：基础 padding 0.5rem + 每层 1.125rem（18px，
+   对齐 RedisTabContent 的 per-depth pad），使缩进比一级深一层 */
+.table-item.nested {
+  padding-left: 1.625rem;
+}
 .table-icon-spacer {
-  width: 1.875rem;
+  /* Equal to the row's .db-arrow width so rows without a collapse button
+     (overview, resources) reserve the arrow slot — their icons sit in the
+     same column as the group header's arrow/icon. */
+  width: 0.75rem;
   flex-shrink: 0;
 }
 .table-icon {

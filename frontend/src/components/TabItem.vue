@@ -350,7 +350,7 @@ const canDuplicateChannel = computed(() => {
 })
 
 // Reconnectable panels — terminal types that Panel.vue can re-initiate.
-const TTY_RECONNECT_TYPES: readonly string[] = ['ssh', 'telnet', 'serial', 'mosh', 'local', 'tcp', 'k8s-exec', 'container-exec']
+const TTY_RECONNECT_TYPES: readonly string[] = ['ssh', 'telnet', 'serial', 'mosh', 'local', 'tcp', 'container-exec']
 
 // Whether the tab has a right-click 「重连」(Reconnect). Terminal panels are
 // re-initiated by Panel.vue via the 'panel:reconnect' event; desktop-protocol

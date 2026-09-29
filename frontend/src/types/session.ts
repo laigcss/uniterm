@@ -157,10 +157,11 @@ export interface ConnectionConfig {
   k8sContext?: string
   k8sNamespace?: string
   k8sInsecureTls?: boolean
-  // K8s exec terminal (k8s-exec panel) — params needed to reconnect the exec stream.
-  k8sExecConnId?: string
-  k8sExecPod?: string
-  k8sExecContainer?: string
+  // Exec terminal (container-exec panel) — params needed to reconnect the exec
+  // stream. containerExecNamespace/containerExecContainerName are k8s-only
+  // (pod namespace / target container in the pod); empty for docker runtimes.
+  containerExecNamespace?: string
+  containerExecContainerName?: string
   // Container connection (type: 'container')
   containerTransport?: 'ssh' | 'local'
   containerSSHConnId?: string
@@ -169,9 +170,10 @@ export interface ConnectionConfig {
   containerExecConnId?: string
   containerExecContainerId?: string
   containerExecShell?: string
-  // Container file browser (type: 'container-file') — config.ID 即容器连接 ID，
-  // containerId 为目标容器
+  // Container file browser (type: 'container-file') — config.ID 即容器/k8s 连接 ID，
+  // containerId 为目标容器（k8s 为 Pod 名），containerNamespace 仅 k8s 使用
   containerId?: string
+  containerNamespace?: string
   // X11 Desktop (type: 'x11-desktop') — carries its own SSH credentials
   // (host, port, user, authType, password, keyPath) for direct connection.
   // X11 forwarding is forced on automatically. The actual desktop is

@@ -213,7 +213,7 @@ async function onNamespaceChange(ns: string) {
 }
 
 .ov-card {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle, #333);
   border-radius: var(--radius-sm, 0.25rem);
   padding: 1rem 1.25rem;

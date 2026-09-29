@@ -529,7 +529,7 @@ async function retryConnection() {
   // Exec panels (k8s-exec / container-exec): rebuild the exec stream via the
   // dedicated wails method — CreateSession has no such type. The original
   // params live on the config from open time.
-  if (props.panel.type === 'k8s-exec' || props.panel.type === 'container-exec') {
+  if (props.panel.type === 'container-exec') {
     const c = props.panel.config
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -537,9 +537,10 @@ async function retryConnection() {
     baseTerminalRef.value?.write(RESET_MOUSE_MODES + `\r\n\x1b[33mReconnecting... (${at})\x1b[0m\r\n`)
     try {
       let info
-      if (props.panel.type === 'k8s-exec') {
-        if (!c.k8sExecConnId || !c.k8sExecPod || !c.k8sExecContainer) throw new Error('exec session parameters missing')
-        info = await K8sExecSession(c.k8sExecConnId, c.k8sNamespace || '', c.k8sExecPod, c.k8sExecContainer)
+      if (c.containerExecNamespace) {
+        // k8s 连接：containerExecContainerId 为 Pod 名
+        if (!c.containerExecConnId || !c.containerExecContainerId || !c.containerExecContainerName) throw new Error('exec session parameters missing')
+        info = await K8sExecSession(c.containerExecConnId, c.containerExecNamespace, c.containerExecContainerId, c.containerExecContainerName)
       } else {
         if (!c.containerExecConnId || !c.containerExecContainerId) throw new Error('exec session parameters missing')
         info = await ContainerExecSession(c.containerExecConnId, c.containerExecContainerId, c.containerExecShell || 'sh')
