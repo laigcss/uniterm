@@ -194,10 +194,10 @@
             <el-form-item v-if="(form.authType === 'key' || form.authType === 'keyText') && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')" :label="t('conn.keyPassphrase')">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.keyPassphrasePlaceholder')" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
+            <el-form-item v-if="(form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch') || form.type === 'mongodb'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
               <el-input v-model="form.dbName" :placeholder="t('db.databases')" />
             </el-form-item>
-            <el-form-item v-if="form.type === 'database' && form.dbType !== 'elasticsearch' && form.dbType !== 'redis'" :label="t('db.params')">
+            <el-form-item v-if="(form.type === 'database' && form.dbType !== 'elasticsearch' && form.dbType !== 'redis') || form.type === 'mongodb'" :label="t('db.params')">
               <el-input v-model="form.dbParams" :placeholder="defaultParamsHint" style="width:100%" />
             </el-form-item>
             <el-form-item v-if="form.type === 'local' || form.type === 'wsl'" :label="t('conn.shell')">
@@ -1014,6 +1014,9 @@ const isEsApiKey = computed(() =>
 )
 
 const defaultParamsHint = computed(() => {
+  // Standalone MongoDB form carries no dbType — key off the type itself.
+  // Mirrors buildMongoURI's built-in defaults.
+  if (form.type === 'mongodb') return '默认: authSource=admin&directConnection=true'
   switch (form.dbType) {
     case 'mysql': return '默认: charset=utf8mb4'
     case 'postgres': return '默认: sslmode=disable'
