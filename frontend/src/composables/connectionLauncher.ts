@@ -282,7 +282,8 @@ async function runSpec(key: string, config: ConnectionConfig, spec: ConnectSpec,
       if (persist) RecordRecentConnection(config.id)
     }
   } catch (e) {
-    console.error(`Failed to create ${sessionType} session:`, e)
+    // 有 onError 的类型（如 container-file）自行决定错误呈现，控制台不再刷堆栈
+    if (!spec.onError) console.error(`Failed to create ${sessionType} session:`, e)
     if (spec.onError) {
       spec.onError(panel.id, e)
     } else {

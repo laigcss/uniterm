@@ -1106,7 +1106,7 @@ function onResizeStart(e: MouseEvent) {
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
 }
 .info-label {
   font-family: var(--font-ui);
