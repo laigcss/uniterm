@@ -492,7 +492,7 @@
               </div>
             </el-form-item>
             <el-form-item
-              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl' || form.type === 'tcp'"
+              v-if="form.type === 'ssh' || form.type === 'telnet' || form.type === 'serial' || form.type === 'mosh' || form.type === 'local' || form.type === 'wsl' || form.type === 'tcp' || form.type === 'ftp'"
               :label="t('conn.encoding')"
             >
               <el-select v-model="form.encoding" placeholder="Unicode (UTF-8)">
@@ -504,6 +504,7 @@
                 <el-option label="Japanese (Shift-JIS)" value="shift-jis" />
                 <el-option label="Japanese (EUC-JP)" value="euc-jp" />
                 <el-option label="Korean (EUC-KR)" value="euc-kr" />
+                <el-option label="Latin-1" value="latin-1" />
               </el-select>
             </el-form-item>
             <template v-if="form.type === 'telnet'">
@@ -582,14 +583,6 @@
               </el-form-item>
               <el-form-item :label="t('conn.ftpPassive')">
                 <el-switch v-model="form.ftpPassive" />
-              </el-form-item>
-              <el-form-item :label="t('conn.ftpEncoding')">
-                <el-select v-model="form.ftpEncoding" placeholder="UTF-8">
-                  <el-option label="UTF-8" value="utf-8" />
-                  <el-option label="GBK" value="gbk" />
-                  <el-option label="Shift-JIS" value="shift-jis" />
-                  <el-option label="Latin-1" value="latin-1" />
-                </el-select>
               </el-form-item>
             </template>
             <template v-if="form.type === 'vnc'">
@@ -1065,7 +1058,6 @@ const form = reactive<ConnectionConfig>({
   agentForwarding: false,
   ftpEncryption: 'none',
   ftpPassive: true,
-  ftpEncoding: 'utf-8',
   ftpSkipVerify: false,
   vncShared: true,
   vncRepeaterID: '',
@@ -1440,7 +1432,6 @@ function resetForm() {
   form.agentForwarding = false
   form.ftpEncryption = 'none'
   form.ftpPassive = true
-  form.ftpEncoding = 'utf-8'
   form.ftpSkipVerify = false
   form.vncShared = true
   form.vncRepeaterID = ''

@@ -1220,7 +1220,6 @@
   "conn.ftpEncryptionAuto": "Если доступно",
   "conn.ftpEncryptionRequired": "Требуется",
   "conn.ftpPassive": "Пассивный режим",
-  "conn.ftpEncoding": "Кодировка символов",
   "conn.ftpSkipVerify": "Разрешить небезопасный TLS (пропуск проверки)",
   "conn.ftpSkipVerifyDesc": "Отключает проверку сертификата для FTPS. Уязвимо к MITM-атакам — включайте только для доверенных самоподписанных сертификатов.",
   "conn.vncShared": "Общий сеанс",
