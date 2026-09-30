@@ -405,7 +405,7 @@ defineExpose({
   height: 1.5rem;
   padding: 0 0.375rem;
   border: 1px solid var(--accent);
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-mono, monospace);
@@ -416,7 +416,7 @@ defineExpose({
   flex-shrink: 0;
   width: 1.375rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated, var(--bg-hover));
   color: var(--text-muted);
   font-size: 0.625rem;

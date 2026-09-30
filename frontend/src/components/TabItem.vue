@@ -825,7 +825,7 @@ onMounted(async () => {
   height: 2px;
   min-width: 2px;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   pointer-events: none;
   transition: width 0.2s ease;
 }

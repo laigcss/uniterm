@@ -1887,7 +1887,7 @@ function onConnect() {
   justify-content: center;
   gap: 0.25rem;
   padding: 0.75rem 0.25rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   user-select: none;
   color: var(--text-muted);
   border-left: 0.125rem solid transparent;
@@ -1948,7 +1948,7 @@ function onConnect() {
   height: 3.25rem;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-ui);
@@ -2098,7 +2098,7 @@ function onConnect() {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-subtle);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 

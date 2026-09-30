@@ -335,7 +335,7 @@ function onRemove(id: string) {
   color: var(--text-muted);
   font-size: 0.75rem;
   line-height: 1;
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   padding: 0;
   margin-left: 0.125rem;
   flex-shrink: 0;
@@ -364,6 +364,6 @@ function onRemove(id: string) {
 
 .history-list::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
 }
 </style>

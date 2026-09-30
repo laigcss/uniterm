@@ -1735,13 +1735,13 @@ watch(activeTab, (tab) => {
 .perf-nav-bar {
   height: 0.25rem;
   background: var(--bg-hover);
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .perf-nav-bar-inner {
   height: 100%;
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 
@@ -1830,7 +1830,7 @@ watch(activeTab, (tab) => {
   font-size: 0.75rem;
   min-width: 0;
   padding: 1px 0.25rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   transition: background 0.12s ease;
 }
 .perf-sub-row:hover {
@@ -1916,7 +1916,7 @@ watch(activeTab, (tab) => {
   padding: 0.5rem 0.75rem;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   flex: 1;
 }
@@ -2229,7 +2229,7 @@ watch(activeTab, (tab) => {
 
 .health-card {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 

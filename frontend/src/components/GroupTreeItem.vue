@@ -212,7 +212,7 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   right: 0.375rem;
   height: 0.125rem;
   background: var(--accent);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   z-index: 2;
   pointer-events: none;
 }
@@ -244,7 +244,7 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   color: var(--text-disabled);
   background: var(--bg-subtle);
   padding: 0 0.3125rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 

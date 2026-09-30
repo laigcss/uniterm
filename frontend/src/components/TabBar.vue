@@ -360,7 +360,7 @@ function clearDragState() {
   background: var(--accent);
   opacity: 0.8;
   margin: 0.25rem 0;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .tab-drop-indicator-end {

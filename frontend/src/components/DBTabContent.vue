@@ -658,7 +658,7 @@ function onResizeEnd() {
   width: 1rem;
   height: 1rem;
   line-height: 0.875rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   color: var(--text-muted);
   flex-shrink: 0;
@@ -674,7 +674,7 @@ function onResizeEnd() {
   background: var(--accent);
   opacity: 0.8;
   margin: 0.25rem 0;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .doc-tab-more {

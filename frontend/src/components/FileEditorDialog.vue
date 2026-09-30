@@ -527,7 +527,7 @@ defineExpose({ open })
 .editor-host {
   height: 60vh;
   border: 1px solid var(--border-subtle);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: #282c34;
 }

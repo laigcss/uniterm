@@ -606,7 +606,7 @@ watch(searchQuery, (q) => {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   flex-shrink: 0;

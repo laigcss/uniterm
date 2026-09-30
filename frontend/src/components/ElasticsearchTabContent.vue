@@ -964,7 +964,7 @@ function onResizeStart(e: MouseEvent) {
   background: none;
   color: var(--text-muted);
   font-size: 0.875rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .tab-close:hover {

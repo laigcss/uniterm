@@ -792,7 +792,7 @@ watch(() => props.panel.outputLog, (val) => {
   color: var(--text-muted);
   font-size: 0.75rem;
   padding: 0.125rem 0.25rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   line-height: 1;
 }
 .panel-broadcast:hover,
@@ -812,7 +812,7 @@ watch(() => props.panel.outputLog, (val) => {
   border: none;
   color: var(--text-muted);
   padding: 0.125rem 0.25rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }
@@ -831,7 +831,7 @@ watch(() => props.panel.outputLog, (val) => {
   border: none;
   color: var(--text-muted);
   padding: 0.125rem 0.25rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }
@@ -866,7 +866,7 @@ watch(() => props.panel.outputLog, (val) => {
   border: none;
   color: var(--text-muted);
   padding: 0.125rem 0.25rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }

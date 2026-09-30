@@ -550,7 +550,7 @@ onBeforeUnmount(() => {
 .task-panel {
   margin: 0 0 0.5rem;
   border: 1px solid var(--el-border-color-lighter, #333);
-  border-radius: var(--radius-sm, 0.25rem);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   max-height: 11rem;
   overflow: auto;
@@ -635,14 +635,14 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 4rem;
   height: 0.375rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   background: var(--bg-hover);
   overflow: hidden;
 }
 .task-bar-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 .task-bar-fill.indeterminate {

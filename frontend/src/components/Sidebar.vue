@@ -1728,7 +1728,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   flex-shrink: 0;
@@ -1836,7 +1836,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   color: var(--text-disabled);
   background: var(--bg-subtle);
   padding: 0 0.3125rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -1866,7 +1866,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   right: 0.375rem;
   height: 0.125rem;
   background: var(--accent);
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   z-index: 2;
   pointer-events: none;
 }
@@ -2085,7 +2085,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
 .tree-option {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 .tree-option:hover {
   background: var(--bg-hover);

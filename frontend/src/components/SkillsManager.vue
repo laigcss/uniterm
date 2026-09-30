@@ -230,7 +230,7 @@ onMounted(() => {
   padding: 0.75rem 0.875rem;
   background: var(--el-fill-color-lighter);
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   transition: border-color 0.15s, background 0.15s;
 }
 .skill-card:hover {

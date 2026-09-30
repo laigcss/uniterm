@@ -886,7 +886,7 @@ function showDragGhost(dataTransfer: DataTransfer, items: { name: string; isDir:
   el.style.cssText =
     'position:fixed;top:-2000px;left:0;display:flex;flex-direction:column;gap:2px;' +
     'padding:0.375rem 0.5rem;background:var(--bg-base);border:1px solid var(--border-subtle);' +
-    'border-radius:0.375rem;box-shadow:0 0.25rem 0.75rem rgba(0,0,0,0.35);'
+    'border-radius: var(--radius-sm);box-shadow:0 0.25rem 0.75rem rgba(0,0,0,0.35);'
 
   const mkRow = (maxWidth: string) => {
     const row = document.createElement('div')

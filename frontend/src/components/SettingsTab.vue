@@ -2834,7 +2834,7 @@ async function onToggleSystemTitleBar(v: boolean) {
   padding: 0.75rem 1.125rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   transition: all 0.12s ease;
 }
 
@@ -2950,7 +2950,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .sync-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   margin-bottom: 1rem;
   overflow: hidden;
 }
@@ -3019,7 +3019,7 @@ async function onToggleSystemTitleBar(v: boolean) {
   padding: 0.625rem 0.875rem;
   background: var(--el-color-warning-light-9);
   border: 1px solid var(--el-color-warning-light-5);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
   margin-bottom: 0.875rem;
   color: var(--el-color-warning-dark-2);
   font-size: 0.75rem;
@@ -3066,7 +3066,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .sync-tag {
   font-size: 0.6875rem;
   padding: 0.125rem 0.5rem;
-  border-radius: 0.625rem;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
@@ -3160,7 +3160,7 @@ async function onToggleSystemTitleBar(v: boolean) {
   padding: 0.125rem 0.5rem;
   background: var(--bg-overlay);
   border: 1px solid var(--border-subtle);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   /* UI font so macOS modifier symbols (⌘⌥⇧) render with their native
      system-font shapes instead of the thin mono fallback glyphs. */
   font-family: var(--font-ui);
@@ -3234,7 +3234,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 
 .bg-image-row { display: flex; align-items: center; gap: 0.5rem; }
 .bg-thumb {
-  width: 4rem; height: 2.5rem; border-radius: 0.25rem;
+  width: 4rem; height: 2.5rem; border-radius: var(--radius-sm);
   background-size: cover; background-position: center;
   border: 1px solid var(--border-subtle);
 }

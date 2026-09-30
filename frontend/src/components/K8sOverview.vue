@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
 .ov-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle, #333);
-  border-radius: var(--radius-sm, 0.25rem);
+  border-radius: var(--radius-sm);
   padding: 1rem 1.25rem;
   min-width: 0;
   display: flex;
@@ -358,7 +358,7 @@ onBeforeUnmount(() => {
 .ov-tile {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle, #333);
-  border-radius: var(--radius-sm, 0.25rem);
+  border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
   display: flex;
   flex-direction: column;
@@ -399,7 +399,7 @@ onBeforeUnmount(() => {
 .ov-meter {
   flex: 1;
   height: 0.375rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   min-width: 0;
 }
@@ -408,7 +408,7 @@ onBeforeUnmount(() => {
 .ov-meter.m-danger { background: color-mix(in srgb, var(--el-color-danger) 16%, var(--bg-elevated)); }
 .ov-meter-fill {
   height: 100%;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 .ov-meter-fill.ok { background: var(--el-color-primary); }
@@ -479,7 +479,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.3125rem 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 .ov-clickable:hover {
   background: var(--bg-hover);

@@ -662,7 +662,7 @@ onUnmounted(() => {
   color: var(--text-primary);
   padding: 0.75rem 1.5rem;
   border: 0.125rem dashed var(--border-hover, var(--accent));
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated, rgba(0, 0, 0, 0.35));
 }
 .transfer-panel {

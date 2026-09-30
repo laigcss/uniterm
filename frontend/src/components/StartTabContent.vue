@@ -1114,7 +1114,7 @@ function doEditConnection(config: ConnectionConfig | null) {
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
   font-size: 0.8125rem;
@@ -1137,7 +1137,7 @@ function doEditConnection(config: ConnectionConfig | null) {
   background-color: var(--bg-surface) !important;
   box-shadow: 0 0 0 1px var(--border-subtle) inset !important;
   padding: 0.25rem 0.875rem !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
 }
 .start-search-input .el-input__wrapper.is-focus {
   box-shadow: 0 0 0 1px var(--accent) inset !important;
@@ -1164,7 +1164,7 @@ function doEditConnection(config: ConnectionConfig | null) {
   white-space: nowrap;
   padding: 0.5rem 1.25rem;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
   font-size: 0.8125rem;
@@ -1192,14 +1192,14 @@ function doEditConnection(config: ConnectionConfig | null) {
 }
 
 .start-action-btn-group > .start-action-btn {
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   border-right: none;
 }
 
 .start-action-btn-dropdown-arrow {
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   background: var(--bg-surface);
   color: var(--text-secondary);
   display: flex;
@@ -1251,7 +1251,7 @@ function doEditConnection(config: ConnectionConfig | null) {
   justify-content: center;
   width: 1.125rem;
   height: 1.125rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   color: var(--text-disabled);
   transition: background 0.15s, color 0.15s;
 }
@@ -1276,7 +1276,7 @@ function doEditConnection(config: ConnectionConfig | null) {
   position: relative;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
   transition: border-color 0.15s;
   width: 15rem;
@@ -1379,7 +1379,7 @@ function doEditConnection(config: ConnectionConfig | null) {
 .start-card-icon {
   width: 2.25rem;
   height: 2.25rem;
-  border-radius: 0.4375rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1423,7 +1423,7 @@ function doEditConnection(config: ConnectionConfig | null) {
 .start-quick-card {
   background: transparent;
   border: 1px dashed var(--accent);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
   transition: background 0.15s;
   margin-top: 0.75rem;

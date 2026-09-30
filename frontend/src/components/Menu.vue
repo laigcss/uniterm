@@ -283,7 +283,7 @@ watch(() => props.visible, (v) => {
   z-index: 99999;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   /* Auto-width: the menu hugs its widest row, so no per-menu min-width tuning
      is needed. min-width only guarantees a floor for single-word menus. */
@@ -382,7 +382,7 @@ watch(() => props.visible, (v) => {
   z-index: 10001;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
   min-width: 8.75rem;
   padding: 0.25rem;

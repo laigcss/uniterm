@@ -1,22 +1,23 @@
 :root {
-  /* Core palette - professional dark, slight blue undertone (kept from before) */
-  --bg-base: #14171d;
-  --bg-elevated: #191c24;
-  --bg-surface: #1f222b;
-  --bg-overlay: #252933;
-  --bg-hover: #313643;
-  --bg-active: #3b4252;
+  /* Core palette - near-black window floor against lighter panels, so the
+     layer contrast reads clearly */
+  --bg-base: #0f0f0f;
+  --bg-elevated: #1a1a1a;
+  --bg-surface: #242424;
+  --bg-overlay: #2b2b2b;
+  --bg-hover: #303030;
+  --bg-active: #383838;
 
   /* Text */
-  --text-primary: #e6e8ed;
-  --text-secondary: #9ea3ae;
-  --text-muted: #949aa5;
-  --text-disabled: #6b7280;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-muted: #9a9a9a;
+  --text-disabled: #636363;
 
-  /* Accent - electric cyan */
-  --accent: #22d3ee;
-  --accent-glow: rgba(34, 211, 238, 0.15);
-  --accent-subtle: rgba(34, 211, 238, 0.08);
+  /* Accent - brightened one step so it stays vivid on the near-black base */
+  --accent: #3794ff;
+  --accent-glow: rgba(55, 148, 255, 0.25);
+  --accent-subtle: rgba(55, 148, 255, 0.1);
 
   /* Info - secondary link/informational blue, distinct from --accent */
   --info: #4c9df0;
@@ -48,7 +49,7 @@
   --error-subtle: rgba(248, 113, 113, 0.06);
   --error-glow: rgba(248, 113, 113, 0.15);
 
-  /* Borders */
+  /* Borders - separators read slightly heavier than hairlines */
   --border-subtle: rgba(255, 255, 255, 0.16);
   --border-hover: rgba(255, 255, 255, 0.22);
 
@@ -66,10 +67,10 @@
   --font-ui: -apple-system, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', monospace;
 
-  /* Spacing */
+  /* Spacing - two-tier radius: 4px controls, 8px surfaces */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-lg: 0.5rem;
 
   /* Scrollbar */
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
@@ -83,16 +84,16 @@
      currently-applied [data-theme] defines. */
   --el-color-primary: var(--accent);
   --el-input-focus-border-color: var(--accent);
-  --el-bg-color: #14171d;
-  --el-bg-color-page: #14171d;
-  --el-fill-color-blank: #1f222b;
-  --el-fill-color: #191c24;
-  --el-fill-color-light: #252933;
-  --el-fill-color-lighter: #313643;
-  --el-text-color-primary: #e6e8ed;
-  --el-text-color-regular: #9ea3ae;
-  --el-text-color-secondary: #737984;
-  --el-text-color-placeholder: #6b7280;
+  --el-bg-color: #1a1a1a;
+  --el-bg-color-page: #0f0f0f;
+  --el-fill-color-blank: #1f1f1f;
+  --el-fill-color: #1a1a1a;
+  --el-fill-color-light: #262626;
+  --el-fill-color-lighter: #2d2d2d;
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #cccccc;
+  --el-text-color-secondary: #9a9a9a;
+  --el-text-color-placeholder: #636363;
   --el-border-color: rgba(255, 255, 255, 0.14);
   --el-border-color-light: rgba(255, 255, 255, 0.1);
   --el-border-color-lighter: rgba(255, 255, 255, 0.08);
@@ -117,16 +118,16 @@
 /* Deep blue - oceanic dark */
 [data-theme="deep-blue"] {
   --bg-base: #0b111e;
-  --bg-elevated: #101729;
-  --bg-surface: #161d33;
-  --bg-overlay: #1c253d;
-  --bg-hover: #232d48;
-  --bg-active: #2b3653;
+  --bg-elevated: #121c30;
+  --bg-surface: #182338;
+  --bg-overlay: #1e2c49;
+  --bg-hover: #243256;
+  --bg-active: #2b3a5f;
 
-  --text-primary: #e2e8f4;
-  --text-secondary: #94a3b8;
-  --text-muted: #8e97a8;
-  --text-disabled: #64708a;
+  --text-primary: #ffffff;
+  --text-secondary: #c3cfdd;
+  --text-muted: #8fa1bd;
+  --text-disabled: #5f6f8a;
 
   --accent: #38bdf8;
   --accent-glow: rgba(56, 189, 248, 0.18);
@@ -162,16 +163,16 @@
   --shadow-md: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.6);
 
-  --el-bg-color: #0b111e;
+  --el-bg-color: #121c30;
   --el-bg-color-page: #0b111e;
-  --el-fill-color-blank: #161d33;
-  --el-fill-color: #101729;
-  --el-fill-color-light: #1c253d;
-  --el-fill-color-lighter: #232d48;
-  --el-text-color-primary: #e2e8f4;
-  --el-text-color-regular: #94a3b8;
-  --el-text-color-secondary: #6b7590;
-  --el-text-color-placeholder: #64708a;
+  --el-fill-color-blank: #182338;
+  --el-fill-color: #121c30;
+  --el-fill-color-light: #1e2c49;
+  --el-fill-color-lighter: #243256;
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #c3cfdd;
+  --el-text-color-secondary: #8fa1bd;
+  --el-text-color-placeholder: #5f6f8a;
   --el-border-color: rgba(255, 255, 255, 0.14);
   --el-border-color-light: rgba(255, 255, 255, 0.1);
   --el-border-color-lighter: rgba(255, 255, 255, 0.08);
@@ -189,13 +190,13 @@
   --bg-hover: #d5d5d5;
   --bg-active: #c8c8c8;
 
-  /* Text - standard dark grays */
-  --text-primary: #1a1a1a;
-  --text-secondary: #5a5a5a;
-  --text-muted: #6e6e6e;
-  --text-disabled: #909090;
+  /* Text - pure black primary, heavier grays for contrast on white */
+  --text-primary: #000000;
+  --text-secondary: #3d3d3d;
+  --text-muted: #5c5c5c;
+  --text-disabled: #8a8a8a;
 
-  /* Accent - Windows-style blue */
+  /* Accent - system blue */
   --accent: #0078d4;
   --accent-glow: rgba(0, 120, 212, 0.22);
   --accent-subtle: rgba(0, 120, 212, 0.08);
@@ -245,10 +246,10 @@
   --el-fill-color: #f5f5f5;
   --el-fill-color-light: #ebebeb;
   --el-fill-color-lighter: #e0e0e0;
-  --el-text-color-primary: #1a1a1a;
-  --el-text-color-regular: #5a5a5a;
-  --el-text-color-secondary: #8a8a8a;
-  --el-text-color-placeholder: #909090;
+  --el-text-color-primary: #000000;
+  --el-text-color-regular: #3d3d3d;
+  --el-text-color-secondary: #6e6e6e;
+  --el-text-color-placeholder: #8a8a8a;
   --el-border-color: rgba(0, 0, 0, 0.12);
   --el-border-color-light: rgba(0, 0, 0, 0.08);
   --el-border-color-lighter: rgba(0, 0, 0, 0.06);
@@ -392,7 +393,7 @@ body::before {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 0.625rem;
+  border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
@@ -419,7 +420,7 @@ body::before {
 }
 .el-scrollbar__thumb {
   background-color: var(--scrollbar-thumb);
-  border-radius: 0.625rem;
+  border-radius: var(--radius-sm);
   /* EP 自带 0.3/0.5 的滑块透明度，会让颜色比原生滚动条淡一截；透明度已
      含在 --scrollbar-thumb 的 rgba 里，这里强制不透明。 */
   opacity: 1;
@@ -452,7 +453,7 @@ body::before {
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
   width: 0.5rem !important;
   left: 0.1875rem !important;
-  border-radius: 0.625rem;
+  border-radius: var(--radius-sm);
   background: var(--terminal-scrollbar-thumb, var(--scrollbar-thumb)) !important;
 }
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
@@ -467,15 +468,14 @@ body::before {
 }
 
 /* Element Plus dark theme overrides.
-   Dialog chrome mirrors the app's own title bar (AppHeader, 2.75rem high) and
-   reads native instead of web: full-bleed header divider, square close key
-   with red hover on Windows/Linux, traffic-light close dot on the left on
-   macOS. Platform comes from documentElement.dataset.platform (set in
-   App.vue's GetPlatform callback on startup). */
+   Dialog chrome mirrors the app's own title bar (AppHeader, 2.25rem high):
+   full-bleed header divider, close key with red hover; on darwin the key
+   becomes a traffic-light dot on the left. Platform comes from
+   documentElement.dataset.platform (set in App.vue's GetPlatform callback). */
 .el-dialog {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: 0.5rem !important;
+  border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-lg) !important;
   /* EP pads the dialog element itself (16px), which insets the header/footer
      so their dividers never reach the edges and the title bar reads taller
@@ -529,14 +529,14 @@ body::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Windows/Linux close key: small rounded button centred in the title bar,
-   sized exactly like WindowControls' .wc-btn.win (0.5rem horizontal +
-   0.3125rem vertical padding around the 0.875rem glyph) so the red hover box
-   matches the minimise/maximise hover boxes. */
+/* Close key: small rounded button centred in the title bar, sized exactly
+   like the window controls' buttons (0.5rem horizontal + 0.3125rem vertical
+   padding around the 0.875rem glyph) so the red hover box matches the
+   minimise/maximise hover boxes. */
 .el-dialog__headerbtn,
 .el-message-box__headerbtn {
   top: 50%;
-  right: 0.375rem;
+  right: 0.25rem;
   transform: translateY(-50%);
   width: 1.875rem;
   height: 1.75rem;
@@ -586,7 +586,7 @@ body::before {
 .el-message-box__headerbtn:active {
   background: #f1707a;
 }
-/* macOS close key: traffic-light dot on the left, glyph shows on hover. */
+/* Darwin close key: traffic-light dot on the left, glyph shows on hover. */
 :root[data-platform="darwin"] .el-dialog__headerbtn,
 :root[data-platform="darwin"] .el-message-box__headerbtn {
   top: 50%;
@@ -617,7 +617,7 @@ body::before {
   opacity: 0;
   transition: opacity 0.1s ease;
 }
-/* On macOS the dot draws the MacClose glyph, not the Win one */
+/* On darwin the dot draws the MacClose glyph, not the Win one */
 :root[data-platform="darwin"] .el-dialog__headerbtn .el-dialog__close::after,
 :root[data-platform="darwin"] .el-message-box__headerbtn .el-message-box__close::after {
   -webkit-mask: var(--mac-close-x) center / contain no-repeat;
@@ -630,9 +630,8 @@ body::before {
 .el-dialog__body {
   color: var(--text-primary);
   padding: 0.75rem 1rem;
-  /* Content area and footer use the app's base colour (same as the start
-     page), one step below the header's surface colour */
-  background: var(--bg-base);
+  /* Whole dialog sits on the surface colour (matches the title bar) */
+  background: var(--bg-surface);
   /* Scrollable middle section of the capped-height dialog: take the leftover
      space and scroll when content exceeds it (min-height: 0 lets flex shrink
      below the content's intrinsic height) */
@@ -643,7 +642,7 @@ body::before {
 .el-dialog__footer {
   padding: 0.625rem 1rem;
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-base);
+  background: var(--bg-surface);
   /* Keep the command bar pinned while the body scrolls */
   flex-shrink: 0;
 }
@@ -664,19 +663,19 @@ body::before {
 .el-message-box {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: 0.5rem !important;
+  border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-lg) !important;
   padding: 0 !important;
 }
 .el-message-box__content {
   color: var(--text-primary);
   padding: 0.875rem 1rem;
-  background: var(--bg-base);
+  background: var(--bg-surface);
 }
 .el-message-box__btns {
   padding: 0.625rem 1rem;
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-base);
+  background: var(--bg-surface);
 }
 
 .el-form-item {
@@ -946,7 +945,7 @@ body::before {
 .el-select-dropdown {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-md) !important;
 }
 .el-select-dropdown__item {
@@ -996,7 +995,7 @@ body::before {
 .el-autocomplete-suggestion {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-md) !important;
 }
 
@@ -1004,7 +1003,7 @@ body::before {
 .el-tree-select__popper {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-md) !important;
 }
 .el-tree-select__popper .el-select-dropdown__item {
@@ -1065,7 +1064,7 @@ body::before {
 .el-dropdown-menu {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-md) !important;
 }
 .el-dropdown-menu__item {
@@ -1301,7 +1300,7 @@ body.drag-active .zone {
   font-size: 0.75rem !important;
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-md) !important;
 }
 /* Force every child to 0.75rem */

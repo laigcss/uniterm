@@ -1697,7 +1697,7 @@ defineExpose({ focusInput })
 }
 .input-container {
   border: 1px solid var(--border-subtle);
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   background: var(--bg-elevated);
   transition: border-color 0.15s ease;
   position: relative;
@@ -1741,7 +1741,7 @@ defineExpose({ focusInput })
   display: inline;
   background: var(--accent);
   color: var(--on-accent);
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   padding: 1px 0.3125rem;
   font-size: 0.75rem;
   font-weight: 500;
@@ -1856,7 +1856,7 @@ defineExpose({ focusInput })
 .ai-panel-tags {
   padding: 0.25rem 0.75rem;
   background: var(--bg-overlay);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 .panel-tags-list {
   display: flex;
@@ -1965,7 +1965,7 @@ defineExpose({ focusInput })
   color: var(--accent);
   background: var(--accent-subtle);
   padding: 0 0.25rem;
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   margin-left: 0.25rem;
   flex-shrink: 0;
 }

@@ -112,13 +112,13 @@ function cancelTransfer(t: ReturnType<typeof store.getTransfers>[number]) {
 .progress-bar {
   height: 0.25rem;
   background: var(--bg-elevated);
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 0.125rem;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 .progress-info {

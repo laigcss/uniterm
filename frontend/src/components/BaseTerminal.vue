@@ -2496,6 +2496,6 @@ defineExpose({
   color: var(--text-primary);
   padding: 0.75rem 1.5rem;
   border: 0.125rem dashed var(--border-hover);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 </style>
