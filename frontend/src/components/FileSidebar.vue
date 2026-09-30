@@ -597,7 +597,6 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .filter-icon-btn:hover {
@@ -606,7 +605,6 @@ onUnmounted(() => {
 }
 .filter-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 .filter-icon-btn.active {
   color: var(--accent);
@@ -620,7 +618,7 @@ onUnmounted(() => {
   height: 0.875rem;
   padding: 0 0.1875rem;
   border-radius: 62.4375rem;
-  background: var(--accent, #22d3ee);
+  background: var(--accent);
   color: #0b1220;
   font-size: 0.625rem;
   font-weight: 700;
@@ -646,7 +644,7 @@ onUnmounted(() => {
   position: relative;
 }
 .file-body.drag-active {
-  outline: 1px solid var(--accent, #22d3ee);
+  outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
 .drop-overlay {
@@ -663,8 +661,8 @@ onUnmounted(() => {
   font-size: 0.875rem;
   color: var(--text-primary);
   padding: 0.75rem 1.5rem;
-  border: 0.125rem dashed var(--border-hover, var(--accent, #22d3ee));
-  border-radius: 0.5rem;
+  border: 0.125rem dashed var(--border-hover, var(--accent));
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated, rgba(0, 0, 0, 0.35));
 }
 .transfer-panel {
@@ -720,8 +718,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-subtle);
 }
 .footer-transfer {
-  color: var(--accent, #22d3ee);
-  cursor: pointer;
+  color: var(--accent);
 }
 .footer-transfer:hover {
   text-decoration: underline;

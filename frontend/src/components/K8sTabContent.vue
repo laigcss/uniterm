@@ -401,8 +401,8 @@ onBeforeUnmount(() => {
 .k8s-ns-warning {
   padding: 0.375rem 0.75rem;
   font-size: 0.75rem;
-  color: var(--el-color-warning, #e6a23c);
-  background: var(--el-color-warning-light-9, #fdf6ec);
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
   border-bottom: 1px solid var(--el-color-warning-light-5, #faecd8);
   flex-shrink: 0;
 }

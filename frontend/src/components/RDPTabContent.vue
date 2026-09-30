@@ -246,7 +246,6 @@ watch(() => props.sessionId, (newId) => {
   font-size: 0.75rem;
   padding: 1px 0.625rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
 }
 .rdp-fullscreen-btn:hover {
   background: var(--bg-hover);

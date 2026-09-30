@@ -824,7 +824,6 @@ function onResizeStart(e: MouseEvent) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.5rem;
-  cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -836,7 +835,6 @@ function onResizeStart(e: MouseEvent) {
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  cursor: pointer;
 }
 .db-arrow:hover {
   color: var(--text-primary);
@@ -869,7 +867,6 @@ function onResizeStart(e: MouseEvent) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.5rem;
-  cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -941,7 +938,6 @@ function onResizeStart(e: MouseEvent) {
   max-width: 11.25rem;
   padding: 0.375rem 0.5rem 0.375rem 0.75rem;
   border-right: 1px solid var(--border-subtle);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -967,9 +963,8 @@ function onResizeStart(e: MouseEvent) {
   border: none;
   background: none;
   color: var(--text-muted);
-  cursor: pointer;
   font-size: 0.875rem;
-  border-radius: 0.1875rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .tab-close:hover {
@@ -985,7 +980,6 @@ function onResizeStart(e: MouseEvent) {
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .es-tab-more:hover {
@@ -1021,7 +1015,6 @@ function onResizeStart(e: MouseEvent) {
   border: none;
   background: none;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   border-bottom: 0.125rem solid transparent;

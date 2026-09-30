@@ -723,7 +723,6 @@ onMounted(async () => {
   min-width: 9rem;
   padding: 0 0.75rem;
   margin: 0 1px;
-  cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   position: relative;
@@ -826,7 +825,7 @@ onMounted(async () => {
   height: 2px;
   min-width: 2px;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   pointer-events: none;
   transition: width 0.2s ease;
 }
@@ -890,7 +889,6 @@ onMounted(async () => {
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
   font-size: 0.875rem;
   transition: all 0.12s ease;
 }

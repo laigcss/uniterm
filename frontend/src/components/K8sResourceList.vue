@@ -580,18 +580,18 @@ onBeforeUnmount(() => {
 /* 行着色：非就绪/异常项高亮（对齐 k9s）。用 el-table 的 CSS 变量覆盖 hover/条纹底色。 */
 .k8s-list-table :deep(.k8s-row-warn) {
   /* 实色（与底色混合），不用半透明覆盖 */
-  --el-table-tr-bg-color: color-mix(in srgb, var(--warning, #e6a23c) 16%, var(--bg-surface, #1e1e1e));
+  --el-table-tr-bg-color: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
 }
 .k8s-list-table :deep(.k8s-row-warn td.el-table__cell) {
-  background: color-mix(in srgb, var(--warning, #e6a23c) 16%, var(--bg-surface, #1e1e1e));
-  color: var(--warning, #e6a23c);
+  background: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
+  color: var(--warning);
 }
 .k8s-list-table :deep(.k8s-row-err) {
-  --el-table-tr-bg-color: color-mix(in srgb, var(--el-color-danger, #f56c6c) 14%, var(--bg-surface, #1e1e1e));
+  --el-table-tr-bg-color: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
 }
 .k8s-list-table :deep(.k8s-row-err td.el-table__cell) {
-  background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 14%, var(--bg-surface, #1e1e1e));
-  color: var(--el-color-danger, #f56c6c);
+  background: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
+  color: var(--el-color-danger);
 }
 /* Action-column cell: tighter cell padding + fixed 0.25rem gap between the
    project-standard .btn-icon buttons (1.5rem square, from style.css .btn). */
