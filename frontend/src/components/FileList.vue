@@ -1102,7 +1102,7 @@ function applyBandSelection() {
 }
 /* Non-name columns read dimmer than the file name (issue #702). */
 .cell-secondary {
-  color: var(--el-text-color-secondary, #909399);
+  color: var(--el-text-color-secondary);
 }
 /* Keep the `border` prop on el-table (column drag-resize needs it) but hide the
    visible vertical lines only on the data rows, keeping the header's. */

@@ -2204,10 +2204,10 @@ watch(activeTab, (tab) => {
   font-variant-numeric: tabular-nums;
 }
 .svc-state.state-ok {
-  color: #67c23a;
+  color: var(--success);
 }
 .svc-state.state-bad {
-  color: #f56c6c;
+  color: var(--error);
 }
 .svc-state.state-idle {
   color: var(--text-muted);

@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 .ov-tile-status-warn {
-  color: var(--warning, #e6a23c);
+  color: var(--warning);
 }
 /* 长文本值（版本号等）用小一号，避免撑破 tile */
 .ov-tile-value-sm {
@@ -403,17 +403,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
   min-width: 0;
 }
-.ov-meter.m-ok { background: color-mix(in srgb, var(--el-color-primary, #409eff) 16%, var(--bg-elevated, #191c24)); }
-.ov-meter.m-warn { background: color-mix(in srgb, var(--warning, #e6a23c) 16%, var(--bg-elevated, #191c24)); }
-.ov-meter.m-danger { background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 16%, var(--bg-elevated, #191c24)); }
+.ov-meter.m-ok { background: color-mix(in srgb, var(--el-color-primary) 16%, var(--bg-elevated)); }
+.ov-meter.m-warn { background: color-mix(in srgb, var(--warning) 16%, var(--bg-elevated)); }
+.ov-meter.m-danger { background: color-mix(in srgb, var(--el-color-danger) 16%, var(--bg-elevated)); }
 .ov-meter-fill {
   height: 100%;
   border-radius: 0.1875rem;
   transition: width 0.3s ease;
 }
-.ov-meter-fill.ok { background: var(--el-color-primary, #409eff); }
-.ov-meter-fill.warn { background: var(--warning, #e6a23c); }
-.ov-meter-fill.danger { background: var(--el-color-danger, #f56c6c); }
+.ov-meter-fill.ok { background: var(--el-color-primary); }
+.ov-meter-fill.warn { background: var(--warning); }
+.ov-meter-fill.danger { background: var(--el-color-danger); }
 
 /* ── 资源用量：CPU / 内存两张卡 ───────────────────────────── */
 .ov-usage-grid {
@@ -511,16 +511,16 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .state-dot[data-state='running'] {
-  background: var(--el-color-success, #67c23a);
+  background: var(--el-color-success);
 }
 .state-dot[data-state='pending'] {
-  background: var(--warning, #e6a23c);
+  background: var(--warning);
 }
 .state-dot[data-state='succeeded'] {
   background: var(--text-muted);
 }
 .state-dot[data-state='failed'] {
-  background: var(--el-color-danger, #f56c6c);
+  background: var(--el-color-danger);
 }
 .state-dot[data-state='unknown'] {
   background: var(--text-muted);

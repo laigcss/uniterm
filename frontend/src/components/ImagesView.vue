@@ -615,10 +615,10 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 .task-kind[data-kind='pull'] {
-  color: var(--el-color-success, #67c23a);
+  color: var(--el-color-success);
 }
 .task-kind[data-kind='push'] {
-  color: var(--el-color-primary, #409eff);
+  color: var(--el-color-primary);
 }
 
 .task-image {
@@ -641,7 +641,7 @@ onBeforeUnmount(() => {
 }
 .task-bar-fill {
   height: 100%;
-  background: var(--accent, #409eff);
+  background: var(--accent);
   border-radius: 0.1875rem;
   transition: width 0.3s ease;
 }
@@ -675,10 +675,10 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .task-status[data-status='done'] {
-  color: var(--el-color-success, #67c23a);
+  color: var(--el-color-success);
 }
 .task-status[data-status='failed'] {
-  color: var(--el-color-danger, #f56c6c);
+  color: var(--el-color-danger);
 }
 .task-status[data-status='stopped'] {
   color: var(--text-muted);

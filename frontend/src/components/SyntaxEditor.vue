@@ -811,7 +811,7 @@ defineExpose({
   white-space: nowrap;
 }
 .match-count.none {
-  color: var(--el-color-danger, #f56c6c);
+  color: var(--el-color-danger);
 }
 .search-icon-btn {
   width: 1.625rem;

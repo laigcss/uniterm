@@ -354,15 +354,15 @@ body {
    applyTheme() sets data-theme. */
 html:not([data-theme]) body,
 [data-theme="dark"] body {
-  background: linear-gradient(180deg, #1b1f27 0%, var(--bg-base) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 40%, var(--bg-base)) 0%, var(--bg-base) 100%);
 }
 
 [data-theme="deep-blue"] body {
-  background: linear-gradient(180deg, #101728 0%, var(--bg-base) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 40%, var(--bg-base)) 0%, var(--bg-base) 100%);
 }
 
 [data-theme="light"] body {
-  background: linear-gradient(180deg, var(--bg-base) 0%, #f2f2f2 100%);
+  background: linear-gradient(180deg, var(--bg-base) 0%, color-mix(in srgb, var(--bg-base) 95%, #000) 100%);
 }
 
 /* Noise texture overlay for atmosphere */

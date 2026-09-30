@@ -1205,7 +1205,7 @@ function escapeHtml(text: string): string {
   font-size: 0.75rem;
 }
 .skill-card-name {
-  color: var(--accent, #409eff);
+  color: var(--accent);
   font-weight: 600;
   font-family: var(--font-mono);
 }

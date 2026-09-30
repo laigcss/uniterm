@@ -325,12 +325,12 @@ async function onNamespaceChange(ns: string) {
   flex-shrink: 0;
 }
 .state-dot[data-state='running'] {
-  background: var(--el-color-success, #67c23a);
+  background: var(--el-color-success);
 }
 .state-dot[data-state='paused'] {
-  background: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning);
 }
 .state-dot[data-state='exited'] {
-  background: var(--el-color-info, #909399);
+  background: var(--el-color-info);
 }
 </style>

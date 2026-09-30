@@ -181,7 +181,7 @@ function fmtSize(bytes: number): string {
   margin: 0.625rem 0;
 }
 .update-dialog-error {
-  color: #f56c6c;
+  color: var(--error);
   font-size: 0.8125rem;
   margin-bottom: 0.625rem;
   word-break: break-word;
