@@ -1671,7 +1671,6 @@ watch(activeTab, (tab) => {
   font-size: 0.8125rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
   border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
@@ -1708,7 +1707,6 @@ watch(activeTab, (tab) => {
 .perf-nav-item {
   padding: 0.625rem 0.75rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   margin-bottom: 0.25rem;
   transition: background 0.12s ease;
 }
@@ -1808,7 +1806,6 @@ watch(activeTab, (tab) => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  cursor: pointer;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -2324,7 +2321,6 @@ watch(activeTab, (tab) => {
   padding: 0.5rem 0.625rem;
   font-size: 0.75rem;
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
   border-bottom: 0.125rem solid transparent;
 }

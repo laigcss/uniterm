@@ -327,7 +327,6 @@ const needsGatewayHint = computed(() => {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.6875rem;
   font-weight: 500;

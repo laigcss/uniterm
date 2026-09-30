@@ -1860,10 +1860,13 @@ function onConnect() {
 }
 
 /* ── Layout ── */
+/* Fills the dialog body (a padding-less flex container — see style.css):
+   the left category rail stays fixed while only the right column scrolls. */
 .conn-layout {
   display: flex;
   gap: 0;
-  min-height: 22.5rem;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Left sidebar ── */
@@ -1871,9 +1874,9 @@ function onConnect() {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  width: 5.625rem;
+  width: 6.875rem;
   flex-shrink: 0;
-  padding: 0.5rem 0.5rem 0.5rem 0;
+  padding: 0.5rem 0.625rem;
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -1885,7 +1888,6 @@ function onConnect() {
   gap: 0.25rem;
   padding: 0.75rem 0.25rem;
   border-radius: var(--radius-md);
-  cursor: pointer;
   user-select: none;
   color: var(--text-muted);
   border-left: 0.125rem solid transparent;
@@ -1917,7 +1919,12 @@ function onConnect() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 0 0 1rem;
+  /* Vertical + right spacing moved here from the dialog body (which is
+     padding-less so the rail divider spans header-to-footer) */
+  padding: 1rem 1.25rem 1rem 1rem;
+  /* The scrolling happens here, not in the dialog body, so the left
+     category rail never moves */
+  overflow-y: auto;
 }
 
 /* ── Sub-type icon grid ── */
@@ -1944,7 +1951,6 @@ function onConnect() {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.6875rem;
   font-weight: 500;
@@ -2053,12 +2059,10 @@ function onConnect() {
   gap: 0.375rem;
   padding: 0.625rem 0 0.5rem;
   margin-bottom: 0.25rem;
-  cursor: pointer;
   user-select: none;
   color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
-  border-bottom: 1px solid var(--border-subtle);
   transition: color 0.15s;
 }
 
@@ -2196,7 +2200,6 @@ function onConnect() {
 }
 
 /* ── Dialog overrides ── */
-:deep(.el-dialog__body) {
-  padding: 1rem 1.25rem;
-}
+/* The body's padding/display override lives in style.css (.conn-dialog):
+   scoped :deep() can't reach the teleport'd append-to-body dialog. */
 </style>

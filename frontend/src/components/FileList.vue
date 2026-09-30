@@ -1144,7 +1144,6 @@ function applyBandSelection() {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
   transition: all 0.12s ease;
 }
@@ -1154,7 +1153,6 @@ function applyBandSelection() {
 }
 .filter-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
   background: transparent;
   color: var(--text-muted);
 }

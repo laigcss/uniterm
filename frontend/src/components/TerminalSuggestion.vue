@@ -258,7 +258,6 @@ function onRemove(id: string) {
   font-size: 0.8125rem;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
   transition: background 0.1s ease;
 }
@@ -334,7 +333,6 @@ function onRemove(id: string) {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   font-size: 0.75rem;
   line-height: 1;
   border-radius: 0.125rem;

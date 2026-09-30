@@ -130,7 +130,6 @@ function groupIcon(_g: ResourceGroup) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.5rem;
-  cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -146,7 +145,6 @@ function groupIcon(_g: ResourceGroup) {
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  cursor: pointer;
 }
 .db-arrow:hover {
   color: var(--text-primary);
@@ -169,7 +167,6 @@ function groupIcon(_g: ResourceGroup) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.5rem;
-  cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 }

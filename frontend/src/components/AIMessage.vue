@@ -840,7 +840,6 @@ function escapeHtml(text: string): string {
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
-  cursor: pointer;
   user-select: none;
 }
 .tool-box-label {
@@ -857,12 +856,10 @@ function escapeHtml(text: string): string {
 .toggle-icon {
   color: var(--text-muted);
   font-size: 0.625rem;
-  cursor: pointer;
 }
 .tool-copy-btn {
   background: none;
   border: none;
-  cursor: pointer;
   font-size: 0.6875rem;
   padding: 0 0.125rem;
   opacity: 0;
@@ -879,7 +876,6 @@ function escapeHtml(text: string): string {
 .text :deep(.code-block-header .tool-copy-btn) {
   background: none;
   border: none;
-  cursor: pointer;
   padding: 0 0.125rem;
   opacity: 0.4;
   transition: opacity 0.15s;
@@ -1051,7 +1047,6 @@ function escapeHtml(text: string): string {
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all 0.2s;
 }
 .copy-md-label {
@@ -1112,7 +1107,6 @@ function escapeHtml(text: string): string {
   padding: 0.375rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
 }

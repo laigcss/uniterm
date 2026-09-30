@@ -320,7 +320,6 @@ watch(() => props.visible, (v) => {
   font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
   white-space: nowrap;
   border-radius: var(--radius-sm);
@@ -332,7 +331,6 @@ watch(() => props.visible, (v) => {
 }
 .conn-context-menu .menu-item.disabled {
   color: var(--text-disabled);
-  cursor: default;
   pointer-events: none;
 }
 .conn-context-menu .menu-item.danger {
@@ -409,7 +407,6 @@ watch(() => props.visible, (v) => {
   font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
   white-space: nowrap;
   border-radius: var(--radius-sm);

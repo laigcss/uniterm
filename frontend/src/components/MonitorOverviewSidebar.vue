@@ -585,7 +585,6 @@ onUnmounted(() => {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 0.625rem;
-  cursor: pointer;
   transition: all 0.15s ease;
 }
 
@@ -697,7 +696,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  cursor: pointer;
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-muted);

@@ -790,7 +790,6 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   font-size: 0.75rem;
   padding: 0.125rem 0.25rem;
   border-radius: 0.1875rem;
@@ -812,7 +811,6 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   padding: 0.125rem 0.25rem;
   border-radius: 0.1875rem;
   display: inline-flex;
@@ -832,7 +830,6 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   padding: 0.125rem 0.25rem;
   border-radius: 0.1875rem;
   display: inline-flex;
@@ -853,7 +850,6 @@ watch(() => props.panel.outputLog, (val) => {
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
   font-size: 0.875rem;
   transition: all 0.12s ease;
 }
@@ -869,7 +865,6 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   padding: 0.125rem 0.25rem;
   border-radius: 0.1875rem;
   display: inline-flex;

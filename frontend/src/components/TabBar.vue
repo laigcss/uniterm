@@ -341,7 +341,6 @@ function clearDragState() {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);

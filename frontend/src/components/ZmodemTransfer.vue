@@ -140,7 +140,6 @@ function cancelTransfer(t: ReturnType<typeof store.getTransfers>[number]) {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  cursor: pointer;
 }
 .cancel-btn:hover {
   border-color: var(--error);

@@ -261,7 +261,6 @@ async function importDir() {
   border-radius: 0.5rem;
   padding: 1.5rem;
   text-align: center;
-  cursor: pointer;
   transition: border-color 0.15s;
 }
 .import-actions {

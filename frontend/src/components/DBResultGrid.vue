@@ -421,7 +421,6 @@ defineExpose({
   color: var(--text-muted);
   font-size: 0.625rem;
   font-weight: 700;
-  cursor: pointer;
   font-style: italic;
 }
 .null-btn:hover {

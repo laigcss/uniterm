@@ -279,7 +279,6 @@ async function onNamespaceChange(ns: string) {
 }
 
 .ov-clickable {
-  cursor: pointer;
   border-radius: 0.25rem;
   padding: 0.4375rem 0.5rem;
   margin: 0 -0.5rem;

@@ -501,7 +501,6 @@ defineExpose({ open })
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
   transition: all 0.12s ease;
 }
@@ -511,7 +510,6 @@ defineExpose({ open })
 }
 .toolbar-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
   background: transparent;
   color: var(--text-muted);
 }
@@ -567,7 +565,6 @@ defineExpose({ open })
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.8125rem;
-  cursor: pointer;
   transition: all 0.12s ease;
 }
 .editor-encoding-btn:hover {

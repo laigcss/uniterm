@@ -211,7 +211,6 @@ function onResizeStart(e: MouseEvent) {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .filter-icon-btn:hover {
@@ -220,7 +219,6 @@ function onResizeStart(e: MouseEvent) {
 }
 .filter-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 .transfer-empty {
   position: absolute;
@@ -270,7 +268,6 @@ function onResizeStart(e: MouseEvent) {
   text-overflow: ellipsis;
 }
 .task-name.clickable {
-  cursor: pointer;
 }
 .task-name.clickable:hover {
   color: var(--text-primary);

@@ -556,7 +556,6 @@ watch(() => [props.dbName, props.collectionName], () => {
   border: none;
   background: none;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   border-bottom: 0.125rem solid transparent;
@@ -729,7 +728,6 @@ watch(() => [props.dbName, props.collectionName], () => {
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
   word-break: break-all;
-  cursor: default;
 }
 .cell-null {
   color: var(--text-muted);

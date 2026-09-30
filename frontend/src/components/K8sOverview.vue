@@ -341,7 +341,6 @@ onBeforeUnmount(() => {
 }
 
 .ov-clickable {
-  cursor: pointer;
 }
 
 .ov-empty {

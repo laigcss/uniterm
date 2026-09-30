@@ -632,7 +632,6 @@ function onResizeEnd() {
   border-right: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.75rem;
   flex-shrink: 0;
@@ -687,7 +686,6 @@ function onResizeEnd() {
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .doc-tab-more:hover {
@@ -700,7 +698,6 @@ function onResizeEnd() {
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   font-size: 1rem;
   flex-shrink: 0;
 }
@@ -741,7 +738,6 @@ function onResizeEnd() {
   border: none;
   background: none;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   border-bottom: 0.125rem solid transparent;

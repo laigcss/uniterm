@@ -1731,7 +1731,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   border-radius: 0.25rem;
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
 }
 
@@ -1751,7 +1750,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
   transition: all 0.12s ease;
 }
 
@@ -1772,7 +1770,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all 0.15s;
 }
 
@@ -1807,7 +1804,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.625rem 0.375rem 0.375rem;
-  cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   transition: background 0.12s ease;
@@ -1856,7 +1852,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   gap: 0.375rem;
   padding: 0.5rem 0.625rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all 0.12s ease;
   margin-bottom: 0.125rem;
   user-select: none;
@@ -1909,7 +1904,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   border: none;
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   margin-left: 0;
@@ -1934,7 +1928,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   border: none;
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   margin-left: auto;
@@ -2020,7 +2013,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
   color: var(--text-muted);
   transition: color 0.12s ease;
   padding: 0.125rem;
@@ -2092,7 +2084,6 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
 
 .tree-option {
   padding: 0.375rem 0.75rem;
-  cursor: pointer;
   font-size: 0.8125rem;
   border-radius: 0.25rem;
 }

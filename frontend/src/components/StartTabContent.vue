@@ -1117,7 +1117,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  cursor: pointer;
   font-size: 0.8125rem;
   white-space: nowrap;
   user-select: none;
@@ -1168,7 +1167,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  cursor: pointer;
   font-size: 0.8125rem;
   display: flex;
   align-items: center;
@@ -1204,7 +1202,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   background: var(--bg-surface);
   color: var(--text-secondary);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1225,7 +1222,6 @@ function doEditConnection(config: ConnectionConfig | null) {
 }
 .start-breadcrumb .link {
   color: var(--accent);
-  cursor: pointer;
 }
 .start-breadcrumb .link:hover {
   text-decoration: underline;
@@ -1256,7 +1252,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   width: 1.125rem;
   height: 1.125rem;
   border-radius: 0.25rem;
-  cursor: pointer;
   color: var(--text-disabled);
   transition: background 0.15s, color 0.15s;
 }
@@ -1283,7 +1278,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 0.5rem 0.75rem;
-  cursor: pointer;
   transition: border-color 0.15s;
   width: 15rem;
 }
@@ -1303,7 +1297,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border: none;
   background: var(--bg-elevated);
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   padding: 0;
   z-index: 2;
@@ -1331,7 +1324,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border: none;
   background: var(--bg-elevated);
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   padding: 0;
   z-index: 2;
@@ -1433,7 +1425,6 @@ function doEditConnection(config: ConnectionConfig | null) {
   border: 1px dashed var(--accent);
   border-radius: var(--radius-lg);
   padding: 0.5rem 0.75rem;
-  cursor: pointer;
   transition: background 0.15s;
   margin-top: 0.75rem;
   width: 15rem;

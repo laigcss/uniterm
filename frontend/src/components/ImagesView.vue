@@ -578,7 +578,6 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .filter-icon-btn:hover {
@@ -587,7 +586,6 @@ onBeforeUnmount(() => {
 }
 .filter-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 
 .task-panel-title {
@@ -607,7 +605,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.375rem 0.625rem;
-  cursor: pointer;
   min-width: 0;
   white-space: nowrap;
 }

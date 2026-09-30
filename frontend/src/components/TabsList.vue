@@ -371,7 +371,6 @@ function onTabDrop(e: DragEvent, targetTabId: string, index: number) {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
@@ -407,7 +406,6 @@ function onTabDrop(e: DragEvent, targetTabId: string, index: number) {
   border-radius: 0.375rem;
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;

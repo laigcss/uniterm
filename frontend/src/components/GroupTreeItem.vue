@@ -183,7 +183,6 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.625rem 0.375rem 0;
-  cursor: pointer;
   user-select: none;
   border-radius: var(--radius-sm);
   transition: background 0.12s ease;
@@ -256,7 +255,6 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   gap: 0.375rem;
   padding: 0.5rem 0.625rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all 0.12s ease;
   margin-bottom: 0.125rem;
   user-select: none;
@@ -289,7 +287,6 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   margin-left: 0;
@@ -314,7 +311,6 @@ function onMoreClick(e: MouseEvent, conn: ConnectionConfig) {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   margin-left: auto;

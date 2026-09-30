@@ -597,7 +597,6 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .filter-icon-btn:hover {
@@ -606,7 +605,6 @@ onUnmounted(() => {
 }
 .filter-icon-btn:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 .filter-icon-btn.active {
   color: var(--accent);
@@ -721,7 +719,6 @@ onUnmounted(() => {
 }
 .footer-transfer {
   color: var(--accent, #22d3ee);
-  cursor: pointer;
 }
 .footer-transfer:hover {
   text-decoration: underline;
