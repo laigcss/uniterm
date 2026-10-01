@@ -96,6 +96,11 @@ type ConnectionConfig struct {
 	KeyContent string  `json:"keyContent,omitempty"`
 	GroupId    *string `json:"groupId,omitempty"`
 	// RDP-specific fields
+	// RdpFixedWidth/Height carry the requested desktop size, or a sentinel:
+	// -1 = follow the primary monitor on connect (the "full screen" option),
+	// -2 = adaptive: the desktop size follows the .rdp-area window size — when
+	// the window size stays stable for a short delay, the session reconnects
+	// with the new size so the server renders at the window's resolution.
 	RdpFixedWidth  int  `json:"rdpFixedWidth,omitempty"`
 	RdpFixedHeight int  `json:"rdpFixedHeight,omitempty"`
 	RdpSmartSizing bool `json:"rdpSmartSizing"`
