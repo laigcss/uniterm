@@ -1037,8 +1037,8 @@ const form = reactive<ConnectionConfig>({
   keyPath: '',
   keyContent: '',
   groupId: undefined,
-  rdpFixedWidth: -1,
-  rdpFixedHeight: -1,
+  rdpFixedWidth: -2,
+  rdpFixedHeight: -2,
   rdpSmartSizing: false,
   rdpEnableNLA: true,
   rdpDomain: '',
@@ -1118,6 +1118,7 @@ function onSSHAlgoSaved(config: SSHAlgoConfig) {
   form.sshAlgorithms = config
 }
 
+const RDP_ADAPTIVE_RESOLUTION = 'adaptive'
 const RDP_CUSTOM_RESOLUTION = 'custom'
 
 // Default preset list (mstsc-style), plus a "custom" entry that reveals
@@ -1142,6 +1143,7 @@ const rdpResolutions = [
 ]
 
 const rdpResolutionOptions = [
+  { value: 'adaptive', label: t('rdp.adaptive') },
   { value: 'fullscreen', label: t('rdp.fullscreen') },
   ...rdpResolutions.map(r => ({ value: `${r.w}x${r.h}`, label: r.label })),
   { value: RDP_CUSTOM_RESOLUTION, label: t('rdp.customResolution') },
@@ -1153,15 +1155,18 @@ function rdpResolutionKey(w?: number, h?: number): string {
   return match ? `${match.w}x${match.h}` : RDP_CUSTOM_RESOLUTION
 }
 
-const rdpResolution = ref('fullscreen')
+const rdpResolution = ref(RDP_ADAPTIVE_RESOLUTION)
 const rdpCustomWidth = ref(1360)
 const rdpCustomHeight = ref(768)
 
 // Keep the form's fixed size fields in sync with the resolution picker.
 watch(rdpResolution, (val) => {
-  if (val === 'fullscreen') {
-    form.rdpFixedWidth = -1
-    form.rdpFixedHeight = -1
+  if (val === RDP_ADAPTIVE_RESOLUTION || val === 'fullscreen') {
+    // Adaptive (-2) seeds the desktop from the window size (backend),
+    // fullscreen (-1) follows the primary monitor — both are sentinels.
+    const sentinel = val === RDP_ADAPTIVE_RESOLUTION ? -2 : -1
+    form.rdpFixedWidth = sentinel
+    form.rdpFixedHeight = sentinel
   } else if (val === RDP_CUSTOM_RESOLUTION) {
     form.rdpFixedWidth = rdpCustomWidth.value
     form.rdpFixedHeight = rdpCustomHeight.value
@@ -1317,7 +1322,12 @@ watch(() => props.editConfig, (config) => {
     // Sync resolution picker to the config's fixed size. Sizes outside the
     // preset list fall back to the custom inputs so they stay visible and
     // editable.
-    rdpResolution.value = rdpResolutionKey(config.rdpFixedWidth, config.rdpFixedHeight)
+    rdpResolution.value =
+      config.rdpFixedWidth === -2
+        ? RDP_ADAPTIVE_RESOLUTION
+        : config.rdpFixedWidth === -1
+          ? 'fullscreen'
+          : rdpResolutionKey(config.rdpFixedWidth, config.rdpFixedHeight)
     if (rdpResolution.value === RDP_CUSTOM_RESOLUTION) {
       rdpCustomWidth.value = config.rdpFixedWidth ?? 1360
       rdpCustomHeight.value = config.rdpFixedHeight ?? 768
@@ -1411,8 +1421,8 @@ function resetForm() {
   form.keyContent = ''
   form.identityId = ''
   form.groupId = undefined
-  form.rdpFixedWidth = -1
-  form.rdpFixedHeight = -1
+  form.rdpFixedWidth = -2
+  form.rdpFixedHeight = -2
   form.rdpSmartSizing = false
   form.rdpEnableNLA = true
   form.rdpDomain = ''
@@ -1472,7 +1482,7 @@ function resetForm() {
   k8sContexts.value = []
   k8sContextsLoading.value = false
   k8sContextsError.value = ''
-  rdpResolution.value = 'fullscreen'
+  rdpResolution.value = RDP_ADAPTIVE_RESOLUTION
   form.x11DesktopDesktopType = 'gnome'
   form.x11DesktopCustomCmd = ''
   selectedGroupId.value = undefined

@@ -369,6 +369,7 @@ let uninstallFocusRestore: (() => void) | null = null
 let unsubRdpFullscreenExit: (() => void) | null = null
 let unsubRdpMoveResizeStart: (() => void) | null = null
 let unsubRdpMoveResizeEnd: (() => void) | null = null
+let unsubRdpAdaptive: (() => void) | null = null
 // Tray menu → open the settings tab (Go shows the window first).
 let unsubTrayOpenSettings: (() => void) | null = null
 let unsubTrayOpenAbout: (() => void) | null = null
@@ -988,6 +989,36 @@ onMounted(async () => {
   observeRdpArea()
   watch(() => activeTab.value, () => nextTick(observeRdpArea))
 
+  // Adaptive resize lifecycle: freeze the last good frame over .rdp-area for
+  // the disconnect/reconnect cycle, restore the live window at the end.
+  unsubRdpAdaptive = Events.On('rdp:adaptive', (ev: any) => {
+    const d = ev?.data as { id: string; event: string; snapshot?: string }
+    if (!d?.id || d.id !== getActiveRdpSessionId()) return
+    if (d.event === 'start') {
+      if (rdpOverlayCount.value > 0 || !d.snapshot) return
+      const url = `data:image/png;base64,${d.snapshot}`
+      const img = new Image()
+      img.onload = () => {
+        const sid = getActiveRdpSessionId()
+        if (!sid) return
+        setRdpSnapshotBg(url)
+        RDPHide(sid)
+      }
+      img.src = url
+    } else if (d.event === 'end') {
+      if (rdpOverlayCount.value > 0) return
+      const sid = getActiveRdpSessionId()
+      if (sid) {
+        RDPShow(sid)
+        RDPInvalidate(sid)
+      }
+      setTimeout(() => {
+        rdpSyncPosition()
+        clearRdpSnapshotBg()
+      }, 300)
+    }
+  })
+
   // Panel/Tab/StartTab menu actions
   // Sidebar connection dropped onto a workspace panel: connect it and split
   // in at the drop position (see WorkspaceContent.onPanelDrop Case 0).
@@ -1214,6 +1245,7 @@ onUnmounted(() => {
   unsubRdpFullscreenExit?.()
   unsubRdpMoveResizeStart?.()
   unsubRdpMoveResizeEnd?.()
+  unsubRdpAdaptive?.()
   unsubTrayOpenSettings?.()
   unsubTrayOpenAbout?.()
   unsubMcpApproval?.()
