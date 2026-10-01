@@ -182,6 +182,7 @@
   "terminal.copy": "复制",
   "terminal.copyAndPaste": "复制并粘贴",
   "terminal.paste": "粘贴",
+  "terminal.selectAll": "全选",
   "terminal.aiLocked": "AI 已锁定",
   "terminal.lockAI": "锁定 AI",
   "terminal.aiLockedToPanel": "AI 已锁定到此面板",

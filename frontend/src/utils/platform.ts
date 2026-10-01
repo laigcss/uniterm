@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 // Platform detection shared by components that adapt desktop-only UI
 // (window controls, local terminal, keyboard hints) for mobile.
 export type UiPlatform = 'windows' | 'darwin' | 'linux' | 'android' | 'ios'
@@ -17,4 +19,22 @@ export function detectPlatformSync(): UiPlatform {
 // shell, so desktop-only affordances are hidden there.
 export function isMobilePlatform(p: UiPlatform = detectPlatformSync()): boolean {
   return p === 'android' || p === 'ios'
+}
+
+// Phone-shaped viewport: a touch platform whose window is phone-narrow.
+// Gates *behavior* changes (long-press menus, key bar) so tablets keep
+// desktop-like behavior. Pure layout narrowing is done in CSS via
+// @media (max-width: 640px) and must NOT use this.
+const NARROW_MQ = '(max-width: 640px)'
+const narrowMq =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(NARROW_MQ)
+    : null
+
+export const isPhoneLayout = ref(isMobilePlatform() && !!narrowMq?.matches)
+
+if (narrowMq) {
+  narrowMq.addEventListener('change', () => {
+    isPhoneLayout.value = isMobilePlatform() && narrowMq.matches
+  })
 }

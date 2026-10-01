@@ -134,7 +134,7 @@ provide('menuSubmenu', submenu)
 const closeFn = () => emit('update:visible', false)
 const menuController: ActiveMenu = { el: () => menuEl.value, close: closeFn }
 
-function position(x: number, y: number) {
+async function position(x: number, y: number) {
   const m = menuEl.value
   if (!m) return
   const mr = m.getBoundingClientRect()
@@ -143,6 +143,12 @@ function position(x: number, y: number) {
     left: Math.max(4, Math.min(x, window.innerWidth - mr.width - 4)) + 'px',
     top: Math.max(4, Math.min(y, window.innerHeight - mr.height - 4)) + 'px',
   }
+  // Measure for the mirror decision only after the new style has been applied:
+  // menuStyle updates flush asynchronously, so an immediate getBoundingClientRect
+  // would still return the previous position — the -9999px park spot on first
+  // open — and the fly side would be decided from geometry the menu never
+  // actually had (flyouts opened offscreen on narrow windows).
+  await nextTick()
   // Seed the submenu fly side with the menu's own width as a stand-in for the
   // projected flyout width; refiners the exact fit once a flyout actually opens
   // (see the submenu.active watcher below). The rule: fly RIGHT by default, and
@@ -225,8 +231,14 @@ watch(() => submenu.active, (key) => {
   if (!key) return
   nextTick(() => {
     const m = menuEl.value
-    const fly = m?.querySelector('.menu-submenu') as HTMLElement | null
-    if (!m || !fly) return
+    if (!m) return
+    // Measure the flyout that actually opened — not querySelector's first one,
+    // which is another row's hidden flyout (zero width) and would silently skip
+    // the refinement, leaving the fly side decided by the seed estimate.
+    const fly = (Array.from(m.querySelectorAll('.menu-submenu')) as HTMLElement[]).find(
+      f => f.getBoundingClientRect().width > 0,
+    )
+    if (!fly) return
     const fw = fly.getBoundingClientRect().width
     if (fw) mirrorLeft.value = overflow.value || shouldMirror(m.getBoundingClientRect(), fw)
   })

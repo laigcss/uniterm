@@ -165,6 +165,16 @@ describe('useTerminalMenu.writeClipboard', () => {
     expect(m.menuVisible.value).toBe(true)
     expect(paste).not.toHaveBeenCalled()
   })
+
+  it('selectAll invokes onSelectAll and closes the menu', () => {
+    const onSelectAll = vi.fn()
+    const m = useTerminalMenu({ getSelection: () => '', onPaste: vi.fn(), onSelectAll })
+    m.onContextMenu(new FakeMouseEvent() as any)
+    expect(m.menuVisible.value).toBe(true)
+    m.selectAll()
+    expect(onSelectAll).toHaveBeenCalledOnce()
+    expect(m.menuVisible.value).toBe(false)
+  })
 })
 
 describe('useTerminalMenu.copySelection re-reads selection at click time', () => {

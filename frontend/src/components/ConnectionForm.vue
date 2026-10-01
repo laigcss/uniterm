@@ -729,6 +729,7 @@ import { isSqlDbType } from '../utils/quickConnect'
 import { CATEGORY_META, CATEGORY_ORDER, CONNECTION_TYPES, connectionTypeFormLabel, connectionTypeInfo, defaultPortFor } from '../utils/connectionTypes'
 import { getShellLabel as getShellLabelBase } from '../utils/shellLabel'
 import { backendErrorText } from '../utils/backendError'
+import { isMobilePlatform } from '../utils/platform'
 import type { Identity } from '../types/identity'
 import type { Proxy } from '../types/proxy'
 
@@ -786,6 +787,10 @@ const allSubTypes = computed((): Record<string, SubTypeInfo[]> => {
   for (const info of CONNECTION_TYPES) {
     if (info.formHidden) continue
     if (info.windowsOnly && !isWindows.value) continue
+    // Local terminals spawn a host shell, which does not exist on android/ios
+    // (same rule as StartTabContent's hidden local-terminal button). Only when
+    // creating: an existing local connection must still show its active tile.
+    if (info.type === 'local' && isMobilePlatform() && !isEdit.value) continue
     groups[info.category].push({
       type: info.type,
       dbType: info.dbType,
@@ -1902,6 +1907,11 @@ function onConnect() {
   flex-shrink: 0;
   padding: 0.5rem 0.625rem;
   border-right: 1px solid var(--border-subtle);
+  /* Scroll the category list inside the rail when the dialog is too short;
+     the rail (and its divider) stays put. min-height: 0 lets the rail shrink
+     below its content height as a flex item of .conn-layout. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .cat-item {
@@ -1910,6 +1920,7 @@ function onConnect() {
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  min-width: 3.75rem;
   padding: 0.75rem 0.25rem;
   border-radius: var(--radius-sm);
   user-select: none;
