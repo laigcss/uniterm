@@ -1113,7 +1113,7 @@ function applyBandSelection() {
   display: flex;
   align-items: center;
   gap: 0.125rem;
-  padding: 0.625rem 0.625rem 0.375rem;
+  padding: 0.375rem 0.625rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 .filter-bar .el-input {
