@@ -182,6 +182,7 @@
   "terminal.copy": "Copy",
   "terminal.copyAndPaste": "Copy & Paste",
   "terminal.paste": "Paste",
+  "terminal.selectAll": "Select All",
   "terminal.aiLocked": "AI locked",
   "terminal.lockAI": "Lock AI",
   "terminal.aiLockedToPanel": "AI locked to this panel",

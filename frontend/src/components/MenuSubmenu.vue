@@ -1,5 +1,5 @@
 <template>
-  <MenuItem iconic class="submenu-wrap" @mouseenter="submenu.active = name">
+  <MenuItem iconic class="submenu-wrap" @mouseenter="onEnter" @click="onTap">
     {{ label }}
     <el-icon class="menu-icon-trailing"><ChevronRight :size="'0.8125rem'" /></el-icon>
     <div v-show="submenu.active === name" class="menu-submenu" @mouseleave="submenu.active = ''">
@@ -35,4 +35,22 @@ const name = `submenu-${submenuSeq++}`
 
 // `submenu.active` reactive object provided by the enclosing <Menu>.
 const submenu = inject<{ active: string }>('menuSubmenu')!
+
+// Touch (coarse pointer) devices have no hover: tap toggles the flyout,
+// otherwise the submenu — and everything inside it — is unreachable.
+const isTouch =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(pointer: coarse)').matches
+
+function onTap() {
+  // Hover already covers mouse users; tap toggles for touch.
+  if (isTouch) submenu.active = submenu.active === name ? '' : name
+}
+
+// A touch tap synthesizes the compatibility mouse sequence, so mouseenter
+// fires before click: opening here would make onTap's toggle immediately
+// close the flyout. Guard it to real (non-touch) pointers.
+function onEnter() {
+  if (!isTouch) submenu.active = name
+}
 </script>

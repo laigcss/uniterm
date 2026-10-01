@@ -68,6 +68,9 @@
       <MenuItem :shortcut="menuShortcut('paste')" @click="menu.pasteFromClipboard">
         {{ t('terminal.paste') }}
       </MenuItem>
+      <MenuItem @click="menu.selectAll">
+        {{ t('terminal.selectAll') }}
+      </MenuItem>
       <MenuItem :class="{ disabled: !menu.hasSelection.value }" @click="menu.askAI">
         {{ t('terminal.askAI') }}
       </MenuItem>
@@ -2334,6 +2337,7 @@ const gutterMenuVisible = ref(false)
 const gutterRef = ref<{ $el: HTMLElement } | null>(null)
 const menu = useTerminalMenu({
   getSelection,
+  onSelectAll: () => terminal?.selectAll(),
   openAt: (x, y) => terminalMenuRef.value?.openAt(x, y),
   onPaste: async (text) => {
     if (props.mode === 'ssh' || props.mode === 'local') {

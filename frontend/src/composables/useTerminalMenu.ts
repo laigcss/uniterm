@@ -6,6 +6,8 @@ export interface UseTerminalMenuOptions {
   getSelection: () => string
   onPaste: (text: string) => Promise<void> | void
   onAskAI?: (text: string) => void
+  /** Select the entire scrollback buffer. Host wires it to term.selectAll(). */
+  onSelectAll?: () => void
   /** Position + open the actual menu. The host wires this to its <Menu>
    *  instance (openAt), so the composable stays decoupled from the component
    *  and its viewport clamping lives in Menu. */
@@ -19,6 +21,7 @@ export interface UseTerminalMenuReturn {
   openMenu: (e: MouseEvent) => void
   closeMenu: () => void
   copySelection: () => void
+  selectAll: () => void
   copyAndPaste: () => Promise<void>
   pasteFromClipboard: () => Promise<void>
   askAI: () => void
@@ -73,6 +76,11 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     closeMenu()
   }
 
+  function selectAll() {
+    options.onSelectAll?.()
+    closeMenu()
+  }
+
   async function copyAndPaste() {
     const text = options.getSelection()
     if (text) {
@@ -112,6 +120,7 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     openMenu,
     closeMenu,
     copySelection,
+    selectAll,
     copyAndPaste,
     pasteFromClipboard,
     askAI,
