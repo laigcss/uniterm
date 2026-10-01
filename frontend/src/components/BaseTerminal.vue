@@ -2460,11 +2460,12 @@ defineExpose({
   height: 100%;
   display: block;
   box-sizing: border-box;
-  /* 右侧不留：那 0.875rem 的滚动条轨道本身已把文本挡开（文本右缘与轨道间还有 0.125rem），
-     右 padding 只会把整条滚动条往左推、在轨道外侧留一条空白。 */
-  padding: 0.25rem 0 0.25rem 0.25rem;
+  /* 左/上/下 0.5rem，右侧不留：那 0.875rem 的滚动条轨道本身已把文本挡开
+     （文本右缘与轨道间还有 0.125rem），右 padding 只会把整条滚动条往左推、
+     在轨道外侧留一条空白。 */
+  padding: 0.5rem 0 0.5rem 0.5rem;
 }
-/* 0.25rem padding 那圈用终端背景色，而不是应用主题色（--bg-base）。
+/* 0.5rem padding（右 0）那圈用终端背景色，而不是应用主题色（--bg-base）。
    v5 时 xterm 把终端色内联在 .xterm-viewport 上，而它 absolute inset:0
    盖满 padding box，边缘因此自带终端色；v6 改成内联到 .xterm-scrollable-element，
    该元素止于 padding 内侧，边缘便露出 .xterm 自身的应用主题色 ——

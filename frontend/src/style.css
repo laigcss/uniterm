@@ -441,7 +441,7 @@ body::before {
    不改 .scrollbar 容器自身的 0.875rem 宽度：FitAddon 也按 0.875rem 预留水平空间，
    点击轨道翻页的热区也是它，改窄会留下 0.375rem 死区。 */
 
-/* 轨道保持透明。轨道现在贴容器右缘，但顶/底仍被 .xterm 的 0.25rem padding 挤在
+/* 轨道保持透明。轨道现在贴容器右缘，但顶/底仍被 .xterm 的 0.375rem padding 挤在
    内侧，一旦上色就会把那圈 padding 显成边线。对比度全交给滑块承担。 */
 .xterm .xterm-scrollable-element > .scrollbar.vertical {
   background: transparent !important;
@@ -1391,7 +1391,8 @@ button:not(:disabled),
 .el-dialog__headerbtn,
 .el-message-box__headerbtn,
 .el-color-picker__trigger,
-.el-backtop {
+.el-backtop,
+.el-scrollbar__thumb {
   cursor: default !important;
 }
 
