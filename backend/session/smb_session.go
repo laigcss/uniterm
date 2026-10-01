@@ -487,6 +487,11 @@ func (s *SMBSession) Get(remotePath, localPath string, recursive bool) (string, 
 	go func() {
 		defer func() {
 			task.done()
+			if task.Status == "error" {
+				// Retained in s.transfers for retry; the frontend drops it
+				// via DismissTransfer.
+				return
+			}
 			s.mu.Lock()
 			delete(s.transfers, task.ID)
 			s.mu.Unlock()
@@ -498,6 +503,12 @@ func (s *SMBSession) Get(remotePath, localPath string, recursive bool) (string, 
 			err = s.downloadFile(task, rp, lp)
 		}
 		if err != nil {
+			if task.ctx.Err() != nil {
+				// cancelled mid-transfer: not a transfer error
+				task.Status = "cancelled"
+				s.emitTransferComplete(task)
+				return
+			}
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -535,6 +546,11 @@ func (s *SMBSession) Put(localPath, remotePath string, recursive bool) (string, 
 	go func() {
 		defer func() {
 			task.done()
+			if task.Status == "error" {
+				// Retained in s.transfers for retry; the frontend drops it
+				// via DismissTransfer.
+				return
+			}
 			s.mu.Lock()
 			delete(s.transfers, task.ID)
 			s.mu.Unlock()
@@ -546,6 +562,12 @@ func (s *SMBSession) Put(localPath, remotePath string, recursive bool) (string, 
 			err = s.uploadFile(task, lp, rp)
 		}
 		if err != nil {
+			if task.ctx.Err() != nil {
+				// cancelled mid-transfer: not a transfer error
+				task.Status = "cancelled"
+				s.emitTransferComplete(task)
+				return
+			}
 			s.emitTransferEvent(task, err)
 			return
 		}
@@ -565,6 +587,81 @@ func (s *SMBSession) CancelTransfer(taskID string) error {
 	if task.cancel != nil {
 		task.cancel()
 	}
+	return nil
+}
+
+// RetryTransfer (re)starts a transfer from a frontend-held checkpoint. The
+// task is re-created directly instead of going through Get/Put: the spec
+// carries the already-resolved internal remote path from the original task,
+// and smbInternal's share-name stripping is not idempotent. skipCompleted is
+// ignored — the transfer restarts from scratch.
+func (s *SMBSession) RetryTransfer(spec TransferSpec, skipCompleted []string) (string, error) {
+	if err := s.requireShare(); err != nil {
+		return "", err
+	}
+	tfType := spec.Type
+	prefix := "dl"
+	if tfType != "download" {
+		tfType = "upload"
+		prefix = "ul"
+	}
+	task := &TransferTask{
+		ID:         s.nextTaskID(prefix),
+		Type:       tfType,
+		LocalPath:  spec.LocalPath,
+		RemotePath: spec.RemotePath,
+		Status:     "running",
+	}
+	task.start()
+	s.mu.Lock()
+	s.transfers[task.ID] = task
+	s.mu.Unlock()
+	s.emitTransferStart(task)
+	go func() {
+		defer func() {
+			task.done()
+			if task.Status == "error" {
+				return // retained for retry
+			}
+			s.mu.Lock()
+			delete(s.transfers, task.ID)
+			s.mu.Unlock()
+		}()
+		var err error
+		if spec.Recursive {
+			if tfType == "download" {
+				err = s.downloadDir(spec.RemotePath, spec.LocalPath, task)
+			} else {
+				err = s.uploadDir(spec.LocalPath, spec.RemotePath, task)
+			}
+		} else {
+			if tfType == "download" {
+				err = s.downloadFile(task, spec.RemotePath, spec.LocalPath)
+			} else {
+				err = s.uploadFile(task, spec.LocalPath, spec.RemotePath)
+			}
+		}
+		if err != nil {
+			if task.ctx.Err() != nil {
+				// cancelled mid-transfer: not a transfer error
+				task.Status = "cancelled"
+				s.emitTransferComplete(task)
+				return
+			}
+			s.emitTransferEvent(task, err)
+			return
+		}
+		task.Status = "done"
+		s.emitTransferComplete(task)
+	}()
+	return task.ID, nil
+}
+
+// DismissTransfer drops a retained (failed) task from the transfers map.
+func (s *SMBSession) DismissTransfer(taskID string) error {
+	s.mu.Lock()
+	delete(s.transfers, taskID)
+	s.mu.Unlock()
 	return nil
 }
 
