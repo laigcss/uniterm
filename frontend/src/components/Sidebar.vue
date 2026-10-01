@@ -1711,7 +1711,8 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   display: flex;
   align-items: center;
   gap: 0.125rem;
-  padding: 0.625rem 0.875rem;
+  /* 下 padding 由各面板顶部工具栏的上 padding 承担，避免间隔叠加 */
+  padding: 0.625rem 0.875rem 0;
   flex-shrink: 0;
 }
 
@@ -1787,7 +1788,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0 0.625rem 0.375rem;
+  padding: 0.625rem 0.625rem 0.375rem;
   flex-shrink: 0;
 }
 

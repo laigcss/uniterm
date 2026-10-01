@@ -1960,7 +1960,6 @@ watch(
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-base);
-  padding: 0.1875rem;
 }
 
 .group-list {
