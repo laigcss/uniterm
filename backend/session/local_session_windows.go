@@ -302,6 +302,7 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		}
 		s.admin = tp
 		s.setStatus(StatusConnected)
+		s.startEmitLoop()
 		go s.readLoop()
 		go s.runPostLoginScript(config.PostLoginScript)
 		s.injectStartupCwdHook()
@@ -333,6 +334,7 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 				s.Disconnect()
 			}()
 			s.setStatus(StatusConnected)
+			s.startEmitLoop()
 			go s.readLoop()
 			go s.runPostLoginScript(config.PostLoginScript)
 			s.injectStartupCwdHook()
@@ -369,6 +371,7 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 	}()
 
 	s.setStatus(StatusConnected)
+	s.startEmitLoop()
 	go s.readLoop()
 	go s.runPostLoginScript(config.PostLoginScript)
 	s.injectStartupCwdHook()
