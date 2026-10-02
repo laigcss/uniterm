@@ -156,7 +156,7 @@ Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-l
 - **Windows** (amd64 / arm64): installer `uniterm-windows-*-installer-*.exe`, or portable `uniterm-windows-*-portable-*.zip`
 - **macOS** (Apple Silicon arm64 / Intel amd64): Download `uniterm-darwin-*-*.dmg`
 - **Linux** (amd64 / arm64): Download `uniterm-linux-*-*.tar.gz`, `.deb`, or `.rpm`
-- **Android** (arm64): Download `uniterm-android-arm64-*.apk` (debug-signed; you will need to allow "install unknown apps" to install it)
+- **Android** (arm64, prerelease): Download `uniterm-android-arm64-*.apk` (debug-signed; you will need to allow "install unknown apps" to install it)
 
 > **About Windows antivirus false positives**: As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
 
