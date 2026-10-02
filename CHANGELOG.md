@@ -1,5 +1,65 @@
 # Changelog
 
+## v1.10.0-alpha
+
+### What's Changed
+
+**New Features**
+- MCP Server: a built-in MCP (Model Context Protocol) server lets external AI agents (Claude Code, Cursor, Trae, ...) run commands on saved SSH connections and transfer files. (@surenwuyuwuqiu)
+- Android: the first Android release — touch and narrow-viewport adaptations for phone use.
+- Containers: image management, an overview page and a container file browser. Four runtimes are supported — Docker / Podman / nerdctl (containerd) / WSLC — with WSLC contributed by @boltomli.
+- Kubernetes: a container file browser and an overview page, with create templates completed for more resource types.
+
+**Improvements**
+- UI: the dark theme palette is refreshed and corner-radius tiers unified; dialog presentation is optimized with a capped height, and hover states use native cursors.
+- Transfer: S3-compatible object storage gains streaming uploads (no whole-file buffering), listing pagination and per-file retry support.
+- Remote desktop: RDP resolution now adapts to follow the window size.
+
+**Bug Fixes**
+- SSH: fixes connections failing with EOF on certain devices (dropbear on OpenWrt CPEs, for example) by detecting the shell before the shell channel opens. (@sonnartliao)
+- SSH: fixes the injected cwd hook command line occasionally flashing in the terminal after connect; injection is hardened, and a new per-connection setting can defer it until directory follow is first enabled.
+- SSH / WSL: fixes the login MOTD not displaying on SSH and WSL, and failed logins on minimal CLI-only appliances (the cwd-hook probe now uses its own short-lived connection).
+- SMB: fixes transfers plateauing around 35MB/s on a typical LAN by pipelining large concurrent chunks instead of one round trip per 64KB — the link can now be saturated.
+- FTP: fixes garbled directory listings and filenames by decoding names with the configured charset; cancelling a single-file transfer now takes effect immediately.
+- S3: fixes creating an empty file / folder failing with an error; failures now surface a clear toast instead of going unnoticed.
+- MongoDB: fixes connections failing over an SSH tunnel; a failed connect keeps the tab open with the concrete error instead of tearing it down, and the form gains default-database and extra-params fields.
+- Database: fixes the duplicated extra-params field, the unusable test-connection button (mongodb / redis / elasticsearch) and the missing API Key input in the NoSQL / Elasticsearch connection forms.
+- Containers: fixes silently failing when a container references an SSH host without saved credentials — the credential dialog now opens.
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @surenwuyuwuqiu, @boltomli and @sonnartliao for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- MCP Server：内置 MCP（Model Context Protocol）服务器，外部 AI Agent（Claude Code、Cursor、Trae 等）可在已保存的 SSH 连接上执行命令、传输文件。(@surenwuyuwuqiu)
+- Android：新增安卓版发布——针对手机屏幕的触控与窄视口适配。
+- 容器：新增镜像管理、总览页和容器文件浏览器。支持 Docker / Podman / nerdctl（containerd）/ WSLC 四种运行时，其中 WSLC 由 @boltomli 贡献。
+- Kubernetes：新增容器文件浏览器和总览页，补全更多资源类型的创建模板。
+
+**改进**
+- 界面：深色主题配色焕新、圆角层级统一；对话框展示效果优化并限制最大高度，悬停使用原生光标。
+- 文件传输：S3 兼容对象存储支持流式上传（不再整文件缓冲）、列表分页和单文件重试。
+- 远程桌面：RDP 分辨率自适应窗口大小。
+
+**修复**
+- SSH：修复部分设备（如 OpenWrt 上的 dropbear）连接报 EOF 失败的问题，现在先探测 shell 类型再打开 shell 通道。(@sonnartliao)
+- SSH：修复连接后终端偶尔闪现 cwd 钩子注入命令行的问题；注入逻辑加固，并新增连接级设置，可选择仅在启用"目录跟随"时注入。
+- SSH / WSL：修复 SSH 和 WSL 登录 MOTD 不显示、部分 CLI-only 设备登录失败（cwd 钩子探测改走独立短连接）的问题。
+- SMB：修复传输吞吐卡在约 35MB/s 的问题，改为大块并发流水线传输、不再逐块往返等待，局域网内可跑满带宽。
+- FTP：修复服务器目录列表与文件名乱码的问题，文件名按配置的字符集解码；单文件传输的取消现在可立即生效。
+- S3：修复新建空文件 / 目录直接报错的问题，失败时也会给出明确提示，不再静默。
+- MongoDB：修复 SSH 隧道下连接失败的问题；连接失败时标签页保留并显示具体错误、不再直接关闭，表单补充默认数据库与额外参数字段。
+- 数据库：修复 NoSQL / Elasticsearch 连接表单的几处问题——额外参数字段重复显示、mongodb/redis/elasticsearch 的"测试连接"按钮不可用、API Key 输入框不出现。
+- 容器：修复引用的 SSH 主机没有保存凭据时静默失败的问题，现在会弹出凭据录入对话框。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中添加排除规则放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @surenwuyuwuqiu、@boltomli 和 @sonnartliao 对本版本的贡献。
+
 ## v1.9.5
 
 ### What's Changed

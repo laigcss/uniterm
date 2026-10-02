@@ -12,7 +12,7 @@
 <br>
 
 <a href="https://github.com/ys-ll/uniterm/releases/latest"><img src="https://img.shields.io/github/v/release/ys-ll/uniterm" alt="GitHub release" /></a>
-<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
+<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue" alt="Platform" /></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
 <a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/github/stars/ys-ll/uniterm?style=social" alt="GitHub stars" /></a>
 <a href="https://gitee.com/ys-l/uniterm"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee" alt="Gitee stars" /></a>
@@ -154,8 +154,9 @@ Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 
 前往 [GitHub Releases](https://github.com/ys-ll/uniterm/releases) 或 [Gitee Releases](https://gitee.com/ys-l/uniterm/releases) 下载最新版本：
 
 - **Windows** (amd64 / arm64): 安装包 `uniterm-windows-*-installer-*.exe`，或便携版 `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): 下载 `uniterm-darwin-*-*.dmg`
+- **macOS** (Apple Silicon arm64 / Intel amd64): 下载 `uniterm-darwin-*-*.dmg`
 - **Linux** (amd64 / arm64): 下载 `uniterm-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
+- **Android** (arm64): 下载 `uniterm-android-arm64-*.apk`（debug 签名，安装时需允许"未知来源应用"）
 
 > **关于 Windows 杀软误报**：由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
 
@@ -182,6 +183,7 @@ sudo rpm -i uniterm.rpm
 - **Windows**: WebView2 运行时（Windows 10+ 已内置，更老的系统需安装）
 - **macOS**: 无需额外依赖（使用系统自带 WebKit）
 - **Linux**: `libgtk-3-0` 与 `libwebkit2gtk-4.1-0`（多数桌面发行版已自带）
+- **Android**: Android 5.0+（使用系统自带 WebView，无需额外依赖）
 
 ## 使用流程
 
@@ -215,7 +217,12 @@ sudo rpm -i uniterm.rpm
 
 ## 从源码构建
 
-需要 [Go](https://go.dev/dl/) 1.26+、[Node.js](https://nodejs.org/) 20+ 和 [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`）。此外，macOS 需 Xcode Command Line Tools，Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`。
+- [Go](https://go.dev/dl/) 1.26+
+- [Node.js](https://nodejs.org/) 20+
+- [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.27（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27`）
+- macOS 需 Xcode Command Line Tools
+- Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`
+- Android 构建另需 JDK 21 与 Android SDK/NDK（`sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;26.3.11579264"`）
 
 ```bash
 git clone https://github.com/ys-ll/uniterm.git

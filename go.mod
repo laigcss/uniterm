@@ -28,7 +28,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/studio-b12/gowebdav v0.12.0
 	github.com/unixshells/mosh-go v0.5.2
-	github.com/wailsapp/wails/v3 v3.0.0-beta.16
+	github.com/wailsapp/wails/v3 v3.0.0-beta.27
 	github.com/xanzy/ssh-agent v0.3.3
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.7.1
@@ -76,7 +76,6 @@ require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
-	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
