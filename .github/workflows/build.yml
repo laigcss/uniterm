@@ -198,9 +198,12 @@ jobs:
           # arm64 covers virtually all real devices; amd64 is only useful for
           # local emulator builds, so CI always packages arm64.
           wails3 task android:package
-          # Match the desktop convention: uniterm-<os>-<arch>-<version>.apk
-          cp bin/uniTerm.apk "bin/uniterm-android-arm64-${VERSION}.apk"
-          ls -la bin/uniterm-android-*.apk
+          # Match the desktop convention: uniterm-<os>-<arch>-<version>.apk.
+          # Stage at the workspace root: the Upload artifact step globs
+          # uniterm-*.apk there, so a copy left under bin/ matches nothing
+          # and no artifact gets uploaded (only a warning is emitted).
+          mv bin/uniTerm.apk "uniterm-android-arm64-${VERSION}.apk"
+          ls -la uniterm-android-*.apk
 
       - name: Package (macOS)
         if: matrix.slug == 'darwin'
@@ -338,6 +341,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: uniTerm-${{ matrix.slug }}
+          # Fail loudly instead of silently uploading nothing when the
+          # globs below miss (an empty artifact previously hid a lost APK).
+          if-no-files-found: error
           path: |
             uniterm-*.zip
             uniterm-*.tar.gz
