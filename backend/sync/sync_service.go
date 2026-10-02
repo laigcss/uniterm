@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	ggittransport "github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/utils"
 )
 
@@ -273,6 +274,48 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 		return nil, fmt.Errorf("merge base: %w", err)
 	}
 
+	// History rewritten on another device (compaction force-push, manual
+	// rewrite): no common ancestor exists. Compare the two sides' contents
+	// directly — identical → silently re-anchor on the remote head;
+	// different → the conflict dialog. Either way the device re-anchors
+	// and shares history again afterwards.
+	if base == nil {
+		remoteDir, cleanupRemote, err := s.decryptCommitToDir(repo, encKey, heads.Remote)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		defer cleanupRemote()
+		same, err := compareConfigDirs(s.dataDir, remoteDir, s.keychain, s.passwordStore)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		if same {
+			if err := repo.ResetToRemote(config.Branch); err != nil {
+				s.updateLastSyncResult("failed", fmt.Sprintf("reset: %v", err))
+				return nil, fmt.Errorf("reset: %w", err)
+			}
+			s.updateLastSyncResult("success", "")
+			return &SyncResult{Message: "已是最新"}, nil
+		}
+		localTime, err := repo.CommitTime(*heads.Local)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		remoteTime, err := repo.CommitTime(*heads.Remote)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		s.updateLastSyncResult("conflict", "")
+		return &SyncResult{
+			Direction: SyncConflict,
+			Conflict:  &ConflictInfo{LocalTime: localTime, RemoteTime: remoteTime},
+		}, nil
+	}
+
 	baseDir, cleanupBase, err := s.decryptCommitToDir(repo, encKey, base)
 	if err != nil {
 		s.updateLastSyncResult("failed", err.Error())
@@ -357,6 +400,96 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 	}
 }
 
+const (
+	// compactionThreshold is the first-parent depth at which sync history
+	// is rewritten down to compactionKeep commits. Encrypted config blobs
+	// do not delta-compress, so every commit stores a near-full copy of
+	// all files and repo size grows as ≈ commits × full-size.
+	compactionThreshold = 50
+	// compactionKeep is how many recent commits survive a rewrite.
+	compactionKeep = 10
+)
+
+// maybeCompactHistory bounds the sync repo size: once the first-parent
+// depth reaches compactionThreshold, the remote history is rewritten down
+// to the most recent compactionKeep commits, force-pushed, and the local
+// clone is rebuilt (go-git cannot gc old objects, so only a fresh clone
+// sheds them).
+//
+// Best-effort by contract: any failure logs and skips the round —
+// compaction never fails or blocks the sync that triggered it. Callers
+// must hold s.mu.
+func (s *SyncService) maybeCompactHistory() {
+	config, err := s.configStore.Load()
+	if err != nil || config.RepoURL == "" {
+		return
+	}
+	username := config.Username
+	token := s.getToken()
+
+	repo, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token)
+	if err != nil {
+		log.Writef("sync compaction: open repo: %v", err)
+		return
+	}
+	depth, err := repo.CommitDepth()
+	if err != nil {
+		log.Writef("sync compaction: depth: %v", err)
+		return
+	}
+	if depth < compactionThreshold {
+		return
+	}
+	// The force-push below replaces remote history wholesale. If another
+	// device pushed between our own push and this rewrite, force-pushing
+	// would silently orphan its commit and surface a spurious conflict
+	// there. Right after a successful push the two heads must be equal —
+	// anything else means the remote moved, so skip the round.
+	if err := repo.Fetch(username, token); err != nil && !errors.Is(err, ggittransport.ErrEmptyRemoteRepository) {
+		log.Writef("sync compaction: fetch: %v", err)
+		return
+	}
+	heads, err := repo.ResolveBranchHeads(config.Branch)
+	if err != nil {
+		log.Writef("sync compaction: resolve heads: %v", err)
+		return
+	}
+	if heads.Local == nil || heads.Remote == nil || *heads.Local != *heads.Remote {
+		log.Writef("sync compaction: remote head moved since push, skipping round")
+		return
+	}
+	// Remember the pre-rewrite head: if the force-push below fails, the
+	// branch must be restored, or local and remote are half-rewritten —
+	// no common ancestor — and the next sync surfaces a spurious conflict.
+	prevHead, err := repo.HeadRef()
+	if err != nil {
+		log.Writef("sync compaction: head: %v", err)
+		return
+	}
+	if err := repo.RewriteHistory(compactionKeep); err != nil {
+		log.Writef("sync compaction: rewrite: %v", err)
+		return
+	}
+	if err := repo.PushForce(username, token); err != nil {
+		log.Writef("sync compaction: force push: %v", err)
+		if refErr := repo.RestoreHead(prevHead.Name(), prevHead.Hash()); refErr != nil {
+			log.Writef("sync compaction: restore head: %v", refErr)
+		}
+		return
+	}
+	// Rebuild the clone from scratch — the only way to shed the old
+	// objects; go-git cannot prune them.
+	if err := os.RemoveAll(s.repoPath); err != nil {
+		log.Writef("sync compaction: remove clone: %v", err)
+		return
+	}
+	if _, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token); err != nil {
+		log.Writef("sync compaction: re-clone: %v", err)
+		return
+	}
+	log.Writef("sync compaction: depth %d → %d commits", depth, compactionKeep)
+}
+
 // pushLocalConfig encrypts the local config into the repo, commits it on
 // top of the current HEAD and pushes.
 func (s *SyncService) pushLocalConfig(repo *GitRepo, encKey []byte, username, token string) (*SyncResult, error) {
@@ -373,6 +506,7 @@ func (s *SyncService) pushLocalConfig(repo *GitRepo, encKey []byte, username, to
 		return nil, fmt.Errorf("push: %w", err)
 	}
 	s.updateLastSyncResult("success", "")
+	s.maybeCompactHistory()
 	return &SyncResult{Direction: SyncPush, Message: "配置已上传"}, nil
 }
 
@@ -499,6 +633,7 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 			return nil, fmt.Errorf("push: %w", err)
 		}
 		s.updateLastSyncResult("success", "")
+		s.maybeCompactHistory()
 		return &SyncResult{Direction: SyncPush, Message: "已用本地配置覆盖远端"}, nil
 	}
 
@@ -715,6 +850,10 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 	if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
 		return nil, fmt.Errorf("decrypt files: %w", err)
 	}
+
+	// Compaction deletes and re-clones s.repoPath best-effort, so it must
+	// run after the last use of that directory in this function.
+	s.maybeCompactHistory()
 
 	s.updateLastSyncResult("success", "")
 	return &SyncResult{Direction: SyncPush, Message: "仓库配置成功"}, nil
@@ -1047,6 +1186,8 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 	if err := repo.Push(username, token); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
+
+	s.maybeCompactHistory()
 
 	return nil
 }
