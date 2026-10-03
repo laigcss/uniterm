@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "例: root",
   "conn.authType": "認証方式",
   "conn.identity": "認証情報",
+  "conn.identityUserOverride": "ユーザー名を上書き",
+  "conn.identityUserOverrideHint": "空欄の場合は認証情報のユーザー名を使用します",
   "conn.manageIdentities": "管理",
   "conn.password": "パスワード",
   "conn.keyPath": "鍵のパス",

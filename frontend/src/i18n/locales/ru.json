@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "например, root",
   "conn.authType": "Тип аутентификации",
   "conn.identity": "Учётные данные",
+  "conn.identityUserOverride": "Переопределить имя пользователя",
+  "conn.identityUserOverrideHint": "Оставьте пустым, чтобы использовать имя пользователя из учётных данных",
   "conn.manageIdentities": "Управление",
   "conn.password": "Пароль",
   "conn.keyPath": "Путь к ключу",

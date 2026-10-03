@@ -80,19 +80,13 @@
                 <el-radio-button value="password">{{ t('conn.password') }}</el-radio-button>
                 <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" value="key">{{ t('conn.keyPath') }}</el-radio-button>
                 <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" value="keyText">{{ t('conn.keyText') }}</el-radio-button>
-                <el-radio-button v-if="form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop'" value="kerberos">{{ t('conn.kerberos') }}</el-radio-button>
+                <el-radio-button v-if="(form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop') && !isMobilePlatform()" value="kerberos">{{ t('conn.kerberos') }}</el-radio-button>
                 <el-radio-button v-if="(isWindows || isMac) && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')" value="agent">{{ t('conn.sshAgent') }}</el-radio-button>
                 <el-radio-button v-if="isElasticsearch" value="apikey">{{ t('conn.esAuthApiKey') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="form.authType !== 'identity' && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.type === 's3' ? 'Access Key' : t('conn.user')">
-              <el-input v-model="form.user" :placeholder="form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder')" />
-            </el-form-item>
-            <el-form-item v-if="form.type === 'rdp' && isWindows && form.authType !== 'identity'" :label="t('conn.rdpDomain')">
-              <el-input v-model="form.rdpDomain" placeholder="e.g. WORKGROUP or WIN-ABC123" />
-            </el-form-item>
             <el-form-item
-              v-if="form.authType === 'identity' && (form.type === 'ssh' || form.type === 'scp' || form.type === 'sftp' || form.type === 'mosh' || form.type === 'x11-desktop')"
+              v-if="form.authType === 'identity' && isSSHAlgoType"
               :label="t('conn.identity')"
             >
               <div class="inline-add-row">
@@ -103,6 +97,12 @@
                   <Plus :size="'0.875rem'" />
                 </el-button>
               </div>
+            </el-form-item>
+            <el-form-item v-if="(form.authType !== 'identity' || isSSHAlgoType) && form.type !== 'vnc' && form.type !== 'spice' && !(form.type === 'database' && form.dbType === 'rqlite') && form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && !isEsApiKey" :label="form.authType === 'identity' ? t('conn.identityUserOverride') : (form.type === 's3' ? 'Access Key' : t('conn.user'))">
+              <el-input v-model="form.user" :placeholder="form.authType === 'identity' ? t('conn.identityUserOverrideHint') : (form.type === 's3' ? 'Access Key ID' : t('conn.userPlaceholder'))" />
+            </el-form-item>
+            <el-form-item v-if="form.type === 'rdp' && isWindows && form.authType !== 'identity'" :label="t('conn.rdpDomain')">
+              <el-input v-model="form.rdpDomain" placeholder="e.g. WORKGROUP or WIN-ABC123" />
             </el-form-item>
             <template v-if="form.type === 'rdp' && isWindows">
               <el-form-item :label="t('conn.rdpEnableNLA')">
@@ -115,10 +115,10 @@
             <el-form-item v-if="form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'tcp' && form.type !== 'k8s' && form.type !== 'container' && form.authType !== 'identity' && ((form.authType === 'password' && form.type !== 'rdp') || (form.type === 'rdp' && !form.rdpEnableNLA) || form.type === 'vnc' || form.type === 'spice' || form.type === 'database' || form.type === 'telnet' || form.type === 'ftp' || form.type === 'smb' || form.type === 'webdav' || form.type === 's3' || form.type === 'elasticsearch') && !(form.type === 'database' && form.dbType === 'rqlite')" :label="form.type === 's3' ? 'Secret Key' : (isEsApiKey ? t('conn.esApiKey') : t('conn.password'))">
               <el-input v-model="form.password" type="password" show-password :key="passwordInputKey" :placeholder="form.type === 's3' ? 'Secret Access Key' : (isEsApiKey ? t('conn.esApiKeyPlaceholder') : '')" />
             </el-form-item>
-            <el-form-item v-if="form.authType === 'kerberos'" :label="t('conn.kerberos')">
+            <el-form-item v-if="form.authType === 'kerberos' && !isMobilePlatform()" :label="t('conn.kerberos')">
               <div class="field-hint">{{ t('conn.kerberosHint') }}</div>
             </el-form-item>
-            <el-form-item v-if="form.authType === 'kerberos'" :label="t('conn.kerberosRealm')">
+            <el-form-item v-if="form.authType === 'kerberos' && !isMobilePlatform()" :label="t('conn.kerberosRealm')">
               <el-input v-model="form.kerberosRealm" :placeholder="t('conn.kerberosRealmPlaceholder')" />
               <div class="field-hint">{{ t('conn.kerberosRealmHint') }}</div>
             </el-form-item>
@@ -1661,14 +1661,15 @@ function normalizeForm(): ConnectionConfig {
       throw new Error(t('conn.sshAlgoEmptyList'))
     }
   }
-  // Identity (密钥库) 的用户名与凭据完全由所引用的 identity 提供，连接时
-  // MaterializeIdentity 会以 identity 的 username/password 覆盖本字段。
+  // Identity (密钥库) 的凭据完全由所引用的 identity 提供，连接时
+  // MaterializeIdentity 会以 identity 的 password 覆盖本字段。
   // 从别的认证方式切到 identity 时，旧字段若残留 enc:v1: 密文，会被
   // 云同步原样带进仓库（同步规范化只处理 authType=="password" 的连接），
-  // 导致他机显示字面量 enc:v1:xxx（issue #711）。保存时清掉两者以绝后患。
+  // 导致他机显示字面量 enc:v1:xxx（issue #711）。保存时清掉以绝后患。
+  // User 不清：identity 认证下它是表单里显式填写的覆盖用户名
+  // （issue #959），连接时非空则覆盖密钥库的用户名，为空则回退。
   if (normalized.authType === 'identity') {
     normalized.password = ''
-    normalized.user = ''
   }
   // Directory-follow hook: SSH and WSL carry it; "startup" is the default and
   // is stored as empty so old connection JSON stays clean.
