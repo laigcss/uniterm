@@ -197,7 +197,11 @@ jobs:
           wails3 task common:build:frontend
           # arm64 covers virtually all real devices; amd64 is only useful for
           # local emulator builds, so CI always packages arm64.
-          wails3 task android:package
+          # PRODUCTION must be passed explicitly: android:package declares
+          # PRODUCTION=true on its internal build dep, but the value is lost
+          # on the build -> compile:go:shared hop, silently producing a
+          # -tags android,debug library (broken WebView asset serving).
+          wails3 task android:package PRODUCTION=true
           # Match the desktop convention: uniterm-<os>-<arch>-<version>.apk.
           # Stage at the workspace root: the Upload artifact step globs
           # uniterm-*.apk there, so a copy left under bin/ matches nothing
