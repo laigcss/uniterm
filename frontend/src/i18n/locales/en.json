@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "e.g. root",
   "conn.authType": "Auth Type",
   "conn.identity": "Identity",
+  "conn.identityUserOverride": "Override Username",
+  "conn.identityUserOverrideHint": "Leave empty to use the identity's username",
   "conn.manageIdentities": "Manage",
   "conn.password": "Password",
   "conn.keyPath": "Key Path",

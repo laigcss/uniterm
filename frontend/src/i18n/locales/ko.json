@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "예: root",
   "conn.authType": "인증 방식",
   "conn.identity": "자격 증명",
+  "conn.identityUserOverride": "사용자 이름 재정의",
+  "conn.identityUserOverrideHint": "비워 두면 자격 증명의 사용자 이름을 사용합니다",
   "conn.manageIdentities": "관리",
   "conn.password": "비밀번호",
   "conn.keyPath": "키 경로",

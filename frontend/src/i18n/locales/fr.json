@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "ex. root",
   "conn.authType": "Type d'authentification",
   "conn.identity": "Identité",
+  "conn.identityUserOverride": "Remplacer le nom d'utilisateur",
+  "conn.identityUserOverrideHint": "Laissez vide pour utiliser le nom d'utilisateur de l'identité",
   "conn.manageIdentities": "Gérer",
   "conn.password": "Mot de passe",
   "conn.keyPath": "Chemin de la clé",

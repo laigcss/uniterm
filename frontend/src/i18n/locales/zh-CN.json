@@ -66,6 +66,8 @@
   "conn.userPlaceholder": "例如 root",
   "conn.authType": "认证方式",
   "conn.identity": "密钥库",
+  "conn.identityUserOverride": "覆盖用户名",
+  "conn.identityUserOverrideHint": "留空则使用密钥库中的用户名",
   "conn.manageIdentities": "管理",
   "conn.password": "密码",
   "conn.keyPath": "密钥路径",
