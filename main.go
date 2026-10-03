@@ -207,10 +207,14 @@ func main() {
 			// Wails' disabled SmartScreen protection.
 			DisabledFeatures: []string{"AutofillAiWalletPrivatePasses"},
 		},
-		// Fixed program name so the window's WM_CLASS stays "uniterm" — the
-		// installed package's .desktop file sets StartupWMClass to the same
-		// value, which is what lets the dock/taskbar associate the running
-		// window with the app icon.
+		// Fixed program name so the window's X11 WM_CLASS stays "uniterm" —
+		// the StartupWMClass in the .desktop file matches it under X11/XWayland.
+		// NOTE: on native Wayland this does NOT control the taskbar association:
+		// the XDG app_id comes from the GtkApplication id, which Wails derives
+		// as "org.wails." + lowercase Options.Name → "org.wails.uniterm". GNOME
+		// matches Wayland windows to launchers by desktop-file filename, so the
+		// installed .desktop must be named org.wails.uniterm.desktop (see
+		// build/linux/Taskfile.yml generate:dotdesktop).
 		Linux: application.LinuxOptions{
 			ProgramName: "uniterm",
 		},
