@@ -32,6 +32,8 @@ const CATEGORY_THEME_KEY: Record<HighlightCategory, string> = {
   warning: 'yellow',
   info: 'cyan',
   brace: 'brightMagenta',
+  keyword: 'cyan',
+  ifname: 'magenta',
 }
 
 // xterm.js default palette values, used when the active theme doesn't
