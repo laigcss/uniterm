@@ -471,6 +471,82 @@ func (s *SyncService) ConfigureRepoWebDAV(serverURL, basePath, username, passwor
 	return &SyncResult{Direction: SyncPush, Message: "仓库配置成功"}, nil
 }
 
+// UpdateWebDAVPassword swaps the WebDAV credential without touching any
+// other configuration. Mirrors the git credential-edit semantics: an empty
+// password means "keep the stored one" — it is verified against the server
+// but never rewritten. A non-empty password is probed against the server
+// first, and when the remote already holds a snapshot the master password
+// must decrypt it — a typo can neither lock the device out of its own
+// snapshot nor silently save a broken credential. Changing server/path/
+// user is intentionally not possible here: that is a different sync
+// target, which must go through delete + re-configure.
+func (s *SyncService) UpdateWebDAVPassword(password, masterPassword string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.requireUnlocked(); err != nil {
+		return err
+	}
+	config, err := s.configStore.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if config.Backend != "webdav" || config.WebDAVServer == "" {
+		return fmt.Errorf("webdav sync not configured")
+	}
+	if masterPassword == "" {
+		return fmt.Errorf("master password is required")
+	}
+
+	// Empty password = keep the stored credential (git-token semantics).
+	store := password != ""
+	if !store {
+		password, _ = s.keychain.GetWebDAVPassword()
+		if password == "" {
+			return fmt.Errorf("webdav password not configured")
+		}
+	}
+
+	backend := NewWebDAVBackend(config.WebDAVServer, config.WebDAVPath, config.WebDAVUser, password, nil)
+	if err := backend.Probe(); err != nil {
+		return fmt.Errorf("probe webdav: %w", err)
+	}
+
+	manifest, err := backend.Head()
+	if err != nil {
+		return fmt.Errorf("head: %w", err)
+	}
+	if manifest != nil {
+		if err := os.RemoveAll(s.repoPath); err != nil {
+			return fmt.Errorf("clean staging: %w", err)
+		}
+		if err := os.MkdirAll(s.repoPath, 0755); err != nil {
+			return fmt.Errorf("create staging: %w", err)
+		}
+		if err := backend.FetchAll(s.repoPath); err != nil {
+			return fmt.Errorf("fetch: %w", err)
+		}
+		salt, err := ReadSaltFile(s.repoPath)
+		if err != nil {
+			return err
+		}
+		if salt == nil {
+			return utils.UserErr("salt_missing")
+		}
+		encKey := DeriveKey(masterPassword, salt)
+		if err := verifyDecryptionScoped(s.effectiveFiles(), s.repoPath, encKey); err != nil {
+			return utils.UserErr("master_password_mismatch")
+		}
+	}
+
+	if store {
+		if err := s.keychain.SetWebDAVPassword(password); err != nil {
+			return fmt.Errorf("store webdav password: %w", err)
+		}
+	}
+	return nil
+}
+
 // changePasswordSnapshot rotates the master password of a WebDAV snapshot.
 // The rotation is repo-global (the salt is repo-global): the remote
 // ciphertext is decrypted with the old key, re-encrypted with a fresh salt

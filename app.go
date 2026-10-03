@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/ys-ll/uniterm/backend/container"
 	"github.com/ys-ll/uniterm/backend/credentials"
 	"github.com/ys-ll/uniterm/backend/importer"
@@ -41,6 +42,7 @@ type App struct {
 	ctx                  context.Context
 	app                  *application.App
 	window               *application.WebviewWindow
+	notifier             *notifications.NotificationService // system notifications (MCP approval prompts)
 	sessionManager       *session.SessionManager
 	k8sManager           *k8s.Manager
 	containerManager     *container.Manager
@@ -1175,7 +1177,14 @@ func (a *App) SaveLocalState(state store.LocalState) error {
 	if a.localStateStore == nil {
 		return fmt.Errorf("local state store not initialized")
 	}
-	return a.localStateStore.Save(state)
+	err := a.localStateStore.Save(state)
+	if err == nil {
+		// MCP endpoint follows the enabled switch / port without a restart.
+		if mcpErr := a.StartMCP(); mcpErr != nil {
+			log.Writef("mcp: restart after local state save failed: %v", mcpErr)
+		}
+	}
+	return err
 }
 
 func (a *App) LoadLocalState() (store.LocalState, error) {
@@ -1483,6 +1492,19 @@ func (a *App) SyncVerifyPassword(password, username, token string) error {
 	return a.syncService.VerifySyncPassword(password, username, token)
 }
 
+// SyncUpdateWebDAVPassword swaps the WebDAV credential only. The server,
+// remote folder and username are display-only in the edit dialog —
+// changing the sync target must go through delete + re-configure.
+func (a *App) SyncUpdateWebDAVPassword(password, masterPassword string) error {
+	if a.syncService == nil {
+		return fmt.Errorf("sync service not initialized")
+	}
+	if !a.waitSyncReady(time.Second) {
+		return fmt.Errorf("sync service still initializing")
+	}
+	return a.syncService.UpdateWebDAVPassword(password, masterPassword)
+}
+
 // SyncDeleteRepo removes the sync repository configuration.
 func (a *App) SyncDeleteRepo() error {
 	if a.syncService == nil {
@@ -1524,10 +1546,6 @@ func (a *App) SaveSettings(settings store.AppSettings) error {
 		// Re-apply the global show/hide hotkey so binding changes (and the
 		// enable switch) take effect immediately. No-op when unchanged.
 		applyGlobalShowHideHotkey(a.app, a.window, trayHotkeyBinding(&settings))
-		// MCP endpoint follows the enabled switch / port without a restart.
-		if err := a.StartMCP(); err != nil {
-			log.Writef("mcp: restart after settings save failed: %v", err)
-		}
 	}
 	return err
 }

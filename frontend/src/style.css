@@ -315,6 +315,13 @@
   box-sizing: border-box;
 }
 
+/* Global monospace baseline: pre/code/kbd/samp would otherwise render in the
+   browser's default mono stack, bypassing JetBrains Mono. Components with
+   their own rules override this as usual. */
+pre, code, kbd, samp {
+  font-family: var(--font-mono);
+}
+
 /* Root rem baseline. All UI lengths are rem-based with 1rem = 16px (the
    browser UA default; 16 = 2^4, so every integer px value converts to an
    exact decimal). index.html tags <html class="mac"> on macOS, where the

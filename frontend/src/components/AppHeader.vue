@@ -100,8 +100,9 @@
 
         <MenuDivider />
 
-        <!-- AI模型 / 密钥库 / 代理 -->
+        <!-- AI模型 / MCP / 密钥库 / 代理 -->
         <MenuItem @click="openCategory('ai')">{{ t('settings.ai') }}</MenuItem>
+        <MenuItem @click="openCategory('mcp')">{{ t('settings.mcp') }}</MenuItem>
         <MenuItem @click="openCategory('identities')">{{ t('settings.identities') }}</MenuItem>
         <MenuItem @click="openCategory('proxies')">{{ t('settings.proxies') }}</MenuItem>
         <MenuItem @click="openCategory('tunnels')">{{ t('settings.tunnels') }}</MenuItem>
