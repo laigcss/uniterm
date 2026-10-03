@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HIGHLIGHT_RULES, matchTextSpans, type HighlightCategory } from './highlightRules'
+import { HIGHLIGHT_RULES, matchTextSpans, stitchLogicalText, splitSpansToRows, type HighlightCategory, type TextSpan } from './highlightRules'
 
 /** Match one line of plain text and flatten the spans to text+category. */
 function spans(text: string): Array<{ text: string; category: HighlightCategory }> {
@@ -264,5 +264,92 @@ describe('matchTextSpans — span mechanics', () => {
     const result = matchTextSpans(input, HIGHLIGHT_RULES, { maxMatches: 3 })
     expect(result.spans.length).toBe(3)
     expect(result.complete).toBe(false)
+  })
+})
+
+describe('stitchLogicalText / splitSpansToRows — soft-wrap stitching', () => {
+  it('joins wrapped rows and records each row start offset', () => {
+    const { text, starts } = stitchLogicalText(['abc', 'def', 'gh'])
+    expect(text).toBe('abcdefgh')
+    expect(starts).toEqual([0, 3, 6])
+  })
+
+  it('handles empty rows and a single row', () => {
+    expect(stitchLogicalText(['']).text).toBe('')
+    const single = stitchLogicalText(['abc'])
+    expect(single).toEqual({ text: 'abc', starts: [0] })
+  })
+
+  it('clips a span crossing the row seam into two row-local spans', () => {
+    // 'bond-business' straddles the seam after 'bond-bus' (row width 8)
+    const spans: TextSpan[] = [{ start: 4, end: 17, category: 'string' }]
+    const perRow = splitSpansToRows(spans, [0, 13])
+    expect(perRow[0]).toEqual([{ start: 4, end: 13, category: 'string' }])
+    expect(perRow[1]).toEqual([{ start: 0, end: 4, category: 'string' }])
+  })
+
+  it('keeps a span inside one row untouched and distributes many spans', () => {
+    const spans: TextSpan[] = [
+      { start: 0, end: 2, category: 'datetime' },
+      { start: 3, end: 5, category: 'host' },
+      { start: 15, end: 18, category: 'string' },
+    ]
+    const perRow = splitSpansToRows(spans, [0, 10, 20])
+    expect(perRow[0]).toEqual([
+      { start: 0, end: 2, category: 'datetime' },
+      { start: 3, end: 5, category: 'host' },
+    ])
+    expect(perRow[1]).toEqual([{ start: 5, end: 8, category: 'string' }])
+    expect(perRow[2]).toEqual([])
+  })
+
+  it('splits a span reaching into the shorter last row', () => {
+    const spans: TextSpan[] = [{ start: 8, end: 15, category: 'string' }]
+    const perRow = splitSpansToRows(spans, [0, 10])
+    expect(perRow[0]).toEqual([{ start: 8, end: 10, category: 'string' }])
+    expect(perRow[1]).toEqual([{ start: 0, end: 5, category: 'string' }])
+  })
+
+  it('returns empty arrays for no spans', () => {
+    expect(splitSpansToRows([], [0, 5])).toEqual([[], []])
+  })
+})
+
+describe('matchTextSpans — string priority', () => {
+  it('quoted strings win over every later rule (host, url, datetime, brace)', () => {
+    // With the string rule first, a quoted IP/datetime/URL is one string
+    // span; later rules must not carve matches out of it.
+    const cases = [
+      ['addr "192.168.10.3" ok', '192.168.10.3'],
+      ['at 2026-05-18 09:10:36 done', '2026-05-18 09:10:36'],
+      ['see https://example.com/a?b=c end', 'https://example.com/a?b=c'],
+    ]
+    for (const [input] of cases) {
+      const result = matchTextSpans(`'${input}'`)
+      expect(result.spans.length).toBe(1)
+      expect(result.spans[0].category).toBe('string')
+    }
+  })
+})
+
+describe('matchTextSpans — quote pairing across empty strings', () => {
+  it('keeps pairing aligned when an empty string appears before a longer one', () => {
+    // Regression: `{2,}` skipped `""`, but its two quotes stayed in the scan
+    // and the next match stole the closing one — every pair after it shifted,
+    // and the long string below (holding an IP) never matched.
+    const input = '"stderr": "", "stdout": "VIP: 100.126.255.250"'
+    const result = matchTextSpans(input)
+    const bigStart = input.indexOf('"VIP')
+    const big = result.spans.find((s) => s.category === 'string' && s.start === bigStart)
+    expect(big).toBeDefined()
+    expect(input.slice(big!.start, big!.end)).toBe('"VIP: 100.126.255.250"')
+    // and the IP is string, not host
+    const ipAt = input.indexOf('100.126.255.250')
+    expect(result.spans.some((s) => s.category === 'string' && s.start <= ipAt && ipAt < s.end)).toBe(true)
+  })
+
+  it('matches an empty string as a 2-char span', () => {
+    const result = matchTextSpans('a "" b')
+    expect(result.spans.some((s) => s.category === 'string' && s.start === 2 && s.end === 4)).toBe(true)
   })
 })
