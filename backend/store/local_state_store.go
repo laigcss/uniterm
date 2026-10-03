@@ -36,6 +36,12 @@ type LocalState struct {
 	// context menu (type/modTime/size/permission/owner/group). Local-only UI
 	// state, never synced; columns absent from the list stay visible.
 	SftpHiddenColumns []string `json:"sftpHiddenColumns,omitempty"`
+	// MCP configures the external-agent MCP server (see MCPSettings).
+	// Pointer + omitempty so local_state.json written by older builds still
+	// loads; nil means the feature is off with defaults. Lives in local
+	// state on purpose — the server is a per-device capability (it exposes
+	// THIS machine's terminal sessions) and must never sync across devices.
+	MCP *MCPSettings `json:"mcp,omitempty"`
 }
 
 type LocalStateStore struct {

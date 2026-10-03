@@ -17,6 +17,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/ys-ll/uniterm/backend/store"
@@ -304,6 +305,14 @@ func main() {
 	app.app = w3app
 	app.window = window
 	w3app.RegisterService(application.NewService(app))
+
+	// System notification service: app_<os>.go notifyMCPApproval posts MCP
+	// approval prompts through it when the window is unfocused. Windows needs
+	// the service's Startup to run so the toast AUMID/registry side is set up;
+	// macOS needs it for UNUserNotificationCenter authorization handling.
+	mcpNotifier := notifications.New()
+	w3app.RegisterService(application.NewService(mcpNotifier))
+	app.notifier = mcpNotifier
 
 	// System tray (issue #982): persistent icon with left-click show/hide
 	// toggle and a menu (show / hide / reset position / settings / about /

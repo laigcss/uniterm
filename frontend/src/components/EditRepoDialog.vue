@@ -25,10 +25,10 @@
         </el-form-item>
 
         <el-form-item :label="t('editRepo.username')">
-          <el-input
-            v-model="username"
-            :placeholder="t('editRepo.usernamePlaceholder')"
-          />
+          <div class="locked-field">
+            <span class="locked-value">{{ syncStore.config.username }}</span>
+            <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          </div>
         </el-form-item>
 
         <el-form-item :label="t('editRepo.token')">
@@ -42,14 +42,47 @@
         </el-form-item>
       </template>
 
-      <el-form-item v-if="!isWebdav" :label="t('editRepo.currentPassword')">
+      <template v-else>
+        <el-form-item :label="t('addRepo.serverUrl')">
+          <div class="locked-field">
+            <span class="locked-value">{{ syncStore.config.webdavServer }}</span>
+            <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          </div>
+          <div class="form-hint">{{ t('editRepo.webdavTargetLocked') }}</div>
+        </el-form-item>
+
+        <el-form-item :label="t('addRepo.basePath')">
+          <div class="locked-field">
+            <span class="locked-value">{{ syncStore.config.webdavPath }}</span>
+            <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          </div>
+        </el-form-item>
+
+        <el-form-item :label="t('addRepo.webdavUser')">
+          <div class="locked-field">
+            <span class="locked-value">{{ syncStore.config.webdavUser }}</span>
+            <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          </div>
+        </el-form-item>
+
+        <el-form-item :label="t('addRepo.webdavPassword')">
+          <el-input
+            v-model="webdavPassword"
+            type="password"
+            show-password
+          />
+          <div class="form-hint">{{ t('editRepo.webdavPasswordHint') }}</div>
+        </el-form-item>
+      </template>
+
+      <el-form-item :label="t('editRepo.currentPassword')">
         <el-input
           v-model="currentPassword"
           type="password"
           show-password
           :placeholder="t('editRepo.currentPasswordPlaceholder')"
         />
-        <div class="form-hint">{{ t('editRepo.currentPasswordHint') }}</div>
+        <div class="form-hint">{{ isWebdav ? t('addRepo.masterPasswordHint') : t('editRepo.currentPasswordHint') }}</div>
       </el-form-item>
     </el-form>
 
@@ -57,7 +90,7 @@
 
     <template #footer>
       <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="submitting" :disabled="isWebdav" @click="handleSubmit">
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">
         {{ t('common.save') }}
       </el-button>
     </template>
@@ -69,7 +102,7 @@ import { ref, computed, watch } from 'vue'
 import { Lock } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { useSyncStore } from '../stores/syncStore'
-import { SyncVerifyPassword } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SyncVerifyPassword, SyncUpdateWebDAVPassword } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { backendErrorText } from '../utils/backendError'
 import { msg } from '../services/message'
 
@@ -81,8 +114,8 @@ const visible = computed({
   set: (v) => { if (!v) syncStore.showEditRepo = false },
 })
 
-const username = ref('')
 const token = ref('')
+const webdavPassword = ref('')
 const currentPassword = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -90,8 +123,8 @@ const isWebdav = computed(() => syncStore.config.backend === 'webdav')
 
 watch(visible, (v) => {
   if (v) {
-    username.value = syncStore.config.username
     token.value = ''
+    webdavPassword.value = ''
     currentPassword.value = ''
     errorMsg.value = ''
   }
@@ -103,8 +136,8 @@ function handleClose() {
 }
 
 function resetForm() {
-  username.value = syncStore.config.username
   token.value = ''
+  webdavPassword.value = ''
   currentPassword.value = ''
   errorMsg.value = ''
 }
@@ -112,18 +145,44 @@ function resetForm() {
 async function handleSubmit() {
   errorMsg.value = ''
 
-  // WebDAV editing is not supported yet; nothing to save in this dialog.
-  if (isWebdav.value) return
+  // WebDAV: only the credential is editable — the server / remote folder /
+  // username are locked, mirroring the locked repo URL in the git branch.
+  // Same shape as the git flow: verify (probe new password + master
+  // password against the remote snapshot) → save → sync.
+  if (isWebdav.value) {
+    if (!currentPassword.value) {
+      errorMsg.value = t('editRepo.currentPasswordRequired')
+      return
+    }
 
-  if (!username.value.trim()) {
-    errorMsg.value = t('editRepo.usernameRequired')
+    submitting.value = true
+    try {
+      await SyncUpdateWebDAVPassword(webdavPassword.value, currentPassword.value)
+      const syncResult = await syncStore.doSync()
+      if (syncResult) {
+        if (syncResult.direction === 3) {
+          // Conflict — SyncConflictDialog will open via event
+        } else {
+          msg.success(syncResult.message || t('editRepo.success'))
+        }
+      } else {
+        msg.error(syncStore.lastResult || t('settings.syncFailed'))
+      }
+      syncStore.showEditRepo = false
+      resetForm()
+    } catch (e: any) {
+      // Coded backend errors (e.g. master_password_mismatch) are localized
+      // by backendErrorText; anything else passes through raw.
+      errorMsg.value = backendErrorText(e)
+    } finally {
+      submitting.value = false
+    }
     return
   }
 
   submitting.value = true
   try {
-    await SyncVerifyPassword(currentPassword.value, username.value.trim(), token.value)
-    syncStore.config.username = username.value.trim()
+    await SyncVerifyPassword(currentPassword.value, syncStore.config.username, token.value)
     await syncStore.saveConfig(token.value)
     const syncResult = await syncStore.doSync()
     if (syncResult) {
