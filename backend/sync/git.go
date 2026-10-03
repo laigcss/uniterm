@@ -83,8 +83,16 @@ func initEmpty(repoPath, repoURL string) (*GitRepo, error) {
 	return &GitRepo{repo: repo, repoPath: repoPath}, nil
 }
 
-// StageAndCommit stages all files and creates a commit. Returns true if committed.
+// StageAndCommit stages the legacy syncedFiles whitelist plus repo metadata.
+// Returns true if committed.
 func (g *GitRepo) StageAndCommit(msg string) (bool, error) {
+	return g.StageAndCommitFiles(msg, syncedFiles)
+}
+
+// StageAndCommitFiles stages exactly files plus ".sync-salt"/"README.md".
+// Whitelisting keeps stray files (e.g. an SSH key) out of the repo (SYNC-P1-9).
+// files must come from EffectiveSyncFiles; arbitrary lists weaken the SYNC-P1-9 stray-file whitelist.
+func (g *GitRepo) StageAndCommitFiles(msg string, files []string) (bool, error) {
 	wt, err := g.repo.Worktree()
 	if err != nil {
 		return false, fmt.Errorf("worktree: %w", err)
@@ -102,7 +110,7 @@ func (g *GitRepo) StageAndCommit(msg string) (bool, error) {
 	// synced_files.go) plus repo metadata, so stray files dropped in
 	// the sync repo (e.g. an SSH key) are NOT committed plaintext
 	// (SYNC-P1-9).
-	commitWhitelist := append(syncedFiles[:len(syncedFiles):len(syncedFiles)], ".sync-salt", "README.md")
+	commitWhitelist := append(files[:len(files):len(files)], ".sync-salt", "README.md")
 	for _, name := range commitWhitelist {
 		if _, err := os.Stat(filepath.Join(g.repoPath, name)); err != nil {
 			continue
@@ -381,10 +389,17 @@ func (g *GitRepo) CommitTime(h plumbing.Hash) (time.Time, error) {
 	return commit.Committer.When, nil
 }
 
-// ExtractCommitFiles writes the synced config files as committed at hash
+// ExtractCommitFiles writes the legacy syncedFiles set as committed at hash
 // into destDir. The extracted files are still encrypted — the caller
 // decrypts them. Files absent from that commit's tree are skipped.
 func (g *GitRepo) ExtractCommitFiles(hash plumbing.Hash, destDir string) error {
+	return g.ExtractCommitFilesIn(hash, syncedFiles, destDir)
+}
+
+// ExtractCommitFilesIn writes exactly files as committed at hash into destDir
+// (still encrypted). Files absent from the tree are skipped.
+// files must come from EffectiveSyncFiles.
+func (g *GitRepo) ExtractCommitFilesIn(hash plumbing.Hash, files []string, destDir string) error {
 	commit, err := g.repo.CommitObject(hash)
 	if err != nil {
 		return fmt.Errorf("commit %s: %w", hash, err)
@@ -396,7 +411,7 @@ func (g *GitRepo) ExtractCommitFiles(hash plumbing.Hash, destDir string) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
-	for _, name := range syncedFiles {
+	for _, name := range files {
 		file, err := tree.File(name)
 		if err != nil {
 			// Not present in this commit (e.g. the merge base predates

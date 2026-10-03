@@ -740,7 +740,7 @@
         <p class="section-desc">{{ t('settings.syncDesc') }}</p>
 
         <!-- Empty state: no repo configured -->
-        <div v-if="!syncStore.config.repoUrl" class="sync-card">
+        <div v-if="!isSyncConfigured" class="sync-card">
           <div class="sync-card-header">{{ t('settings.syncRepoCard') }}</div>
           <div class="sync-card-body empty-state">
             <p class="empty-text">{{ t('settings.syncEmptyDesc') }}</p>
@@ -761,12 +761,12 @@
             <div class="sync-card-body">
               <div class="repo-info">
                 <div class="repo-info-row">
-                  <span class="repo-label">{{ t('settings.syncRepoUrl') }}</span>
-                  <span class="repo-value">{{ syncStore.config.repoUrl }}</span>
+                  <span class="repo-label">{{ syncStore.config.backend === 'webdav' ? t('addRepo.serverUrl') : t('settings.syncRepoUrl') }}</span>
+                  <span class="repo-value">{{ syncStore.config.backend === 'webdav' ? syncStore.config.webdavServer : syncStore.config.repoUrl }}</span>
                 </div>
                 <div class="repo-info-row">
                   <span class="repo-label">{{ t('settings.syncUsername') }}</span>
-                  <span class="repo-value">{{ syncStore.config.username }}</span>
+                  <span class="repo-value">{{ syncStore.config.backend === 'webdav' ? syncStore.config.webdavUser : syncStore.config.username }}</span>
                 </div>
               </div>
               <div class="repo-actions">
@@ -805,6 +805,21 @@
                 <span class="sync-auto-label">{{ t('settings.syncAuto') }}</span>
                 <span class="sync-auto-desc">{{ t('settings.syncAutoDesc') }}</span>
                 <el-switch v-model="syncStore.config.autoSync" @change="handleAutoSyncToggle" />
+              </div>
+              <div class="sync-scope-row">
+                <div class="sync-scope-header">
+                  <span class="sync-auto-label">{{ t('settings.syncScope') }}</span>
+                  <span class="scope-hint">{{ t('settings.syncScopeHint') }}</span>
+                </div>
+                <el-checkbox-group
+                  v-model="syncScopeModel"
+                  :disabled="syncStore.syncing"
+                  @change="handleScopeChange"
+                >
+                  <el-checkbox v-for="item in SYNC_FILE_ITEMS" :key="item.file" :value="item.file">
+                    {{ t(item.label) }}
+                  </el-checkbox>
+                </el-checkbox-group>
               </div>
             </div>
           </div>
@@ -1438,7 +1453,7 @@ import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, 
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors, GenerateMCPToken, RevokeMCPToken, ListMCPTokens, GetMCPStatus } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useSyncStore } from '../stores/syncStore'
+import { useSyncStore, SYNC_FILE_ITEMS } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
@@ -1619,6 +1634,13 @@ function openEditRepo() {
   syncStore.showEditRepo = true
 }
 
+// WebDAV configure leaves repoUrl empty, so "configured" depends on backend.
+const isSyncConfigured = computed(() =>
+  syncStore.config.backend === 'webdav'
+    ? !!syncStore.config.webdavServer
+    : !!syncStore.config.repoUrl
+)
+
 async function handleSyncNow() {
   const result = await syncStore.doSync()
   if (!result) {
@@ -1636,6 +1658,38 @@ async function handleAutoSyncToggle() {
     await syncStore.saveConfig()
   } catch (e) {
     console.error('Failed to save auto sync toggle:', e)
+  }
+}
+
+// nil scope = legacy default: settings.json unchecked, everything else checked.
+const LEGACY_SCOPE = SYNC_FILE_ITEMS.filter(i => i.file !== 'settings.json').map(i => i.file)
+
+const syncScopeModel = computed<string[]>({
+  get: () => syncStore.config.syncScope ?? LEGACY_SCOPE,
+  set: (v) => { syncStore.config.syncScope = v },
+})
+
+// An empty selection would persist as [] which the backend resolves back to
+// the legacy default — the UI would show nothing syncing while the device
+// syncs all legacy files. Keep the last non-empty selection instead.
+const lastValidScope = ref<string[]>([...syncScopeModel.value])
+// Track the store reactively: loadConfig (and any future store reset) replaces
+// config.value asynchronously after setup, so a one-time snapshot could go stale.
+watch(() => syncStore.config.syncScope, (v) => {
+  if (v && v.length) lastValidScope.value = [...v]
+})
+
+async function handleScopeChange(v: string[]) {
+  if (v.length === 0) {
+    syncStore.config.syncScope = [...lastValidScope.value]
+    msg.warning(t('settings.syncScopeEmpty'))
+    return
+  }
+  lastValidScope.value = [...v]
+  try {
+    await syncStore.saveConfig()
+  } catch (e) {
+    console.error('Failed to save sync scope:', e)
   }
 }
 
@@ -3097,6 +3151,7 @@ async function onToggleSystemTitleBar(v: boolean) {
   align-items: center;
   gap: 0.625rem;
   padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -3110,6 +3165,33 @@ async function onToggleSystemTitleBar(v: boolean) {
   font-size: 0.75rem;
   color: var(--text-muted);
   flex: 1;
+}
+
+.sync-scope-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sync-scope-row :deep(.el-checkbox-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.sync-scope-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.scope-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .model-fetch-row {
