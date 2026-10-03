@@ -190,6 +190,14 @@ jobs:
       - name: Build (Android)
         if: matrix.slug == 'android'
         shell: bash
+        env:
+          # Release keystore as base64; decoded below. Without it gradle
+          # signs with the per-runner debug keystore, whose signature is
+          # different on every ephemeral runner and blocks upgrade installs.
+          ANDROID_KEYSTORE_FILE_B64: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           # main.go embeds all:frontend/dist; neither dist nor the generated
           # bindings are committed, so build the frontend first (this also
@@ -201,6 +209,14 @@ jobs:
           # PRODUCTION=true on its internal build dep, but the value is lost
           # on the build -> compile:go:shared hop, silently producing a
           # -tags android,debug library (broken WebView asset serving).
+          if [ -n "${ANDROID_KEYSTORE_FILE_B64:-}" ]; then
+            KS="$GITHUB_WORKSPACE/uniterm-release.keystore"
+            echo "$ANDROID_KEYSTORE_FILE_B64" | base64 -d > "$KS"
+            export ANDROID_KEYSTORE_FILE="$KS"
+            echo "Signing with release keystore (alias: $ANDROID_KEY_ALIAS)"
+          else
+            echo "WARNING: no ANDROID_KEYSTORE_FILE secret — falling back to the runner debug keystore"
+          fi
           wails3 task android:package PRODUCTION=true
           # Match the desktop convention: uniterm-<os>-<arch>-<version>.apk.
           # Stage at the workspace root: the Upload artifact step globs
