@@ -275,6 +275,9 @@ export interface AppSettings {
   updateSource: 'auto' | 'github' | 'gitee'
   closeTabPrompt: boolean
   closeAppPrompt: boolean
+  // Startup prompt to reopen the tabs that were open when the app last quit
+  // (issue #937). The snapshot is always recorded either way.
+  restoreTabsPrompt: boolean
   sftpBookmarks: SFTPBookmarks
   // Whether the dual-pane SFTP tab's transfer panel starts out visible.
   // The panel auto-pops on every new transfer task regardless of this flag;
@@ -373,6 +376,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateSource: 'auto',
   closeTabPrompt: true,
   closeAppPrompt: true,
+  restoreTabsPrompt: true,
   sftpBookmarks: {
     localPaths: [],
     remotePaths: []

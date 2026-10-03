@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "キャンセルされました — {count} 個のメンバー未接続",
   "workspace.createCancelled": "作成をキャンセル — 接続済みメンバーは保持されます",
   "workspace.createSkippedHosts": "{count} 個の選択された接続タイプはワークスペースに追加できません",
-  "workspace.dropHint": "接続をここにドラッグしてワークスペースに追加"
+  "workspace.dropHint": "接続をここにドラッグしてワークスペースに追加",
+  "settings.restoreTabsPrompt": "起動時に前回のタブを復元するか確認",
+  "settings.restoreTabsPromptDesc": "次回起動時に復元するか尋ねます。",
+  "start.restoreTabsTitle": "前回のセッションを復元",
+  "start.restoreTabsMessage": "前回終了時に {count} 個のウィンドウが開いていました。復元しますか？",
+  "start.restoreTabsConfirm": "復元"
 }

@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "Отменено — не открыто участников: {count}",
   "workspace.createCancelled": "Создание отменено — подключённые участники сохранены",
   "workspace.createSkippedHosts": "Выбранные типы подключений ({count}) не могут присоединиться к рабочей области",
-  "workspace.dropHint": "Перетащите подключения сюда, чтобы добавить их в рабочую область"
+  "workspace.dropHint": "Перетащите подключения сюда, чтобы добавить их в рабочую область",
+  "settings.restoreTabsPrompt": "Предлагать восстановить вкладки прошлого сеанса",
+  "settings.restoreTabsPromptDesc": "Предлагает восстановить вкладки при следующем запуске.",
+  "start.restoreTabsTitle": "Восстановить прошлый сеанс",
+  "start.restoreTabsMessage": "При выходе было открыто окон: {count}. Восстановить их?",
+  "start.restoreTabsConfirm": "Восстановить"
 }

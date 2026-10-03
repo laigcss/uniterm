@@ -362,6 +362,7 @@ function mergeSettings(loaded: AppSettings): AppSettings {
     updateSource: loaded.updateSource ?? DEFAULT_SETTINGS.updateSource,
     closeTabPrompt: loaded.closeTabPrompt ?? DEFAULT_SETTINGS.closeTabPrompt,
     closeAppPrompt: loaded.closeAppPrompt ?? DEFAULT_SETTINGS.closeAppPrompt,
+    restoreTabsPrompt: loaded.restoreTabsPrompt ?? DEFAULT_SETTINGS.restoreTabsPrompt,
     sftpBookmarks: {
       localPaths: loaded.sftpBookmarks?.localPaths || [],
       remotePaths: loaded.sftpBookmarks?.remotePaths || []

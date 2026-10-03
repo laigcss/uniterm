@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "Annulé — {count} membre(s) non ouvert(s)",
   "workspace.createCancelled": "Création annulée — les membres connectés ont été conservés",
   "workspace.createSkippedHosts": "{count} type(s) de connexion sélectionnés ne peuvent pas rejoindre l'espace",
-  "workspace.dropHint": "Glissez des connexions ici pour les ajouter à l'espace"
+  "workspace.dropHint": "Glissez des connexions ici pour les ajouter à l'espace",
+  "settings.restoreTabsPrompt": "Proposer de rouvrir les onglets de la dernière session",
+  "settings.restoreTabsPromptDesc": "Propose de rouvrir les onglets ouverts au prochain démarrage.",
+  "start.restoreTabsTitle": "Restaurer la dernière session",
+  "start.restoreTabsMessage": "{count} fenêtre(s) étaient ouverte(s) à la fermeture. Les rouvrir ?",
+  "start.restoreTabsConfirm": "Restaurer"
 }

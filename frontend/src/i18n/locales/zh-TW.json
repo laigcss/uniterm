@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "已取消，{count} 個成員未開啟",
   "workspace.createCancelled": "已取消建立，已連線的成員保留",
   "workspace.createSkippedHosts": "{count} 個所選連線類型不支援加入工作區",
-  "workspace.dropHint": "將連線拖動到此處加入工作區"
+  "workspace.dropHint": "將連線拖動到此處加入工作區",
+  "settings.restoreTabsPrompt": "啟動時提示恢復上次未關閉的視窗",
+  "settings.restoreTabsPromptDesc": "下次啟動時詢問是否恢復未關閉的標籤頁",
+  "start.restoreTabsTitle": "恢復上次工作階段",
+  "start.restoreTabsMessage": "上次結束時有 {count} 個未關閉的視窗，是否恢復？",
+  "start.restoreTabsConfirm": "恢復"
 }

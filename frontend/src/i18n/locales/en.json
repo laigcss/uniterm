@@ -1838,5 +1838,10 @@
   "mcp.zcodeHint": "Merge into the mcp.servers field of ~/.zcode/cli/config.json (do not replace the whole file):",
   "mcp.traeHint": "Save as .trae/mcp.json in the project root (or ~/.trae/mcp.json user-level):",
   "mcp.workbuddyHint": "WorkBuddy connector format. Save as ~/.workbuddy/connectors-marketplace/connectors/uniterm/mcp.json and enable it in the app:",
-  "mcp.dshHint": "Cordis overlay snippet for DeepSeek Harness (dsh). Save as uniterm.cordis.yml and start with dsh web --patch <file>; put the token in the UNITERM_MCP_TOKEN env var (export it first, or configure config.env):"
+  "mcp.dshHint": "Cordis overlay snippet for DeepSeek Harness (dsh). Save as uniterm.cordis.yml and start with dsh web --patch <file>; put the token in the UNITERM_MCP_TOKEN env var (export it first, or configure config.env):",
+  "settings.restoreTabsPrompt": "Prompt to Reopen Last Session's Tabs",
+  "settings.restoreTabsPromptDesc": "Ask to reopen open tabs at the next startup.",
+  "start.restoreTabsTitle": "Restore Last Session",
+  "start.restoreTabsMessage": "You had {count} open window(s) when the app last quit. Reopen them?",
+  "start.restoreTabsConfirm": "Restore"
 }
