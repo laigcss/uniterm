@@ -310,8 +310,18 @@ func main() {
 	// approval prompts through it when the window is unfocused. Windows needs
 	// the service's Startup to run so the toast AUMID/registry side is set up;
 	// macOS needs it for UNUserNotificationCenter authorization handling.
-	mcpNotifier := notifications.New()
-	w3app.RegisterService(application.NewService(mcpNotifier))
+	//
+	// Not registered on Android: the wails notifications service has no
+	// Android backend, so on GOOS=android it compiles the linux D-Bus
+	// implementation whose Startup fails (there is no session bus) and aborts
+	// w3app.Run before platformRun signals the app ready — leaving the
+	// WebView stuck on a blank wails.localhost error page. notifyMCPApproval
+	// already handles a nil notifier.
+	var mcpNotifier *notifications.NotificationService
+	if runtime.GOOS != "android" {
+		mcpNotifier = notifications.New()
+		w3app.RegisterService(application.NewService(mcpNotifier))
+	}
 	app.notifier = mcpNotifier
 
 	// System tray (issue #982): persistent icon with left-click show/hide
