@@ -156,7 +156,7 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
 import { writeClipboard, readClipboardText } from '../composables/useClipboardWrite'
-import { filterTerminalInput } from '../utils/terminalInputFilter'
+import { filterTerminalInput, stripDeviceReplies } from '../utils/terminalInputFilter'
 import { isAuthFailureError } from '../utils/authError'
 import { DcsReassembler } from '../utils/dcsReassembler'
 import Menu from './Menu.vue'
@@ -248,14 +248,15 @@ const showTimestamps = computed(() => settingsStore.settings.terminal.showTimest
 // next sequential number and the arrival time; lines the cursor moved past
 // get their timestamp fixed to the completion time. `before` is an absolute
 // row index, so a trim inside the write doesn't skew the band.
-function writeStamped(data: string) {
+function writeStamped(data: string, onParsed?: () => void) {
   const t = terminal
   const sid = props.sessionId
-  if (!t || !sid) { t?.write(data); return }
+  if (!t || !sid) { t?.write(data, onParsed); return }
   const ts = Date.now()
   const before = currentAbsoluteLine(sid)
   t.write(data, () => {
     recordWrite(sid, before, ts)
+    onParsed?.()
   })
 }
 
@@ -293,6 +294,14 @@ let intersectionObserver: IntersectionObserver | null = null
 // Track how many sessionStore chunks have been written to the terminal
 // so we can replay only missed data on KeepAlive reactivation.
 let writtenChunks = 0
+// While the gap replay re-parses stale device queries, xterm's
+// auto-generated replies (CPR/DSR/DA) must not reach the remote: the
+// mirror terminal already answered them in real time while this panel
+// was inactive, and a second reply arriving after the remote's read
+// timed out leaks its tail into the shell (the "0R" artifact).
+// Timestamp cap in case a parse callback never fires; cleared early
+// once the last replayed chunk reports parsed.
+let replySuppressUntil = 0
 // Viewport position (top line in the buffer) captured on KeepAlive
 // deactivation so reactivation can restore the user's scroll position
 // instead of jumping to the bottom. baseY at deactivation is also kept so
@@ -1314,6 +1323,18 @@ onMounted(() => {
         return
       }
 
+      // Gap-replay suppression: while stale queries from the replay are being
+      // re-parsed, drop xterm's auto-generated device replies. The mirror
+      // already answered them in real time (responder handoff, see
+      // terminalManager); a second reply reaches the remote after its read
+      // timed out and leaks into the shell. Keystrokes can never match these
+      // escape shapes, so real input is untouched.
+      if (Date.now() < replySuppressUntil) {
+        const cleaned = stripDeviceReplies(data)
+        if (!cleaned) return
+        data = cleaned
+      }
+
       // Mobile sticky Ctrl: transform the next soft-keyboard character into
       // the corresponding Ctrl combo (e.g. 'c' → ^C) when Ctrl is armed.
       if (isMobileTouch && (props.mode === 'ssh' || props.mode === 'local')) {
@@ -1792,9 +1813,15 @@ onActivated(() => {
       const tail = sessionStore.getDataFromChunk(props.sessionId, writtenChunks)
       // Route the gap replay through the DCS reassembler like the live
       // path — a sixel sequence may span the deactivation boundary.
-      for (const seg of dcsReassembler.feed(tail)) {
-        writeStamped(seg.text)
+      // Suppress auto device replies for the whole replay (see
+      // replySuppressUntil): the replayed gap contains the same queries the
+      // mirror answered while this panel was frozen.
+      replySuppressUntil = Date.now() + 10000
+      const segs = dcsReassembler.feed(tail)
+      for (let i = 0; i < segs.length; i++) {
+        writeStamped(segs[i].text, i === segs.length - 1 ? () => { replySuppressUntil = 0 } : undefined)
       }
+      if (segs.length === 0) replySuppressUntil = 0
       writtenChunks = total
     }
   }
