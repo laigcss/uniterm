@@ -156,6 +156,68 @@ describe('matchTextSpans — retained rules', () => {
   })
 })
 
+describe('matchTextSpans — network device config rules', () => {
+  it('highlights Cisco interface names as ifname', () => {
+    expect(find('interface FastEthernet0/1\n', 'FastEthernet0/1', 'ifname')).toBe(true)
+    expect(find('interface GigabitEthernet0/0/1\n', 'GigabitEthernet0/0/1', 'ifname')).toBe(true)
+    expect(find('interface TenGigabitEthernet1/0/1\n', 'TenGigabitEthernet1/0/1', 'ifname')).toBe(true)
+    expect(find('interface Port-channel1\n', 'Port-channel1', 'ifname')).toBe(true)
+  })
+
+  it('highlights Huawei interface names as ifname', () => {
+    expect(find('interface Vlanif204\n', 'Vlanif204', 'ifname')).toBe(true)
+    expect(find('interface Eth-Trunk3\n', 'Eth-Trunk3', 'ifname')).toBe(true)
+    expect(find('interface MEth0/0/1\n', 'MEth0/0/1', 'ifname')).toBe(true)
+    expect(find('interface LoopBack0\n', 'LoopBack0', 'ifname')).toBe(true)
+    expect(find('interface GE1/0/1\n', 'GE1/0/1', 'ifname')).toBe(true)
+  })
+
+  it('highlights ifnames without the interface keyword too', () => {
+    expect(find('port trunk allow-pass vlan 10 17 135 on GigabitEthernet0/0/1\n', 'GigabitEthernet0/0/1', 'ifname')).toBe(true)
+  })
+
+  it('does not highlight lookalike words as ifname', () => {
+    expect(noSpanOf('page1/2 of the report\n', 'ifname')).toBe(true)
+    expect(noSpanOf('the ethernet cable is unplugged\n', 'ifname')).toBe(true)
+    expect(noSpanOf('revisions 3vlan4 mixed\n', 'ifname')).toBe(true)
+  })
+
+  it('highlights device config keywords as keyword', () => {
+    expect(find(' switchport access vlan 135\n', 'switchport access', 'keyword')).toBe(true)
+    expect(find(' ip address 192.168.1.253 255.255.255.0\n', 'ip address', 'keyword')).toBe(true)
+    expect(find(' port link-type trunk\n', 'port link-type', 'keyword')).toBe(true)
+    expect(find(' port trunk allow-pass vlan 10 17 135\n', 'port trunk', 'keyword')).toBe(true)
+    expect(find(' dhcp server dns-list 192.168.1.12\n', 'dhcp server', 'keyword')).toBe(true)
+    expect(find(' dhcp select interface\n', 'dhcp select', 'keyword')).toBe(true)
+    expect(find(' mode lacp\n', 'mode lacp', 'keyword')).toBe(true)
+    expect(find(' vlan batch 10 20\n', 'vlan batch', 'keyword')).toBe(true)
+    expect(find(' ip route-static 0.0.0.0 0 192.168.1.1\n', 'ip route-static', 'keyword')).toBe(true)
+  })
+
+  it('highlights the interface keyword only before an interface name', () => {
+    expect(find('interface GigabitEthernet0/0/1\n', 'interface', 'keyword')).toBe(true)
+    expect(find('interface Vlanif204\n', 'interface', 'keyword')).toBe(true)
+    expect(find('interface Vlan10\n', 'interface', 'keyword')).toBe(true)
+    expect(find('interface LoopBack0\n', 'interface', 'keyword')).toBe(true)
+    // Prose and non-device contexts stay untouched.
+    expect(noSpanOf('the network interface card is fine\n', 'keyword')).toBe(true)
+    expect(noSpanOf('no such interface\n', 'keyword')).toBe(true)
+  })
+
+  it('does not highlight keyword lookalikes', () => {
+    expect(noSpanOf('switchports available\n', 'keyword')).toBe(true)
+    expect(noSpanOf('trip addresses\n', 'keyword')).toBe(true)
+  })
+
+  it('keeps IP highlighting alongside keywords', () => {
+    const line = ' ip address 192.168.1.253 255.255.255.0\n'
+    expect(find(line, 'ip address', 'keyword')).toBe(true)
+    expect(find(line, '192.168.1.253', 'host')).toBe(true)
+    // 255.x netmasks stay uncolored: the host rule intentionally restricts
+    // the first octet to 1-254 (see the keyword-rule suite above).
+  })
+})
+
 describe('matchTextSpans — span mechanics', () => {
   it('matches a run of consecutive identical brace symbols once', () => {
     const runs = spans('a **** b ===== c >>> d')

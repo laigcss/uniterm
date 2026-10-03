@@ -12,6 +12,7 @@
 export type HighlightCategory =
   | 'url' | 'host' | 'path' | 'datetime' | 'string'
   | 'success' | 'error' | 'warning' | 'info' | 'brace'
+  | 'keyword' | 'ifname'
 
 export interface HighlightRule {
   category: HighlightCategory
@@ -22,6 +23,19 @@ export interface HighlightRule {
 export const HIGHLIGHT_RULES: HighlightRule[] = [
   { category: 'url',     regexes: [
     /https?:\/\/[A-Za-z0-9_.&?=%~#{}()@+-]+(?::?[A-Za-z0-9_./&?=%~#{}()@+-]+)?/gi,
+  ]},
+  // Network device config (Cisco IOS / Huawei VRP style; also matches the
+  // config dumps of Linux net tools like iptables-save or FRR). Keywords are
+  // multi-word command starters or distinctive single words; `interface`
+  // only counts when an interface-name-like token follows, so prose stays
+  // untouched.
+  { category: 'keyword', regexes: [
+    /(^|[^0-9a-z_&-])(interface(?=\s+(?:[a-z]*ethernet|vlan(?:if)?|eth-trunk|meth|loopback|port-channel|tunnel|console|null)\s*\d)|switchport(?:\s+(?:mode|access|trunk|native|voice))?|ip address|ipv6 address|dhcp (?:select|server|relay|enable|snooping)|port (?:link-type|trunk|hybrid|default|group)|mode lacp|access vlan|vlan batch|ip route-static|stp (?:enable|disable|mode|bpdu)|local-user|user-interface|sysname|link-type|trunk allow-pass)(?![a-z_-])/gi,
+  ]},
+  // Interface names: full vendor spellings plus Huawei abbreviations (GE…),
+  // always name+digits+slash-groups so bare words like "ethernet" never hit.
+  { category: 'ifname',  regexes: [
+    /(^|[^0-9a-z_/-])((?:(?:twentyfivegigabit|hundredgigabit|fortygigabit|tengigabit|xgigabit|gigabit|fast)?ethernet|meth|(?:x?ge))\d+(?:\/\d+)+|vlanif\d+|vlan\d+|eth-trunk\d+|loopback\d+|port-channel\d+)(?![0-9a-z_.\-/])/gi,
   ]},
   { category: 'host',    regexes: [
     // IPv4 (first octet 1-254) and IPv6 (full and ::-compressed forms)
