@@ -7,32 +7,42 @@
     @close="handleClose"
   >
     <el-form label-width="7.5rem" class="edit-repo-form">
-      <el-form-item :label="t('editRepo.url')">
+      <el-form-item :label="t('addRepo.backend')">
         <div class="locked-field">
-          <span class="locked-value">{{ syncStore.config.repoUrl }}</span>
-          <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          <span class="locked-value">{{ isWebdav ? t('addRepo.backendWebDAV') : t('addRepo.backendGit') }}</span>
+          <el-icon class="lock-icon"><Lock :size="14" /></el-icon>
         </div>
-        <div class="form-hint">{{ t('editRepo.urlLocked') }}</div>
+        <div class="form-hint">{{ t('addRepo.backendSwitchHint') }}</div>
       </el-form-item>
 
-      <el-form-item :label="t('editRepo.username')">
-        <el-input
-          v-model="username"
-          :placeholder="t('editRepo.usernamePlaceholder')"
-        />
-      </el-form-item>
+      <template v-if="!isWebdav">
+        <el-form-item :label="t('editRepo.url')">
+          <div class="locked-field">
+            <span class="locked-value">{{ syncStore.config.repoUrl }}</span>
+            <el-icon class="lock-icon"><Lock :size="'0.875rem'" /></el-icon>
+          </div>
+          <div class="form-hint">{{ t('editRepo.urlLocked') }}</div>
+        </el-form-item>
 
-      <el-form-item :label="t('editRepo.token')">
-        <el-input
-          v-model="token"
-          type="password"
-          show-password
-          :placeholder="t('editRepo.tokenPlaceholder')"
-        />
-        <div class="form-hint">{{ t('editRepo.tokenHint') }}</div>
-      </el-form-item>
+        <el-form-item :label="t('editRepo.username')">
+          <el-input
+            v-model="username"
+            :placeholder="t('editRepo.usernamePlaceholder')"
+          />
+        </el-form-item>
 
-      <el-form-item :label="t('editRepo.currentPassword')">
+        <el-form-item :label="t('editRepo.token')">
+          <el-input
+            v-model="token"
+            type="password"
+            show-password
+            :placeholder="t('editRepo.tokenPlaceholder')"
+          />
+          <div class="form-hint">{{ t('editRepo.tokenHint') }}</div>
+        </el-form-item>
+      </template>
+
+      <el-form-item v-if="!isWebdav" :label="t('editRepo.currentPassword')">
         <el-input
           v-model="currentPassword"
           type="password"
@@ -47,7 +57,7 @@
 
     <template #footer>
       <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">
+      <el-button type="primary" :loading="submitting" :disabled="isWebdav" @click="handleSubmit">
         {{ t('common.save') }}
       </el-button>
     </template>
@@ -76,6 +86,7 @@ const token = ref('')
 const currentPassword = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
+const isWebdav = computed(() => syncStore.config.backend === 'webdav')
 
 watch(visible, (v) => {
   if (v) {
@@ -100,6 +111,9 @@ function resetForm() {
 
 async function handleSubmit() {
   errorMsg.value = ''
+
+  // WebDAV editing is not supported yet; nothing to save in this dialog.
+  if (isWebdav.value) return
 
   if (!username.value.trim()) {
     errorMsg.value = t('editRepo.usernameRequired')
