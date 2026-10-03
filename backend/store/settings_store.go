@@ -183,9 +183,13 @@ type AppSettings struct {
 	// "gitee" (domestic mirror). Pointer + omitempty so settings.json written
 	// by older builds still load; nil means "auto".
 	UpdateSource   *string       `json:"updateSource,omitempty"`
-	CloseTabPrompt *bool         `json:"closeTabPrompt"`
-	CloseAppPrompt *bool         `json:"closeAppPrompt"`
-	SFTPBookmarks  SFTPBookmarks `json:"sftpBookmarks"`
+	CloseTabPrompt *bool `json:"closeTabPrompt"`
+	CloseAppPrompt *bool `json:"closeAppPrompt"`
+	// RestoreTabsPrompt gates the "reopen last session's tabs" prompt at
+	// startup (issue #937). Pointer + omitempty so settings.json written by
+	// older builds still loads; nil means "on" (frontend default).
+	RestoreTabsPrompt *bool         `json:"restoreTabsPrompt,omitempty"`
+	SFTPBookmarks     SFTPBookmarks `json:"sftpBookmarks"`
 	// SftpTransferPanelVisible remembers whether the SFTP transfer panel was
 	// last left visible. Pointer + omitempty so settings.json written by older
 	// builds (which lack this field) still load; nil means "use the frontend

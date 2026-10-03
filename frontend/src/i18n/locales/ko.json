@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "취소됨 — {count}개 멤버 미연결",
   "workspace.createCancelled": "생성 취소 — 연결된 멤버는 유지됩니다",
   "workspace.createSkippedHosts": "{count}개 선택한 연결 유형은 워크스페이스에 추가할 수 없습니다",
-  "workspace.dropHint": "연결을 여기로 끌어다 워크스페이스에 추가하세요"
+  "workspace.dropHint": "연결을 여기로 끌어다 워크스페이스에 추가하세요",
+  "settings.restoreTabsPrompt": "시작 시 마지막 세션 탭 복원 확인",
+  "settings.restoreTabsPromptDesc": "다음 시작 시 복원할지 묻습니다.",
+  "start.restoreTabsTitle": "마지막 세션 복원",
+  "start.restoreTabsMessage": "종료 시 열려 있던 창이 {count}개 있습니다. 복원할까요?",
+  "start.restoreTabsConfirm": "복원"
 }

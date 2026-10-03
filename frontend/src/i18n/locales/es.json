@@ -1780,5 +1780,10 @@
   "workspace.openCancelled": "Cancelado — {count} miembro(s) sin abrir",
   "workspace.createCancelled": "Creación cancelada — se conservaron los miembros conectados",
   "workspace.createSkippedHosts": "{count} tipo(s) de conexión seleccionados no pueden unirse al espacio",
-  "workspace.dropHint": "Arrastre conexiones aquí para añadirlas al espacio"
+  "workspace.dropHint": "Arrastre conexiones aquí para añadirlas al espacio",
+  "settings.restoreTabsPrompt": "Preguntar al iniciar por las pestañas de la última sesión",
+  "settings.restoreTabsPromptDesc": "Pregunta si reabrir las pestañas en el siguiente inicio.",
+  "start.restoreTabsTitle": "Restaurar la última sesión",
+  "start.restoreTabsMessage": "Tenías {count} ventana(s) abierta(s) al salir. ¿Reabrirlas?",
+  "start.restoreTabsConfirm": "Restaurar"
 }

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { MCPSettings } from '../types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '../types/mcp'
+import type { SavedTabsSnapshot } from '../types/tabSnapshot'
 
 // Shape of the backend's LocalState store (bindings are untyped JS, so the
 // type is declared here and must stay in sync with backend/store).
@@ -28,6 +29,9 @@ interface LocalState {
   sftpHiddenColumns: string[]
   // MCP server config (external AI agents). Per device — never synced.
   mcp: MCPSettings
+  // Open-tabs snapshot for "reopen last session's tabs". Opaque shape
+  // (types/tabSnapshot.ts); local-only, never synced.
+  lastTabsSnapshot: SavedTabsSnapshot | null
 }
 
 const DEFAULT: LocalState = {
@@ -49,6 +53,7 @@ const DEFAULT: LocalState = {
   externalEditor: '',
   sftpHiddenColumns: [],
   mcp: { ...DEFAULT_MCP_SETTINGS },
+  lastTabsSnapshot: null,
 } as LocalState
 
 export const useLocalStateStore = defineStore('localState', () => {

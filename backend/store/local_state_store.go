@@ -42,6 +42,11 @@ type LocalState struct {
 	// state on purpose — the server is a per-device capability (it exposes
 	// THIS machine's terminal sessions) and must never sync across devices.
 	MCP *MCPSettings `json:"mcp,omitempty"`
+	// LastTabsSnapshot holds the open-tabs snapshot used by "reopen last
+	// session's tabs" (issue #937). Opaque JSON written by the frontend
+	// (types/tabSnapshot.ts); local-only, never synced, and holds no
+	// secrets — host references are connectionIds re-resolved at restore.
+	LastTabsSnapshot json.RawMessage `json:"lastTabsSnapshot,omitempty"`
 }
 
 type LocalStateStore struct {

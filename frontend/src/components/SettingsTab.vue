@@ -251,6 +251,17 @@
             </div>
           </div>
 
+          <!-- Reopen last session's tabs at startup (issue #937) -->
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.restoreTabsPrompt') }}</div>
+              <div class="setting-desc">{{ t('settings.restoreTabsPromptDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch v-model="settingsStore.settings.restoreTabsPrompt" @change="settingsStore.save()" />
+            </div>
+          </div>
+
           <!-- No local CLI editors on mobile -->
           <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">

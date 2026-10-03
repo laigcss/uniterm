@@ -241,6 +241,7 @@ import { getShellLabel as getShellLabelBase, parseWslFromShell } from './utils/s
 import { reconnectFileTransferPanel } from './composables/usePanelReconnect'
 import { launchConnection, launchFileBrowser, launchMonitor, launchWslFileBrowser, launchContainerFileBrowser, persistConnection, configureLauncher } from './composables/connectionLauncher'
 import { openSavedWorkspace } from './composables/savedWorkspace'
+import { installTabSnapshotSaver, restoreTabsSnapshot } from './composables/tabSnapshot'
 import { createWorkspaceFromSelection } from './composables/createWorkspace'
 
 const bgDataUrl = ref('')
@@ -917,6 +918,11 @@ onMounted(async () => {
   if (tabStore.tabs.length === 0) {
     tabStore.createStartTab()
   }
+  // Reopen-last-session prompt (issue #937): ask before touching tabs, then
+  // start recording so the snapshot always mirrors what's open. Not awaited —
+  // the dialog must not block the rest of the mount sequence.
+  maybeRestoreLastTabs()
+  installTabSnapshotSaver()
   // Pre-load noVNC so VNC tab switches don't pay the dynamic import cost.
   import('@novnc/novnc').then((m: any) => {
     ;(window as any).__novnc_RFB = m.default || m
@@ -1540,6 +1546,37 @@ function closeStartAndReposition(prevTab: any): (newTabId: string) => void {
 
 configureLauncher({ ensureCredentials, closeStartAndReposition })
 
+// ── Reopen last session's tabs (issue #937-4) ──
+// The snapshot itself is written continuously by installTabSnapshotSaver;
+// this is the startup half: prompt (when the setting is on) and re-open the
+// recorded tabs through the regular connect flows.
+async function maybeRestoreLastTabs() {
+  if (!settingsStore.settings.restoreTabsPrompt) return
+  const snapshot = localStateStore.state.lastTabsSnapshot
+  if (!snapshot?.tabs?.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('start.restoreTabsMessage', { count: snapshot.tabs.length }),
+      t('start.restoreTabsTitle'),
+      {
+        confirmButtonText: t('start.restoreTabsConfirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'info'
+      }
+    )
+  } catch {
+    // One-shot prompt: a decline means "don't offer these tabs again", so
+    // drop the snapshot. It only re-accumulates once the user actually opens
+    // tabs (the watcher in installTabSnapshotSaver re-records on change).
+    localStateStore.update({ lastTabsSnapshot: null })
+    return // user declined
+  }
+  await restoreTabsSnapshot(snapshot, {
+    connectTerminal: (c, p) => connectTerminalSession(c, p, undefined),
+    connectMember: workspaceConnectMember
+  })
+}
+
 async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?: boolean, persist = true, targetWorkspaceId?: string) {
   // Saved workspace connection: open it as a live workspace instead of the
   // per-type launch flow (no spec exists — and must not exist — for this type).
@@ -2023,7 +2060,7 @@ watch(
   opacity: var(--bg-mask-opacity, 0.6);
 }
 .app-container.has-bg .main-content,
-.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground))),
+.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground, .el-progress-bar__inner, .perf-nav-bar-inner))),
 .app-container.has-bg .app-header,
 .app-container.has-bg :deep(.app-header *) {
   background-color: transparent !important;
@@ -2083,6 +2120,105 @@ body > .conn-context-menu {
 .app-container.has-bg .main-content :deep(.el-slider__button) {
   background-color: #ffffff !important;
 }
+/* 进度条/传输面板：背景图下保持可见（通配透明会把 el-progress 轨道和
+   传输面板容器一并抹掉，只剩淡灰小字浮在背景上）。填充色(.el-progress-bar__inner)
+   按状态着色，不能一刀切，已在上方 :where 排除列表里整体豁免 */
+.app-container.has-bg .main-content :deep(.transfer-panel),
+.app-container.has-bg .main-content :deep(.transfer-progress-bar),
+.app-container.has-bg .main-content :deep(.el-progress-bar__outer) {
+  background-color: var(--bg-elevated) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel) {
+  background-color: var(--bg-surface) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel .progress-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel .progress-fill) {
+  background-color: var(--accent) !important;
+}
+/* K8s 总览用量条：轨道底色是 color-mix、填充按 ok/warn/danger 着色，
+   不能一刀切，逐级恢复 */
+.app-container.has-bg .main-content :deep(.ov-meter.m-ok) {
+  background-color: color-mix(in srgb, var(--el-color-primary) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter.m-warn) {
+  background-color: color-mix(in srgb, var(--warning) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter.m-danger) {
+  background-color: color-mix(in srgb, var(--el-color-danger) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.ok) {
+  background-color: var(--el-color-primary) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.warn) {
+  background-color: var(--warning) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.danger) {
+  background-color: var(--el-color-danger) !important;
+}
+/* 容器镜像页拉取/推送进度条 */
+.app-container.has-bg .main-content :deep(.task-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.task-bar-fill) {
+  background-color: var(--accent) !important;
+}
+/* K8s 总览：可点行 hover（纯毛玻璃，不改底色）与 pod 状态点着色 */
+.app-container.has-bg .main-content :deep(.ov-clickable:hover) {
+  backdrop-filter: blur(0.875rem);
+}
+.app-container.has-bg .main-content :deep(.state-dot) {
+  background-color: var(--text-muted) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='running']) {
+  background-color: var(--el-color-success) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='pending']) {
+  background-color: var(--warning) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='failed']) {
+  background-color: var(--el-color-danger) !important;
+}
+/* 树形结构选中项（K8s / 容器 / 数据库 / Mongo）：纯毛玻璃高亮，
+   否则背景图下看不出选中了哪一项 */
+.app-container.has-bg .main-content :deep(.table-item.selected),
+.app-container.has-bg .main-content :deep(.db-header.selected) {
+  backdrop-filter: blur(0.875rem);
+}
+/* 监控-性能左侧导航选中项 */
+.app-container.has-bg .main-content :deep(.perf-nav-item.active) {
+  backdrop-filter: blur(0.875rem);
+}
+/* 监控-性能：CPU/磁盘等展开行的百分比条与左侧导航迷你条
+   （.perf-nav-bar-inner 的颜色是行内样式，已在上方 :where 排除）*/
+.app-container.has-bg .main-content :deep(.sub-bar),
+.app-container.has-bg .main-content :deep(.perf-nav-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.sub-fill) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow)) !important;
+}
+/* 监控边栏：CPU/内存/磁盘百分比条（填充是各资源专属渐变，逐个恢复）*/
+.app-container.has-bg .main-content :deep(.mem-bar),
+.app-container.has-bg .main-content :deep(.detail-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.cpu) {
+  background: linear-gradient(90deg, #6366f1, #818cf8) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.phys) {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.swap) {
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.disk) {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa) !important;
+}
+.app-container.has-bg .main-content :deep(.detail-fill) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow)) !important;
+}
 /* 开背景时，开始页「新建连接」主按钮改用普通按钮样式（透明+blur 与其它按钮一致），
    仅修正文字/边框颜色，避免深色文字糊在图上 */
 .app-container.has-bg .main-content :deep(.start-action-btn.primary) {
@@ -2125,7 +2261,7 @@ body > .conn-context-menu {
   backdrop-filter: blur(0.5rem);
 }
 /* 表格固定列（el-table fixed right/left）：背景图模式下被透明规则抹掉背景，
-   固定列会和下方内容重叠 → 加毛玻璃遮住滚动内容。
+   固定列会和下方内容重叠 → 用毛玻璃遮住滚动内容（透明底 + blur）。
    旧版用 .el-table__fixed 容器，新版(2.5+)用 sticky 单元格 .el-table-fixed-column--*，两种都覆盖。 */
 .app-container.has-bg .main-content :deep(.el-table__fixed-right),
 .app-container.has-bg .main-content :deep(.el-table__fixed),
@@ -2133,8 +2269,7 @@ body > .conn-context-menu {
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
 .app-container.has-bg .main-content :deep(.k8s-action-cell),
 .app-container.has-bg .main-content :deep(.db-action-cell) {
-  background-color: var(--bg-surface) !important;
-  backdrop-filter: blur(0.5rem);
+  backdrop-filter: blur(0.875rem);
   pointer-events: auto !important;
   z-index: 3 !important;
 }
