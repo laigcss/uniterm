@@ -44,6 +44,13 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     // Either modifier is accepted so the intent reads the same on macOS (Cmd)
     // and Windows/Linux (Ctrl).
     const forceMenu = e.ctrlKey || e.metaKey
+    if (rightClickAction === 'none' && !forceMenu) {
+      // Issue #1088: leave the click to mouse-tracking terminal apps, but still
+      // swallow the event so the WebView's own context menu doesn't appear.
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
     if (rightClickAction === 'paste' && !forceMenu) {
       e.preventDefault()
       e.stopPropagation()

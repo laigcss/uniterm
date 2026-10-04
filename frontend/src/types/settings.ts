@@ -70,8 +70,8 @@ export interface TerminalSettings {
   fontWeight: number
   fontSize: number
   selectionAction: 'none' | 'copy'
-  rightClickAction: 'menu' | 'paste'
-  middleClickAction: 'paste' | 'menu'
+  rightClickAction: 'none' | 'menu' | 'paste'
+  middleClickAction: 'none' | 'paste' | 'menu'
   // Ctrl/Cmd + mouse wheel zooms the terminal font. Can be turned off (issue
   // #671) for scroll-sensitive mice; defaults to enabled.
   ctrlWheelZoom?: boolean
@@ -470,7 +470,8 @@ export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorS
 
 export const RIGHT_CLICK_ACTIONS: { label: string; value: TerminalSettings['rightClickAction'] }[] = [
   { label: 'Show context menu', value: 'menu' },
-  { label: 'Paste from clipboard', value: 'paste' }
+  { label: 'Paste from clipboard', value: 'paste' },
+  { label: 'No action', value: 'none' }
 ]
 
 export const LANGUAGE_OPTIONS: { value: Locale; label: string; native: string }[] = [
