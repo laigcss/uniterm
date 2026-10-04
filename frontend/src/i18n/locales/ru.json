@@ -572,6 +572,8 @@
   "common.delete": "Удалить",
   "common.actions": "Действия",
   "common.more": "Ещё",
+  "common.collapse": "Свернуть",
+  "common.expand": "Развернуть",
   "importExport.import": "Импорт",
   "importExport.export": "Экспорт",
   "importExport.exportTitle": "Экспорт подключений",

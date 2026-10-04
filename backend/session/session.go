@@ -365,6 +365,11 @@ type baseSession struct {
 	onDataCallback   func([]byte)
 	onBinaryCallback func([]byte)
 	onStatusCallback func(SessionStatus)
+	// statusListeners are ADDITIONAL status observers (AddStatusListener),
+	// fired after onStatusCallback. Cross-cutting concerns (the Android
+	// foreground-keepalive counter) register here so they survive the App
+	// layer re-registering onStatusCallback via SetOnStatusChangeCallback.
+	statusListeners []func(SessionStatus)
 	mu               sync.RWMutex
 	pendingCols      int
 	pendingRows      int
@@ -450,10 +455,23 @@ func (s *baseSession) SetOnStatusChangeCallback(cb func(SessionStatus)) {
 	s.onStatusCallback = cb
 }
 
+// AddStatusListener registers an ADDITIONAL status observer. Unlike
+// SetOnStatusChangeCallback (single slot, owned by the App layer and
+// overwritten on re-register), listeners accumulate — used by cross-cutting
+// concerns like the Android foreground-keepalive tracker that must survive
+// the app layer re-registering its own callback.
+func (s *baseSession) AddStatusListener(cb func(SessionStatus)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statusListeners = append(s.statusListeners, cb)
+}
+
 func (s *baseSession) setStatus(st SessionStatus) {
 	s.mu.Lock()
 	s.status = st
 	cb := s.onStatusCallback
+	listeners := make([]func(SessionStatus), len(s.statusListeners))
+	copy(listeners, s.statusListeners)
 	s.mu.Unlock()
 	if st == StatusDisconnected || st == StatusError {
 		// Terminal output is over; flush anything still queued (e.g. the
@@ -464,6 +482,9 @@ func (s *baseSession) setStatus(st SessionStatus) {
 	}
 	if cb != nil {
 		cb(st)
+	}
+	for _, l := range listeners {
+		l(st)
 	}
 }
 

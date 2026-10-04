@@ -163,6 +163,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Clipboard } from '@wailsio/runtime'
+import { isMobilePlatform } from '../utils/platform'
 import { SquareTerminal, FolderUp, X, ArrowDownUp, Lock, Radio } from '@lucide/vue'
 
 const props = defineProps<{
@@ -200,6 +201,8 @@ const { t } = useI18n()
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 const tabShortcut = computed(() => {
+  // No hardware keyboard on mobile — the badge would advertise a dead binding.
+  if (isMobilePlatform()) return ''
   if (!props.shortcutIndex || props.shortcutIndex > 9) return ''
   // Cmd+N on macOS / Ctrl+N elsewhere by default, or the user-configured
   // keyboard.tabSwitchModifier combo — always the real binding.

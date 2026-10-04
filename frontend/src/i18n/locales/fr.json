@@ -572,6 +572,8 @@
   "common.delete": "Supprimer",
   "common.actions": "Actions",
   "common.more": "Plus",
+  "common.collapse": "Replier",
+  "common.expand": "Déplier",
   "importExport.import": "Importer",
   "importExport.export": "Exporter",
   "importExport.exportTitle": "Exporter les connexions",

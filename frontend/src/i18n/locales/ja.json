@@ -572,6 +572,8 @@
   "common.delete": "削除",
   "common.actions": "操作",
   "common.more": "その他",
+  "common.collapse": "折りたたむ",
+  "common.expand": "展開",
   "importExport.import": "インポート",
   "importExport.export": "エクスポート",
   "importExport.exportTitle": "接続のエクスポート",

@@ -33,8 +33,14 @@ const narrowMq =
 
 export const isPhoneLayout = ref(isMobilePlatform() && !!narrowMq?.matches)
 
+// Narrow viewport (<640px) on ANY platform: gates layout switches such as the
+// tree drawer in DB/Redis/Mongo/ES/Container/K8s panels. Desktop windows that
+// happen to be small get the same compact layout as phones.
+export const isNarrowScreen = ref(!!narrowMq?.matches)
+
 if (narrowMq) {
   narrowMq.addEventListener('change', () => {
     isPhoneLayout.value = isMobilePlatform() && narrowMq.matches
+    isNarrowScreen.value = narrowMq.matches
   })
 }

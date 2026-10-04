@@ -165,10 +165,11 @@
           <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
           <MenuItem @click="doSelectAll">{{ t('sftp.selectAll') }}</MenuItem>
           <MenuDivider />
+          <MenuItem v-if="mode === 'remote'" @click="doUpload">{{ t('sftp.upload') }}</MenuItem>
           <MenuItem v-if="props.showSendToOther !== false" @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
           <MenuItem @click="doCopyPath">{{ t('sftp.copyPath') }}</MenuItem>
           <MenuItem v-if="showCopyPathToTerminal" @click="doCopyPathToTerminal">{{ t('sftp.copyPathToTerminal') }}</MenuItem>
-          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote' && !isMobilePlatform()" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
           <MenuDivider />
           <MenuItem @click="doRename">{{ t('sftp.rename') }}</MenuItem>
           <MenuItem @click="doDelete">{{ t('sftp.delete') }}</MenuItem>
@@ -186,10 +187,11 @@
           <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
           <MenuItem @click="doSelectAll">{{ t('sftp.selectAll') }}</MenuItem>
           <MenuDivider />
+          <MenuItem v-if="mode === 'remote'" @click="doUpload">{{ t('sftp.upload') }}</MenuItem>
           <MenuItem v-if="props.showSendToOther !== false" @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
           <MenuItem @click="doCopyPath">{{ t('sftp.copyPath') }}</MenuItem>
           <MenuItem v-if="showCopyPathToTerminal" @click="doCopyPathToTerminal">{{ t('sftp.copyPathToTerminal') }}</MenuItem>
-          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote' && !isMobilePlatform()" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
           <MenuDivider />
           <MenuItem @click="doRename">{{ t('sftp.rename') }}</MenuItem>
           <MenuItem @click="doDelete">{{ t('sftp.delete') }}</MenuItem>
@@ -203,10 +205,11 @@
           <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
           <MenuItem @click="doSelectAll">{{ t('sftp.selectAll') }}</MenuItem>
           <MenuDivider />
+          <MenuItem v-if="mode === 'remote'" @click="doUpload">{{ t('sftp.upload') }}</MenuItem>
           <MenuItem v-if="props.showSendToOther !== false" @click="doSendToOther">{{ t(sendToKey) }}</MenuItem>
           <MenuItem @click="doCopyPath">{{ t('sftp.copyPath') }}</MenuItem>
           <MenuItem v-if="showCopyPathToTerminal" @click="doCopyPathToTerminal">{{ t('sftp.copyPathToTerminal') }}</MenuItem>
-          <MenuItem v-if="mode === 'remote'" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote' && !isMobilePlatform()" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</MenuItem>
           <MenuDivider />
           <MenuItem v-if="mode === 'remote'" class="disabled">{{ t('sftp.renameDisabled') }}</MenuItem>
           <MenuItem v-if="mode === 'local'" @click="doRename">{{ t('sftp.rename') }}</MenuItem>
@@ -222,6 +225,7 @@
           <MenuDivider />
           <MenuItem :class="{ disabled: !clipboardCount }" @click="clipboardCount && doPaste()">{{ t('sftp.paste') }}</MenuItem>
           <MenuItem @click="doSelectAll">{{ t('sftp.selectAll') }}</MenuItem>
+          <MenuItem v-if="mode === 'remote'" @click="doUpload">{{ t('sftp.upload') }}</MenuItem>
           <MenuDivider />
           <MenuItem @click="doRefresh">{{ t('sftp.refresh') }}</MenuItem>
         </template>
@@ -273,6 +277,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
 import { uiPx } from '../utils/uiScale'
+import { isMobilePlatform } from '../utils/platform'
 import { useLocalStateStore } from '../stores/localStateStore'
 
 export interface FileItem {
@@ -286,7 +291,7 @@ export interface FileItem {
   group: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   files: FileItem[]
   mode: 'local' | 'remote'
   loading?: boolean
@@ -294,7 +299,9 @@ const props = defineProps<{
   cutItemNames?: string[]
   clipboardCount?: number
   clipboardMode?: 'copy' | 'cut'
-  /** Hide the "send to other pane" entry — for hosts with a single pane. */
+  /** Hide the "send to other pane" entry — for hosts with a single pane.
+   *  Defaults to true: without an explicit default, Vue's Boolean casting
+   *  turns the absent prop into false, hiding the entry everywhere. */
   showSendToOther?: boolean
   /** Show the "new link" (symbolic link) entry — only for backends with link semantics. */
   supportsSymlink?: boolean
@@ -313,7 +320,9 @@ const props = defineProps<{
    *  download) as icon buttons in the filter bar; 'compact' (default) keeps them
    *  in the more-menu only. */
   toolbarLayout?: 'flat' | 'compact'
-}>()
+}>(), {
+  showSendToOther: true,
+})
 
 const emit = defineEmits<{
   open: [item: FileItem]
@@ -773,6 +782,9 @@ function onEmptyAreaContextMenu(event: MouseEvent, force = false) {
 function doSendToOther() { emit('sendToOther', [...selectedItems.value]); ctxMenuVisible.value = false }
 function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); ctxMenuVisible.value = false }
 
+// Upload into the pane's current directory (same as the toolbar upload button).
+function doUpload() { emit('upload'); ctxMenuVisible.value = false }
+
 // "Copy path" actions: one full path per selected entry ('..' excluded),
 // joined by newlines so a multi-selection pastes as a path list.
 function buildSelectedPathsText(): string {
@@ -1118,6 +1130,18 @@ function applyBandSelection() {
 }
 .filter-bar .el-input {
   flex: 1;
+}
+/* Narrow viewports: the flat toolbar's buttons overflow, so let the bar scroll
+   horizontally. The filter input keeps a minimum width so the buttons actually
+   overflow instead of squeezing it away. */
+@media (max-width: 640px) {
+  .filter-bar {
+    overflow-x: auto;
+  }
+  .filter-bar .el-input {
+    flex: 1 0 7rem;
+    min-width: 7rem;
+  }
 }
 /* Vertical separator between flat-toolbar button groups (nav / view /
    transfer / create). Compact (sidebar) layout has no groups and no dividers. */

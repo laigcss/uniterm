@@ -65,7 +65,7 @@
             <DBTabContent
               v-else-if="activeTab.type === 'database'"
               :key="activeTab.id"
-              :session-id="getPanelSessionId(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
               :host-name="getPanelConfig(activeTab.panelId)?.host || ''"
               :default-db-name="getPanelConfig(activeTab.panelId)?.dbName"
               :db-type="getPanelConfig(activeTab.panelId)?.dbType || ''"

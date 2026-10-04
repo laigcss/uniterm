@@ -251,7 +251,7 @@ func main() {
 		Y:               savedY,
 		InitialPosition: startPos,
 		StartState:      startState,
-		MinWidth:        700,
+		MinWidth:        500,
 		MinHeight:       450,
 		// Headless local update e2e runs must not flash a window.
 		Hidden:           os.Getenv("UNITERM_UPDATE_AUTOTEST") == "1",

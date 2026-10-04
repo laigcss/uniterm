@@ -572,6 +572,8 @@
   "common.delete": "Löschen",
   "common.actions": "Aktionen",
   "common.more": "Mehr",
+  "common.collapse": "Einklappen",
+  "common.expand": "Ausklappen",
   "importExport.import": "Importieren",
   "importExport.export": "Exportieren",
   "importExport.exportTitle": "Verbindungen exportieren",
