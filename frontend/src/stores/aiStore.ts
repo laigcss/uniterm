@@ -129,6 +129,11 @@ async function loadSessionsFromBackend(): Promise<{ sessions: AISession[], curre
         id: m.id,
         role: m.role,
         content: m.content,
+        thinking: m.thinking || undefined,
+        // Backfill createdAt for sessions saved before timestamps existed:
+        // ids embed the creation epoch (msg-<ms>, skill-<ms>, cmd-<ms>).
+        createdAt: m.createdAt || Number(/(?:^|-)(\d{13})(?:-\d+)?$/.exec(m.id)?.[1]) || undefined,
+        thinkingDurationMs: m.thinkingDurationMs || undefined,
         tool_call_id: m.tool_call_id,
         tool_calls: m.tool_calls || [],
         pendingTools: m.pendingTools || [],
@@ -147,6 +152,13 @@ export const useAIStore = defineStore('ai', () => {
   const mode = ref<ExecutionMode>('confirm_dangerous')
   const isRunning = ref(false)
   const status = ref<AIAgentStatus>('thinking')
+  // Live thinking/reasoning text streamed during the current run, shown in
+  // the expandable box under the "Thinking..." status indicator.
+  const thinkingText = ref('')
+  const thinkingExpanded = ref(false)
+  // Epoch ms when the current turn's thinking stream began; drives the live
+  // elapsed timer in the thinking box. 0 = not currently thinking.
+  const thinkingStartedAt = ref<number>(0)
   const stopRequested = ref(false)
   const sessions = ref<AISession[]>([])
   const currentSessionId = ref<string | null>(null)
@@ -251,7 +263,7 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   function addMessage(msg: AIMessage): AIMessage {
-    const r = reactive({ ...msg }) as AIMessage
+    const r = reactive({ createdAt: Date.now(), ...msg }) as AIMessage
     messages.value.push(r)
     if (currentSessionId.value) {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
@@ -376,6 +388,9 @@ export const useAIStore = defineStore('ai', () => {
             id: m.id,
             role: m.role,
             content: m.content,
+            thinking: m.thinking || '',
+            createdAt: m.createdAt || 0,
+            thinkingDurationMs: m.thinkingDurationMs || 0,
             tool_call_id: m.tool_call_id || '',
             tool_calls: m.tool_calls || [],
             pendingTools: m.pendingTools || [],
@@ -415,6 +430,9 @@ export const useAIStore = defineStore('ai', () => {
     if (!s) return
     currentSessionId.value = sessionId
     messages.value = s.messages.map(m => reactive({ ...m }) as AIMessage)
+    thinkingText.value = ''
+    thinkingExpanded.value = false
+    thinkingStartedAt.value = 0
     clearQueue()
   }
 
@@ -694,6 +712,9 @@ export const useAIStore = defineStore('ai', () => {
     mode,
     isRunning,
     status,
+    thinkingText,
+    thinkingExpanded,
+    thinkingStartedAt,
     conversation,
     systemPrompt,
     stopRequested,
