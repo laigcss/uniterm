@@ -11,6 +11,7 @@
 - Containers: a container file browser, image management and an overview page. Four runtimes are supported — Docker / Podman / nerdctl (containerd) / WSLC — with WSLC contributed by @boltomli.
 - Kubernetes: a container file browser and an overview page, with create templates completed for more resource types.
 - Terminal: tabs can be restored at startup — a prompt at launch offers to reopen the tabs from the last session, enabled by default.
+- AI: a collapsible thinking view — the Thinking indicator is clickable and expands into a live view streaming the model's reasoning, with a status indicator and elapsed timer; completed thinking is saved with the message as a collapsed block showing duration and timestamp. (@Teejer)
 
 **Improvements**
 - UI: the dark theme palette is refreshed and corner-radius tiers unified; dialog presentation is optimized with a capped height, and hover states use native cursors.
@@ -34,11 +35,12 @@
 - Terminal: fixes highlighting not applying to lines that span a soft wrap.
 - SMB: fixes a session dying silently after idle — reconnect now restores the previous directory.
 - UI: fixes progress bars and status indicators turning invisible in background-image mode.
+- Linux: fixes the running window showing as an orphan with a generic icon on GNOME Wayland — the desktop file is now named after the Wayland app_id (`org.wails.uniterm.desktop`) so the window correctly matches its launcher. (@Teejer)
 
 **Notes**
 - As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
 
-Thanks to @surenwuyuwuqiu, @boltomli and @sonnartliao for their contributions to this release.
+Thanks to @surenwuyuwuqiu, @boltomli, @Teejer and @sonnartliao for their contributions to this release.
 
 ### 更新内容
 
@@ -49,6 +51,7 @@ Thanks to @surenwuyuwuqiu, @boltomli and @sonnartliao for their contributions to
 - 容器：新增容器文件浏览器、镜像管理和总览页。支持 Docker / Podman / nerdctl（containerd）/ WSLC 四种运行时，其中 WSLC 由 @boltomli 贡献。
 - Kubernetes：新增容器文件浏览器和总览页，补全更多资源类型的创建模板。
 - 终端：支持启动时恢复标签页——启动时询问是否恢复上次会话的标签，默认开启。
+- AI：新增可折叠的思考过程视图——点击"思考中"指示器可展开实时查看模型的思考内容，带状态指示与耗时计时；完成后随消息保存为可折叠的思考块，显示耗时与时间戳。(@Teejer)
 
 **改进**
 - 界面：深色主题配色焕新、圆角层级统一；对话框展示效果优化并限制最大高度，悬停使用原生光标。
@@ -72,11 +75,12 @@ Thanks to @surenwuyuwuqiu, @boltomli and @sonnartliao for their contributions to
 - 终端：修复跨软换行的行高亮不生效的问题。
 - SMB：修复空闲后会话静默失效的问题——重连后恢复原目录。
 - 界面：修复背景图模式下进度条、状态指示不可见的问题。
+- Linux：修复 GNOME Wayland 下运行窗口显示为无图标孤立窗口的问题——桌面文件改为按 Wayland app_id 命名（`org.wails.uniterm.desktop`），窗口可正确关联启动器图标。(@Teejer)
 
 **说明**
 - 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中添加排除规则放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
 
-感谢 @surenwuyuwuqiu、@boltomli 和 @sonnartliao 对本版本的贡献。
+感谢 @surenwuyuwuqiu、@boltomli、@Teejer 和 @sonnartliao 对本版本的贡献。
 
 ## v1.9.5
 

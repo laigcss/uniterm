@@ -298,6 +298,7 @@ uniTerm/
 - [@feuvan](https://github.com/feuvan)
 - [@zhangsir1211](https://github.com/zhangsir1211)
 - [@sonnartliao](https://github.com/sonnartliao)
+- [@Teejer](https://github.com/Teejer)
 
 ## 开源协议
 

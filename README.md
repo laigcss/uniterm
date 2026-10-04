@@ -298,6 +298,7 @@ Thanks to the following people for contributing code and improvements, and to ev
 - [@feuvan](https://github.com/feuvan)
 - [@zhangsir1211](https://github.com/zhangsir1211)
 - [@sonnartliao](https://github.com/sonnartliao)
+- [@Teejer](https://github.com/Teejer)
 
 ## License
 
