@@ -263,7 +263,9 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 // " (Ctrl+Shift+K)" suffix for a shortcut action's tooltip, '' when unset.
 // Reactive via settingsStore, so tooltips update when the user rebinds keys.
+// '' on mobile too — no hardware keyboard, so the hint is meaningless.
 function shortcutSuffix(action: 'focusAI' | 'toggleSidebar'): string {
+  if (isMobilePlatform(platform.value)) return ''
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
   const key = formatKeyBinding(b, isMac)
@@ -273,6 +275,7 @@ function shortcutSuffix(action: 'focusAI' | 'toggleSidebar'): string {
 // Right-aligned keybinding hint for a menu item, '' when unset. Reactive via
 // settingsStore, so hints follow the user's rebinds.
 function menuShortcut(action: ShortcutAction): string {
+  if (isMobilePlatform(platform.value)) return ''
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
   return formatKeyBinding(b, isMac)
