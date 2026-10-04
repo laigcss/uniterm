@@ -55,9 +55,8 @@ Autonomous AI Agent that independently plans and executes multi-turn shell comma
 - **Autonomous Multi-Turn Execution** — The AI Agent can plan, execute, observe results, and iterate across multiple rounds of shell commands without manual intervention.
 - **LLM Integration** — Sidebar chat with Anthropic/OpenAI-compatible API, supporting Claude, GPT and other compliant models.
 - **Flexible Execution Modes** — Bypass, dangerous only, dangerous + write, or confirm all — you control how much oversight the AI Agent needs.
-- **Persistent Conversations** — Chat history is saved per session, so conversations survive app restarts.
 - **Terminal Integration** — AI commands execute directly in the active terminal tab, with optional pinning to a specific tab or following your active one. Collaborate side-by-side in split panes, each with its own terminal context.
-- **Smart Completion** — While typing in SSH terminals, get real-time suggestions from your command history and AI-powered command rewrites.
+- **MCP Server** — Built-in MCP server that lets external AI agents (Claude Code, Codex, Gemini CLI, ...) run commands and transfer files on saved connections — credentials never leave the app.
 - **Skills & Commands** — Reusable skill workflows and prompt-template commands, attached with `/` in the AI input; the AI can also save new skills itself.
 
 ### Personalization
@@ -66,7 +65,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 
 - **Connection Manager** — Group, quickly search, create, and batch-operate server connections.
 - **Split Panes** — Drag terminal tabs into the content area to split freely and combine them into a workspace; drag panel edges to resize and rearrange.
-- **Cloud Sync** — Encrypt and auto-sync settings via your own decentralized private repo on GitHub, GitLab, or Gitee — no worry about data loss or leaks, and pick up your work seamlessly across devices.
+- **Cloud Sync** — Dual-mode cloud sync via private Git repository or WebDAV — no worry about data loss or leaks, and pick up your work seamlessly across devices.
 - **Custom Keybindings** — Freely bind keyboard shortcuts for every action for full keyboard-driven operation, hands never leaving the keyboard.
 - **Themes** — 28 terminal themes plus 3 UI themes (Dark / Deep Blue / Light) and a customizable background image.
 - **Internationalization** — 9-language UI: Simplified Chinese, Traditional Chinese, English, Japanese, Korean, German, Spanish, French, Russian.
@@ -245,7 +244,7 @@ uniTerm/
 │   ├── container/                # Docker/Podman/nerdctl container management
 │   ├── k8s/                      # Kubernetes cluster management
 │   ├── store/                    # Persistent config (connections, AI, settings)
-│   ├── sync/                     # Cloud sync (GitHub/GitLab/Gitee)
+│   ├── sync/                     # Cloud sync (Git / WebDAV)
 │   ├── update/                   # Auto-update
 │   ├── platform/                 # Platform abstraction layer
 │   └── log/                      # File-based logging
