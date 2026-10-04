@@ -59,12 +59,8 @@ type ConflictInfo struct {
 }
 
 func NewSyncService(dataDir string) (*SyncService, error) {
-	cfgDir, err := os.UserConfigDir()
+	metaDir, err := syncMetaDir()
 	if err != nil {
-		return nil, err
-	}
-	metaDir := filepath.Join(cfgDir, "uniTerm")
-	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		return nil, err
 	}
 
@@ -95,12 +91,8 @@ func NewSyncServiceAsync(dataDir string) (*SyncService, context.Context) {
 	initDone, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer s.readyOnce.Do(func() { close(s.ready) })
-		cfg, err := os.UserConfigDir()
+		metaDir, err := syncMetaDir()
 		if err != nil {
-			return
-		}
-		metaDir := filepath.Join(cfg, "uniTerm")
-		if err := os.MkdirAll(metaDir, 0755); err != nil {
 			return
 		}
 		s.configDir = metaDir

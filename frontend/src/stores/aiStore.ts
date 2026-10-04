@@ -3,6 +3,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import type { AIMessage, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
 import { SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useLocalStateStore } from './localStateStore'
+import { isMobilePlatform } from '../utils/platform'
 import { t } from '../i18n'
 
 /**
@@ -351,7 +352,10 @@ export const useAIStore = defineStore('ai', () => {
     try {
       const ls = useLocalStateStore()
       if (!ls.loaded) await ls.init()
-      visible.value = ls.state.aiSidebarVisible ?? false
+      // Mobile always starts with the AI sidebar closed (see App.vue).
+      visible.value = isMobilePlatform()
+        ? false
+        : (ls.state.aiSidebarVisible ?? false)
     } catch {
       // keep default
     }
