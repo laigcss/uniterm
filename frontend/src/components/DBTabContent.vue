@@ -1,7 +1,13 @@
 <template>
   <div class="db-tab-content">
-    <div class="db-main">
-      <div class="db-left" :style="{ width: leftWidth + 'px' }">
+    <div class="db-main" :class="{ 'm-tree-host': isNarrowScreen }">
+      <div v-if="isNarrowScreen && treeOpen" class="m-tree-overlay" @click="treeOpen = false" />
+      <div
+        v-show="isNarrowScreen || treeOpen"
+        class="db-left"
+        :class="{ 'm-tree': isNarrowScreen, 'm-tree-open': isNarrowScreen && treeOpen }"
+        :style="isNarrowScreen ? {} : { width: leftWidth + 'px' }"
+      >
         <DBTreePanel
           ref="treeRef"
           :session-id="sessionId"
@@ -15,13 +21,27 @@
           @object-removed="onObjectRemoved"
         />
       </div>
-      <div class="db-resizer" @mousedown="onResizeStart" />
+      <div v-if="!isNarrowScreen && treeOpen" class="db-resizer" @mousedown="onResizeStart" />
       <div class="db-right">
         <div v-if="docs.length === 0" class="db-placeholder">
+          <button
+            class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+            :title="treeOpen ? t('common.collapse') : t('common.expand')"
+            @click="treeOpen = !treeOpen"
+          >
+            <PanelLeft :size="'0.875rem'" />
+          </button>
           <span>{{ t('db.selectTableHint') }}</span>
         </div>
         <template v-else>
           <div class="doc-tabs">
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
             <div ref="docTabsScrollRef" class="doc-tabs-scroll" @wheel="onTabsWheel">
               <template v-for="(doc, index) in docs" :key="doc.id">
                 <div
@@ -188,7 +208,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Table2, Eye, Code2, Database, MoreHorizontal } from '@lucide/vue'
+import { Table2, Eye, Code2, Database, MoreHorizontal, PanelLeft } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { useI18n } from '../i18n'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -237,6 +258,14 @@ const activeTable = computed(() => (activeDoc.value?.kind === 'table' ? activeDo
 const leftWidth = ref(220)
 let resizeStartX = 0
 let resizeStartWidth = 0
+
+// Narrow screens turn the tree into an overlay drawer (closed by default);
+// wide screens keep it inline and the toggle collapses it. Close the drawer
+// once the user picks something so the content gets the full width back.
+const treeOpen = ref(!isNarrowScreen.value)
+function closeTree() {
+  if (isNarrowScreen.value) treeOpen.value = false
+}
 
 function nextId(prefix: string) {
   docSeq += 1
@@ -437,6 +466,7 @@ async function loadSchema(doc: DocTab) {
 }
 
 async function onSelectTable(dbName: string, tableName: string, isView = false) {
+  closeTree()
   const existing = findTableDoc(dbName, tableName)
   if (existing) {
     existing.subTab = 'data'
@@ -462,6 +492,7 @@ async function onSelectTable(dbName: string, tableName: string, isView = false) 
 }
 
 async function onViewStructure(dbName: string, tableName: string) {
+  closeTree()
   const existing = findTableDoc(dbName, tableName)
   if (existing) {
     existing.isView = false
@@ -491,6 +522,7 @@ function openStructureSub(doc: DocTab) {
 }
 
 function onOpenDatabase(dbName: string, tab: 'query' | 'objects' = 'objects') {
+  closeTree()
   // Prefer objects list when opening a database; only open query when explicitly requested.
   const kind: DocKind = tab === 'query' ? 'db-query' : 'db-objects'
   const existing = findDbDoc(kind, dbName)
@@ -515,6 +547,7 @@ function onOpenDatabase(dbName: string, tab: 'query' | 'objects' = 'objects') {
 }
 
 function onNewQuery(dbName?: string) {
+  closeTree()
   const db = dbName || activeDb.value || props.defaultDbName || ''
   const doc: DocTab = {
     id: nextId('query'),
@@ -592,14 +625,26 @@ function onResizeEnd() {
   overflow: hidden;
 }
 .db-resizer {
+  /* Hover area floats over the tree edge (negative margin) so it takes
+     no layout width when idle and never blanks the content side. */
   width: 0.25rem;
+  margin-left: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-.db-resizer:hover {
-  background: var(--border-subtle);
+.db-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 .db-right {
   flex: 1;
@@ -766,5 +811,14 @@ function onResizeEnd() {
   color: var(--text-secondary);
   font-family: var(--font-ui);
   font-size: 0.875rem;
+  position: relative;
+}
+/* Empty-state keeps the tree toggle reachable at the same top-left spot
+   the doc-tabs row occupies once tabs exist. */
+.db-placeholder .m-tree-toggle {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  margin-right: 0;
 }
 </style>

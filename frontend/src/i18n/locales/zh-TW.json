@@ -572,6 +572,8 @@
   "common.delete": "刪除",
   "common.actions": "操作",
   "common.more": "更多",
+  "common.collapse": "收起",
+  "common.expand": "展開",
   "importExport.import": "匯入",
   "importExport.export": "匯出",
   "importExport.exportTitle": "匯出連線",

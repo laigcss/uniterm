@@ -572,6 +572,8 @@
   "common.delete": "삭제",
   "common.actions": "작업",
   "common.more": "더 보기",
+  "common.collapse": "접기",
+  "common.expand": "펼치기",
   "importExport.import": "가져오기",
   "importExport.export": "내보내기",
   "importExport.exportTitle": "연결 내보내기",

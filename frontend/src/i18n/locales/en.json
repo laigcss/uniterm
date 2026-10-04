@@ -573,6 +573,8 @@
   "common.delete": "Delete",
   "common.actions": "Actions",
   "common.more": "More",
+  "common.collapse": "Collapse",
+  "common.expand": "Expand",
   "importExport.import": "Import",
   "importExport.export": "Export",
   "importExport.exportTitle": "Export Connections",

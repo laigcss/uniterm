@@ -1585,3 +1585,68 @@ button:disabled,
     opacity: 1 !important;      /* AIMessage.vue copy button */
   }
 }
+
+/* ── Narrow-screen tree drawer (DB/Redis/Mongo/ES/Container/K8s panels).
+   Below 640px the fixed left tree would eat most of the viewport, so it
+   becomes a slide-in overlay; the toggle button lives at the top-left of
+   the right pane. Positioned ancestors are marked with .m-tree-host and
+   the drawer with .m-tree from each tab content component. !important
+   beats the per-component scoped styles that also target these nodes. ── */
+.m-tree-host { position: relative; }
+.m-tree-overlay {
+  position: absolute !important;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+}
+.m-tree {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(70vw, 18rem) !important;
+  z-index: 41;
+  background: var(--bg-elevated) !important;
+  transform: translateX(-100%);
+  transition: transform 0.18s ease;
+  box-shadow: 0.25rem 0 0.75rem rgba(0, 0, 0, 0.3);
+}
+.m-tree-open { transform: translateX(0); }
+/* Toggle sits inline at the left edge of the right pane's tab bar (or a
+   dedicated .tree-head title bar when the panel has no tab bar). Tab bars
+   use align-items:stretch, so stretch too and drop the fixed .btn height
+   to line up flush with the tab items. */
+.m-tree-toggle {
+  flex-shrink: 0;
+  margin-right: 0.25rem;
+}
+/* Triple-class so it beats .btn-sm.btn-icon's fixed height: tab bars use
+   align-items:stretch, so stretch and line up flush with the tab items. */
+.btn.btn-sm.m-tree-toggle {
+  align-self: stretch;
+  height: auto;
+}
+/* Title bar for panels whose right side has no tab bar (Redis / Container /
+   K8s): toggle button on the left, panel title next to it. */
+.tree-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  min-width: 0;
+}
+.tree-head-title {
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Compact query editors on narrow screens: less reserved editor height. */
+@media (max-width: 640px) {
+  .sql-editor-wrap { min-height: 4rem !important; }
+}
