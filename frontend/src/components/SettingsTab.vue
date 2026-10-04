@@ -582,6 +582,7 @@
               <el-select v-model="settingsStore.settings.terminal.rightClickAction" @change="settingsStore.save()">
                 <el-option :label="t('settings.rightClickMenu')" value="menu" />
                 <el-option :label="t('settings.rightClickPaste')" value="paste" />
+                <el-option :label="t('settings.selectionNone')" value="none" />
               </el-select>
             </div>
           </div>
@@ -595,6 +596,7 @@
               <el-select v-model="settingsStore.settings.terminal.middleClickAction" @change="settingsStore.save()">
                 <el-option :label="t('settings.rightClickPaste')" value="paste" />
                 <el-option :label="t('settings.rightClickMenu')" value="menu" />
+                <el-option :label="t('settings.selectionNone')" value="none" />
               </el-select>
             </div>
           </div>
