@@ -1214,8 +1214,8 @@
         </div>
       </div>
 
-      <!-- MCP 服务器(外部 AI agent) -->
-      <div v-if="settingsStore.activeCategory === 'mcp'" class="settings-section">
+      <!-- MCP 服务器(外部 AI agent) — 无 Android 后端,移动端隐藏 -->
+      <div v-if="settingsStore.activeCategory === 'mcp' && !isMobile" class="settings-section">
         <h2 class="section-title">{{ t('settings.mcpSection') }}</h2>
         <p class="section-desc">{{ t('settings.mcpSectionDesc') }}</p>
 

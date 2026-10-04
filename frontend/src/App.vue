@@ -909,7 +909,11 @@ onMounted(async () => {
   // Load local-only state (sidebar visibility, background image, etc.)
   await localStateStore.init()
   await loadBackgroundImage()
-  sidebarVisible.value = localStateStore.state.sidebarVisible ?? false
+  // Mobile always opens with both sidebars closed, regardless of the
+  // persisted desktop state — screen space is too tight to restore panels.
+  sidebarVisible.value = isMobilePlatform()
+    ? false
+    : (localStateStore.state.sidebarVisible ?? false)
   // Pre-load quick commands so suggestions can read them immediately
   useQuickCommandStore().load()
   // Pre-load tunnels so auto-start state and the panel are ready
