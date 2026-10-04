@@ -19,6 +19,7 @@
 - Remote desktop: RDP resolution now adapts to follow the window size.
 - Connections: the login username can be overridden per connection when using identity auth, so one key works across servers with different users.
 - Terminal: network-device highlighting rules — Cisco IOS / Huawei VRP interface names and config keywords are recognized in output.
+- Terminal: the right/middle click actions gain a "No action" option, so mouse-tracking apps (vim, htop, ...) keep receiving those clicks. (#1088)
 - Sync: Git sync repo history is auto-compacted to bound repo size.
 
 **Bug Fixes**
@@ -59,6 +60,7 @@ Thanks to @surenwuyuwuqiu, @boltomli, @Teejer and @sonnartliao for their contrib
 - 远程桌面：RDP 分辨率自适应窗口大小。
 - 连接：身份认证下可按连接覆盖登录用户名，一把密钥可用于多台不同用户名的服务器。
 - 终端：新增网络设备高亮规则——识别 Cisco IOS / 华为 VRP 的接口名与配置关键字。
+- 终端：右键、中键动作新增「无动作」选项，开启鼠标追踪的程序（vim、htop 等）可正常接收点击。(#1088)
 - 同步：Git 同步仓库历史自动压缩，避免仓库无限膨胀。
 
 **修复**
