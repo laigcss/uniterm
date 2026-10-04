@@ -128,7 +128,7 @@ jobs:
 
       # Regenerate the gitignored build assets (build/windows/info.json +
       # manifest, darwin Info.plist, linux nfpm.yaml) from build/config.yml.
-      # A fresh checkout has only icon.ico/uniterm.desktop committed, and
+      # A fresh checkout has only icon.ico/org.wails.uniterm.desktop committed, and
       # generate:syso + app-bundle/nfpm all need these.
       - name: Update build assets
         if: matrix.slug != 'android'
@@ -346,8 +346,8 @@ jobs:
           contents:
             - src: bin/uniTerm
               dst: /usr/bin/uniterm
-            - src: build/linux/uniTerm.desktop
-              dst: /usr/share/applications/uniterm.desktop
+            - src: build/linux/org.wails.uniterm.desktop
+              dst: /usr/share/applications/org.wails.uniterm.desktop
             - src: build/linux/icons/hicolor
               dst: /usr/share/icons/hicolor
           EOF
