@@ -495,6 +495,8 @@
   "settings.fontSizeDesc": "终端字体大小",
   "settings.defaultLocalShell": "默认本地终端",
   "settings.defaultLocalShellDesc": "在起始页点击本地终端按钮时使用的 Shell",
+  "settings.gitBashPath": "Git Bash 位置",
+  "settings.gitBashPathDesc": "自定义 Git for Windows 目录或 bash.exe(例如 scoop 的 apps/git/current 目录)。留空则自动检测。",
   "settings.selectionActionDesc": "选中文字后的默认操作",
   "settings.wordSeparator": "选词分隔符",
   "settings.wordSeparatorDesc": "双击选词时作为分词边界的字符。留空使用默认值。",

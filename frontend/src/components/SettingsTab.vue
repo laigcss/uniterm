@@ -653,6 +653,21 @@
             </div>
           </div>
 
+          <div v-if="!isMobile" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.gitBashPath') }}</div>
+              <div class="setting-desc">{{ t('settings.gitBashPathDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input
+                v-model="settingsStore.settings.gitBashPath"
+                clearable
+                placeholder="C:\Users\you\scoop\apps\git\current"
+                @change="onGitBashPathChange"
+              />
+            </div>
+          </div>
+
           <div class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.maxHistory') }}</div>
@@ -1508,6 +1523,11 @@ const { resolveTunnelCredentials } = useTunnelCredentials()
 // system-managed data dir — settings that only make sense on the desktop are
 // hidden there via `v-if="!isMobile"` / category filtering below.
 const isMobile = isMobilePlatform()
+
+async function onGitBashPathChange() {
+  await settingsStore.save()
+  await settingsStore.refreshAvailableShells()
+}
 const platform = ref('')
 const isMac = computed(() => platform.value === 'darwin')
 

@@ -495,6 +495,8 @@
   "settings.fontSizeDesc": "Terminal font size",
   "settings.defaultLocalShell": "Default Local Shell",
   "settings.defaultLocalShellDesc": "Shell used when clicking the Local Terminal button on the start page",
+  "settings.gitBashPath": "Git Bash location",
+  "settings.gitBashPathDesc": "Custom Git for Windows folder or bash.exe (e.g. a scoop apps/git/current folder). Leave empty to auto-detect.",
   "settings.selectionActionDesc": "Default action after selecting text",
   "settings.wordSeparator": "Word Separator",
   "settings.wordSeparatorDesc": "Characters that separate words on double-click. Leave empty to use the default.",
