@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -73,7 +75,7 @@ func TestChatCompletionOpenAI_ReasoningContent(t *testing.T) {
 		"max_tokens": 1024,
 		"messages":   []interface{}{map[string]interface{}{"role": "user", "content": "hi"}},
 	}
-	result, err := (&App{}).chatCompletionOpenAI("k", srv.URL, "deepseek-r1", reqBody, "test", srv.Client())
+	result, err := (&App{}).chatCompletionOpenAI("k", srv.URL, "deepseek-r1", reqBody, "test", "", srv.Client())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +99,86 @@ func TestChatCompletionOpenAI_ReasoningContent(t *testing.T) {
 	}
 	if msg.Content[1].Type != "text" || msg.Content[1].Text != "The answer is 42." {
 		t.Fatalf("text block wrong: %+v", msg.Content[1])
+	}
+}
+
+func TestIsOpenCodeGoBaseURL(t *testing.T) {
+	tests := []struct {
+		baseURL string
+		want    bool
+	}{
+		{"https://opencode.ai/zen/go/v1", true},
+		{"https://opencode.ai/zen/go/v1/", true},
+		{"https://opencode.ai/zen/go/v1/chat/completions", true},
+		{" https://OPENCODE.AI/zen/go/v1/ ", true},
+		{"https://api.openai.com/v1", false},
+		{"https://openrouter.ai/api/v1", false},
+		{"http://localhost:11434/v1", false},
+		{"https://example.com/zen/go/v1", false},
+		{"https://opencode.ai.example.com/zen/go/v1", false},
+		{"https://opencode.ai/zen/v1", false},
+		{"https://opencode.ai/zen/go/v10", false},
+		{"https://opencode.ai/zen/go/v1-extra", false},
+		{"https://opencode.ai/%zz", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.baseURL, func(t *testing.T) {
+			if got := isOpenCodeGoBaseURL(tt.baseURL); got != tt.want {
+				t.Fatalf("isOpenCodeGoBaseURL(%q) = %v, want %v", tt.baseURL, got, tt.want)
+			}
+		})
+	}
+}
+
+type llmRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f llmRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestChatCompletionOpenAI_SessionHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		baseURL   string
+		sessionID string
+		want      string
+	}{
+		{"OpenCode Go", "https://opencode.ai/zen/go/v1", "session-123", "session-123"},
+		{"empty session", "https://opencode.ai/zen/go/v1", "", ""},
+		{"OpenCode Zen", "https://opencode.ai/zen/v1", "session-123", ""},
+		{"OpenAI", "https://api.openai.com/v1", "session-123", ""},
+		{"OpenRouter", "https://openrouter.ai/api/v1", "session-123", ""},
+		{"local provider", "http://localhost:11434/v1", "session-123", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got http.Header
+			client := &http.Client{Transport: llmRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				got = req.Header.Clone()
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{sseContentType}},
+					Body:       io.NopCloser(strings.NewReader("data: [DONE]\n\n")),
+				}, nil
+			})}
+			reqBody := map[string]interface{}{
+				"max_tokens": 1024,
+				"messages":   []interface{}{map[string]interface{}{"role": "user", "content": "hi"}},
+			}
+			if _, err := (&App{}).chatCompletionOpenAI("k", tt.baseURL, "model", reqBody, "test", tt.sessionID, client); err != nil {
+				t.Fatal(err)
+			}
+			if got == nil {
+				t.Fatal("no HTTP request sent")
+			}
+			if value := got.Get("x-opencode-session"); value != tt.want {
+				t.Fatalf("x-opencode-session = %q, want %q", value, tt.want)
+			}
+			if tt.want == "" && got.Values("x-opencode-session") != nil {
+				t.Fatal("x-opencode-session must be absent")
+			}
+		})
 	}
 }
 
