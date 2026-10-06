@@ -298,6 +298,8 @@ uniTerm/
 - [@zhangsir1211](https://github.com/zhangsir1211)
 - [@sonnartliao](https://github.com/sonnartliao)
 - [@Teejer](https://github.com/Teejer)
+- [@IBRAHIMELAMRABET](https://github.com/IBRAHIMELAMRABET)
+- [@chris-edstrom](https://github.com/chris-edstrom)
 
 ## 开源协议
 

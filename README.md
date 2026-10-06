@@ -298,6 +298,8 @@ Thanks to the following people for contributing code and improvements, and to ev
 - [@zhangsir1211](https://github.com/zhangsir1211)
 - [@sonnartliao](https://github.com/sonnartliao)
 - [@Teejer](https://github.com/Teejer)
+- [@IBRAHIMELAMRABET](https://github.com/IBRAHIMELAMRABET)
+- [@chris-edstrom](https://github.com/chris-edstrom)
 
 ## License
 
