@@ -115,7 +115,7 @@ func injectCacheControl(reqBody map[string]interface{}) {
 // ChatCompletion streams the Anthropic API response via SSE, emitting Wails
 // events for each token while collecting the full message. It returns the
 // complete message JSON when the stream ends (backward-compatible).
-func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, protocol string, userAgent string, proxyID string) (string, error) {
+func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, protocol string, userAgent string, proxyID string, sessionID string) (string, error) {
 	// Parse the incoming request body (always Anthropic format from frontend)
 	var reqBody map[string]interface{}
 	if err := json.Unmarshal([]byte(requestJSON), &reqBody); err != nil {
@@ -133,7 +133,7 @@ func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, 
 
 	switch protocol {
 	case "openai":
-		return a.chatCompletionOpenAI(apiKey, baseURL, model, reqBody, userAgent, client)
+		return a.chatCompletionOpenAI(apiKey, baseURL, model, reqBody, userAgent, sessionID, client)
 	case "responses":
 		return a.chatCompletionResponses(apiKey, baseURL, model, reqBody, userAgent, client)
 	}
@@ -526,10 +526,24 @@ func toString(v interface{}) string {
 	}
 }
 
+func isOpenCodeGoBaseURL(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+
+	if !strings.EqualFold(u.Hostname(), "opencode.ai") {
+		return false
+	}
+
+	path := strings.TrimRight(u.Path, "/")
+	return path == "/zen/go/v1" || strings.HasPrefix(path, "/zen/go/v1/")
+}
+
 // chatCompletionOpenAI converts the Anthropic-format request to OpenAI,
 // calls the OpenAI Chat Completions API with SSE streaming, and converts
 // the response back to Anthropic format so the frontend sees no difference.
-func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, client *http.Client) (string, error) {
+func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, sessionID string, client *http.Client) (string, error) {
 	url := strings.TrimRight(baseURL, "/") + "/chat/completions"
 
 	// --- Build OpenAI-format request body ---
@@ -598,6 +612,10 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("User-Agent", userAgent)
+
+	if sessionID != "" && isOpenCodeGoBaseURL(baseURL) {
+		req.Header.Set("x-opencode-session", sessionID)
+	}
 
 	res, err := client.Do(req)
 	if err != nil {

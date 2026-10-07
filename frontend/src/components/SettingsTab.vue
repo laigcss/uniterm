@@ -2630,7 +2630,8 @@ async function testConnection() {
       testMsg,
       modelForm.protocol,
       modelForm.userAgent || '',
-      modelForm.proxyId || ''
+      modelForm.proxyId || '',
+      `uniterm-test-${Date.now()}`
     )
     testResult.value = true
     msg.success(t('settings.testSuccess'))

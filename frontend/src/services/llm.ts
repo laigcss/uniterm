@@ -1,6 +1,7 @@
 import { ChatCompletion } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useAIStore } from '../stores/aiStore'
 
 export interface ChatOptions {
   system: string
@@ -51,7 +52,10 @@ function formatAPIError(raw: string): string {
 
 export async function chat(options: ChatOptions): Promise<void> {
   const settingsStore = useSettingsStore()
+  const aiStore = useAIStore()
   const activeModel = settingsStore.activeModel
+
+  const sessionId = aiStore.currentSessionId || `uniterm-${Date.now()}`
 
   const apiKey = activeModel?.apiKey || ''
   const baseURL = activeModel?.baseURL || ''
@@ -85,7 +89,16 @@ export async function chat(options: ChatOptions): Promise<void> {
     if (text) streamedText += text
    })
   try {
-    responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON, protocol, userAgent, proxyId)
+    responseText = await ChatCompletion(
+      apiKey,
+      baseURL,
+      model,
+      requestJSON,
+      protocol,
+      userAgent,
+      proxyId,
+      sessionId
+    )
   } catch (e: any) {
     const raw = e?.message || String(e)
     if (isCancellationError(raw)) {
