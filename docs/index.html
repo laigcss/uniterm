@@ -1390,6 +1390,14 @@ function setLang(lang) {
   try { localStorage.setItem('uniterm-lang', lang); } catch(e) {}
 }
 
+/* Restore saved language on load (default zh-CN) so download/guide links
+   point to the right repo from the first paint */
+(function() {
+  var saved = null;
+  try { saved = localStorage.getItem('uniterm-lang'); } catch(e) {}
+  setLang(saved === 'en' ? 'en' : 'zh-CN');
+})();
+
 /* ── Theme toggle ── */
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
