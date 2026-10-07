@@ -2,6 +2,7 @@ import { ChatCompletion } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAIStore } from '../stores/aiStore'
+import { t } from '../i18n'
 
 export interface ChatOptions {
   system: string
@@ -35,6 +36,11 @@ function isCancellationError(raw: string): boolean {
 }
 
 function formatAPIError(raw: string): string {
+  // Attachment failures are reported with a machine-readable prefix so the
+  // user sees a localized explanation instead of an upstream 400 body.
+  const attachment = formatAttachmentError(raw)
+  if (attachment) return attachment
+
   // Parse Go backend error format: "HTTP <code>: <json body>"
   const match = raw.match(/^HTTP\s+(\d+):\s*(.+)/)
   if (!match) return `API Error: ${raw}`
@@ -47,6 +53,42 @@ function formatAPIError(raw: string): string {
     return `API Error: ${code} ${msg}`
   } catch {
     return `API Error: ${code} ${bodyStr}`
+  }
+}
+
+/**
+ * Translate the backend's AI_ATTACHMENT_* sentinels into a readable message.
+ * Returns null when the error is not attachment-related.
+ */
+export function formatAttachmentError(raw: string): string | null {
+  const [code, ...rest] = raw.split(':')
+  const detail = rest.join(':').trim()
+
+  switch (code.trim()) {
+    case 'AI_ATTACHMENT_TOO_LARGE':
+      return t('ai.attachmentErrTooLarge')
+    case 'AI_ATTACHMENT_TOO_LARGE_PIXELS':
+      // The upstream's own one-line reason names the provider's actual
+      // pixel cap, which can be tighter than the local pre-flight's.
+      return detail
+        ? `${t('ai.attachmentErrTooLargePixels')} (${detail})`
+        : t('ai.attachmentErrTooLargePixels')
+    case 'AI_ATTACHMENT_UNSUPPORTED_TYPE':
+      return t('ai.attachmentErrUnsupportedType')
+    case 'AI_ATTACHMENT_TOO_MANY':
+      return t('ai.attachmentErrTooMany')
+    case 'AI_ATTACHMENT_EMPTY':
+      return t('ai.attachmentErrEmpty')
+    case 'AI_ATTACHMENT_INVALID':
+      return t('ai.attachmentErrInvalid')
+    case 'AI_ATTACHMENT_UNSUPPORTED_BY_MODEL':
+      // The upstream's own one-line reason is safe to append (the raw JSON
+      // envelope is never surfaced); it tells the user *why* it was refused.
+      return detail
+        ? `${t('ai.attachmentErrNoVision')} (${detail})`
+        : t('ai.attachmentErrNoVision')
+    default:
+      return null
   }
 }
 
