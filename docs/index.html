@@ -652,24 +652,23 @@ html[data-theme="light"] .hero h1 {
 .fs-shot {
   position: relative;
   z-index: 1;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 1.52;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--card-border);
+  background: linear-gradient(180deg, #015697 0%, #014880 100%);
   box-shadow: 0 20px 60px var(--shadow);
   transition: opacity 0.3s ease;
   cursor: zoom-in;
 }
 .fs-shot img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
 }
 .fs-shot .fs-blur {
-  object-fit: cover;
-  filter: blur(20px);
-  transform: scale(1.15);
+  display: none;
 }
 .fs-shot .fs-real {
   object-fit: contain;
@@ -777,7 +776,7 @@ html[data-theme="light"] .fs-media .img-dark { display: none; }
   overflow: hidden;
   max-height: 0;
   opacity: 0;
-  transition: max-height 0.35s ease, opacity 0.25s ease;
+  transition: opacity 0.25s ease;
 }
 .fs-item.active p { max-height: 160px; opacity: 1; }
 /* Desktop: fixed 3-line description slot so every group keeps a constant
@@ -797,7 +796,7 @@ html[data-theme="light"] .fs-media .img-dark { display: none; }
   .fs-split { display: contents; }
   .fs-list { grid-area: list; }
   .fs-media { grid-area: media; }
-  .fs-item p { max-height: none; height: 0; transition: height 0.35s ease, opacity 0.25s ease; }
+  .fs-item p { max-height: none; height: 0; transition: opacity 0.25s ease; }
   .fs-item.active p { height: 70px; }
 }
 @media (max-width: 960px) {
@@ -808,7 +807,7 @@ html[data-theme="light"] .fs-media .img-dark { display: none; }
   .fs-split .fs-media { order: 0; } /* image always on top on small screens */
   .fs-list { gap: 16px; }
   /* fixed slot like desktop so expanding a description never shifts content below */
-  .fs-item p { max-height: none; height: 0; transition: height 0.35s ease, opacity 0.25s ease; }
+  .fs-item p { max-height: none; height: 0; transition: opacity 0.25s ease; }
   .fs-item.active p { height: 66px; } /* 3 lines */
 }
 @media (max-width: 560px) {
@@ -1134,7 +1133,7 @@ var _hmt = _hmt || [];
           <p><span class="content-zh">SFTP / SCP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`</span><span class="content-en">SFTP / SCP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem, dual-pane browse, drag-and-drop transfer, `rz`/`sz` in SSH</span></p>
         </div>
       </li>
-      <li class="fs-item" data-dark="imgs/x11_forward.webp" data-light="imgs/x11_forward_light.webp" role="button" tabindex="0">
+      <li class="fs-item" data-dark="imgs/rdp.webp" data-light="imgs/rdp_light.webp" role="button" tabindex="0">
         <div class="fi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
         <div>
           <h4><span class="content-zh">远程桌面</span><span class="content-en">Remote Desktop</span></h4>
@@ -1195,11 +1194,18 @@ var _hmt = _hmt || [];
           <p><span class="content-zh">可复用的 Skill 工作流与 Prompt 命令模板，输入 `/` 即可触发，AI 也可自行沉淀新技能</span><span class="content-en">Reusable skill workflows and prompt-template commands triggered with `/`; the AI can also save new skills itself</span></p>
         </div>
       </li>
-      <li class="fs-item" data-dark="imgs/ai_model.webp" data-light="imgs/ai_model_light.webp" role="button" tabindex="0">
+      <li class="fs-item" data-dark="imgs/mcp_server.webp" data-light="imgs/mcp_server_light.webp" role="button" tabindex="0">
         <div class="fi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
         <div>
           <h4><span class="content-zh">MCP Server</span><span class="content-en">MCP Server</span></h4>
           <p><span class="content-zh">外部 AI Agent 经 MCP 安全执行命令、传输文件，凭据不出应用</span><span class="content-en">External AI agents run commands and transfer files via MCP — credentials never leave the app</span></p>
+        </div>
+      </li>
+      <li class="fs-item" data-dark="imgs/ai_generate_sql.webp" data-light="imgs/ai_generate_sql_light.webp" role="button" tabindex="0">
+        <div class="fi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+        <div>
+          <h4><span class="content-zh">AI 生成 SQL</span><span class="content-en">AI SQL Generation</span></h4>
+          <p><span class="content-zh">用自然语言描述查询需求，AI 结合表结构自动生成 SQL 并直接执行</span><span class="content-en">Describe your query in natural language and the AI generates SQL from your schema, ready to run</span></p>
         </div>
       </li>
       <li class="fs-item" data-dark="imgs/auto_complete.webp" data-light="imgs/auto_complete_light.webp" role="button" tabindex="0">
