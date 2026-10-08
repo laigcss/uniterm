@@ -149,7 +149,18 @@
         </div>
       </div>
 
-      <div class="input-container">
+      <div
+        :id="aiDropId"
+        class="input-container"
+        data-file-drop-target
+        @dragenter.prevent="onDropDragEnter"
+        @dragover.prevent="onDropDragOver"
+        @dragleave="onDropDragLeave"
+        @drop="onDropDragDrop"
+      >
+        <div v-if="aiDropHover" class="ai-drop-overlay">
+          <span>{{ t('ai.attachmentDropHere') }}</span>
+        </div>
         <!-- # reference dropdown -->
         <div
           v-if="hashDropdownVisible && hashMatchingPanels.length > 0"
@@ -231,7 +242,7 @@
           <div class="input-actions-left">
             <button
               v-if="!isMobile"
-              class="ghost-btn hash-btn"
+              class="ghost-btn hash-btn attach-btn"
               :title="t('ai.attachFile')"
               :disabled="lockedPanels.length === 0 && !currentIsTerminal"
               @click="onAttachClick"
@@ -314,18 +325,22 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent, answerQuestion, dismissQuestion } from '../services/agent'
-import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64, ReadLocalAttachmentFile } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { AIAttachment, ExecutionMode } from '../types/ai'
 import {
   ATTACHMENT_FILE_ACCEPT,
   ATTACHMENT_LIMITS,
   attachmentErrorMessageKey,
+  attachmentFormatsLabel,
   attachmentPreviewUrl,
+  bytesFromBase64,
+  classifyAttachment,
   createImageAttachmentFromDataURL,
   formatBytes,
   readAttachmentFile,
   validateAttachment,
 } from '../services/attachments'
+import { useNativeFileDrop } from '../composables/useFilePanel'
 import { isMobilePlatform } from '../utils/platform'
 import AIMessage from './AIMessage.vue'
 import Menu from './Menu.vue'
@@ -507,6 +522,81 @@ async function onFileInputChange(e: Event) {
   // Reset immediately so picking the same file twice still fires 'change'.
   input.value = ''
   for (const file of files) await addFile(file)
+}
+
+// --- Drag-drop attachments (native OS paths) --------------------------------
+//
+// OS file drops never carry content into the webview (the window runs with
+// EnableFileDrop, so Wails intercepts them at the native layer); the DOM
+// dragenter/leave handlers below only drive the hover overlay. The real file
+// paths arrive via the common:WindowFilesDropped event, routed here by this
+// container's data-file-drop-target id, and are read off disk by the
+// ReadLocalAttachmentFile binding.
+
+const aiDropId = 'ai-drop-' + (crypto.randomUUID?.() || Math.random().toString(36).slice(2))
+const aiDropHover = ref(false)
+let aiDropEnterCount = 0
+// Mirror the attach button's gating: no attachments on mobile or with no
+// terminal to send them with.
+const dropAllowed = computed(() => !isMobile && (lockedPanels.value.length > 0 || currentIsTerminal.value))
+
+const nativeDrop = useNativeFileDrop({
+  elementId: aiDropId,
+  isActive: () => dropAllowed.value,
+  upload: (paths) => onNativePathsDropped(paths),
+})
+
+function onDropDragEnter(e: DragEvent) {
+  if (!dropAllowed.value || !e.dataTransfer?.types.includes('Files')) return
+  aiDropEnterCount++
+  aiDropHover.value = true
+}
+
+function onDropDragOver(e: DragEvent) {
+  if (!dropAllowed.value || !e.dataTransfer?.types.includes('Files')) return
+  e.dataTransfer.dropEffect = 'copy'
+}
+
+function onDropDragLeave() {
+  if (--aiDropEnterCount <= 0) {
+    aiDropEnterCount = 0
+    aiDropHover.value = false
+  }
+}
+
+function onDropDragDrop() {
+  // The native layer consumes the drop; here we only retire the overlay.
+  aiDropEnterCount = 0
+  aiDropHover.value = false
+}
+
+/** Add files dropped as absolute OS paths. The whitelist is checked before
+ *  reading (unsupported files never touch disk reads); everything else reuses
+ *  addFile, so per-kind caps, count limits, the pixel check and the binary
+ *  probe all behave exactly like the file picker. */
+async function onNativePathsDropped(paths: string[]) {
+  for (const p of paths) {
+    const name = p.replace(/\\/g, '/').split('/').pop() || p
+    if (!classifyAttachment(name, '')) {
+      showAttachmentError('ai.attachmentUnsupportedType', { name, formats: attachmentFormatsLabel })
+      continue
+    }
+    try {
+      const f = await ReadLocalAttachmentFile(p)
+      await addFile(new File([bytesFromBase64(f.dataB64)], f.name || name))
+    } catch (e) {
+      const detail = (e as any)?.toString?.() || String(e)
+      if (detail.includes('AI_ATTACHMENT_IS_DIRECTORY')) {
+        showAttachmentError('ai.attachmentIsDirectory', { name })
+      } else if (detail.includes('AI_ATTACHMENT_TOO_LARGE')) {
+        showAttachmentError('ai.attachmentTooLarge', { name, limit: formatBytes(ATTACHMENT_LIMITS.maxImageBytes) })
+      } else if (detail.includes('AI_ATTACHMENT_EMPTY')) {
+        showAttachmentError('ai.attachmentEmpty', { name })
+      } else {
+        showAttachmentError('ai.attachmentReadFailed', { name })
+      }
+    }
+  }
 }
 
 /**
@@ -1761,6 +1851,7 @@ onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
   skillStore.load()
   commandStore.load()
+  nativeDrop.bind()
 
   if (messagesRef.value) {
     messagesRef.value.addEventListener('scroll', onMessagesScroll)
@@ -1776,6 +1867,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('ai:ask', onAskAI)
+  nativeDrop.unbind()
 
   if (messagesRef.value) {
     messagesRef.value.removeEventListener('scroll', onMessagesScroll)
@@ -2075,6 +2167,25 @@ defineExpose({ focusInput })
 .input-container:focus-within {
   border-color: var(--accent);
   border-top-color: var(--accent);
+}
+/* Hover feedback while an OS file drag is over the composer */
+.ai-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.ai-drop-overlay span {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  padding: 0.75rem 1.5rem;
+  border: 0.125rem dashed var(--border-hover);
+  border-radius: var(--radius-sm);
 }
 .textarea-wrap {
   position: relative;
@@ -2409,6 +2520,13 @@ defineExpose({ focusInput })
   font-family: var(--font-mono);
   font-size: 0.875rem;
   font-weight: 600;
+}
+
+/* 附件按钮内是 SVG 图标（基线对齐），改用 flex 垂直居中以与 # / 按钮对齐 */
+.attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Skill dropdown (紧凑单行，仿 TRAE) */
