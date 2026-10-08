@@ -334,6 +334,7 @@ import { Clipboard } from '@wailsio/runtime'
 import MenuDivider from './MenuDivider.vue'
 import { writeClipboard } from '../composables/useClipboardWrite'
 import { formatClock, formatDuration } from '../utils/timeFormat'
+import { useLocalStateStore } from '../stores/localStateStore'
 
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
@@ -738,10 +739,25 @@ const liveThinkingElapsed = computed(() => {
 const thinkingStartLabel = computed(() => formatClock(aiStore.thinkingStartedAt))
 
 const messagesRef = ref<HTMLDivElement>()
+const AI_SIDEBAR_MIN_WIDTH = 300
+const AI_SIDEBAR_MAX_WIDTH = 800
 const sidebarWidth = ref(360)
 const isResizing = ref(false)
 const isMaximized = ref(false)
 const preMaxWidth = ref(360)
+
+// Restore the persisted width once LocalState is loaded (App.vue awaits
+// init() on mount; children mount first, so re-init here — it is idempotent).
+onMounted(async () => {
+  try {
+    const ls = useLocalStateStore()
+    if (!ls.loaded) await ls.init()
+    const w = ls.state.aiSidebarWidth
+    if (w > 0) sidebarWidth.value = Math.min(Math.max(w, AI_SIDEBAR_MIN_WIDTH), AI_SIDEBAR_MAX_WIDTH)
+  } catch {
+    // keep the default width
+  }
+})
 
 function toggleMaximize() {
   if (isMaximized.value) {
@@ -1708,13 +1724,18 @@ function onResizeStart(e: MouseEvent) {
   function onMouseMove(ev: MouseEvent) {
     if (!isResizing.value) return
     const delta = startX - ev.clientX
-    const newWidth = Math.min(Math.max(startWidth + delta, 300), 800)
+    const newWidth = Math.min(Math.max(startWidth + delta, AI_SIDEBAR_MIN_WIDTH), AI_SIDEBAR_MAX_WIDTH)
     if (el) el.style.width = newWidth + 'px'
   }
 
   function onMouseUp() {
     isResizing.value = false
     sidebarWidth.value = el.offsetWidth
+    // Skip while maximised — the CSS forces 100% width, so offsetWidth is
+    // the full window width and must not overwrite the persisted value.
+    if (!isMaximized.value) {
+      useLocalStateStore().update({ aiSidebarWidth: sidebarWidth.value })
+    }
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
     window.dispatchEvent(new CustomEvent('split:resize-end'))
