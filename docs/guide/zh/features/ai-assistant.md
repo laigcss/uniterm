@@ -1,6 +1,6 @@
 # AI 助理
 
-uniTerm 内置自主 AI Agent，可在终端中独立规划并执行多轮 Shell 命令。
+ai-ops-terminal 内置自主 AI Agent，可在终端中独立规划并执行多轮 Shell 命令。
 
 ![AI 助理](/imgs/ai_assistant_light.webp)
 
@@ -28,7 +28,7 @@ AI Agent 会：
 | 名称 | 自定义显示名称，用于在模型列表中区分不同配置 |
 | 协议 | 选择 **Anthropic** 或 **OpenAI** 协议，决定请求格式 |
 | Base URL | API 端点地址，OpenAI 默认为 `https://api.openai.com/v1`，Anthropic 默认为 `https://api.anthropic.com` |
-| User-Agent | 可选，自定义请求头中的 User-Agent 标识，提供 uniTerm、Claude Code、Cursor 等预设，也支持手动输入 |
+| User-Agent | 可选，自定义请求头中的 User-Agent 标识，提供 ai-ops-terminal、Claude Code、Cursor 等预设，也支持手动输入 |
 | API Key | API 认证密钥，以密码形式存储 |
 | 模型 | 模型名称（如 `gpt-4o`、`claude-sonnet-4-20250514`），可通过「获取模型列表」按钮从 API 自动拉取可选模型 |
 | 测试连接 | 填写完 API Key 和模型后，点击「测试连接」验证配置是否正确 |

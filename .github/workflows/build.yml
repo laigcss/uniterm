@@ -102,7 +102,7 @@ jobs:
 
       # Regenerate the gitignored build assets (build/windows/info.json +
       # manifest, darwin Info.plist, linux nfpm.yaml) from build/config.yml.
-      # A fresh checkout has only icon.ico/uniterm.desktop committed, and
+      # A fresh checkout has only icon.ico/ai-ops-terminal.desktop committed, and
       # generate:syso + app-bundle/nfpm all need these.
       - name: Update build assets
         shell: bash
@@ -117,10 +117,10 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          wails3 build VERSION="$VERSION"                 # bin/uniTerm.exe (amd64)
-          mv bin/uniTerm.exe bin/uniTerm-amd64.exe
-          wails3 build VERSION="$VERSION" ARCH=arm64      # bin/uniTerm.exe (arm64)
-          mv bin/uniTerm.exe bin/uniTerm-arm64.exe
+          wails3 build VERSION="$VERSION"                 # bin/ai-ops-terminal.exe (amd64)
+          mv bin/ai-ops-terminal.exe bin/ai-ops-terminal-amd64.exe
+          wails3 build VERSION="$VERSION" ARCH=arm64      # bin/ai-ops-terminal.exe (arm64)
+          mv bin/ai-ops-terminal.exe bin/ai-ops-terminal-arm64.exe
           echo "AMD64|ARM64 built:"; ls -la bin/
 
       - name: Build (Linux)
@@ -128,12 +128,12 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          # Native CGO build on the matching-arch runner → bin/uniTerm.
+          # Native CGO build on the matching-arch runner → bin/ai-ops-terminal.
           # gtk3 = legacy WebKit2GTK 4.1 stack (the only one ubuntu-24.04 provides).
           pkg-config --modversion webkit2gtk-4.1
           wails3 build GOOS=linux VERSION="$VERSION" EXTRA_TAGS=gtk3
-          chmod +x bin/uniTerm
-          echo "Linux binary:"; ls -la bin/uniTerm
+          chmod +x bin/ai-ops-terminal
+          echo "Linux binary:"; ls -la bin/ai-ops-terminal
 
       - name: Build (macOS)
         if: matrix.slug == 'darwin'
@@ -145,11 +145,11 @@ jobs:
           # into its own dmg below (matches the v1.8.0 single-arch dmgs).
           wails3 task darwin:build:universal VERSION="$VERSION"
           for arch in amd64 arm64; do
-            cp "bin/uniTerm-$arch" bin/uniTerm
+            cp "bin/ai-ops-terminal-$arch" bin/ai-ops-terminal
             wails3 task darwin:create:app:bundle
-            mv bin/uniTerm.app "bin/uniTerm-$arch.app"
+            mv bin/ai-ops-terminal.app "bin/ai-ops-terminal-$arch.app"
           done
-          ls -la bin/uniTerm-amd64.app/Contents/MacOS bin/uniTerm-arm64.app/Contents/MacOS
+          ls -la bin/ai-ops-terminal-amd64.app/Contents/MacOS bin/ai-ops-terminal-arm64.app/Contents/MacOS
 
       - name: Package (macOS)
         if: matrix.slug == 'darwin'
@@ -159,19 +159,19 @@ jobs:
           # separate volume and hdiutil regularly ran out of space there for a
           # large .app. Fall back to a zipped .app when hdiutil still fails.
           for arch in amd64 arm64; do
-            APP="bin/uniTerm-$arch.app"
-            chmod +x "$APP/Contents/MacOS/uniTerm"
+            APP="bin/ai-ops-terminal-$arch.app"
+            chmod +x "$APP/Contents/MacOS/ai-ops-terminal"
 
             STAGE="${{ github.workspace }}/dmg_staging_${arch}"
             mkdir -p "$STAGE"
-            cp -R "$APP" "$STAGE/uniTerm.app"
+            cp -R "$APP" "$STAGE/ai-ops-terminal.app"
             ln -s /Applications "$STAGE/Applications"
-            if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${arch}-${VERSION}.dmg"; then
+            if hdiutil create -volname ai-ops-terminal -srcfolder "$STAGE" -ov -format UDZO "ai-ops-terminal-darwin-${arch}-${VERSION}.dmg"; then
               echo "dmg created ($arch)"
             else
               echo "hdiutil dmg failed ($arch) — shipping zipped .app instead"
-              rm -f "uniterm-darwin-${arch}-${VERSION}.dmg"
-              ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${arch}-${VERSION}.zip"
+              rm -f "ai-ops-terminal-darwin-${arch}-${VERSION}.dmg"
+              ditto -c -k --sequesterRsrc --keepParent "$APP" "ai-ops-terminal-darwin-${arch}-${VERSION}.zip"
             fi
             rm -rf "$STAGE"
           done
@@ -198,8 +198,8 @@ jobs:
           $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
           $ROOT = $env:GITHUB_WORKSPACE
-          $AMD64_BIN = Join-Path $ROOT 'bin\uniTerm-amd64.exe'
-          $ARM64_BIN = Join-Path $ROOT 'bin\uniTerm-arm64.exe'
+          $AMD64_BIN = Join-Path $ROOT 'bin\ai-ops-terminal-amd64.exe'
+          $ARM64_BIN = Join-Path $ROOT 'bin\ai-ops-terminal-arm64.exe'
           $NSI = Join-Path $ROOT 'build\windows\installer\project.nsi'
 
           # compress amd64 with upx; arm64 is left uncompressed because
@@ -217,18 +217,18 @@ jobs:
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
-            $srcExe = Join-Path $ROOT "bin\uniTerm-$arch.exe"
-            $srcInstaller = Join-Path $ROOT "build\bin\uniTerm-$arch-installer.exe"
+            $srcExe = Join-Path $ROOT "bin\ai-ops-terminal-$arch.exe"
+            $srcInstaller = Join-Path $ROOT "build\bin\ai-ops-terminal-$arch-installer.exe"
 
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
-            Copy-Item $srcExe "dist_tmp\uniTerm.exe"
+            Copy-Item $srcExe "dist_tmp\ai-ops-terminal.exe"
             Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\plugins\vcxsrv"
-            Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
+            Compress-Archive -Path dist_tmp\* -DestinationPath "ai-ops-terminal-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp
 
             # rename NSIS installer
-            Move-Item $srcInstaller "uniterm-windows-$arch-installer-$VERSION.exe"
+            Move-Item $srcInstaller "ai-ops-terminal-windows-$arch-installer-$VERSION.exe"
           }
 
       - name: Package (Linux, nfpm)
@@ -236,10 +236,10 @@ jobs:
         run: |
           ARCH=${{ matrix.slug == 'linux-amd64' && 'amd64' || 'arm64' }}
           NFPM_ARCH=${{ matrix.slug == 'linux-amd64' && 'x86_64' || 'arm64' }}
-          upx --best --lzma bin/uniTerm
+          upx --best --lzma bin/ai-ops-terminal
 
           cd bin
-          tar czf ../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
+          tar czf ../ai-ops-terminal-linux-${ARCH}-${VERSION}.tar.gz ai-ops-terminal
           cd ..
 
           NFPM_VER="2.46.3"
@@ -249,13 +249,13 @@ jobs:
           chmod +x /usr/local/bin/nfpm
 
           cat > nfpm.yaml << EOF
-          name: uniterm
+          name: ai-ops-terminal
           arch: ${ARCH}
           platform: linux
           version: ${VERSION}
-          maintainer: uniTerm <uniTerm@uniterm.net>
+          maintainer: ai-ops-terminal <ai-ops-terminal@github.com/laigcss/ai-ops-terminal>
           description: Lightweight all-in-one terminal emulator with built-in AI Agent
-          homepage: https://uniterm.net
+          homepage: https://github.com/laigcss/ai-ops-terminal
           license: Proprietary
           depends:
             - libgtk-3-0
@@ -266,30 +266,30 @@ jobs:
                 - gtk3
                 - webkit2gtk4.1
           contents:
-            - src: bin/uniTerm
-              dst: /usr/bin/uniterm
-            - src: build/linux/uniTerm.desktop
-              dst: /usr/share/applications/uniterm.desktop
+            - src: bin/ai-ops-terminal
+              dst: /usr/bin/ai-ops-terminal
+            - src: build/linux/ai-ops-terminal.desktop
+              dst: /usr/share/applications/ai-ops-terminal.desktop
             - src: build/linux/icons/hicolor
               dst: /usr/share/icons/hicolor
           EOF
 
           nfpm package --config nfpm.yaml --packager deb \
-            --target "uniterm-linux-${ARCH}-${VERSION}.deb"
+            --target "ai-ops-terminal-linux-${ARCH}-${VERSION}.deb"
           nfpm package --config nfpm.yaml --packager rpm \
-            --target "uniterm-linux-${ARCH}-${VERSION}.rpm"
+            --target "ai-ops-terminal-linux-${ARCH}-${VERSION}.rpm"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: uniTerm-${{ matrix.slug }}
+          name: ai-ops-terminal-${{ matrix.slug }}
           path: |
-            uniterm-*.zip
-            uniterm-*.tar.gz
-            uniterm-*.exe
-            uniterm-*.dmg
-            uniterm-*.deb
-            uniterm-*.rpm
+            ai-ops-terminal-*.zip
+            ai-ops-terminal-*.tar.gz
+            ai-ops-terminal-*.exe
+            ai-ops-terminal-*.dmg
+            ai-ops-terminal-*.deb
+            ai-ops-terminal-*.rpm
 
   release:
     needs: build
@@ -310,7 +310,7 @@ jobs:
       - name: Collect release files
         run: |
           find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) -exec mv {} . \;
-          ls -la uniterm-*
+          ls -la ai-ops-terminal-*
 
       - name: Determine release mode
         run: |
@@ -365,11 +365,11 @@ jobs:
           prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: release_body.md
           files: |
-            uniterm-*.zip
-            uniterm-*.tar.gz
-            uniterm-*.exe
-            uniterm-*.dmg
-            uniterm-*.deb
-            uniterm-*.rpm
+            ai-ops-terminal-*.zip
+            ai-ops-terminal-*.tar.gz
+            ai-ops-terminal-*.exe
+            ai-ops-terminal-*.dmg
+            ai-ops-terminal-*.deb
+            ai-ops-terminal-*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

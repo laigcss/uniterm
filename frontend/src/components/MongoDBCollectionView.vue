@@ -62,41 +62,18 @@
 
         <div v-if="filteredTableData.length > 0" class="result-grid">
           <div class="result-table-wrap">
-            <el-table
-              :data="filteredTableData"
-              border
-              size="small"
-              style="width:100%"
-              class="db-result-table"
-              :empty-text="t('db.noData')"
-              @row-dblclick="onRowDblClick"
-            >
-              <el-table-column
-                v-for="col in columns"
-                :key="col"
-                :prop="col"
-                :label="col"
-                min-width="120"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  <span
-                    class="cell-value"
-                    :class="{ 'cell-null': row[col] === null || row[col] === undefined }"
-                  >{{ formatCellValue(row[col]) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column width="80" fixed="right">
-                <template #default="{ row }">
-                  <button class="btn btn-ghost btn-icon btn-sm" @click.stop="onRowDblClick(row)">
-                    <Pencil :size="14" />
-                  </button>
-                  <button class="btn btn-ghost btn-icon btn-sm danger" @click.stop="deleteDocument(row)">
-                    <Trash2 :size="14" />
-                  </button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <el-auto-resizer>
+              <template #default="{ height, width }">
+                <el-table-v2
+                  :columns="v2Columns"
+                  :data="filteredTableData"
+                  :width="width"
+                  :height="height"
+                  :row-height="28"
+                  fixed
+                />
+              </template>
+            </el-auto-resizer>
           </div>
           <div class="result-footer">
             <span class="result-count">
@@ -200,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, h, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Pencil, Trash2, Sparkles, Plus } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
@@ -295,6 +272,37 @@ const columns = computed(() => {
     cols.unshift('_id')
   }
   return cols
+})
+
+// P1: el-table-v2 虚拟滚动列配置。双击行打开文档编辑器，操作列固定右侧。
+const v2Columns = computed<any[]>(() => {
+  const dataCols = columns.value.map((col) => ({
+    key: col,
+    dataKey: col,
+    title: col,
+    width: 150,
+    flexGrow: 1,
+    cellRenderer: ({ cellData, rowData }: { cellData: any; rowData: any }) =>
+      h('span', {
+        class: { 'cell-value': true, 'cell-null': cellData === null || cellData === undefined },
+        onDblclick: () => onRowDblClick(rowData),
+      }, formatCellValue(cellData)),
+  }))
+  return [
+    ...dataCols,
+    {
+      key: '__actions',
+      dataKey: '__actions',
+      title: '',
+      width: 80,
+      fixed: 'right' as const,
+      cellRenderer: ({ rowData }: { rowData: any }) =>
+        h('div', { class: 'row-actions-v2' }, [
+          h('button', { class: 'btn btn-ghost btn-icon btn-sm', onClick: (e: Event) => { e.stopPropagation(); onRowDblClick(rowData) } }, h(Pencil, { size: 14 })),
+          h('button', { class: 'btn btn-ghost btn-icon btn-sm danger', onClick: (e: Event) => { e.stopPropagation(); deleteDocument(rowData) } }, h(Trash2, { size: 14 })),
+        ]),
+    },
+  ]
 })
 
 // ── Index state ──
@@ -734,6 +742,12 @@ watch(() => [props.dbName, props.collectionName], () => {
   color: var(--text-muted);
   font-style: italic;
 }
+.row-actions-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.row-actions-v2 :deep(svg) { pointer-events: none; }
 .result-footer {
   display: flex;
   align-items: center;

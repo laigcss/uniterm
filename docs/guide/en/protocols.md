@@ -1,6 +1,6 @@
 # Supported Protocols
 
-uniTerm supports 30+ connection protocols, covering remote terminals, remote desktops, file transfers, databases, containers, and server monitoring.
+ai-ops-terminal supports 30+ connection protocols, covering remote terminals, remote desktops, file transfers, databases, containers, and server monitoring.
 
 ## Remote Terminal
 

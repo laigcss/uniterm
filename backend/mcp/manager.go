@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 
 	"sync"
@@ -114,8 +115,11 @@ func (m *MCPManager) StartServer(name string, command string, args []string, env
 
 	cmd := exec.Command(command, args...)
 	// Inherit the parent env, then overlay the caller-provided overrides.
+	// F3: cmd.Env 一旦设为非 nil 即不再继承父进程环境，会导致配置了 env 的
+	//     MCP server 丢失 PATH/HOME（npx/uvx 等启动失败）。必须以 os.Environ()
+	//     为基底再叠加用户 env。
 	if len(env) > 0 {
-		cmd.Env = append(cmd.Env, envToList(env)...)
+		cmd.Env = append(os.Environ(), envToList(env)...)
 	}
 
 	stdin, err := cmd.StdinPipe()

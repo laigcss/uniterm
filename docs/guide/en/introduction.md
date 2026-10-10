@@ -1,6 +1,6 @@
-# About uniTerm
+# About ai-ops-terminal
 
-uniTerm is a lightweight all-in-one terminal emulator supporting **30+** connection protocols, covering remote terminals, remote desktops, file transfers, database management, containers, and server monitoring. It features a built-in **autonomous AI Agent** that can independently plan and execute multi-round shell commands.
+ai-ops-terminal is a lightweight all-in-one terminal emulator supporting **30+** connection protocols, covering remote terminals, remote desktops, file transfers, database management, containers, and server monitoring. It features a built-in **autonomous AI Agent** that can independently plan and execute multi-round shell commands.
 
 
 ## Core Features
@@ -46,7 +46,7 @@ Integrated **Kubernetes / Docker / Podman / nerdctl** management for cluster res
 
 ### AI Assistant
 
-uniTerm features a built-in autonomous AI Agent that can independently plan and execute multi-round shell commands in the terminal.
+ai-ops-terminal features a built-in autonomous AI Agent that can independently plan and execute multi-round shell commands in the terminal.
 
 - **Autonomous Multi-Round Execution** — The AI Agent can plan, execute, observe results, and iterate across multiple rounds without human intervention.
 - **LLM Integration** — The sidebar chat supports Anthropic/OpenAI-compatible APIs, allowing use of Claude, GPT, and other compatible models.

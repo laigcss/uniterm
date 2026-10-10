@@ -68,6 +68,11 @@ async function executeOnHost(
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null
   let pollHandle: ReturnType<typeof setInterval> | null = null
   let settled = false
+  // F2: 一旦 settle（timeout/cancel/error/完成标记）即置 true。
+  //     任何在途 await（CreateSession/SessionStart/SessionWrite）返回后都必须
+  //     检查它：若已 disposed，说明本次执行早已结束、无人接管新 session，
+  //     必须立即 CloseSession，否则会永久泄漏一个后端 SSH session。
+  let disposed = false
 
   // 唯一完成标记（避免与命令输出冲突）
   const doneMarker = `__BATCH_DONE_${conn.id.replace(/[^a-zA-Z0-9]/g, '')}__`
@@ -87,20 +92,31 @@ async function executeOnHost(
   // 标记 running
   store.updateSessionStatus(conn.id, 'running')
 
+  // F2: 关闭当前已创建的 session（幂等）。先同步把 sessionId 置空再 await
+  //     CloseSession，保证并发/重复调用绝不会二次关闭同一个 session。
+  const closeCurrentSession = async () => {
+    if (!sessionId) return
+    const sid = sessionId
+    sessionId = null
+    try { await CloseSession(sid) } catch { /* ignore */ }
+  }
+
   const cleanup = async () => {
     if (timeoutHandle) clearTimeout(timeoutHandle)
     if (pollHandle) clearInterval(pollHandle)
     if (dataUnsub) dataUnsub()
     if (statusUnsub) statusUnsub()
-    if (sessionId) {
-      try { await CloseSession(sessionId) } catch { /* ignore */ }
-    }
+    await closeCurrentSession()
   }
 
-  return new Promise<{ ok: boolean; error?: string }>(async (resolve) => {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    // settle 终结本次执行：幂等标记 settled/disposed，释放全部资源
+    // （含关闭已创建的 session），并保证只 resolve 一次。disposed 供在途
+    // await 返回后做泄漏兜底检查。
     const settle = async (ok: boolean, error?: string) => {
       if (settled) return
       settled = true
+      disposed = true
       await cleanup()
       store.updateSessionStatus(conn.id, ok ? 'success' : 'failed', error)
       resolve({ ok, error })
@@ -140,56 +156,89 @@ async function executeOnHost(
       }
     })
 
-    try {
-      // 1. 创建 session
-      const info = await CreateSession(conn.type, config)
-      sessionId = info?.id || null
-      if (!sessionId) {
-        await settle(false, 'Failed to create session')
-        return
-      }
-
-      if (isCancelled()) {
-        await settle(false, 'Cancelled')
-        return
-      }
-
-      // 2. 启动 session（建立 SSH 连接）
+    // F2: 异步流程写在独立 run() 中，避免 async Promise executor 反模式
+    //     （executor 无法取消、异常会被吞）。每个关键 await 返回后立即检查
+    //     disposed：若 settle 已先行（timeout/cancel/error/完成），则关闭
+    //     「创建晚于 settle」的 session 并退出，杜绝后端 SSH session 泄漏。
+    const run = async () => {
       try {
-        await SessionStart(sessionId, config)
-      } catch (e: any) {
-        await settle(false, `Connection failed: ${e?.message || e}`)
-        return
-      }
-
-      if (isCancelled()) {
-        await settle(false, 'Cancelled')
-        return
-      }
-
-      // 3. 写入命令 + 完成标记 + 换行
-      //    用 ; echo 确保即使命令失败也能输出标记
-      //    用 printf 避免换行干扰 exit code 解析
-      const fullCommand = `${command}\nprintf '${doneMarker}%d' $?\n`
-      try {
-        await SessionWrite(sessionId, fullCommand)
-      } catch (e: any) {
-        await settle(false, `Failed to write command: ${e?.message || e}`)
-        return
-      }
-
-      // 4. 轮询取消标志（每 500ms）
-      pollHandle = setInterval(() => {
-        if (isCancelled()) {
-          settle(false, 'Cancelled')
+        // 1. 创建 session
+        const info = await CreateSession(conn.type, config)
+        sessionId = info?.id || null
+        if (disposed) {
+          // CreateSession 返回晚于 timeout/cancel：此 session 无人接管，立即关闭
+          await closeCurrentSession()
+          return
         }
-      }, 500)
+        if (!sessionId) {
+          await settle(false, 'Failed to create session')
+          return
+        }
 
-      // 命令完成由 doneMarker 检测触发 settle；超时由 timeoutHandle 触发
-      // 若 timeoutMs <= 0 且无完成标记，则一直等到取消
-    } catch (e: any) {
-      await settle(false, `Unexpected error: ${e?.message || e}`)
+        if (isCancelled()) {
+          await settle(false, 'Cancelled')
+          return
+        }
+
+        // 2. 启动 session（建立 SSH 连接）
+        try {
+          await SessionStart(sessionId, config)
+        } catch (e: any) {
+          if (disposed) {
+            await closeCurrentSession()
+            return
+          }
+          await settle(false, `Connection failed: ${e?.message || e}`)
+          return
+        }
+        if (disposed) {
+          await closeCurrentSession()
+          return
+        }
+
+        if (isCancelled()) {
+          await settle(false, 'Cancelled')
+          return
+        }
+
+        // 3. 写入命令 + 完成标记 + 换行
+        //    用 ; echo 确保即使命令失败也能输出标记
+        //    用 printf 避免换行干扰 exit code 解析
+        const fullCommand = `${command}\nprintf '${doneMarker}%d' $?\n`
+        try {
+          await SessionWrite(sessionId, fullCommand)
+        } catch (e: any) {
+          if (disposed) {
+            await closeCurrentSession()
+            return
+          }
+          await settle(false, `Failed to write command: ${e?.message || e}`)
+          return
+        }
+        if (disposed) {
+          await closeCurrentSession()
+          return
+        }
+
+        // 4. 轮询取消标志（每 500ms）
+        pollHandle = setInterval(() => {
+          if (isCancelled()) {
+            settle(false, 'Cancelled')
+          }
+        }, 500)
+
+        // 命令完成由 doneMarker 检测触发 settle；超时由 timeoutHandle 触发
+        // 若 timeoutMs <= 0 且无完成标记，则一直等到取消
+      } catch (e: any) {
+        if (disposed) {
+          await closeCurrentSession()
+          return
+        }
+        await settle(false, `Unexpected error: ${e?.message || e}`)
+      }
     }
+
+    void run()
   })
 }
 

@@ -122,6 +122,63 @@ func TestRedact(t *testing.T) {
 			in:   "postgres://alice:s3cr3t@host:5432/db password=hunter2",
 			want: "postgres://alice:***@host:5432/db password=***",
 		},
+
+		// --- JSON sensitive fields ---
+		{
+			name: "json password field",
+			in:   `{"password":"hunter2","user":"alice"}`,
+			want: `{"password":"***","user":"alice"}`,
+		},
+		{
+			name: "json token field",
+			in:   `{"token":"abc123"}`,
+			want: `{"token":"***"}`,
+		},
+		{
+			name: "json access_token field",
+			in:   `{"access_token":"eyJhbGciOiJIUzI1NiJ9"}`,
+			want: `{"access_token":"***"}`,
+		},
+		{
+			name: "json secret field",
+			in:   `{"secret":"my-secret-value"}`,
+			want: `{"secret":"***"}`,
+		},
+		{
+			name: "json api_key field",
+			in:   `{"api_key":"sk-1234567890"}`,
+			want: `{"api_key":"***"}`,
+		},
+		{
+			name: "json apikey field (no underscore)",
+			in:   `{"apikey":"sk-1234567890"}`,
+			want: `{"apikey":"***"}`,
+		},
+		{
+			name: "json private_key field",
+			in:   `{"private_key":"-----BEGIN..."}`,
+			want: `{"private_key":"***"}`,
+		},
+		{
+			name: "json multiple sensitive fields",
+			in:   `{"password":"hunter2","token":"abc123","name":"alice"}`,
+			want: `{"password":"***","token":"***","name":"alice"}`,
+		},
+		{
+			name: "json case insensitive keys",
+			in:   `{"PASSWORD":"hunter2","Token":"abc123"}`,
+			want: `{"PASSWORD":"***","Token":"***"}`,
+		},
+		{
+			name: "json with spaces around colon",
+			in:   `{"password" : "hunter2"}`,
+			want: `{"password" : "***"}`,
+		},
+		{
+			name: "json non-sensitive field unchanged",
+			in:   `{"name":"alice","age":30}`,
+			want: `{"name":"alice","age":30}`,
+		},
 	}
 
 	for _, tc := range cases {

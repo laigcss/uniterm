@@ -1,6 +1,6 @@
 # Databases
 
-uniTerm has a built-in database client that supports mainstream relational databases, Redis, and MongoDB.
+ai-ops-terminal has a built-in database client that supports mainstream relational databases, Redis, and MongoDB.
 
 ## Relational Databases
 

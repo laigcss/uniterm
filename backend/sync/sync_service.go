@@ -363,7 +363,7 @@ func (s *SyncService) pushLocalConfig(repo *GitRepo, encKey []byte, username, to
 		s.updateLastSyncResult("failed", fmt.Sprintf("encrypt files: %v", err))
 		return nil, fmt.Errorf("encrypt files: %w", err)
 	}
-	if _, err := repo.StageAndCommit(commitMsg("uniTerm config sync")); err != nil {
+	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync")); err != nil {
 		s.updateLastSyncResult("failed", fmt.Sprintf("commit: %v", err))
 		return nil, fmt.Errorf("commit: %w", err)
 	}
@@ -491,7 +491,7 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 		if err := EncryptConfigFiles(s.dataDir, s.repoPath, encKey, s.keychain, s.passwordStore); err != nil {
 			return nil, fmt.Errorf("encrypt files: %w", err)
 		}
-		if _, err := repo.StageAndCommit(commitMsg("uniTerm config sync (resolve conflict)")); err != nil {
+		if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync (resolve conflict)")); err != nil {
 			return nil, fmt.Errorf("commit: %w", err)
 		}
 		if err := repo.Push(username, token); err != nil {
@@ -681,7 +681,7 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 		return nil, fmt.Errorf("encrypt files: %w", err)
 	}
 
-	if _, err := repo.StageAndCommit(commitMsg("uniTerm config sync")); err != nil {
+	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync")); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
@@ -1018,7 +1018,7 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 		return fmt.Errorf("open repo: %w", err)
 	}
 
-	if _, err := repo.StageAndCommit(commitMsg("uniTerm config sync (change password)")); err != nil {
+	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync (change password)")); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 

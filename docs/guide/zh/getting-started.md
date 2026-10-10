@@ -1,33 +1,33 @@
 # 安装与首次连接
 
-本指南将帮助您下载安装 uniTerm 并建立第一个连接。
+本指南将帮助您下载安装 ai-ops-terminal 并建立第一个连接。
 
 
 ## 下载与安装
 
 ### Windows
 
-从 [GitHub Releases](https://github.com/ys-ll/uniterm/releases/latest) 下载 `uniterm-amd64-installer.exe` 安装包，双击运行即可。
+从 [GitHub Releases](https://github.com/laigcss/ai-ops-terminal/releases/latest) 下载 `ai-ops-terminal-amd64-installer.exe` 安装包，双击运行即可。
 
-或者下载 `uniterm.exe` 便携版，解压后直接运行。
+或者下载 `ai-ops-terminal.exe` 便携版，解压后直接运行。
 
 ### macOS
 
-下载 `uniterm.darwin-universal.dmg`，打开后将 uniTerm 拖入 Applications 文件夹。
+下载 `ai-ops-terminal.darwin-universal.dmg`，打开后将 ai-ops-terminal 拖入 Applications 文件夹。
 
 ### Linux
 
-下载 `uniterm.linux-amd64.tar.gz`，解压后运行：
+下载 `ai-ops-terminal.linux-amd64.tar.gz`，解压后运行：
 
 ```bash
-tar xzf uniterm.linux-amd64.tar.gz
-./uniterm
+tar xzf ai-ops-terminal.linux-amd64.tar.gz
+./ai-ops-terminal
 ```
 
 
 ## 创建第一个连接
 
-1. 打开 uniTerm，点击左侧边栏的 **+** 按钮，或点击"新建连接"卡片。
+1. 打开 ai-ops-terminal，点击左侧边栏的 **+** 按钮，或点击"新建连接"卡片。
 
    ![新建连接](/imgs/new_connection_light.webp)
 
@@ -45,7 +45,7 @@ tar xzf uniterm.linux-amd64.tar.gz
 
 ## 界面概览
 
-uniTerm 的主界面主要分为以下区域：
+ai-ops-terminal 的主界面主要分为以下区域：
 
 - **左侧边栏** — 连接列表，按分组管理您的所有连接
 - **中央终端区** — 终端 Tab 页，支持拖拽分栏组成工作区

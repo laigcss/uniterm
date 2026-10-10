@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased] — v2.0.0（私有化版本）
+
+> 本次发布将项目由 uniTerm 私有化为 **ai-ops-terminal**（仓库迁移至 github.com/laigcss/ai-ops-terminal），并完成安全加固、性能体验、架构可维护性、功能增强四方向共 17 项优化。
+
+### 品牌私有化
+- 项目品牌 `uniTerm` → `ai-ops-terminal`，仓库迁移至 `github.com/laigcss/ai-ops-terminal`。
+- README / ROADMAP / 文档站点同步更新品牌、链接与下载产物名。
+
+### 安全加固
+- **S1 SSH Host Key TOFU 校验**：新增 `backend/session/hostkey.go`，首次连接记录指纹（TOFU），密钥变更弹窗告警，支持 AcceptNew / Strict / Off 三种策略，替换全部 `InsecureIgnoreHostKey`。
+- **S2 AI 本地危险命令防线**：新增 `frontend/src/services/localRisk.ts`，独立于模型声明的本地命令模式检测（危险模式黑名单 + 反绕过检测），`getRisk` 取 `max(modelRisk, localRisk)`。
+- **S3 LLM baseURL scheme 校验**：`aiStore` 保存 baseURL 时校验，非 `https://` 且非本地地址弹警告；后端入参校验并留痕。
+- **S4 日志脱敏**：新增 `backend/log/redact.go`，日志写前过脱敏（密码 / DSN 密码段 / token / 私钥），K8s secret 响应不写 preview。
+
+### 性能与体验
+- **P1 虚拟滚动**：引入 `vue-virtual-scroller`，`FileList.vue` / `DBResultGrid.vue` 渲染层虚拟化。⚠️ MongoDB / Elasticsearch / Redis 视图虚拟化未完成。
+- **P2 session:data 批量节流**：`BaseTerminal.vue` 改累积 + rAF 批量写出，窗口隐藏时 setTimeout 兜底，按 session id 订阅避免线性扫描。
+- **P3 Element Plus 按需引入**：配置 `unplugin-vue-components` + Auto Import resolver，移除全量注册与全量 CSS。
+- **P4 删除 useTerminal.ts 死代码**：迁移 `getXtermTheme` 后删除约 800 行死代码。
+
+### 架构可维护性
+- **A2 fileTransferSession 接口下沉**：接口迁移至 `backend/session/file_transfer.go`，各 session 加编译期断言。
+- **A3 AI 函数去重 + 工具注册表化**：后端 SSE 骨架抽取至 `app_ai_stream.go`；前端新建 `services/tools/` 注册表，runAgent 改为查表分发。
+- **A4 SSH 拨号公共函数抽取**：`dialSSH` 统一封装 ClientConfig + authMethods + host key callback，6+ 处调用统一。
+- **A5 vue-tsc 类型闸门**：新增 `build:check`（vue-tsc + vite build）与 `typecheck` 脚本，修复 panelStore 类型声明。
+- **A1 App.vue 拆分**：❌ 未完全达成，App.vue 当前 1814 行（目标 < 500），Tab 注册表化与 onConnect 工厂化待后续推进。
+
+### 功能增强
+- **F1 AI 交互模式**：新增 Chat / 只读 / Agent 三种交互模式，约束 AI Agent 行为边界。
+- **F2 批量多主机执行**：连接管理器多选主机并发执行同一命令 / 脚本，结果聚合展示（`BatchExecuteDialog.vue` + `batchExecute.ts`）。
+- **F3 MCP Client**：接入外部 MCP 服务器扩展 AI 工具能力（`app_mcp.go` + `services/mcp/`）。
+- **F4 终端录制与回放**：录制为 asciinema cast 文件并回放，支持暂停 / 倍速 / 进度拖拽（`app_recorder.go` + `RecordList.vue` + `terminalRecorder.ts`）。
+
+---
+
 ## v1.9.2
 
 ### What's Changed

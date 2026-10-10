@@ -412,13 +412,13 @@ func (p *lineProcessor) Reset() {
 // The zero value is a disabled logger; Enable installs a file, Disable
 // closes it. All methods are safe for concurrent use.
 type OutputLogger struct {
-	mu       sync.Mutex
-	file     *os.File
-	bw       *bufio.Writer
-	path     string
-	stripper ansiStripper
-	lines    lineProcessor
-	flushCh  chan struct{}
+	mu        sync.Mutex
+	file      *os.File
+	bw        *bufio.Writer
+	path      string
+	stripper  ansiStripper
+	lines     lineProcessor
+	flushCh   chan struct{}
 	flushDone chan struct{}
 	// buffered controls whether writes go through bufio + periodic flush.
 	// SetBuffered(false) opts back into the legacy Sync-per-write path,
@@ -438,7 +438,7 @@ const logBufferSize = 64 * 1024
 // disk write; we only need to forward buffered bytes out of user-space.
 const logFlushInterval = 1 * time.Second
 
-const bannerHeader = "=== uniTerm session log ==="
+const bannerHeader = "=== ai-ops-terminal session log ==="
 
 // Enable opens the log file and writes the header banner. Returns the
 // final path. If dir is empty, defaultSessionLogDir() is used. If name

@@ -16,7 +16,7 @@ jobs:
       - name: Checkout homebrew tap repo
         uses: actions/checkout@v7
         with:
-          repository: ys-ll/homebrew-uniterm
+          repository: laigcss/homebrew-ai-ops-terminal
           token: ${{ secrets.PAT }}
 
       - name: Get version
@@ -29,22 +29,22 @@ jobs:
       - name: Download macOS DMGs and compute hashes
         run: |
           for ARCH in amd64 arm64; do
-            URL="https://github.com/ys-ll/uniterm/releases/download/$TAG/uniterm-darwin-${ARCH}-$TAG.dmg"
-            curl -sLo "/tmp/uniterm-${ARCH}.dmg" "$URL"
-            SHA256=$(sha256sum "/tmp/uniterm-${ARCH}.dmg" | cut -d' ' -f1)
+            URL="https://github.com/laigcss/ai-ops-terminal/releases/download/$TAG/ai-ops-terminal-darwin-${ARCH}-$TAG.dmg"
+            curl -sLo "/tmp/ai-ops-terminal-${ARCH}.dmg" "$URL"
+            SHA256=$(sha256sum "/tmp/ai-ops-terminal-${ARCH}.dmg" | cut -d' ' -f1)
             echo "SHA256_${ARCH}=$SHA256" >> $GITHUB_ENV
           done
 
       - name: Update formula
         run: |
-          sed -i "s/version \".*\"/version \"$VERSION\"/" Casks/uniterm.rb
-          sed -i "/sha256/ s/intel: \".*\"/intel: \"$SHA256_amd64\"/" Casks/uniterm.rb
-          sed -i "/sha256/ s/arm: \".*\"/arm: \"$SHA256_arm64\"/" Casks/uniterm.rb
+          sed -i "s/version \".*\"/version \"$VERSION\"/" Casks/ai-ops-terminal.rb
+          sed -i "/sha256/ s/intel: \".*\"/intel: \"$SHA256_amd64\"/" Casks/ai-ops-terminal.rb
+          sed -i "/sha256/ s/arm: \".*\"/arm: \"$SHA256_arm64\"/" Casks/ai-ops-terminal.rb
 
       - name: Commit and push
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add Casks/uniterm.rb
+          git add Casks/ai-ops-terminal.rb
           git commit -m "Update to $TAG" || true
           git push

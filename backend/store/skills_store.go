@@ -76,8 +76,8 @@ type SkillsStore struct {
 	// listCache holds the merged result of the most recent List call. F-107:
 	// re-scanning the whole skills tree (every SKILL.md + references/ +
 	// scripts/ probe) per call is wasteful when the frontend polls.
-	listMu      sync.Mutex
-	listCache   []SkillMeta
+	listMu       sync.Mutex
+	listCache    []SkillMeta
 	listCachedAt time.Time
 }
 

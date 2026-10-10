@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="build/appicon.png" alt="uniTerm" width="128" height="128" />
-  <h1>uniTerm</h1>
+  <img src="build/appicon.png" alt="ai-ops-terminal" width="128" height="128" />
+  <h1>ai-ops-terminal</h1>
   <p>A lightweight all-in-one terminal with 30+ protocols — SSH, RDP, SFTP, databases, Kubernetes and more<br>With a built-in autonomous AI Agent that plans and runs multi-turn shell commands</p>
-  <p><a href="https://uniterm.net">🌐 Homepage</a> &nbsp;|&nbsp; <a href="https://uniterm.net/guide/en/introduction">📖 User Guide</a> &nbsp;|&nbsp; <a href="https://github.com/ys-ll/uniterm">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://gitee.com/ys-l/uniterm">💻 Gitee</a></p>
+  <p><a href="https://github.com/laigcss/ai-ops-terminal">🌐 Homepage</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal/guide/en/introduction">📖 User Guide</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 Gitee</a></p>
 </div>
 
 <div align="center">
@@ -11,11 +11,11 @@ English &nbsp;|&nbsp; <a href="README_zh-CN.md">简体中文</a>
 
 <br>
 
-<a href="https://github.com/ys-ll/uniterm/releases/latest"><img src="https://img.shields.io/github/v/release/ys-ll/uniterm" alt="GitHub release" /></a>
-<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal/releases/latest"><img src="https://img.shields.io/github/v/release/laigcss/ai-ops-terminal" alt="GitHub release" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
-<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/github/stars/ys-ll/uniterm?style=social" alt="GitHub stars" /></a>
-<a href="https://gitee.com/ys-l/uniterm"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee" alt="Gitee stars" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social" alt="GitHub stars" /></a>
+
 
 </div>
 
@@ -59,6 +59,8 @@ Autonomous AI Agent that independently plans and executes multi-turn shell comma
 - **Terminal Integration** — AI commands execute directly in the active terminal tab, with optional pinning to a specific tab or following your active one. Collaborate side-by-side in split panes, each with its own terminal context.
 - **Smart Completion** — While typing in SSH terminals, get real-time suggestions from your command history and AI-powered command rewrites.
 - **Skills & Commands** — Reusable skill workflows and prompt-template commands, attached with `/` in the AI input; the AI can also save new skills itself.
+- **Interaction Modes** — Switch between Chat (conversation only, no command execution), Read-only (only read commands allowed), and Agent (full autonomous) modes to constrain what the AI Agent can do.
+- **MCP Client** — Connect external MCP (Model Context Protocol) servers to extend the AI Agent with additional tools and capabilities.
 
 ### Personalization
 
@@ -70,6 +72,11 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 - **Custom Keybindings** — Freely bind keyboard shortcuts for every action for full keyboard-driven operation, hands never leaving the keyboard.
 - **Themes** — 28 terminal themes plus 3 UI themes (Dark / Deep Blue / Light) and a customizable background image.
 - **Internationalization** — 9-language UI: Simplified Chinese, Traditional Chinese, English, Japanese, Korean, German, Spanish, French, Russian.
+
+### Productivity
+
+- **Batch Multi-Host Execution** — Select multiple hosts in the Connection Manager and run the same command or script across all of them concurrently, with per-host status, output preview, and failure strategy controls.
+- **Terminal Recording & Replay** — Record terminal sessions to asciinema cast files and replay them later with pause, speed control, and progress scrubbing.
 
 ## Supported Protocols
 
@@ -106,7 +113,7 @@ Connection management, split panes, cloud sync, themes — your terminal, your w
 | Containers | nerdctl (containerd) | containerd container management with namespace switching |
 | Containers | WSLC | Windows WSL2 Container runtime |
 
-Oracle Database support is implemented with a pure Go driver. uniTerm does not bundle Oracle Database, Oracle Instant Client, OJDBC, wallet files, or Oracle brand assets; users are responsible for their own Oracle licenses, credentials, and database access.
+Oracle Database support is implemented with a pure Go driver. ai-ops-terminal does not bundle Oracle Database, Oracle Instant Client, OJDBC, wallet files, or Oracle brand assets; users are responsible for their own Oracle licenses, credentials, and database access.
 
 ## Screenshots
 
@@ -150,11 +157,11 @@ Oracle Database support is implemented with a pure Go driver. uniTerm does not b
 
 ## Download
 
-Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-ll/uniterm/releases) or [Gitee Releases](https://gitee.com/ys-l/uniterm/releases):
+Get the latest pre-built binaries from [GitHub Releases](https://github.com/laigcss/ai-ops-terminal/releases) or [Gitee Releases](https://github.com/laigcss/ai-ops-terminal/releases):
 
-- **Windows** (amd64 / arm64): installer `uniterm-windows-*-installer-*.exe`, or portable `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): Download `uniterm-darwin-*-*.dmg`
-- **Linux** (amd64 / arm64): Download `uniterm-linux-*-*.tar.gz`, `.deb`, or `.rpm`
+- **Windows** (amd64 / arm64): installer `ai-ops-terminal-windows-*-installer-*.exe`, or portable `ai-ops-terminal-windows-*-portable-*.zip`
+- **macOS** (Intel / Apple Silicon): Download `ai-ops-terminal-darwin-*-*.dmg`
+- **Linux** (amd64 / arm64): Download `ai-ops-terminal-linux-*-*.tar.gz`, `.deb`, or `.rpm`
 
 > **About Windows antivirus false positives**: As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
 
@@ -162,18 +169,18 @@ Get the latest pre-built binaries from [GitHub Releases](https://github.com/ys-l
 
 ```bash
 # Windows
-scoop bucket add uniterm https://github.com/ys-ll/scoop-uniterm && scoop install uniterm
+scoop bucket add ai-ops-terminal https://github.com/laigcss/scoop-ai-ops-terminal && scoop install ai-ops-terminal
 
 # macOS
-brew install --cask ys-ll/uniterm/uniterm
+brew install --cask laigcss/ai-ops-terminal/ai-ops-terminal
 
 # Linux (deb)
-curl -sLo uniterm.deb https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.deb
-sudo dpkg -i uniterm.deb
+curl -sLo ai-ops-terminal.deb https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.deb
+sudo dpkg -i ai-ops-terminal.deb
 
 # Linux (rpm)
-curl -sLo uniterm.rpm https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.rpm
-sudo rpm -i uniterm.rpm
+curl -sLo ai-ops-terminal.rpm https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.rpm
+sudo rpm -i ai-ops-terminal.rpm
 ```
 
 ### Runtime Dependencies
@@ -217,8 +224,8 @@ sudo rpm -i uniterm.rpm
 Requires [Go](https://go.dev/dl/) 1.26+, [Node.js](https://nodejs.org/) 20+, and [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12 (install with `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`). Additionally, macOS needs Xcode Command Line Tools, and Linux needs `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`.
 
 ```bash
-git clone https://github.com/ys-ll/uniterm.git
-cd uniTerm
+git clone https://github.com/laigcss/ai-ops-terminal.git
+cd ai-ops-terminal
 cd frontend && npm install && cd ..
 wails3 dev                  # Development
 wails3 build                # Production build
@@ -227,7 +234,7 @@ wails3 build                # Production build
 ## Project Structure
 
 ```
-uniTerm/
+ai-ops-terminal/
 ├── main.go                       # Entry point
 ├── app.go                        # Wails bindings, LLM API proxy, SFTP API
 ├── app_*.go                      # Platform-specific implementations
@@ -264,18 +271,18 @@ See [ROADMAP.md](ROADMAP.md) for the current protocol / feature status and what'
 
 ## Star this Project
 
-If uniTerm is helpful to you, please consider giving it a ⭐ Star — it's the best encouragement for the project and helps more people discover it.
+If ai-ops-terminal is helpful to you, please consider giving it a ⭐ Star — it's the best encouragement for the project and helps more people discover it.
 
-[![GitHub stars](https://img.shields.io/github/stars/ys-ll/uniterm?style=social)](https://github.com/ys-ll/uniterm)
-[![Gitee stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee)](https://gitee.com/ys-l/uniterm)
+[![GitHub stars](https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social)](https://github.com/laigcss/ai-ops-terminal)
+
 
 ## Feedback &amp; Contributing
 
 This is a personal hobby project maintained in the author's spare time, with no commercialization or sponsorship plans — anyone who shares the same interest is warmly welcome to join, discuss, and build together.
 
-Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/ys-ll/uniterm/issues), and code contributions via [Pull Request](https://github.com/ys-ll/uniterm/pulls) are always welcome. Due to the wide variety of terminal environments and usage scenarios, the author cannot cover every possible case in testing — if you run into any issues, feel free to fork the project and contribute directly. This project welcomes vibe coding.
+Issues, suggestions, and feedback are welcome at [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues), and code contributions via [Pull Request](https://github.com/laigcss/ai-ops-terminal/pulls) are always welcome. Due to the wide variety of terminal environments and usage scenarios, the author cannot cover every possible case in testing — if you run into any issues, feel free to fork the project and contribute directly. This project welcomes vibe coding.
 
-Thanks to the following people for contributing code and improvements, and to everyone who reported issues and shared suggestions — you help make uniTerm better ❤️
+Thanks to the following people for contributing code and improvements, and to everyone who reported issues and shared suggestions — you help make ai-ops-terminal better ❤️
 
 - [@yuwei5380](https://github.com/yuwei5380)
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)

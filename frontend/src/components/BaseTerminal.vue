@@ -1349,6 +1349,13 @@ onMounted(() => {
   }
 
   const onSessionData = (rawData: string) => {
+    // F4: 录制写入必须在 isActive 判断之前 —— 非活动标签/分屏的终端输出
+    //     同样需要写入录制，否则回放会丢失非活动标签期间的内容。
+    //     走 terminalRecorder 内部串行队列，不阻塞 rAF 渲染主路径。
+    if (isRecording.value) {
+      terminalRecorder.writeData(rawData)
+    }
+
     if (!isActive.value) {
       // Mark notification dot on the tab when inactive terminal receives output
       // (subscribeSessionData 已按 id 分发，无需再过滤 payload.id)
@@ -1433,11 +1440,7 @@ onMounted(() => {
     }
 
     // 普通数据：累积到缓冲队列，rAF 批量写出
-    // F4: 录制写入原始 session:data（未经 sanitize/highlight），保证回放忠实。
-    //     走 terminalRecorder 内部串行队列，不阻塞 rAF 渲染主路径。
-    if (isRecording.value) {
-      terminalRecorder.writeData(rawData)
-    }
+
     dataBuffer.push(rawData)
     if (!rafScheduled) {
       scheduleFlush()

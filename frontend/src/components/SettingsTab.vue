@@ -869,11 +869,11 @@
             {{ t('settings.version') }}: {{ updateCheck.updateInfo?.current || '...' }}
           </div>
           <div class="about-links">
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://uniterm.net')">
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/laigcss/ai-ops-terminal')">
               <Globe :size="14" class="about-link-icon" />
               {{ t('settings.homepage') }}
             </a>
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL(locale === 'zh-CN' ? 'https://uniterm.net/guide/zh/introduction' : 'https://uniterm.net/guide/en/introduction')">
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/laigcss/ai-ops-terminal')">
               <BookOpen :size="14" class="about-link-icon" />
               {{ t('settings.userManual') }}
             </a>
@@ -1190,7 +1190,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
-import { useI18n, locale } from '../i18n'
+import { useI18n } from '../i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { warnIfInsecureBaseURL } from '../stores/aiStore'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS, SIDEBAR_TAB_ORDER, SIDEBAR_TAB_DEFAULTS } from '../types/settings'

@@ -44,4 +44,4 @@
 
 If your issue is not listed here, please reach out through the following channels:
 
-- [GitHub Issues](https://github.com/ys-ll/uniterm/issues)
+- [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues)

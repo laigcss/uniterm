@@ -1,6 +1,6 @@
 # File Transfer
 
-uniTerm has a built-in dual-pane file browser that supports multiple file transfer protocols, providing a unified file management interface.
+ai-ops-terminal has a built-in dual-pane file browser that supports multiple file transfer protocols, providing a unified file management interface.
 
 ## Supported Protocols
 

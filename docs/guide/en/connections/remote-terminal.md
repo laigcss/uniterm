@@ -1,6 +1,6 @@
 # Remote Terminal
 
-uniTerm supports three remote terminal protocols: **SSH**, **Telnet**, and **Mosh**.
+ai-ops-terminal supports three remote terminal protocols: **SSH**, **Telnet**, and **Mosh**.
 
 ## SSH
 
@@ -100,7 +100,7 @@ Mosh (Mobile Shell) is designed for high-latency and intermittent networks. Base
 
 ### Connection Parameters
 
-Same as SSH. uniTerm first connects to the server via SSH, then automatically starts `mosh-server` to establish a UDP session.
+Same as SSH. ai-ops-terminal first connects to the server via SSH, then automatically starts `mosh-server` to establish a UDP session.
 
 | Parameter | Description |
 |------|------|

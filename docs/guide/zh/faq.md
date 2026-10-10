@@ -44,4 +44,4 @@
 
 如果您的问题未在此列出，请通过以下渠道反馈：
 
-- [GitHub Issues](https://github.com/ys-ll/uniterm/issues)
+- [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues)

@@ -20,7 +20,7 @@ What should it say instead? A rough wording or bullet points is fine — no need
 
 ## Additional Context
 
-Anything else worth knowing (uniTerm version, OS, related issues, screenshots).
+Anything else worth knowing (ai-ops-terminal version, OS, related issues, screenshots).
 
 ---
 
@@ -38,4 +38,4 @@ Anything else worth knowing (uniTerm version, OS, related issues, screenshots).
 
 ## 补充说明
 
-其他有用的信息（uniTerm 版本、操作系统、相关 issue、截图等）。
+其他有用的信息（ai-ops-terminal 版本、操作系统、相关 issue、截图等）。

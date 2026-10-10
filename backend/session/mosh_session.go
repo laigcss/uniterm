@@ -4,16 +4,14 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	mosh "github.com/unixshells/mosh-go"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
-	mosh "github.com/unixshells/mosh-go"
 )
 
 type MoshSession struct {
@@ -54,29 +52,21 @@ func (s *MoshSession) Connect(config ConnectionConfig) error {
 	}
 
 	// Step 1: SSH to remote and start mosh-server to get key + UDP port.
-	authMethods := makeSSHAuthMethods(config, nil)
-	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	clientConfig := &ssh.ClientConfig{
+	// 走 dialSSH 统一封装，共享主机密钥校验、cipher 回退与代理拨号。
+	client, err := dialSSH(DialSSHOptions{
+		Host:            config.Host,
+		Port:            config.Port,
 		User:            config.User,
-		Auth:            authMethods,
+		AuthMethods:     makeSSHAuthMethods(config, nil),
+		HostKeyStrategy: config.HostKeyStrategy,
 		Timeout:         30 * time.Second,
-		HostKeyCallback: HostKeyCallback(config.Host, strconv.Itoa(config.Port), ResolveHostKeyStrategy(config.HostKeyStrategy)),
-		Config: sshAlgorithms(),
-	}
-
-	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
+		Proxy:           config.Proxy,
+		CipherFallback:  true,
+	})
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("mosh ssh dial: %w", err)
 	}
-
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
-	if err != nil {
-		conn.Close()
-		s.setStatus(StatusError)
-		return fmt.Errorf("mosh ssh handshake: %w", err)
-	}
-	client := ssh.NewClient(sshConn, chans, reqs)
 
 	key, udpPort, err := startMoshServer(client)
 	if err != nil {

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>uniTerm</string>
+    <string>ai-ops-terminal</string>
     <key>CFBundleExecutable</key>
-    <string>uniTerm</string>
+    <string>ai-ops-terminal</string>
     <key>CFBundleDisplayName</key>
-    <string>uniTerm</string>
+    <string>ai-ops-terminal</string>
     <key>CFBundleIdentifier</key>
-    <string>com.yourcompany.uniter</string>
+    <string>com.laigcss.ai-ops-terminal</string>
     <key>CFBundleIconFile</key>
     <string>icons.icns</string>
     <key>CFBundleVersion</key>

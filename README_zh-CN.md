@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="build/appicon.png" alt="uniTerm" width="128" height="128" />
-  <h1>uniTerm</h1>
+  <img src="build/appicon.png" alt="ai-ops-terminal" width="128" height="128" />
+  <h1>ai-ops-terminal</h1>
   <p>一款轻量级一站式终端软件，支持 SSH、RDP、VNC、SFTP、数据库、Kubernetes 等 30 余种协议<br>内置可自主执行的 AI Agent，规划并执行多轮 Shell 命令</p>
-  <p><a href="https://uniterm.net">🌐 软件首页</a> &nbsp;|&nbsp; <a href="https://uniterm.net/guide/zh/introduction">📖 用户手册</a> &nbsp;|&nbsp; <a href="https://github.com/ys-ll/uniterm">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://gitee.com/ys-l/uniterm">💻 Gitee</a></p>
+  <p><a href="https://github.com/laigcss/ai-ops-terminal">🌐 软件首页</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal/guide/zh/introduction">📖 用户手册</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 Gitee</a></p>
 </div>
 
 <div align="center">
@@ -11,11 +11,11 @@
 
 <br>
 
-<a href="https://github.com/ys-ll/uniterm/releases/latest"><img src="https://img.shields.io/github/v/release/ys-ll/uniterm" alt="GitHub release" /></a>
-<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal/releases/latest"><img src="https://img.shields.io/github/v/release/laigcss/ai-ops-terminal" alt="GitHub release" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
-<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/github/stars/ys-ll/uniterm?style=social" alt="GitHub stars" /></a>
-<a href="https://gitee.com/ys-l/uniterm"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee" alt="Gitee stars" /></a>
+<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social" alt="GitHub stars" /></a>
+
 
 </div>
 
@@ -59,6 +59,8 @@
 - **终端智能协作** — AI 命令直接在当前终端标签页中执行，支持固定到指定标签页或跟随当前激活终端。分屏中人与 AI 各司其职，同屏协作互不干扰。
 - **智能补全** — SSH 终端输入时，根据历史命令和 AI 能力实时提供命令补全建议。
 - **技能与命令** — 可复用的 Skill 工作流与 Prompt 命令模板，输入 `/` 即可挂载触发，AI 也可自行沉淀新技能。
+- **交互模式** — 在 Chat（纯对话不执行命令）、只读（仅允许执行读命令）、Agent（全自主）三种模式间切换，精确约束 AI Agent 的行为边界。
+- **MCP Client** — 接入外部 MCP（Model Context Protocol）服务器，为 AI Agent 扩展更多工具与能力。
 
 ### 个性化能力
 
@@ -70,6 +72,11 @@
 - **自定义快捷键** — 自由绑定各项操作的键盘快捷键，实现全键盘操作，双手不离键盘。
 - **主题** — 28 款终端主题、3 款界面主题（暗色 / 深蓝 / 浅色）、自定义背景图片。
 - **国际化** — 支持简中、繁中、英、日、韩、德、西、法、俄等 9 种语言界面。
+
+### 效率工具
+
+- **批量多主机执行** — 在连接管理器中多选主机，并发执行同一命令或脚本，结果聚合展示，支持每主机状态查看、输出预览与失败策略配置。
+- **终端录制与回放** — 将终端会话录制为 asciinema cast 文件，回放时支持暂停、倍速与进度拖拽。
 
 ## 支持的协议
 
@@ -106,7 +113,7 @@
 | 容器 | nerdctl (containerd) | containerd 容器管理，支持切换 namespace |
 | 容器 | WSLC | Windows WSL2 Container 运行时 |
 
-Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 Oracle Database、Oracle Instant Client、OJDBC、Wallet 文件或 Oracle 品牌素材；用户需自行确保其 Oracle 授权、凭据和数据库访问权限合规。
+Oracle Database 支持基于纯 Go 驱动实现。ai-ops-terminal 不随安装包分发 Oracle Database、Oracle Instant Client、OJDBC、Wallet 文件或 Oracle 品牌素材；用户需自行确保其 Oracle 授权、凭据和数据库访问权限合规。
 
 ## 界面截图
 
@@ -150,11 +157,11 @@ Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 
 
 ## 下载安装
 
-前往 [GitHub Releases](https://github.com/ys-ll/uniterm/releases) 或 [Gitee Releases](https://gitee.com/ys-l/uniterm/releases) 下载最新版本：
+前往 [GitHub Releases](https://github.com/laigcss/ai-ops-terminal/releases) 或 [Gitee Releases](https://github.com/laigcss/ai-ops-terminal/releases) 下载最新版本：
 
-- **Windows** (amd64 / arm64): 安装包 `uniterm-windows-*-installer-*.exe`，或便携版 `uniterm-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): 下载 `uniterm-darwin-*-*.dmg`
-- **Linux** (amd64 / arm64): 下载 `uniterm-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
+- **Windows** (amd64 / arm64): 安装包 `ai-ops-terminal-windows-*-installer-*.exe`，或便携版 `ai-ops-terminal-windows-*-portable-*.zip`
+- **macOS** (Intel / Apple Silicon): 下载 `ai-ops-terminal-darwin-*-*.dmg`
+- **Linux** (amd64 / arm64): 下载 `ai-ops-terminal-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
 
 > **关于 Windows 杀软误报**：由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
 
@@ -162,18 +169,18 @@ Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 
 
 ```bash
 # Windows
-scoop bucket add uniterm https://github.com/ys-ll/scoop-uniterm && scoop install uniterm
+scoop bucket add ai-ops-terminal https://github.com/laigcss/scoop-ai-ops-terminal && scoop install ai-ops-terminal
 
 # macOS
-brew install --cask ys-ll/uniterm/uniterm
+brew install --cask laigcss/ai-ops-terminal/ai-ops-terminal
 
 # Linux (deb)
-curl -sLo uniterm.deb https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.deb
-sudo dpkg -i uniterm.deb
+curl -sLo ai-ops-terminal.deb https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.deb
+sudo dpkg -i ai-ops-terminal.deb
 
 # Linux (rpm)
-curl -sLo uniterm.rpm https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.rpm
-sudo rpm -i uniterm.rpm
+curl -sLo ai-ops-terminal.rpm https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.rpm
+sudo rpm -i ai-ops-terminal.rpm
 ```
 
 ### 运行依赖
@@ -217,8 +224,8 @@ sudo rpm -i uniterm.rpm
 需要 [Go](https://go.dev/dl/) 1.26+、[Node.js](https://nodejs.org/) 20+ 和 [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`）。此外，macOS 需 Xcode Command Line Tools，Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`。
 
 ```bash
-git clone https://github.com/ys-ll/uniterm.git
-cd uniTerm
+git clone https://github.com/laigcss/ai-ops-terminal.git
+cd ai-ops-terminal
 cd frontend && npm install && cd ..
 wails3 dev                   # 开发模式运行
 wails3 build                 # 构建生产版本
@@ -227,7 +234,7 @@ wails3 build                 # 构建生产版本
 ## 项目结构
 
 ```
-uniTerm/
+ai-ops-terminal/
 ├── main.go                       # 入口文件
 ├── app.go                        # Wails 绑定、LLM API 代理、SFTP API
 ├── app_*.go                      # 平台相关实现
@@ -264,18 +271,18 @@ uniTerm/
 
 ## 欢迎 Star
 
-如果 uniTerm 对你有帮助，欢迎点一个 ⭐ Star，这是对项目最大的鼓励，也能让更多人发现它。
+如果 ai-ops-terminal 对你有帮助，欢迎点一个 ⭐ Star，这是对项目最大的鼓励，也能让更多人发现它。
 
-[![GitHub stars](https://img.shields.io/github/stars/ys-ll/uniterm?style=social)](https://github.com/ys-ll/uniterm)
-[![Gitee stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee)](https://gitee.com/ys-l/uniterm)
+[![GitHub stars](https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social)](https://github.com/laigcss/ai-ops-terminal)
+
 
 ## 反馈与贡献
 
 本项目为纯个人业余兴趣项目，无商业化及接收赞助计划，欢迎志同道合的朋友一起交流，参与共建。
 
-欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 贡献代码。由于终端访问场景与环境各异，作者难以覆盖所有场景的验证，如遇到相关问题，欢迎 fork 项目代码参与共建。本项目欢迎 vibe coding。
+欢迎通过 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/laigcss/ai-ops-terminal/pulls) 贡献代码。由于终端访问场景与环境各异，作者难以覆盖所有场景的验证，如遇到相关问题，欢迎 fork 项目代码参与共建。本项目欢迎 vibe coding。
 
-感谢以下朋友为 uniTerm 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 uniTerm 变得更好 ❤️
+感谢以下朋友为 ai-ops-terminal 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 ai-ops-terminal 变得更好 ❤️
 
 - [@yuwei5380](https://github.com/yuwei5380)
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)

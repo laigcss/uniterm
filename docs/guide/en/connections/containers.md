@@ -1,6 +1,6 @@
 # Containers
 
-uniTerm has a built-in container management interface supporting **Kubernetes** cluster management and the **Docker / Podman / nerdctl** container engines. Manage cluster resources and container images on the local machine or on remote hosts over SSH.
+ai-ops-terminal has a built-in container management interface supporting **Kubernetes** cluster management and the **Docker / Podman / nerdctl** container engines. Manage cluster resources and container images on the local machine or on remote hosts over SSH.
 
 ## Kubernetes
 
@@ -57,7 +57,7 @@ After selecting a resource, the right-click menu or inline action buttons provid
 
 ![Container Management](/imgs/container_light.webp)
 
-uniTerm supports the **Docker**, **Podman**, and **nerdctl** container engines.
+ai-ops-terminal supports the **Docker**, **Podman**, and **nerdctl** container engines.
 
 ### Connection Parameters
 

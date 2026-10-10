@@ -1,6 +1,6 @@
 # Personalization
 
-uniTerm provides a wealth of personalization options to make the terminal fit your workflow and aesthetic preferences.
+ai-ops-terminal provides a wealth of personalization options to make the terminal fit your workflow and aesthetic preferences.
 
 ## Application Settings
 
@@ -72,7 +72,7 @@ When enabled, automatically highlights content such as timestamps, IP addresses,
 
 ## Shortcuts
 
-uniTerm supports customizable keyboard shortcuts.
+ai-ops-terminal supports customizable keyboard shortcuts.
 
 ![Shortcuts Settings](/imgs/shortcuts_light.webp)
 

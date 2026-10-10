@@ -48,6 +48,15 @@ var redactors = []struct {
 		re:  regexp.MustCompile(`(?i)(access_token|token)=("?[^\s"]+"?)`),
 		sub: "$1=***",
 	},
+	// 6. JSON 字符串中的敏感字段："password":"value" → "password":"***"
+	//    覆盖 password / passwd / pwd / token / access_token / secret /
+	//    api_key / apikey / private_key。值必须是双引号字符串（JSON 标准）。
+	//    非字符串值（数字/null/bool）不匹配——密码几乎总是字符串。
+	//    第二个捕获组保留冒号周围的空格（"key" : "val" → "key" : "***"）。
+	{
+		re:  regexp.MustCompile(`(?i)"(password|passwd|pwd|access?_token|token|secret|api_?key|private_?key)"(\s*:\s*)"[^"]*"`),
+		sub: `"$1"$2"***"`,
+	},
 }
 
 // Redact returns s with sensitive substrings replaced by "***". It is a

@@ -1,6 +1,6 @@
 # 远程终端
 
-uniTerm 支持 **SSH**、**Telnet** 和 **Mosh** 三种远程终端协议。
+ai-ops-terminal 支持 **SSH**、**Telnet** 和 **Mosh** 三种远程终端协议。
 
 ## SSH
 
@@ -100,7 +100,7 @@ Mosh（Mobile Shell）专为高延迟和间歇性网络设计，基于 UDP 传�
 
 ### 连接参数
 
-与 SSH 相同，uniTerm 先通过 SSH 连接到服务器，再自动启动 `mosh-server` 建立 UDP 会话。
+与 SSH 相同，ai-ops-terminal 先通过 SSH 连接到服务器，再自动启动 `mosh-server` 建立 UDP 会话。
 
 | 参数 | 说明 |
 |------|------|

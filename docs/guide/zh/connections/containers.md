@@ -1,6 +1,6 @@
 # 容器
 
-uniTerm 内置容器管理界面，支持 **Kubernetes** 集群管理，以及 **Docker / Podman / nerdctl** 容器引擎，可管理本机或 SSH 远程主机上的集群资源与容器镜像。
+ai-ops-terminal 内置容器管理界面，支持 **Kubernetes** 集群管理，以及 **Docker / Podman / nerdctl** 容器引擎，可管理本机或 SSH 远程主机上的集群资源与容器镜像。
 
 ## Kubernetes
 
@@ -57,7 +57,7 @@ uniTerm 内置容器管理界面，支持 **Kubernetes** 集群管理，以及 *
 
 ![容器管理](/imgs/container_light.webp)
 
-uniTerm 支持 **Docker**、**Podman** 和 **nerdctl** 三种容器引擎。
+ai-ops-terminal 支持 **Docker**、**Podman** 和 **nerdctl** 三种容器引擎。
 
 ### 连接参数
 

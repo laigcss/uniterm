@@ -60,10 +60,10 @@ func ExportUniterm(data session.ConnectionStoreData, password string) ([]byte, e
 func parseUniterm(data []byte, opts ParseOptions) (*ImportResult, error) {
 	var f utmFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parse uniterm json: %w", err)
+		return nil, fmt.Errorf("parse ai-ops-terminal json: %w", err)
 	}
 	if f.Format != unitermFormat {
-		return nil, fmt.Errorf("not a uniterm file (format=%q)", f.Format)
+		return nil, fmt.Errorf("not an ai-ops-terminal file (format=%q)", f.Format)
 	}
 	if f.Encrypted {
 		if opts.Password == "" {

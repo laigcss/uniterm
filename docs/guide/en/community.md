@@ -4,11 +4,11 @@
 
 If you encounter a bug or have a feature suggestion, please use the following channel:
 
-- [GitHub Issues](https://github.com/ys-ll/uniterm/issues)
+- [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues)
 
 When submitting an issue, please include as much as possible:
 - Operating system and version
-- uniTerm version
+- ai-ops-terminal version
 - Problem description and steps to reproduce
 - Relevant screenshots or logs
 
@@ -16,19 +16,19 @@ When submitting an issue, please include as much as possible:
 
 Pull Requests are welcome.
 
-- [GitHub Repository](https://github.com/ys-ll/uniterm)
+- [GitHub Repository](https://github.com/laigcss/ai-ops-terminal)
 
 ## Discussions
 
-- [GitHub Discussions](https://github.com/ys-ll/uniterm/discussions)
+- [GitHub Discussions](https://github.com/laigcss/ai-ops-terminal/discussions)
 
 ## Support the Project
 
-If you find uniTerm useful, consider giving it a Star ⭐
+If you find ai-ops-terminal useful, consider giving it a Star ⭐
 
-- [GitHub](https://github.com/ys-ll/uniterm)
-- [Gitee](https://gitee.com/ys-l/uniterm)
+- [GitHub](https://github.com/laigcss/ai-ops-terminal)
+- [Gitee](https://github.com/laigcss/ai-ops-terminal)
 
 ## License
 
-uniTerm is open-sourced under the [Apache 2.0](https://github.com/ys-ll/uniterm/blob/main/LICENSE) license.
+ai-ops-terminal is open-sourced under the [Apache 2.0](https://github.com/laigcss/ai-ops-terminal/blob/main/LICENSE) license.

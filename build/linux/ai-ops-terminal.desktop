@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=uniTerm
+Name=ai-ops-terminal
 Comment=Lightweight All-in-One Terminal Emulator
-Exec=/usr/local/bin/uniTerm
-Icon=uniterm
+Exec=/usr/local/bin/ai-ops-terminal
+Icon=ai-ops-terminal
 Terminal=false
 Type=Application
 Categories=System;TerminalEmulator;
-StartupWMClass=uniterm
+StartupWMClass=ai-ops-terminal

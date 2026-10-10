@@ -112,19 +112,19 @@ import { useContainerStore } from './stores/containerStore'
 import { useSyncStore } from './stores/syncStore'
 import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
-import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './composables/useKeyboardShortcuts'
+import { useKeybindings } from './composables/useKeybindings'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import { useDuplicateSession } from './composables/useDuplicateSession'
 import { useBackgroundImage } from './composables/useBackgroundImage'
 import { useContextMenu } from './composables/useContextMenu'
 import { useCredentials } from './composables/useCredentials'
-import type { ShortcutAction } from './types/settings'
+
 import { useI18n } from './i18n'
 import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, SessionStart } from '../bindings/github.com/ys-ll/uniterm/app'
 import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'
-import { Application, Events } from '@wailsio/runtime'
+import { Events } from '@wailsio/runtime'
 import { parseQuickConnect } from './utils/quickConnect'
 import { fileTransferProto } from './utils/fileTransferUtils'
 
@@ -335,45 +335,15 @@ const {
 } = useContextMenu()
 
 
-// Adjust the terminal font size, clamped to the valid range. Shared by the
-// Ctrl/Cmd+wheel zoom and the zoom-font-in/out shortcuts.
-function adjustFontSize(delta: number) {
-  const ts = settingsStore.settings.terminal
-  const next = Math.max(8, Math.min(32, ts.fontSize + delta))
-  if (next !== ts.fontSize) {
-    ts.fontSize = next
-    settingsStore.save()
-  }
-}
-
-function onWheel(e: WheelEvent) {
-  // Ctrl/Cmd + wheel zooms the terminal font — macOS (Cmd) and Windows/Linux
-  // (Ctrl) alike. Skipped when the user disables it (issue #671, e.g. for
-  // scroll-sensitive Mac mice); without preventDefault the wheel then scrolls
-  // normally.
-  if ((e.ctrlKey || e.metaKey) && settingsStore.settings.terminal.ctrlWheelZoom !== false) {
-    e.preventDefault()
-    adjustFontSize(e.deltaY < 0 ? 1 : -1)
-  }
-}
-
-// macOS-only system shortcuts (issue #339): Cmd+Q quits, Cmd+W closes the
-// active tab. Guarded by isMac so Windows/Linux never see this behaviour —
-// there Ctrl+Q/W stay free for the terminal and the existing keybindings.
-let isMac = false
-function onMacSystemShortcut(e: KeyboardEvent) {
-  if (!isMac || e.defaultPrevented) return
-  if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
-  const key = e.key.toLowerCase()
-  if (key === 'q') {
-    e.preventDefault()
-    Application.Quit()
-  } else if (key === 'w') {
-    e.preventDefault()
-    const t = tabStore.activeTab
-    if (t) closeTab(t.id)
-  }
-}
+// ── Keybindings / font zoom / panel navigation (下沉 useKeybindings) ──
+const {
+  onWheel, isMac, onMacSystemShortcut,
+  applyKeybindings,
+  installGlobalListener, uninstallGlobalListener,
+} = useKeybindings({
+  sidebarVisible, sidebarRef, aiSidebarRef,
+  closeTab, openSettings, duplicateSession, onToggleAiLock,
+})
 
 onMounted(async () => {
   connectionStore.load()
@@ -401,8 +371,8 @@ onMounted(async () => {
   // scrolls, but bails on defaultPrevented — so we must preempt it.
   document.addEventListener('wheel', onWheel, { passive: false, capture: true })
   // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
-  try { isMac = (await GetPlatform()) === 'darwin' } catch { isMac = false }
-  if (isMac) document.addEventListener('keydown', onMacSystemShortcut, true)
+  try { isMac.value = (await GetPlatform()) === 'darwin' } catch { isMac.value = false }
+  if (isMac.value) document.addEventListener('keydown', onMacSystemShortcut, true)
   // Keyboard shortcuts — load once on mount, watch for settings changes
   applyKeybindings()
   installGlobalListener()
@@ -462,46 +432,22 @@ onMounted(async () => {
   observeRdpArea()
   watch(() => activeTab.value, () => nextTick(observeRdpArea))
 
-  // Panel/Tab/StartTab menu actions
-  window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSftp(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-wsl-file', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectWslFile(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-monitor', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectMonitor(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-rdp', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectRDP(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-vnc', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectVNC(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-spice', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSPICE(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-x11-desktop', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectX11Desktop(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-db', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectDB(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-k8s', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectK8s(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-ftp', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectFtp(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-smb', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectSmb(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-webdav', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectWebdav(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
-  window.addEventListener('app:connect-s3', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; onConnectS3(c, prev?.type === 'start' ? prev : undefined) }
-  }) as EventListener)
+  // Panel/Tab/StartTab menu actions — 批量注册（A1 重构）：13 个事件统一模式
+  const connectEvents: Array<[string, (c: any, p?: any) => void]> = [
+    ['app:connect-sftp', onConnectSftp], ['app:connect-wsl-file', onConnectWslFile],
+    ['app:connect-monitor', onConnectMonitor], ['app:connect-rdp', onConnectRDP],
+    ['app:connect-vnc', onConnectVNC], ['app:connect-spice', onConnectSPICE],
+    ['app:connect-x11-desktop', onConnectX11Desktop], ['app:connect-db', onConnectDB],
+    ['app:connect-k8s', onConnectK8s], ['app:connect-ftp', onConnectFtp],
+    ['app:connect-smb', onConnectSmb], ['app:connect-webdav', onConnectWebdav],
+    ['app:connect-s3', onConnectS3],
+  ]
+  for (const [evt, handler] of connectEvents) {
+    window.addEventListener(evt, ((e: CustomEvent) => {
+      const d = e.detail; const c = d?.config || d
+      if (c) { const prev = tabStore.activeTab; handler(c, prev?.type === 'start' ? prev : undefined) }
+    }) as EventListener)
+  }
 
   // DB/Redis/Mongo tabs create their connection in App.vue (onConnectDB), not in
   // a content component, so their right-click 「重连」(Reconnect) is handled here.
@@ -509,128 +455,7 @@ onMounted(async () => {
   window.addEventListener('panel:reconnect', onPanelReconnectEvent)
 
   await checkCredentials()
-})
-
-function navigatePanel(dir: number) {
-  const t = tabStore.activeTab
-  if (!t || t.type !== 'workspace') return
-  if (t.panelIds.length <= 1) return
-  const current = t.activePanelId || t.panelIds[0]
-  const idx = t.panelIds.indexOf(current)
-  if (idx < 0) return
-  const next = t.panelIds[(idx + dir + t.panelIds.length) % t.panelIds.length]
-  tabStore.setActivePanel(t.id, next)
-}
-
-// ── Keyboard shortcut handlers (module-level so watch can access them) ──
-const actionHandlers: Record<ShortcutAction, () => void> = {
-  nextTab: () => tabStore.nextTab(),
-  prevTab: () => tabStore.prevTab(),
-  newConnection: () => { tabStore.createStartTab() },
-  toggleSidebar: () => {
-    if (sidebarVisible.value) {
-      sidebarVisible.value = false
-      const pid = tabStore.getActivePanelId()
-      if (pid) nextTick(() => focusPanelTerminal(pid))
-    } else {
-      sidebarVisible.value = true
-      nextTick(() => sidebarRef.value?.focusSearch())
-    }
-  },
-  focusTerminal: () => {
-    const pid = tabStore.getActivePanelId()
-    if (pid) focusPanelTerminal(pid)
-  },
-  lockAI: () => {
-    const t = tabStore.activeTab
-    if (!t) return
-    let panelId: string | null = null
-    if (t.type === 'workspace') {
-      panelId = t.activePanelId || t.panelIds[0] || null
-    } else if (t.type === 'terminal') {
-      panelId = t.panelId
-    }
-    if (panelId) onToggleAiLock(panelId)
-  },
-  focusAI: () => {
-    if (aiStore.visible) {
-      aiStore.visible = false
-      const pid = tabStore.getActivePanelId()
-      if (pid) nextTick(() => focusPanelTerminal(pid))
-    } else {
-      aiStore.visible = true
-      nextTick(() => aiSidebarRef.value?.focusInput())
-    }
-  },
-  closePanel: () => {
-    const t = tabStore.activeTab
-    if (!t) return
-    if (t.locked) return
-    if (t.type === 'workspace' && t.panelIds.length > 1) {
-      const panelId = t.activePanelId || t.panelIds[t.panelIds.length - 1]
-      const p = panelStore.getPanel(panelId)
-      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
-      companionStore.disposeForPanel(panelId).catch(() => {})
-      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
-      panelStore.removePanel(panelId)
-    } else if (t.type === 'workspace' && t.panelIds.length === 1) {
-      const panelId = t.panelIds[0]
-      const p = panelStore.getPanel(panelId)
-      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
-      companionStore.disposeForPanel(panelId).catch(() => {})
-      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
-      panelStore.removePanel(panelId)
-    } else {
-      closeTab(t.id)
-    }
-  },
-  terminalSearch: () => {
-    const pid = tabStore.getActivePanelId()
-    if (pid) window.dispatchEvent(new CustomEvent('terminal:open-search', { detail: { panelId: pid } }))
-  },
-  copy: () => {
-    const pid = tabStore.getActivePanelId()
-    if (pid) window.dispatchEvent(new CustomEvent('terminal:copy', { detail: { panelId: pid } }))
-  },
-  toggleLineNumbers: () => {
-    // Line numbers / timestamps are global terminal settings, so these toggle
-    // them directly rather than dispatching a per-panel event.
-    const cur = settingsStore.settings.terminal.showLineNumbers ?? false
-    settingsStore.updateTerminal({ showLineNumbers: !cur })
-  },
-  toggleTimestamps: () => {
-    const cur = settingsStore.settings.terminal.showTimestamps ?? false
-    settingsStore.updateTerminal({ showTimestamps: !cur })
-  },
-  zoomFontIn: () => adjustFontSize(1),
-  zoomFontOut: () => adjustFontSize(-1),
-  paste: () => {
-    const pid = tabStore.getActivePanelId()
-    if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
-  },
-  navigatePrev: () => navigatePanel(-1),
-  navigateNext: () => navigatePanel(1),
-  openSettings: () => openSettings(),
-  duplicateSession: () => {
-    // Same logic as the tab context menu's "复制会话": delegate to the shared
-    // duplicate routine so both entry points behave identically.
-    const tab = tabStore.activeTab
-    if (!tab) return
-    if (tab.type === 'workspace') {
-      // A workspace holds several panels; the shortcut duplicates the focused
-      // one (a terminal). Feed it to the shared routine as a terminal tab.
-      const pid = tabStore.getActivePanelId()
-      const panel = pid ? panelStore.getPanel(pid) : undefined
-      if (panel) duplicateSession({ type: 'terminal', panelId: pid, title: panel.title })
-      return
-    }
-    duplicateSession(tab)
-  },
-}
-
-function applyKeybindings() {
-  loadKeybindings(settingsStore.settings.keyboard, actionHandlers)
-}
+ })
 
 onUnmounted(() => {
   uninstallGlobalListener()
@@ -915,19 +740,16 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     // though it will not be persisted to the connection list.
     config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   }
-  if (config.type === 'sftp') { await onConnectSftp(config, prevStart); return }
-  if (config.type === 'scp') { await onConnectScp(config, prevStart, persist); return }
-  if (config.type === 'ftp') { await onConnectFtp(config, prevStart, persist); return }
-  if (config.type === 'smb') { await onConnectSmb(config, prevStart, persist); return }
-  if (config.type === 'webdav') { await onConnectWebdav(config, prevStart, persist); return }
-  if (config.type === 's3') { await onConnectS3(config, prevStart, persist); return }
-  if (config.type === 'rdp') { await onConnectRDP(config, prevStart, persist); return }
-  if (config.type === 'vnc') { await onConnectVNC(config, prevStart, persist); return }
-  if (config.type === 'spice') { await onConnectSPICE(config, prevStart, persist); return }
-  if (config.type === 'x11-desktop') { await onConnectX11Desktop(config, prevStart, persist); return }
-  if (config.type === 'database') { await onConnectDB(config, prevStart, persist); return }
-  if (config.type === 'k8s') { await onConnectK8s(config, prevStart, persist); return }
-  if (config.type === 'container') { onConnectContainer(config, prevStart, persist); return }
+  // 工厂查表分发（A1 重构）：消除 13 个 if-else 分支链。各 onConnectXxx 为
+  // 函数声明（hoisted），此处可安全引用。sftp 签名不含 persist，多余参数被忽略。
+  const connectDispatch: Record<string, (c: ConnectionConfig, p: any, s: boolean) => any> = {
+    sftp: onConnectSftp, scp: onConnectScp, ftp: onConnectFtp, smb: onConnectSmb,
+    webdav: onConnectWebdav, s3: onConnectS3, rdp: onConnectRDP, vnc: onConnectVNC,
+    spice: onConnectSPICE, 'x11-desktop': onConnectX11Desktop, database: onConnectDB,
+    k8s: onConnectK8s, container: onConnectContainer,
+  }
+  const dispatcher = connectDispatch[config.type]
+  if (dispatcher) { await dispatcher(config, prevStart, persist); return }
 
   // Credential check
   const resolved = await ensureCredentials(config)

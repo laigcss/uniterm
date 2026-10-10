@@ -109,10 +109,36 @@ const BYPASS_PATTERNS: RegExp[] = [
   /\$\(/,
   // 反引号命令替换
   /`/,
-  // 变量拼接执行：a="rm"; $a  —— 形如 var="..." 后 $var 出现
-  // 检测 "$" 紧跟字母且前面有变量赋值，简化为：出现 $VAR 形式的命令调用
-  /\$\w+\s/,
+  // 变量拼接执行：VAR="cmd"; $VAR ... — 将命令赋值给变量后通过 $VAR 执行，
+  // 无法静态判断 $VAR 展开内容，一律按危险处理。
+  // 仅匹配"赋值 + 分隔符 + $VAR 在命令首位"的精确模式，不会误伤
+  // echo $HOME / ls $PATH 等正常变量引用（那些 $VAR 不在命令首位）。
+  /\b\w+\s*=\s*["'][^"']*["']\s*[;&|]+\s*\$\w+/,
 ]
+
+/**
+ * 剥离 shell 语法噪音，收窄误报。
+ *
+ * 将变量引用 $VAR / ${VAR} 替换为占位符 _VAR_，并将重定向目标
+ * （> file、>> file、2> file、&> file 等，但保留 > /dev/xxx）移除，
+ * 使后续危险模式匹配只针对实际命令部分，不会把 $HOME 或 > output.txt
+ * 误判为危险命令。
+ *
+ * 注意：$() 命令替换和反引号 **不** 被剥离——它们是真正的命令替换，
+ * 属于 BYPASS_PATTERNS 的检测范畴，需在原始命令上匹配。
+ */
+function stripShellNoise(command: string): string {
+  let s = command
+  // 1. ${VAR} → _VAR_（花括号变量引用）
+  s = s.replace(/\$\{[a-zA-Z_]\w*\}/g, '_VAR_')
+  // 2. $VAR → _VAR_（裸变量引用，排除 $( 命令替换）
+  s = s.replace(/\$(?!\()[a-zA-Z_]\w*/g, '_VAR_')
+  // 3. 移除重定向目标文件名（保留到 /dev/ 的重定向，那是危险操作）
+  //    匹配 > file、>> file、2> file、2>> file、&> file、&>> file
+  //    但不匹配 > /dev/xxx（块设备重定向属 DANGEROUS_PATTERNS 管辖）
+  s = s.replace(/(?:&|\d+)?>>?\s*(?!\/dev\/)\S+/g, '')
+  return s
+}
 
 /**
  * 评估单条命令的本地风险等级。
@@ -130,18 +156,26 @@ export function assessLocalRisk(command: string): LocalRiskLevel {
   if (!command || typeof command !== 'string') return 'read'
 
   // 反绕过优先：一旦命中，直接 dangerous，不再继续。
+  // 注意：$() 和反引号是真正的命令替换，不属于"变量引用噪音"，
+  // 所以 BYPASS_PATTERNS 对原始命令做匹配。
   for (const re of BYPASS_PATTERNS) {
     if (re.test(command)) return 'dangerous'
   }
 
+  // 剥离 $VAR / ${VAR} / 重定向目标，收窄误报。
+  // 危险模式只对剥离后的命令部分匹配，避免 $HOME 或 > output.txt
+  // 等 shell 语法噪音被误判为危险命令。
+  const stripped = stripShellNoise(command)
+
   let isDangerous = false
   for (const re of DANGEROUS_PATTERNS) {
-    if (re.test(command)) {
+    if (re.test(stripped)) {
       isDangerous = true
       break
     }
   }
 
+  // 写操作对原始命令匹配：重定向 > file 确实是写操作，不应被剥离。
   let isWrite = false
   for (const re of WRITE_PATTERNS) {
     if (re.test(command)) {

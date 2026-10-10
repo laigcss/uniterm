@@ -1,33 +1,33 @@
 # Installation and First Connection
 
-This guide will help you download, install uniTerm, and establish your first connection.
+This guide will help you download, install ai-ops-terminal, and establish your first connection.
 
 
 ## Download and Installation
 
 ### Windows
 
-Download the `uniterm-amd64-installer.exe` installer from [GitHub Releases](https://github.com/ys-ll/uniterm/releases/latest) and double-click to run.
+Download the `ai-ops-terminal-amd64-installer.exe` installer from [GitHub Releases](https://github.com/laigcss/ai-ops-terminal/releases/latest) and double-click to run.
 
-Alternatively, download the `uniterm.exe` portable version, extract it, and run directly.
+Alternatively, download the `ai-ops-terminal.exe` portable version, extract it, and run directly.
 
 ### macOS
 
-Download `uniterm.darwin-universal.dmg`, open it, and drag uniTerm into the Applications folder.
+Download `ai-ops-terminal.darwin-universal.dmg`, open it, and drag ai-ops-terminal into the Applications folder.
 
 ### Linux
 
-Download `uniterm.linux-amd64.tar.gz`, extract it, and run:
+Download `ai-ops-terminal.linux-amd64.tar.gz`, extract it, and run:
 
 ```bash
-tar xzf uniterm.linux-amd64.tar.gz
-./uniterm
+tar xzf ai-ops-terminal.linux-amd64.tar.gz
+./ai-ops-terminal
 ```
 
 
 ## Creating Your First Connection
 
-1. Open uniTerm, click the **+** button in the left sidebar, or click the "New Connection" card.
+1. Open ai-ops-terminal, click the **+** button in the left sidebar, or click the "New Connection" card.
 
    ![New Connection](/imgs/new_connection_light.webp)
 
@@ -45,7 +45,7 @@ tar xzf uniterm.linux-amd64.tar.gz
 
 ## Interface Overview
 
-uniTerm's main interface is divided into the following areas:
+ai-ops-terminal's main interface is divided into the following areas:
 
 - **Left Sidebar** — Connection list, where all your connections are managed by groups
 - **Central Terminal Area** — Terminal tabs, supporting drag-and-drop splits to form workspaces

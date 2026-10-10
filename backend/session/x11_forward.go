@@ -340,10 +340,10 @@ func (f *x11Forwarder) handleX11(ch ssh.NewChannel, display string) {
 		}
 	}
 	addDataPad := int((4 - (addDataLen % 4)) % 4)
-		if addDataPad > 0 {
-			if _, err := io.ReadFull(local, make([]byte, addDataPad)); err != nil {
-			}
+	if addDataPad > 0 {
+		if _, err := io.ReadFull(local, make([]byte, addDataPad)); err != nil {
 		}
+	}
 
 	if status == 0 {
 	} else {
@@ -407,7 +407,7 @@ func forwardX11Setup(local io.Writer, remote io.Reader, realProto string, realCo
 	m := int(order.Uint16(header[8:10])) // auth-protocol-data length
 
 	// pad4(n) = (4 - (n % 4)) % 4
-	pad4 := func(x int) int { return (4 - (x%4)) % 4 }
+	pad4 := func(x int) int { return (4 - (x % 4)) % 4 }
 
 	// Read auth protocol name, then skip its padding.
 	authName := make([]byte, n)
@@ -525,7 +525,7 @@ func displayTargetString(display string) string {
 func xServerHint(goos string) string {
 	switch goos {
 	case "windows":
-		return "Windows: VcXsrv is bundled with uniTerm (plugins/vcxsrv). If missing, reinstall uniTerm."
+		return "Windows: VcXsrv is bundled with ai-ops-terminal (plugins/vcxsrv). If missing, reinstall ai-ops-terminal."
 	case "darwin":
 		return "macOS: install and start XQuartz, then try again."
 	default:

@@ -138,7 +138,7 @@ func (a *App) findMainWindow() uintptr {
 		// Verify it has our window title so we don't pick up invisible helper windows.
 		buf := make([]uint16, 256)
 		procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 255)
-		if windows.UTF16ToString(buf) == "uniTerm" {
+		if windows.UTF16ToString(buf) == "ai-ops-terminal" {
 			result = uintptr(hwnd)
 			return 0 // stop
 		}

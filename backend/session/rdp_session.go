@@ -259,7 +259,7 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	}()
 
 	if s.parentHwnd == 0 {
-		title, _ := windows.UTF16PtrFromString("uniTerm")
+		title, _ := windows.UTF16PtrFromString("ai-ops-terminal")
 		hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
 		if hwnd == 0 {
 			log.Writef("[RDP] ERROR: cannot find main window")

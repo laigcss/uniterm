@@ -66,42 +66,18 @@
 
         <div v-if="columns.length > 0" class="result-grid">
           <div class="result-table-wrap">
-            <el-table
-              :data="filteredTableData"
-              border
-              size="small"
-              style="width:100%"
-              class="db-result-table"
-              :empty-text="t('db.noData')"
-              @row-click="onRowClick"
-              @row-dblclick="onRowDblClick"
-            >
-              <el-table-column
-                v-for="col in columns"
-                :key="col"
-                :prop="col"
-                :label="col"
-                min-width="120"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  <span
-                    class="cell-value"
-                    :class="{ 'cell-null': row[col] === null || row[col] === undefined }"
-                  >{{ formatCellValue(row[col]) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column width="80" fixed="right">
-                <template #default="{ row }">
-                  <button class="btn btn-ghost btn-icon btn-sm" @click.stop="onRowDblClick(row)">
-                    <Pencil :size="14" />
-                  </button>
-                  <button class="btn btn-ghost btn-icon btn-sm danger" @click.stop="deleteDocument(row)">
-                    <Trash2 :size="14" />
-                  </button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <el-auto-resizer>
+              <template #default="{ height, width }">
+                <el-table-v2
+                  :columns="v2Columns"
+                  :data="filteredTableData"
+                  :width="width"
+                  :height="height"
+                  :row-height="28"
+                  fixed
+                />
+              </template>
+            </el-auto-resizer>
           </div>
           <div class="result-footer">
             <span class="result-count" v-if="searchResult">
@@ -161,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { Pencil, Trash2, Plus } from '@lucide/vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
@@ -236,6 +212,38 @@ const columns = computed(() => {
   // Prefer _id first, then sorted field names (cap columns)
   const rest = [...cols].filter(c => c !== '_id').sort()
   return ['_id', ...rest].slice(0, 40)
+})
+
+// P1: el-table-v2 虚拟滚动列配置。单击选中行，双击打开文档编辑器。
+const v2Columns = computed<any[]>(() => {
+  const dataCols = columns.value.map((col) => ({
+    key: col,
+    dataKey: col,
+    title: col,
+    width: 150,
+    flexGrow: 1,
+    cellRenderer: ({ cellData, rowData }: { cellData: any; rowData: any }) =>
+      h('span', {
+        class: { 'cell-value': true, 'cell-null': cellData === null || cellData === undefined },
+        onClick: () => onRowClick(rowData),
+        onDblclick: () => onRowDblClick(rowData),
+      }, formatCellValue(cellData)),
+  }))
+  return [
+    ...dataCols,
+    {
+      key: '__actions',
+      dataKey: '__actions',
+      title: '',
+      width: 80,
+      fixed: 'right' as const,
+      cellRenderer: ({ rowData }: { rowData: any }) =>
+        h('div', { class: 'row-actions-v2' }, [
+          h('button', { class: 'btn btn-ghost btn-icon btn-sm', onClick: (e: Event) => { e.stopPropagation(); onRowDblClick(rowData) } }, h(Pencil, { size: 14 })),
+          h('button', { class: 'btn btn-ghost btn-icon btn-sm danger', onClick: (e: Event) => { e.stopPropagation(); deleteDocument(rowData) } }, h(Trash2, { size: 14 })),
+        ]),
+    },
+  ]
 })
 
 const currentPage = computed(() => Math.floor(pageFrom.value / pageSize.value) + 1)
@@ -554,6 +562,12 @@ function onTopResizeStart(e: MouseEvent) {
   color: var(--text-muted);
   font-style: italic;
 }
+.row-actions-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.row-actions-v2 :deep(svg) { pointer-events: none; }
 .result-footer {
   padding-top: 8px;
   display: flex;

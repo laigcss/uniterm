@@ -1,6 +1,6 @@
 # 数据库
 
-uniTerm 内置数据库客户端，支持主流关系型数据库、Redis 和 MongoDB。
+ai-ops-terminal 内置数据库客户端，支持主流关系型数据库、Redis 和 MongoDB。
 
 ## 关系型数据库
 

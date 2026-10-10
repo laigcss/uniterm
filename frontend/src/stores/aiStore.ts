@@ -19,27 +19,52 @@ import { ElMessage } from 'element-plus'
 export function warnIfInsecureBaseURL(baseURL: string): boolean {
   if (!baseURL || typeof baseURL !== 'string') return true
   const trimmed = baseURL.trim()
-  // https 直接放行
-  if (trimmed.startsWith('https://')) return true
+  const lower = trimmed.toLowerCase()
+  // https 直接放行（大小写不敏感：HTTPS:// / Https:// 等均放行）
+  if (lower.startsWith('https://')) return true
   // 非 http:// 的也放行（可能是 ws:// 或自定义协议，不归本函数管）
-  if (!trimmed.startsWith('http://')) return true
+  if (!lower.startsWith('http://')) return true
   // http:// 但 host 是 localhost / 127.0.0.1 / 0.0.0.0 / [::1] 放行
   try {
-    // 简单解析：http://host[:port][/path]
-    const rest = trimmed.slice('http://'.length)
-    const hostPort = rest.split('/')[0]
-    const host = hostPort.split(':')[0]
+    // 用 URL 构造器解析，正确处理 IPv6 方括号语法（http://[::1]:8080）
+    // 和大小写不敏感的 scheme。URL.hostname 对 IPv6 自动去掉方括号。
+    const u = new URL(trimmed)
+    const host = u.hostname
     if (
       host === 'localhost' ||
       host === '127.0.0.1' ||
       host === '0.0.0.0' ||
-      host === '[::1]' ||
       host === '::1'
     ) {
       return true
     }
   } catch {
-    // 解析失败则继续弹警告
+    // URL 解析失败，回退到手动解析
+    try {
+      const rest = lower.slice('http://'.length)
+      const hostPort = rest.split('/')[0]
+      // IPv6 地址用方括号包裹：[::1]:8080
+      if (hostPort.startsWith('[')) {
+        const closeBracket = hostPort.indexOf(']')
+        if (closeBracket > 0) {
+          const host = hostPort.slice(1, closeBracket)
+          if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
+            return true
+          }
+        }
+      } else {
+        const host = hostPort.split(':')[0]
+        if (
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host === '0.0.0.0'
+        ) {
+          return true
+        }
+      }
+    } catch {
+      // 解析失败则继续弹警告
+    }
   }
   ElMessage.warning(t('ai.insecureBaseURLWarning'))
   return false

@@ -1,1 +1,3 @@
-uniterm.net
+uniterm.net# 部署域名说明：本项目已由 uniTerm 私有化为 ai-ops-terminal（github.com/laigcss/ai-ops-terminal）。
+# 此 CNAME 仍指向原 uniterm.net 域名，需用户决策是否更换为新域名。
+# 若继续使用 GitHub Pages 自定义域名，保留首行域名即可；若不再使用此域名，删除本文件后将回退到默认 *.github.io 域名。

@@ -1,6 +1,6 @@
 # Smart Suggestions
 
-When typing in the terminal, uniTerm provides real-time completion suggestions to help you enter commands faster.
+When typing in the terminal, ai-ops-terminal provides real-time completion suggestions to help you enter commands faster.
 
 ![Smart Suggestions](/imgs/auto_complete_light.webp)
 
@@ -35,7 +35,7 @@ Each quick command supports three actions:
 
 ## Terminal History
 
-uniTerm automatically records commands entered in the terminal, deduplicates them, and saves them locally.
+ai-ops-terminal automatically records commands entered in the terminal, deduplicates them, and saves them locally.
 
 - **History Panel** — Press `Ctrl + Shift + H` to open. Supports search and multi-select
 - **Run / Paste / Copy** — The same three execution methods as quick commands
