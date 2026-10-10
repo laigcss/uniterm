@@ -13,7 +13,7 @@ const (
 )
 
 // ParseOptions carries per-parse inputs. Password is the import password for the
-// uniterm own-format (encrypted=true) path, or the WindTerm master password for
+// ai-ops-terminal own-format (encrypted=true) path, or the WindTerm master password for
 // the windterm path; empty means "no password".
 type ParseOptions struct {
 	Password string

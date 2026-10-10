@@ -190,7 +190,7 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
-      # uniTerm's frontend is written against Wails v2-class style bindings
+      # ai-ops-terminal's frontend is written against Wails v2-class style bindings
       # (e.g. `new SyncConfig()`), so generate class-style JS bindings rather than
       # the `-ts -i` interface default.
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}}

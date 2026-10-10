@@ -88,7 +88,7 @@ export interface TerminalSettings {
   // readable. 1 = xterm's no-op default = disabled.
   minimumContrast: number
   // Override for the session output log directory. Empty means the
-  // OS default under ~/Documents/uniTerm/logs.
+  // OS default under ~/Documents/ai-ops-terminal/logs.
   sessionLogDir: string
   // Characters that act as word boundaries for xterm.js's double-click
   // word selection. Default mirrors the built-in xterm separators

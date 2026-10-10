@@ -26,10 +26,10 @@ var (
 	navicatNcxIV  = []byte("libcciv libcciv ")
 )
 
-// navicatConnType maps NCX ConnType values onto uniterm dbType keys.
+// navicatConnType maps NCX ConnType values onto ai-ops-terminal dbType keys.
 var navicatConnType = map[string]string{
-	"MYSQL":  "mysql",
-	"MARIADB": "mysql",
+	"MYSQL":      "mysql",
+	"MARIADB":    "mysql",
 	"POSTGRESQL": "postgres",
 	"MSSQL":      "sqlserver",
 	"ORACLE":     "oracle",
@@ -37,7 +37,7 @@ var navicatConnType = map[string]string{
 	"REDIS":      "redis",
 }
 
-// navicatDefaultPort per uniterm dbType for entries missing Port.
+// navicatDefaultPort per ai-ops-terminal dbType for entries missing Port.
 var navicatDefaultPort = map[string]int{
 	"mysql": 3306, "postgres": 5432, "sqlserver": 1433, "oracle": 1521,
 	"mongodb": 27017, "redis": 6379,

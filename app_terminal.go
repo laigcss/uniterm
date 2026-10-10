@@ -189,7 +189,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 				payload["clientW"] = cw
 				payload["clientH"] = ch
 				// The RDP ActiveX (and any credential/security dialog it owns) can
-				// push uniTerm behind other windows during connect. Raise the main
+				// push ai-ops-terminal behind other windows during connect. Raise the main
 				// window once the session is up so it stays visible above unrelated
 				// windows. No-op on non-Windows; harmless if already in front.
 				a.bringMainWindowToFront()
@@ -1109,7 +1109,7 @@ func (a *App) SetDefaultSessionLogDir(dir string) {
 
 // GetDefaultSessionLogDir returns the directory a fresh session log
 // would land in: the user's override if set, otherwise the OS default
-// (~/Documents/uniTerm/logs on all platforms). Used by the settings UI
+// (~/Documents/ai-ops-terminal/logs on all platforms). Used by the settings UI
 // to show the current default path as a placeholder.
 func (a *App) GetDefaultSessionLogDir() string {
 	a.customLogDirMu.RLock()

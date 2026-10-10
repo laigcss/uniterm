@@ -1,14 +1,14 @@
-# Contributing to uniTerm
+# Contributing to ai-ops-terminal
 
-Thank you for your interest in contributing to uniTerm! This guide covers how to report issues, suggest features, and submit code changes.
+Thank you for your interest in contributing to ai-ops-terminal! This guide covers how to report issues, suggest features, and submit code changes.
 
 ---
 
 ## Reporting Bugs
 
-Found a bug? Please open an issue on [GitHub Issues](https://github.com/ys-ll/uniterm/issues). To help us fix it quickly, include:
+Found a bug? Please open an issue on [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues). To help us fix it quickly, include:
 
-- uniTerm version (find it in **Settings → About**)
+- ai-ops-terminal version (find it in **Settings → About**)
 - Operating system and version
 - Steps to reproduce the bug
 - Expected vs actual behavior
@@ -16,7 +16,7 @@ Found a bug? Please open an issue on [GitHub Issues](https://github.com/ys-ll/un
 
 ## Suggesting Features
 
-Feature suggestions are also welcome via [GitHub Issues](https://github.com/ys-ll/uniterm/issues). Please search existing issues first to avoid duplicates. Describe the use case and why it would be valuable.
+Feature suggestions are also welcome via [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues). Please search existing issues first to avoid duplicates. Describe the use case and why it would be valuable.
 
 ## Setting Up Development Environment
 
@@ -32,8 +32,8 @@ Feature suggestions are also welcome via [GitHub Issues](https://github.com/ys-l
 ### Build & Run
 
 ```bash
-git clone https://github.com/ys-ll/uniterm.git
-cd uniTerm
+git clone https://github.com/laigcss/ai-ops-terminal.git
+cd ai-ops-terminal
 cd frontend && npm install && cd ..
 wails dev                   # Development mode
 wails build                 # Production build
@@ -68,7 +68,7 @@ wails build                 # Production build
 ## Project Structure
 
 ```
-uniTerm/
+ai-ops-terminal/
 ├── main.go                       # Entry point
 ├── app.go                        # Wails bindings, LLM API proxy, SFTP API
 ├── backend/
@@ -97,23 +97,23 @@ uniTerm/
 
 ## Questions?
 
-Feel free to ask in [GitHub Issues](https://github.com/ys-ll/uniterm/issues) or start a discussion in [GitHub Discussions](https://github.com/ys-ll/uniterm/discussions).
+Feel free to ask in [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) or start a discussion in [GitHub Discussions](https://github.com/laigcss/ai-ops-terminal/discussions).
 
 Thanks again for contributing! ❤️
 
 ---
 
-# 参与贡献 uniTerm
+# 参与贡献 ai-ops-terminal
 
-感谢你对 uniTerm 的关注！本文档介绍如何报告问题、建议功能和提交代码。
+感谢你对 ai-ops-terminal 的关注！本文档介绍如何报告问题、建议功能和提交代码。
 
 ---
 
 ## 报告 Bug
 
-发现 Bug 请在 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交 issue。为帮助我们快速定位问题，请包含以下信息：
+发现 Bug 请在 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 提交 issue。为帮助我们快速定位问题，请包含以下信息：
 
-- uniTerm 版本（在 **设置 → 关于** 中查看）
+- ai-ops-terminal 版本（在 **设置 → 关于** 中查看）
 - 操作系统及版本
 - 复现步骤
 - 预期行为与实际行为
@@ -121,7 +121,7 @@ Thanks again for contributing! ❤️
 
 ## 建议功能
 
-功能建议也请通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交。提交前请先搜索是否已有类似建议，避免重复。请描述使用场景以及为什么这个功能有价值。
+功能建议也请通过 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 提交。提交前请先搜索是否已有类似建议，避免重复。请描述使用场景以及为什么这个功能有价值。
 
 ## 搭建开发环境
 
@@ -137,8 +137,8 @@ Thanks again for contributing! ❤️
 ### 构建与运行
 
 ```bash
-git clone https://github.com/ys-ll/uniterm.git
-cd uniTerm
+git clone https://github.com/laigcss/ai-ops-terminal.git
+cd ai-ops-terminal
 cd frontend && npm install && cd ..
 wails dev                   # 开发模式
 wails build                 # 生产构建
@@ -173,7 +173,7 @@ wails build                 # 生产构建
 ## 项目结构
 
 ```
-uniTerm/
+ai-ops-terminal/
 ├── main.go                       # 入口文件
 ├── app.go                        # Wails 绑定、LLM API 代理、SFTP API
 ├── backend/
@@ -202,6 +202,6 @@ uniTerm/
 
 ## 有问题？
 
-如有疑问，欢迎在 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提问或在 [GitHub Discussions](https://github.com/ys-ll/uniterm/discussions) 发起讨论。
+如有疑问，欢迎在 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 提问或在 [GitHub Discussions](https://github.com/laigcss/ai-ops-terminal/discussions) 发起讨论。
 
 再次感谢你的贡献！❤️

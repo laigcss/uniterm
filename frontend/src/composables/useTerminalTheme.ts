@@ -19,7 +19,7 @@ export function resolveTerminalThemeName(
 /**
  * Resolve the real background color for an xterm theme.
  *
- * When the user enables a custom background image, uniterm previously set
+ * When the user enables a custom background image, ai-ops-terminal previously set
  * `theme.background = 'rgba(0,0,0,0)'` so the canvas would show the image
  * through. xterm.js however parses that string and stores `rgb:0/0/0` as the
  * background — which means OSC 11 (background query) responses also report
