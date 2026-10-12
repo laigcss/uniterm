@@ -27,7 +27,7 @@ MIN_GO_MINOR=27
 
 TARGET_GOOS="linux"
 TARGET_GOARCH="arm64"
-BUILD_TAGS="server"
+BUILD_TAGS="server,production"
 
 DEFAULT_OUTPUT="bin/ai-ops-terminal-harmonyos"
 
@@ -164,7 +164,7 @@ info "前端产物: $FRONTEND_DIST (${DIST_FILE_COUNT} 个文件)"
 # -----------------------------------------------------------------------------
 log "开始 Go 交叉编译"
 info "目标架构: ${TARGET_GOOS}/${TARGET_GOARCH} (鸿蒙 Linux 内核 + ARM64)"
-info "构建标签: ${BUILD_TAGS} (Wails server 模式, 无 CGO)"
+info "构建标签: ${BUILD_TAGS} (Wails server 模式 + 生产 asset server, 无 CGO)"
 info "版本号:   ${VERSION}"
 info "输出路径: ${OUTPUT_PATH}"
 
