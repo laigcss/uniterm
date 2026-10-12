@@ -1,0 +1,3 @@
+# 此目录用于存放 Go 二进制文件（打包进应用）
+# 实际二进制由 scripts/build-harmonyos.sh 构建后复制到此目录
+# 文件名: ai-ops-terminal（无扩展名）

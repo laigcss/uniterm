@@ -1,0 +1,7 @@
+此文件为占位文件。
+
+libnative_process.so 是 native_process.c 的 NDK 编译产物。
+实际编译后此文件将被替换为真正的共享库二进制。
+
+编译方式见 native_process.c 文件头部注释，或在 DevEco Studio 中
+配置 CMakeLists.txt 后自动编译。

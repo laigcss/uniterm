@@ -13,10 +13,10 @@ import (
 	// F-201: register pprof handlers on the default mux.
 	_ "net/http/pprof"
 
-	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/laigcss/ai-ops-terminal/backend/log"
 	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 var Version = "dev"
@@ -44,6 +44,13 @@ func main() {
 		println("Failed to init log:", err.Error())
 	}
 	defer log.Close()
+
+	// Apply server-mode configuration before creating the application.
+	// In desktop builds this is a no-op (see server_config_noserver.go);
+	// in server builds (//go:build server) it bridges AI_OPS_PORT /
+	// AI_OPS_HOST env vars onto Wails' WAILS_SERVER_PORT / WAILS_SERVER_HOST
+	// so the HarmonyOS launcher can control the listen address.
+	serverModeConfig()
 
 	// F-201: expose net/http/pprof on localhost:6060 for dev builds only.
 	// Production builds (wails build) leave Version unchanged from "dev"
@@ -126,6 +133,24 @@ func main() {
 		Name:       "ai-ops-terminal",
 		Assets:     application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		OnShutdown: app.shutdown,
+		// Server configures the HTTP server used when the binary is built with
+		// the `server` build tag (CGO-free, headless). This is the HarmonyOS
+		// adaptation path D: a static Go binary runs as a subprocess serving
+		// the frontend over HTTP, and an ArkWeb shell on the device connects
+		// to localhost. In desktop builds (no `server` tag) this field is
+		// ignored entirely, so it is safe to set unconditionally.
+		//
+		// Defaults: host localhost, port 9245. Both can be overridden at run
+		// time via AI_OPS_HOST / AI_OPS_PORT (bridged onto Wails' own
+		// WAILS_SERVER_HOST / WAILS_SERVER_PORT in serverModeConfig).
+		// WebSocketAllowAllOrigins is required because the ArkWeb origin on
+		// HarmonyOS does not match the server's host origin, so the default
+		// same-origin check would reject the WebSocket upgrade.
+		Server: application.ServerOptions{
+			Host:                     "localhost",
+			Port:                     9245,
+			WebSocketAllowAllOrigins: true,
+		},
 		// WebviewUserDataPath is a Windows-only path for WebView2 user data; it is
 		// harmless (ignored) on other platforms.
 		Windows: application.WindowsOptions{

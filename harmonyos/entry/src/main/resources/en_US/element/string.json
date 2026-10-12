@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "ai-ops-terminal HarmonyOS shell"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "ai-ops-terminal entry"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "ai-ops-terminal"
+    },
+    {
+      "name": "reason_internet",
+      "value": "Network permission required to connect to local Go backend server"
+    },
+    {
+      "name": "reason_network_info",
+      "value": "Network info required to detect backend server status"
+    }
+  ]
+}

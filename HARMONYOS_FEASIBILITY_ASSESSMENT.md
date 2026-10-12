@@ -662,3 +662,173 @@ Wails bindings      HTTP REST + WebSocket    通信层改造
 localStorage        ArkWeb 支持              无需改动
 @wailsio/runtime    fetch / WebSocket        通信层改造
 ```
+---
+
+## 路径D 实施进展（2026-10-12 更新）
+
+> **更新性质**：路径A 实施过程中的重大发现与方案简化
+> **核心发现**：Wails v3 内置 server 模式（`-tags server` build tag），无需自建 HTTP 服务器即可将 Go 后端以纯 HTTP/WebSocket 模式运行
+> **方案定位**：路径D = 路径A 的简化实现，Go 后端作为鸿蒙设备本地子进程运行（非远程部署），ArkWeb 加载 `localhost:9245`
+
+### D.1 Wails server 模式发现
+
+在实施路径A 的过程中，对 Wails v3 源码进行分析时发现了一个重大特性：**内置 server 模式**。
+
+**发现机制**：Wails v3 源码中存在一组以 `//go:build server` build tag 标注的文件（如 `application_server.go`），当使用 `go build -tags server` 编译时，这些文件替代默认的 GUI 平台实现，使应用以纯 HTTP 服务器模式运行。
+
+**server 模式自带能力**：
+
+| 能力 | 端点/机制 | 说明 |
+|------|----------|------|
+| HTTP 服务器 | 根路径 `/` | 服务前端静态资源（Vue3 SPA） |
+| WebSocket 事件推送 | `/wails/events` | 双向事件总线，替代 Wails 桌面 IPC |
+| WebSocket 流 | `/wails/stream/ws` | 终端 I/O 流（PTY 输入输出） |
+| 健康检查 | `/health` | 供外部进程探测服务器就绪状态 |
+| Binding 方法暴露 | HTTP POST `/wails/call` | 自动暴露所有 Wails binding 方法为 HTTP 端点 |
+
+**GUI 操作降级为 no-op**：在 server 模式下，所有依赖平台 GUI 的操作（对话框、剪贴板、窗口管理、系统托盘、菜单等）均为空实现，不产生副作用。这意味着业务代码无需任何条件分支即可在 server 模式下运行。
+
+**CGO 依赖消除**：
+
+| 依赖 | CGO 使用情况 | 说明 |
+|------|-------------|------|
+| `github.com/creack/pty` | 仅 BSD 变体使用 CGO | Linux 实现为纯 Go，`CGO_ENABLED=0` 可正常编译 |
+| 项目其他依赖 | 无 CGO | `go list -deps -f '{{if .CgoFiles}}{{.ImportPath}}{{end}}' ./...` 输出为空 |
+
+因此 `CGO_ENABLED=0 go build -tags server .` 可产出**纯静态链接二进制**，无任何动态库依赖，可在鸿蒙 musl libc 环境运行。
+
+### D.2 简化后的方案：原方案 vs 新方案
+
+路径A 的原始设想（见本文档 §4.1、§6.2）需要大量手动改造工作。发现 Wails server 模式后，方案大幅简化。
+
+| 维度 | 原方案（路径A 原始设想） | 新方案（路径D，利用 Wails server 模式） |
+|------|------------------------|----------------------------------------|
+| HTTP 服务器 | 自建（`net/http` 或 gin/echo） | Wails 内置，零代码 |
+| Binding 方法暴露 | 手动包装 50-80 个方法为 HTTP handler | Wails 自动暴露所有 binding，零代码 |
+| 方法分发机制 | 反射式分发或手写路由 | Wails 内置 `/wails/call` 统一分发 |
+| 终端 I/O | 手动实现 WebSocket PTY 代理 | Wails 内置 `/wails/stream/ws` |
+| 事件推送 | 手动实现 WebSocket 事件总线 | Wails 内置 `/wails/events` |
+| 前端通信层改造 | `@wailsio/runtime` → `fetch`/`WebSocket`（约 1000-2000 行） | **无需改造**，`@wailsio/runtime` 在 server 模式下自动走 HTTP/WS |
+| 业务代码改动 | 约 500-800 行包装代码 | **零改动** |
+| 后端部署位置 | 远程服务器 | 鸿蒙设备本地子进程（`localhost:9245`） |
+| TLS + Token 认证 | 必须实现 | 本地回环无需（`localhost` 仅设备内可达） |
+| 预计工期 | 8-12 周 | 显著缩短（通信层改造阶段基本消除） |
+
+**关键结论**：新方案**无需修改任何业务代码**。Wails server 模式自动完成了原方案中工作量最大的部分（通信层改造 + binding 方法包装），路径D 的实施重心从「改造通信层」转移到「鸿蒙工程壳 + 子进程管理」。
+
+### D.3 已完成的实施
+
+以下 5 项工作已完成：
+
+| # | 文件/目录 | 说明 |
+|:--:|----------|------|
+| 1 | `main.go` | 添加 `Server: application.ServerOptions{Host: "localhost", Port: 9245, WebSocketAllowAllOrigins: true}` 配置，启用 Wails 内置 server 模式 |
+| 2 | `server_config.go`（`//go:build server`） | server 模式环境变量桥接：将 `AI_OPS_HOST`/`AI_OPS_PORT` 映射到 Wails 的 `WAILS_SERVER_HOST`/`WAILS_SERVER_PORT`，支持配置优先级 |
+| 3 | `server_config_noserver.go`（`//go:build !server`） | 桌面模式空实现，保持 `serverModeConfig()` 签名一致，使 `main.go` 可无条件调用 |
+| 4 | `scripts/build-harmonyos.sh` | 鸿蒙交叉编译构建脚本，执行前端构建 + Go 交叉编译，产出静态链接 ELF ARM64 二进制（50.6MB） |
+| 5 | `harmonyos/` | 鸿蒙工程壳骨架：ArkTS 应用 + ArkWeb 组件 + NDK `libnative_process.so`（execve 启动 Go 二进制） |
+
+**`server_config.go` 的配置优先级**（从高到低）：
+
+1. `WAILS_SERVER_HOST` / `WAILS_SERVER_PORT`（显式设置）
+2. `AI_OPS_HOST` / `AI_OPS_PORT`（应用自有环境变量）
+3. `main.go` 中的 `ServerOptions`（`localhost:9245`）
+4. Wails 默认值（`localhost:8080`）
+
+### D.4 构建验证
+
+三项构建验证全部通过：
+
+| 验证项 | 命令 | 结果 | 说明 |
+|--------|------|:----:|------|
+| 桌面构建 | `go build .` | ✅ | 桌面模式构建不受 server 配置影响 |
+| server 模式构建 | `CGO_ENABLED=0 go build -tags server .` | ✅ | 纯 Go 编译，无 CGO 依赖 |
+| 鸿蒙交叉编译 | `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags server .` | ✅ | 产出鸿蒙可运行的静态链接二进制 |
+
+**产出二进制特征**：
+
+```
+ELF 64-bit LSB executable, ARM aarch64, statically linked, stripped
+大小: 50.6MB
+```
+
+- **静态链接**：无任何动态库依赖，规避鸿蒙 musl libc vs glibc 不兼容问题
+- **ARM aarch64**：匹配鸿蒙 arm64-v8a 架构
+- **ELF 格式**：鸿蒙 ABI 使用 ELF 二进制格式（见 §3.3）
+- **stripped**：已去除调试符号，减小体积
+
+### D.5 鸿蒙工程壳
+
+`harmonyos/` 目录是鸿蒙应用壳骨架，负责在设备上启动 Go 二进制子进程并用 ArkWeb 加载前端。
+
+**目录结构**：
+
+```
+harmonyos/
+├── README.md                          # 工程说明文档
+├── build-profile.json5                # 鸿蒙构建配置
+├── oh-package.json5                   # 鸿蒙包配置
+├── entry/                             # 应用主模块
+│   └── src/main/
+│       ├── ets/                       # ArkTS 源码
+│       │   ├── entryability/
+│       │   │   └── EntryAbility.ets   # 应用入口（生命周期管理）
+│       │   ├── pages/
+│       │   │   └── Index.ets          # 主页面（ArkWeb 组件）
+│       │   └── utils/
+│       │       └── NativeProcess.ets  # NDK 子进程管理封装
+│       ├── module.json5               # 模块配置（权限、能力声明）
+│       └── resources/
+│           ├── base/                  # 基础资源（颜色、字符串、路由配置）
+│           ├── en_US/                 # 英文本地化资源
+│           └── rawfile/               # 原始资源（Go 二进制将放置于此）
+└── libs/
+    └── arm64-v8a/
+        └── libnative_process.so       # NDK 原生库（fork + execve 启动子进程）
+```
+
+**运行原理**：
+
+```
+应用启动 → EntryAbility 初始化
+    → 释放 Go 二进制: resources/rawfile/ → 应用沙箱 filesDir（赋予执行权限）
+    → 启动子进程: NDK fork + execve 启动 Go 二进制
+    → 等待就绪: 轮询 http://localhost:9245/health 健康检查
+    → 加载前端: ArkWeb 加载 http://localhost:9245（Vue3 + xterm.js UI）
+```
+
+1. **应用启动**：HarmonyOS 加载 ArkTS 应用壳，`EntryAbility` 初始化
+2. **释放 Go 二进制**：将 `resources/rawfile/` 中内嵌的 Go 二进制复制到应用沙箱可写目录（`filesDir`），赋予执行权限
+3. **启动子进程**：通过 NDK `fork + execve` 系统调用启动 Go 二进制作为子进程
+4. **等待就绪**：轮询 `http://localhost:9245/health` 健康检查端点，等待 HTTP 服务器就绪
+5. **加载前端**：ArkWeb 组件加载 `http://localhost:9245`，显示 Vue 3 + xterm.js 前端 UI
+
+**关键设计点**：
+
+- Go 二进制作为**子进程**运行，而非鸿蒙原生库——绕过 Go 不支持 `GOOS=ohos` 的限制
+- 通信走 **localhost 回环**——无需 TLS/Token，安全性由鸿蒙应用沙箱隔离保证
+- ArkWeb 加载 **HTTP 地址**而非本地文件——前端由 Go 内置 HTTP 服务器提供，保持与桌面版完全一致的资源加载方式
+
+### D.6 后续步骤
+
+| # | 待办事项 | 优先级 | 说明 |
+|:--:|---------|:------:|------|
+| 1 | 鸿蒙设备/模拟器实测 | 高 | 在真实鸿蒙环境验证 Go 二进制能否正常启动、ArkWeb 能否加载前端、xterm.js 终端交互是否正常 |
+| 2 | NDK 子进程管理完善 | 高 | 实现子进程生命周期管理（启动/停止/重启/崩溃恢复）、信号处理、日志收集 |
+| 3 | 文件对话框替代方案 | 中 | server 模式下 Wails 对话框为 no-op，需通过 ArkTS FilePicker + JSBridge 实现文件选择/保存 |
+| 4 | 系统通知替代方案 | 中 | server 模式下 Wails 通知为 no-op，需通过 ArkTS NotificationManager + JSBridge 实现 |
+| 5 | 剪贴板替代方案 | 中 | server 模式下 Wails 剪贴板为 no-op，需通过 ArkTS pasteboard + JSBridge 实现 |
+| 6 | 窗口管理替代方案 | 中 | server 模式下 Wails 窗口 API 为 no-op，需通过 ArkTS window API + JSBridge 实现多窗口/分屏 |
+| 7 | Go 二进制体积优化 | 低 | 当前 50.6MB，可通过 `-ldflags '-s -w'`、UPX 压缩、按需裁剪依赖进一步减小 |
+| 8 | 应用打包与签名 | 中 | 使用 DevEco Studio 打包 HAP/APP，配置签名 |
+| 9 | 离线场景验证 | 低 | 验证纯离线环境下（无网络）全部功能可用，确认无外部网络依赖 |
+| 10 | 性能测试与优化 | 中 | 鸿蒙 PC 上 ArkWeb + Go 子进程的内存/CPU/渲染性能基准测试 |
+
+**最关键的验证**（第 1 项）：当前所有验证均在 macOS 开发机上完成交叉编译，尚未在真实鸿蒙设备/模拟器上运行。需确认：
+
+- [ ] 静态链接 ELF ARM64 二进制能否在鸿蒙 musl libc 环境正常执行
+- [ ] NDK `fork + execve` 能否成功启动 Go 子进程
+- [ ] Go 子进程能否正常监听 `localhost:9245`
+- [ ] ArkWeb 能否加载 `http://localhost:9245` 并正确渲染 Vue3 + xterm.js
+- [ ] WebSocket 终端流（`/wails/stream/ws`）在 ArkWeb 中是否稳定
+- [ ] 长时间终端会话的内存稳定性（V8 OOM 风险，见 §3.1）

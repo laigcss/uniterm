@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "ai-ops-terminal 鸿蒙应用壳"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "ai-ops-terminal 入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "ai-ops-terminal"
+    },
+    {
+      "name": "reason_internet",
+      "value": "需要网络权限以连接本地 Go 后端服务器"
+    },
+    {
+      "name": "reason_network_info",
+      "value": "需要获取网络信息以检测后端服务器状态"
+    }
+  ]
+}
