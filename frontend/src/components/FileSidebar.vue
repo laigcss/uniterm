@@ -131,7 +131,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
   SftpListRemote, SftpChangeRemoteDir, SftpOpenExternalEditor, ListSessions,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import {
   useFilePanel, useConflictDialog, useFileDialogs, useFileListing, useChmodDialog,
   useEditorBridge, useDragOver, useNativeFileDrop, remoteFileOps, resolveRemoteTarget, joinPath,

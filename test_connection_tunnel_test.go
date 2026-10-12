@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/ys-ll/uniterm/backend/session"
-	"github.com/ys-ll/uniterm/backend/store"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/store"
 )
 
 // stubPasswordStore satisfies store.PasswordStore without any crypto.

@@ -15,9 +15,9 @@ import (
 
 	"go.bug.st/serial"
 
-	"github.com/ys-ll/uniterm/backend/log"
-	"github.com/ys-ll/uniterm/backend/session"
-	"github.com/ys-ll/uniterm/backend/store"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/store"
 )
 
 // SessionManager methods

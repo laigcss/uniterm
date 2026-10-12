@@ -1,4 +1,4 @@
-import { ChatCompletion } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { ChatCompletion } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 // A3: AVAILABLE_TOOLS now lives in ./tools (registry-derived). Re-exported

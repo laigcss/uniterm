@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 	"golang.org/x/crypto/pbkdf2"
 )
 

@@ -50,9 +50,9 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
     brightWhite: '#d0d0d8'
   }
   switch (name) {
-    case 'uniterm-dark':
+    case 'aiops-dark':
       return base
-    case 'uniterm-light':
+    case 'aiops-light':
       return {
         background: '#e8e8e8',
         foreground: '#2c2c2c',

@@ -154,7 +154,7 @@ import {
   SftpChangeRemoteDir, SftpChangeLocalDir,
   SftpGet, SftpPut,
   SftpOpenExternalEditor, OpenExternalEditorLocal, ListSessions,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import FileList from './FileList.vue'
 import TransferPanel from './TransferPanel.vue'
 import FileChmodDialog from './FileChmodDialog.vue'

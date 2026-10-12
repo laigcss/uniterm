@@ -156,7 +156,7 @@ import { useI18n } from '../i18n'
 import { useBatchStore, type BatchSessionStatus } from '../stores/batchStore'
 import { assessLocalRisk } from '../services/localRisk'
 import { executeBatch, exportCsv, exportJson } from '../services/batchExecute'
-import { OpenFileDialogFiltered, ReadFileBase64, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { OpenFileDialogFiltered, ReadFileBase64, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import type { ConnectionConfig } from '../types/session'
 
 const { t } = useI18n()

@@ -15,8 +15,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"github.com/ys-ll/uniterm/backend/log"
-	"github.com/ys-ll/uniterm/backend/store"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/store"
 )
 
 var Version = "dev"
@@ -51,7 +51,7 @@ func main() {
 	// not open a listener.
 	startPprofIfDev()
 
-	webviewDataPath := filepath.Join(os.TempDir(), fmt.Sprintf("uniTerm-webview2-%d", os.Getpid()))
+	webviewDataPath := filepath.Join(os.TempDir(), fmt.Sprintf("aiops-webview2-%d", os.Getpid()))
 	os.MkdirAll(webviewDataPath, 0700)
 
 	app := NewApp(webviewDataPath)
@@ -74,7 +74,7 @@ func main() {
 	savedX, savedY := 0, 0
 	savedMaxed := false
 	if configDir, err := os.UserConfigDir(); err == nil {
-		ls := store.NewLocalStateStore(filepath.Join(configDir, "uniTerm"))
+		ls := store.NewLocalStateStore(filepath.Join(configDir, "ai-ops-terminal"))
 		done := make(chan store.LocalState, 1)
 		go func() {
 			if state, err := ls.Load(); err == nil {
@@ -131,7 +131,7 @@ func main() {
 		Windows: application.WindowsOptions{
 			WebviewUserDataPath: webviewDataPath,
 		},
-		// Fixed program name so the window's WM_CLASS stays "uniterm" — the
+		// Fixed program name so the window's WM_CLASS stays "ai-ops-terminal" — the
 		// installed package's .desktop file sets StartupWMClass to the same
 		// value, which is what lets the dock/taskbar associate the running
 		// window with the app icon.

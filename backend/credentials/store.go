@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	stdsync "sync"
 
-	unitsync "github.com/ys-ll/uniterm/backend/sync"
+	unitsync "github.com/laigcss/ai-ops-terminal/backend/sync"
 )
 
 // Keychain is the subset of sync.Keychain this package needs.

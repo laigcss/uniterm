@@ -1,7 +1,7 @@
 // tools/useSkill.ts — use_skill 工具定义。
 
 import { useSkillStore } from '../../stores/skillStore'
-import { ListSkillFiles } from '../../../bindings/github.com/ys-ll/uniterm/app'
+import { ListSkillFiles } from '../../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import {
   InputValidationError,
   validateRequiredString,

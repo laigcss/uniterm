@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/kevinburke/ssh_config"
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 // NOTE: corrected against ssh_config v1.2.0's real API — Host.Patterns is a

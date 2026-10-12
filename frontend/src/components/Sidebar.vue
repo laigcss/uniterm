@@ -500,7 +500,7 @@ import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, FOLLOW_APP_THEME, SIDEBAR_TAB_DEFAULTS, SIDEBAR_TAB_ORDER } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { GetAllFonts } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { GetAllFonts } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { useLocalStateStore } from '../stores/localStateStore'
 
 defineProps<{

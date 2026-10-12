@@ -42,12 +42,12 @@ var (
 // default ANSI/OEM code page (e.g. GBK/936 on zh-CN Windows); MSYS2 shells
 // like Git Bash write raw UTF-8 to their controlling console, which the
 // console then reinterprets under that legacy code page before ConPTY
-// re-serializes it as the VT stream uniterm reads, producing mojibake that
+// re-serializes it as the VT stream ai-ops-terminal reads, producing mojibake that
 // does not occur in standalone Git Bash (which runs under mintty and never
 // goes through the Win32 console subsystem). Windows Terminal and VS Code's
-// integrated terminal apply the same fix. uniterm's own process is a GUI
+// integrated terminal apply the same fix. ai-ops-terminal's own process is a GUI
 // subsystem app with no console of its own, so AttachConsole/FreeConsole
-// here only ever touches the child's console, never uniterm's.
+// here only ever touches the child's console, never ai-ops-terminal's.
 func forceUTF8ConsoleCodePage(pid int) {
 	consoleAttachMu.Lock()
 	defer consoleAttachMu.Unlock()

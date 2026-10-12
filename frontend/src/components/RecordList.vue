@@ -64,7 +64,7 @@ import { ref, computed } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
-import { RecorderList, RecorderDelete } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { RecorderList, RecorderDelete } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import TerminalPlayer from './TerminalPlayer.vue'
 
 interface RecordingInfo {

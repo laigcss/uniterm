@@ -9,7 +9,7 @@
 // All data lines use raw (non-base64) terminal bytes encoded as a JSON string,
 // which preserves ANSI escape sequences for faithful replay in xterm.js.
 //
-// Files live under <home>/.uniterm/records/<sessionId>_<unixTs>.cast. The
+// Files live under <home>/.ai-ops-terminal/records/<sessionId>_<unixTs>.cast. The
 // directory is created on first use. A process-wide Recorder instance tracks
 // open file handles so the hot path (WriteRecordingData) is a single mutex'd
 // append, not an open/write/close cycle per data chunk.
@@ -80,15 +80,15 @@ func New() *Recorder {
 	return globalInst
 }
 
-// recordsDir resolves <home>/.uniterm/records, creating it on first use.
-// Falls back to <tmp>/uniTerm/records if the home directory is unavailable.
+// recordsDir resolves <home>/.ai-ops-terminal/records, creating it on first use.
+// Falls back to <tmp>/ai-ops-terminal/records if the home directory is unavailable.
 func (r *Recorder) recordsDir() (string, error) {
 	r.dirOnce.Do(func() {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			r.baseDir = filepath.Join(os.TempDir(), "uniTerm", "records")
+			r.baseDir = filepath.Join(os.TempDir(), "ai-ops-terminal", "records")
 		} else {
-			r.baseDir = filepath.Join(home, ".uniterm", "records")
+			r.baseDir = filepath.Join(home, ".ai-ops-terminal", "records")
 		}
 		r.dirErr = os.MkdirAll(r.baseDir, 0755)
 	})

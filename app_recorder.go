@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ys-ll/uniterm/backend/recorder"
+	"github.com/laigcss/ai-ops-terminal/backend/recorder"
 )
 
 // app_recorder.go exposes the terminal recorder (asciinema cast v2) as Wails
@@ -19,7 +19,7 @@ func recorderInst() *recorder.Recorder {
 	return recorder.New()
 }
 
-// RecorderStart creates a new cast v2 file under ~/.uniterm/records/ and
+// RecorderStart creates a new cast v2 file under ~/.ai-ops-terminal/records/ and
 // writes the JSON header. Returns the absolute file path the frontend should
 // pass to subsequent RecorderWriteData / RecorderStop calls.
 func (a *App) RecorderStart(sessionID string, width int, height int) (string, error) {

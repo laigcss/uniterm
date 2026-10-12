@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/ys-ll/uniterm/backend/credentials"
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/credentials"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 const proxyStoreFileName = "proxies.json"

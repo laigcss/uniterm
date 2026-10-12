@@ -85,7 +85,7 @@ interface SavedServer extends MCPServerConfig {
   envStr: string
 }
 
-const STORAGE_KEY = 'uniterm.mcpServers'
+const STORAGE_KEY = 'aiops.mcpServers'
 
 const servers = ref<SavedServer[]>([])
 const connectedNames = ref<Set<string>>(new Set())

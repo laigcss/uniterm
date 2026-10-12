@@ -1571,7 +1571,7 @@
   "settings.autoRecord": "Auto-record new sessions",
   "settings.autoRecordHint": "Automatically start asciinema cast recording when a new terminal connects.",
   "settings.recordingsDir": "Recordings directory",
-  "settings.recordingsDirHint": "Empty = ~/.uniterm/records/",
+  "settings.recordingsDirHint": "Empty = ~/.ai-ops-terminal/records/",
   "common.refresh": "Refresh",
   "record.manage": "Manage recordings",
   "mcp.serverName": "Server name",

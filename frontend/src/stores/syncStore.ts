@@ -10,9 +10,9 @@ import {
   SyncConfigureRepo,
   SyncChangePassword,
   SyncDeleteRepo,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
-import { SyncConfig } from '../../bindings/github.com/ys-ll/uniterm/backend/sync/models'
+import { SyncConfig } from '../../bindings/github.com/laigcss/ai-ops-terminal/backend/sync/models'
 import { backendErrorText } from '../utils/backendError'
 // Module-level un-subscribers for sync:conflict / sync:completed listeners.
 // Tracked at module scope so re-imports under HMR can detach the previous

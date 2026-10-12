@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ys-ll/uniterm/backend/container"
-	"github.com/ys-ll/uniterm/backend/k8s"
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/container"
+	"github.com/laigcss/ai-ops-terminal/backend/k8s"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 // K8sContextInfo 是前端可见的 context 元信息。

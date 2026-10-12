@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, reactive, watch } from 'vue'
 import type { AIMessage, AIConfig, ExecutionMode, InteractionMode, AISession, AIAgentStatus } from '../types/ai'
-import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { useLocalStateStore } from './localStateStore'
 import { Events } from '@wailsio/runtime'
 import { t } from '../i18n'

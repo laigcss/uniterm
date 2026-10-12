@@ -7,7 +7,7 @@ import {
   SftpLocalCopy, SftpLocalMove, SftpLocalRename, SftpLocalRemove, SftpLocalMkdir, SftpLocalPutContent,
   SftpCancelTransfer, SftpPauseTransfer, SftpResumeTransfer,
   OpenMultipleFilesDialog, OpenDirectoryDialog,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useSettingsStore } from '../stores/settingsStore'

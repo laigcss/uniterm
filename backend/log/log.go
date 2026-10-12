@@ -64,7 +64,7 @@ func Writef(format string, args ...interface{}) {
 func logPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "uniterm.log"
+		return "ai-ops-terminal.log"
 	}
-	return filepath.Join(home, ".uniterm", "uniterm.log")
+	return filepath.Join(home, ".ai-ops-terminal", "ai-ops-terminal.log")
 }

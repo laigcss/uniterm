@@ -344,7 +344,7 @@ import {
   RedisSetKeyTTL,
   RedisSwitchDB,
   RedisKeyspaceInfo,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import type { RedisKeyInfo, FieldEntry, ScoredMember, ScanResult, KeyNode } from '../types/redis'
 
 const props = defineProps<{ sessionId: string; keySeparator?: string }>()

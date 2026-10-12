@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -352,7 +352,7 @@ type extEditWatcher struct {
 // extEditRootDir is the scratch root for external-edit temp files; each
 // session gets a subdirectory keyed by its sanitized ID.
 func extEditRootDir() string {
-	return filepath.Join(os.TempDir(), "uniterm-extedit")
+	return filepath.Join(os.TempDir(), "aiops-extedit")
 }
 
 // extEditSessionDir is a session's scratch dir. The PID prefix attributes the

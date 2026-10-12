@@ -7,7 +7,7 @@
  */
 import { ref, computed } from 'vue'
 import { useLocalStateStore } from '../stores/localStateStore'
-import { GetBackgroundImage } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { GetBackgroundImage } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 
 export function useBackgroundImage() {
   const localStateStore = useLocalStateStore()

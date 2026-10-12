@@ -57,7 +57,7 @@ type commandPrefsData struct {
 	Prefs   []commandPref `json:"prefs"`
 }
 
-// CommandsStore 管理 commands 目录扫描与偏好持久化。configDir 由 app.go 传入（~/.../uniTerm）。
+// CommandsStore 管理 commands 目录扫描与偏好持久化。configDir 由 app.go 传入（~/.../ai-ops-terminal）。
 type CommandsStore struct {
 	mu sync.Mutex // 保护 listCache / listAt
 	// listCache 是 List() 的最近一次完整合并结果；listAt 是填入时刻。

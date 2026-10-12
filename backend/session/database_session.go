@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ys-ll/uniterm/backend/database"
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/database"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 type DatabaseSession struct {

@@ -11,7 +11,7 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-const keychainService = "uniTerm"
+const keychainService = "ai-ops-terminal"
 
 const (
 	pbkdf2Iterations = 600000

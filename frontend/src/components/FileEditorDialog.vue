@@ -59,7 +59,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import {
   SftpGetContent, SftpLocalGetContent, SftpPutContent, SftpLocalPutContent,
   SftpOpenExternalEditor, OpenExternalEditorLocal,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import SyntaxEditor from './SyntaxEditor.vue'
 
 const { t } = useI18n()

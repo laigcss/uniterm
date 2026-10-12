@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { SaveQuickCommands, LoadQuickCommands } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SaveQuickCommands, LoadQuickCommands } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 
 export interface QuickCommand {
   id: string

@@ -70,15 +70,15 @@ func sanitizeLogName(name string) string {
 	return s
 }
 
-// defaultSessionLogDir is the fallback log root: <home>/Documents/uniTerm/logs.
+// defaultSessionLogDir is the fallback log root: <home>/Documents/ai-ops-terminal/logs.
 // Callers must MkdirAll before use. Returns a temp-dir path if the
 // user's home cannot be determined.
 func defaultSessionLogDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "uniTerm", "logs")
+		return filepath.Join(os.TempDir(), "ai-ops-terminal", "logs")
 	}
-	return filepath.Join(home, "Documents", "uniTerm", "logs")
+	return filepath.Join(home, "Documents", "ai-ops-terminal", "logs")
 }
 
 // DefaultSessionLogDir exposes the OS-default log directory for the

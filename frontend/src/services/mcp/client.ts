@@ -3,7 +3,7 @@
 // 封装 Wails binding 调用，提供 MCP server 启停、工具列表、工具调用
 // 的 typed 接口。所有方法返回 Promise，错误由调用方处理。
 //
-// 后端 binding 在 frontend/bindings/github.com/ys-ll/uniterm/app.js 中
+// 后端 binding 在 frontend/bindings/github.com/laigcss/ai-ops-terminal/app.js 中
 // 自动生成（手动补充 MCP* 函数）。
 
 import {
@@ -12,7 +12,7 @@ import {
   MCPListServers,
   MCPListTools,
   MCPCallTool,
-} from '../../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../../bindings/github.com/laigcss/ai-ops-terminal/app'
 
 /** MCP server 启动配置。 */
 export interface MCPServerConfig {

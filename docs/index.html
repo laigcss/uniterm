@@ -557,7 +557,7 @@ html[data-theme="light"] .img-dark { display: none; }
 /* Apply saved/system theme before paint to avoid a flash */
 (function() {
   var t;
-  try { t = localStorage.getItem('uniterm-theme'); } catch(e) {}
+  try { t = localStorage.getItem('aiops-theme'); } catch(e) {}
   if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', t);
 })();
@@ -920,18 +920,18 @@ function setLang(lang) {
   if (guideBtn) {
     guideBtn.href = lang === 'zh-CN' ? '/guide/zh/introduction' : '/guide/en/introduction';
   }
-  try { localStorage.setItem('uniterm-lang', lang); } catch(e) {}
+  try { localStorage.setItem('aiops-lang', lang); } catch(e) {}
 }
 (function() {
   var saved = 'zh-CN';
-  try { saved = localStorage.getItem('uniterm-lang') || saved; } catch(e) {}
+  try { saved = localStorage.getItem('aiops-lang') || saved; } catch(e) {}
   setLang(saved);
 })();
 
 /* ── Theme toggle ── */
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  try { localStorage.setItem('uniterm-theme', theme); } catch(e) {}
+  try { localStorage.setItem('aiops-theme', theme); } catch(e) {}
 }
 function toggleTheme() {
   var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';

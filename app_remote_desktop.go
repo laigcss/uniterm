@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 func (a *App) RDPSetPosition(sessionID string, x, y, w, h int) error {

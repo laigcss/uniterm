@@ -8,7 +8,7 @@ import {
   ReadFileChunkBase64,
   OpenDirectoryDialog,
   OpenMultipleFilesDialog,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import { useZmodemStore } from '../stores/zmodemStore'
 

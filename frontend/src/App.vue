@@ -120,7 +120,7 @@ import { useContextMenu } from './composables/useContextMenu'
 import { useCredentials } from './composables/useCredentials'
 
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, SessionStart } from '../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, SessionStart } from '../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import type { ConnectionConfig } from './types/session'

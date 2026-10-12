@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { AppSettings, AIModelConfig, CustomTerminalTheme } from '../types/settings'
 import { DEFAULT_SETTINGS, DEFAULT_KEYBOARD } from '../types/settings'
-import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import { setLocale } from '../i18n'
 

@@ -5,11 +5,11 @@ export const SUPPORTED_LOCALES = [
 export type Locale = typeof SUPPORTED_LOCALES[number]
 export type Language = Locale | 'system'
 export type Theme = 'dark' | 'deep-blue' | 'light' | 'system'
-export type TerminalTheme = 'uniterm-dark' | 'uniterm-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light' | 'xshell-xterm' | 'xshell-ansi-black' | 'xshell-new-black' | 'mobaxterm-default' | 'mobaxterm-ubuntu' | 'finalshell-dark' | 'finalshell-light'
+export type TerminalTheme = 'aiops-dark' | 'aiops-light' | 'solarized-dark' | 'solarized-light' | 'monokai' | 'dracula' | 'molokai' | 'tomorrow-night' | 'tomorrow-night-bright' | 'tomorrow' | 'one-dark' | 'one-light' | 'github-dark' | 'github-light' | 'gotham' | 'hybrid' | 'nord' | 'gruvbox-dark' | 'gruvbox-light' | 'catppuccin-mocha' | 'catppuccin-latte' | 'tokyo-night' | 'tokyo-day' | 'rose-pine' | 'rose-pine-dawn' | 'everforest-dark' | 'everforest-light' | 'xshell-xterm' | 'xshell-ansi-black' | 'xshell-new-black' | 'mobaxterm-default' | 'mobaxterm-ubuntu' | 'finalshell-dark' | 'finalshell-light'
 
 // Magic value for `AppSettings.terminal.theme`: the effective built-in theme
-// is derived from the current app theme (dark / deep-blue -> uniterm-dark,
-// light -> uniterm-light) instead of being fixed. Kept out of TERMINAL_THEMES
+// is derived from the current app theme (dark / deep-blue -> aiops-dark,
+// light -> aiops-light) instead of being fixed. Kept out of TERMINAL_THEMES
 // because it has no color palette of its own.
 export const FOLLOW_APP_THEME = 'follow-app'
 
@@ -243,7 +243,7 @@ export interface AppSettings {
   hostKeyStrategy?: HostKeyStrategy
   // F4: 终端录制与回放 — 新终端连接时是否自动开始录制。默认 false。
   autoRecord?: boolean
-  // F4: 录制文件存储目录。空表示使用后端默认 ~/.uniterm/records/。
+  // F4: 录制文件存储目录。空表示使用后端默认 ~/.ai-ops-terminal/records/。
   recordingsDir?: string
 }
 
@@ -335,8 +335,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }
 export const TERMINAL_THEMES: TerminalThemeEntry[] = [
-  { label: 'ai-ops-terminal Dark', value: 'uniterm-dark', type: 'dark' },
-  { label: 'ai-ops-terminal Light', value: 'uniterm-light', type: 'light' },
+  { label: 'ai-ops-terminal Dark', value: 'aiops-dark', type: 'dark' },
+  { label: 'ai-ops-terminal Light', value: 'aiops-light', type: 'light' },
   { label: 'Solarized Dark', value: 'solarized-dark', type: 'dark' },
   { label: 'Solarized Light', value: 'solarized-light', type: 'light' },
   { label: 'Monokai', value: 'monokai', type: 'dark' },

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 func (a *App) findMainWindow() uintptr { return 0 }
@@ -105,8 +105,8 @@ func detectExternalEditors() []ExternalEditorOption {
 
 // macBundleID is the app's bundle identifier. Wails derives the default
 // identifier from wails.json's "name" as com.wails.<name>, and this project
-// ships no custom build/darwin/Info.plist, so it resolves to com.wails.uniTerm.
-const macBundleID = "com.wails.uniTerm"
+// ships no custom build/darwin/Info.plist, so it resolves to com.laigcss.ai-ops-terminal.
+const macBundleID = "com.laigcss.ai-ops-terminal"
 
 // configureMacKeyRepeat disables macOS's press-and-hold accent picker for this
 // app's bundle only, so that holding a key down produces continuous key-repeat

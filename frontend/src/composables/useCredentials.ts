@@ -25,7 +25,7 @@ import { useSkillStore } from '../stores/skillStore'
 import { useCommandStore } from '../stores/commandStore'
 import { useTunnelStore } from '../stores/tunnelStore'
 import { useI18n } from '../i18n'
-import { RelaunchApp } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { RelaunchApp } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import type { ConnectionConfig } from '../types/session'
 import type { CredentialResult } from '../components/CredentialPrompt.vue'
 

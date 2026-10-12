@@ -139,8 +139,8 @@ import { ref, computed, onMounted, onBeforeUnmount, onUnmounted, onActivated, on
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { SessionWrite, SessionResize, SessionEndZmodem } from '../../bindings/github.com/ys-ll/uniterm/app'
-import { WriteFileBase64, SaveFileDialog, FrontendLog, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SessionWrite, SessionResize, SessionEndZmodem } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { WriteFileBase64, SaveFileDialog, FrontendLog, EnableSessionOutputLog, DisableSessionOutputLog, GetSessionOutputLogInfo, OpenPathInExplorer } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { useNativeFileDrop } from '../composables/useFilePanel'
 import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { msg } from '../services/message'
@@ -1424,7 +1424,7 @@ onMounted(() => {
         if (sid) {
           // Consume immediately to avoid losing data during async handoff
           zmodemService.consume(rawData)
-          import('../../bindings/github.com/ys-ll/uniterm/app').then(({ SessionStartZmodem }) => {
+          import('../../bindings/github.com/laigcss/ai-ops-terminal/app').then(({ SessionStartZmodem }) => {
             SessionStartZmodem(sid).catch(() => {})
           })
         }

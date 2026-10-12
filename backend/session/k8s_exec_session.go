@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 var _ Session = (*K8sExecSession)(nil)

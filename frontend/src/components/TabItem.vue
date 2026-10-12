@@ -123,7 +123,7 @@ import {
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { msg } from '../services/message'
 import type { Tab, TerminalTab, RDPTab } from '../types/workspace'
 import { connectFileMenuKey, fileTransferProto } from '../utils/fileTransferUtils'

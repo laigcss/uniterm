@@ -187,7 +187,7 @@ jobs:
           $VCXSRV_DIR = Join-Path $env:GITHUB_WORKSPACE 'build\windows\installer\plugins\vcxsrv'
           New-Item -ItemType Directory -Force -Path $VCXSRV_DIR | Out-Null
           $zip = Join-Path $env:TEMP 'vcxsrv.zip'
-          Invoke-WebRequest -Uri "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
+          Invoke-WebRequest -Uri "https://github.com/laigcss/ai-ops-terminal-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath $VCXSRV_DIR -Force
           Get-ChildItem $VCXSRV_DIR
 

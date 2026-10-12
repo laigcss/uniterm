@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ys-ll/uniterm/backend/credentials"
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/credentials"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 const unitermFormat = "uniterm"

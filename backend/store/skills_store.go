@@ -69,7 +69,7 @@ type skillPrefsData struct {
 	Prefs   []skillPref `json:"prefs"`
 }
 
-// SkillsStore 管理 skills 目录扫描与偏好持久化。configDir 由 app.go 传入（~/.../uniTerm）。
+// SkillsStore 管理 skills 目录扫描与偏好持久化。configDir 由 app.go 传入（~/.../ai-ops-terminal）。
 type SkillsStore struct {
 	configDir string
 

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/ys-ll/uniterm/backend/mcp"
+	"github.com/laigcss/ai-ops-terminal/backend/mcp"
 )
 
 // MCPStartServer launches an MCP server as a child process and registers it

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ys-ll/uniterm/backend/database"
-	"github.com/ys-ll/uniterm/backend/log"
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/database"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 // ── Database methods ──
 

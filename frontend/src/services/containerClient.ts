@@ -4,7 +4,7 @@ import {
   ContainerRemoveImage, ContainerCreate, ContainerNamespaces,
   ContainerSetNamespace, ContainerStartLogs, ContainerStartPull,
   ContainerStopStream, ContainerExecSession,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import type {
   ContainerInfo, InspectResult, ContainerImage, ContainerStats as ContainerStatsInfo, ContainerCreateOptions,

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/ys-ll/uniterm/backend/credentials"
+	"github.com/laigcss/ai-ops-terminal/backend/credentials"
 )
 
 const settingsFileName = "settings.json"
@@ -38,7 +38,7 @@ type TerminalSettings struct {
 	CtrlWheelZoom *bool `json:"ctrlWheelZoom,omitempty"`
 	// SessionLogDir overrides the default directory used for session
 	// output logs (issue #227). Empty means: use the OS-appropriate
-	// default under ~/Documents/uniTerm/logs.
+	// default under ~/Documents/ai-ops-terminal/logs.
 	SessionLogDir string `json:"sessionLogDir,omitempty"`
 	// WordSeparator overrides xterm.js's double-click word-selection
 	// separators. Empty means the frontend falls back to its built-in
@@ -171,7 +171,7 @@ type AppSettings struct {
 	// frontend defaults to false when nil.
 	AutoRecord *bool `json:"autoRecord,omitempty"`
 	// RecordingsDir overrides the default directory for terminal recordings
-	// (~/.uniterm/records/). Empty means use the default. (F4)
+	// (~/.ai-ops-terminal/records/). Empty means use the default. (F4)
 	RecordingsDir string `json:"recordingsDir,omitempty"`
 }
 
@@ -306,7 +306,7 @@ func defaultSettings() AppSettings {
 		Theme:    "dark",
 		Language: "system",
 		Terminal: TerminalSettings{
-			Theme:            "uniterm-dark",
+			Theme:            "aiops-dark",
 			FontFamily:       "Consolas, \"Courier New\", monospace",
 			FontSize:         14,
 			SelectionAction:  "none",

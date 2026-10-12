@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	ggittransport "github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/ys-ll/uniterm/backend/utils"
+	"github.com/laigcss/ai-ops-terminal/backend/utils"
 )
 
 var ErrWrongSyncPassword = errors.New("WRONG_SYNC_PASSWORD")
@@ -61,7 +61,7 @@ func NewSyncService(dataDir string) (*SyncService, error) {
 	if err != nil {
 		return nil, err
 	}
-	metaDir := filepath.Join(cfgDir, "uniTerm")
+	metaDir := filepath.Join(cfgDir, "ai-ops-terminal")
 	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func NewSyncServiceAsync(dataDir string) (*SyncService, context.Context) {
 		if err != nil {
 			return
 		}
-		metaDir := filepath.Join(cfg, "uniTerm")
+		metaDir := filepath.Join(cfg, "ai-ops-terminal")
 		if err := os.MkdirAll(metaDir, 0755); err != nil {
 			return
 		}

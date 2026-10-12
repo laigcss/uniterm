@@ -1571,7 +1571,7 @@
   "settings.autoRecord": "自动录制新会话",
   "settings.autoRecordHint": "新终端连接时自动开始 asciinema cast 录制。",
   "settings.recordingsDir": "录制目录",
-  "settings.recordingsDirHint": "留空 = ~/.uniterm/records/",
+  "settings.recordingsDirHint": "留空 = ~/.ai-ops-terminal/records/",
   "common.refresh": "刷新",
   "record.manage": "管理录制",
   "mcp.serverName": "服务器名称",

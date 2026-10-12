@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
 )
 
 // FormatDBeaver imports DBeaver connections straight from a workspace's
@@ -24,7 +24,7 @@ const FormatDBeaver = "dbeaver"
 // decrypted block discarded — the file's real IV is recovered that way).
 var dbeaverAesKey, _ = hex.DecodeString("babb4a9f774ab853c96c2d653dfe544a")
 
-// dbeaverDBType maps DBeaver providers onto uniterm dbType keys.
+// dbeaverDBType maps DBeaver providers onto ai-ops-terminal dbType keys.
 var dbeaverDBType = map[string]string{
 	"mysql":         "mysql",
 	"mariadb":       "mysql",
@@ -38,7 +38,7 @@ var dbeaverDBType = map[string]string{
 	"elasticsearch": "elasticsearch",
 }
 
-// dbeaverDefaultPort per uniterm dbType, used when the source omits port.
+// dbeaverDefaultPort per ai-ops-terminal dbType, used when the source omits port.
 var dbeaverDefaultPort = map[string]int{
 	"mysql": 3306, "postgres": 5432, "sqlserver": 1433, "oracle": 1521,
 	"mongodb": 27017, "redis": 6379, "elasticsearch": 9200,

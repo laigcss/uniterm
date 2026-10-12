@@ -12,8 +12,8 @@ export function resolveTerminalThemeName(
   terminalTheme: string | undefined,
   appTheme: 'dark' | 'light'
 ): string {
-  if (terminalTheme !== FOLLOW_APP_THEME) return terminalTheme || 'uniterm-dark'
-  return appTheme === 'light' ? 'uniterm-light' : 'uniterm-dark'
+  if (terminalTheme !== FOLLOW_APP_THEME) return terminalTheme || 'aiops-dark'
+  return appTheme === 'light' ? 'aiops-light' : 'aiops-dark'
 }
 
 /**

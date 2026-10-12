@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 const bootstrapFileName = "bootstrap.json"
@@ -23,13 +23,13 @@ type DataDir struct {
 	Upgrade  bool
 }
 
-// DefaultDataDir returns the OS user-config data dir (<UserConfigDir>/uniTerm).
+// DefaultDataDir returns the OS user-config data dir (<UserConfigDir>/ai-ops-terminal).
 func DefaultDataDir() (string, error) {
 	cfg, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cfg, "uniTerm"), nil
+	return filepath.Join(cfg, "ai-ops-terminal"), nil
 }
 
 func exeDir() (string, error) {
@@ -49,7 +49,7 @@ func bootstrapPath() (string, error) {
 }
 
 // userConfigBootstrapPath returns the bootstrap path in the user config dir
-// (<UserConfigDir>/uniTerm/bootstrap.json). Unlike the exe/data location it is
+// (<UserConfigDir>/ai-ops-terminal/bootstrap.json). Unlike the exe/data location it is
 // writable for installs under a read-only Program Files / Applications, which
 // is where default and custom data dirs (and their bootstrap pointer) belong.
 func userConfigBootstrapPath() (string, error) {

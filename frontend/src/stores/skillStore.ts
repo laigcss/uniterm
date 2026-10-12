@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill, OpenPathInExplorer } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { ListSkills, GetSkillBody, SetSkillEnabled, SetSkillLocked, DeleteSkill, CreateSkill, SaveSkill, OpenPathInExplorer } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import type { SkillMeta } from '../types/skill'
 
 export const useSkillStore = defineStore('skills', () => {

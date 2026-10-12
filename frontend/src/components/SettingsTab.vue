@@ -663,7 +663,7 @@
             <div class="setting-control">
               <el-input
                 :model-value="settingsStore.settings.recordingsDir ?? ''"
-                :placeholder="'~/.uniterm/records/'"
+                :placeholder="'~/.ai-ops-terminal/records/'"
                 class="dir-input"
                 @update:model-value="(v: string) => { settingsStore.settings.recordingsDir = v; settingsStore.save() }"
                 clearable
@@ -1185,7 +1185,7 @@
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft, Plug } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'

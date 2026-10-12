@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 // UpdateInfo is the result returned to the frontend.
@@ -164,7 +164,7 @@ func cachePath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "uniTerm", "update_cache.json")
+	return filepath.Join(dir, "ai-ops-terminal", "update_cache.json")
 }
 
 func loadCache() *cacheEntry {

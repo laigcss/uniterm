@@ -18,7 +18,7 @@ import {
   RecorderWriteData,
   RecorderStop,
   RecorderIsRecording,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 
 export interface RecordingMeta {
   filePath: string

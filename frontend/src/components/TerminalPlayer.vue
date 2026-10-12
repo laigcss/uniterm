@@ -59,7 +59,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useI18n } from '../i18n'
 
-import { RecorderGetContent } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { RecorderGetContent } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { parseCastContent, type CastEvent, type ParsedCastHeader } from '../services/terminalRecorder'
 import { getXtermTheme } from '../utils/xtermTheme'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -128,7 +128,7 @@ async function onOpen() {
     terminal.dispose()
     terminal = null
   }
-  const themeName = settingsStore.settings.terminal.theme || 'uniterm-dark'
+  const themeName = settingsStore.settings.terminal.theme || 'aiops-dark'
   const theme = getXtermTheme(themeName, settingsStore.settings.customTerminalThemes)
   const cols = header.value?.width || 80
   const rows = header.value?.height || 24

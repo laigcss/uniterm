@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import {
   LoadTunnels, SaveTunnels, StartTunnel, StopTunnel, ListTunnelStates,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 // Module-level un-subscribers for tunnel:state / store:tunnels:changed listeners.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).

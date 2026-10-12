@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
 )
 
 type SessionManager struct {

@@ -149,7 +149,7 @@ import {
   EsIndexDoc,
   EsUpdateDoc,
   EsDeleteDoc,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import type { EsSearchResult } from '../types/elasticsearch'
 import SyntaxEditor from './SyntaxEditor.vue'
 

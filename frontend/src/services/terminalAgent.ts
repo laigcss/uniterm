@@ -1,4 +1,4 @@
-import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { SessionWrite } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { getManagedTerminal } from '../services/terminalManager'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'

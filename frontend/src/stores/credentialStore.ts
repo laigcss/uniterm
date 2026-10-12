@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import {
   GetDataDirInfo, SetDataDir, GetCredentialStatus, SetupCredentials,
   UnlockCredentials, SwitchCredentialMode, ChangeMasterPassword, ResetCredentials,
-} from '../../bindings/github.com/ys-ll/uniterm/app'
+} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { Events } from '@wailsio/runtime'
 import type { DataDirInfo, CredentialStatus } from '../types/credentials'
 

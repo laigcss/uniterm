@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { LoadLocalState, SaveLocalState } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 
 // bindings 模块无 .d.ts，LocalState 仅用作类型占位。
 type LocalState = any

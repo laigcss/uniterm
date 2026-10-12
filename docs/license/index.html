@@ -97,7 +97,7 @@ h1 {
 <script>
 (function() {
   var t;
-  try { t = localStorage.getItem('uniterm-theme'); } catch(e) {}
+  try { t = localStorage.getItem('aiops-theme'); } catch(e) {}
   if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', t);
 })();

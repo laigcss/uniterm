@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"github.com/mattn/go-ieproxy"
-	"github.com/ys-ll/uniterm/backend/log"
-	"github.com/ys-ll/uniterm/backend/session"
-	"github.com/ys-ll/uniterm/backend/store"
+	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/laigcss/ai-ops-terminal/backend/store"
 )
 
 // warnIfInsecureBaseURL logs a warning when baseURL uses plaintext http://
 // against a non-local host. S3: respects user choice (does not block), but
-// leaves an audit trail in ~/.uniterm/uniterm.log so a leaked API key via
+// leaves an audit trail in ~/.ai-ops-terminal/ai-ops-terminal.log so a leaked API key via
 // social-engineered baseURL is at least visible after the fact.
 // Local hosts (localhost, 127.0.0.1, 0.0.0.0, ::1) are exempt so local
 // Ollama / LM Studio setups stay silent.
