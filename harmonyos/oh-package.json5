@@ -10,9 +10,7 @@
     "tablet",
     "2in1"
   ],
-  "dependencies": {
-    "@ohos/web.webview": "file:libs/ohos_web_webview"
-  },
+
   "devDependencies": {
     "@ohos/hypium": "1.0.6"
   }
