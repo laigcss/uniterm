@@ -19,6 +19,42 @@
     {
       "name": "reason_network_info",
       "value": "需要获取网络信息以检测后端服务器状态"
+    },
+    {
+      "name": "reason_background",
+      "value": "需要后台运行权限以保持 Go 子进程持续运行"
+    },
+    {
+      "name": "loading_starting",
+      "value": "正在启动 ai-ops-terminal..."
+    },
+    {
+      "name": "loading_restarting",
+      "value": "正在重启..."
+    },
+    {
+      "name": "error_timeout",
+      "value": "后端启动超时，请检查 Go 二进制是否正确"
+    },
+    {
+      "name": "error_crashed",
+      "value": "后端进程多次崩溃，已停止自动重启"
+    },
+    {
+      "name": "error_refused",
+      "value": "无法连接到后端服务器，Go 子进程可能未运行"
+    },
+    {
+      "name": "error_timeout_connect",
+      "value": "连接后端超时，请检查网络或后端状态"
+    },
+    {
+      "name": "error_reset",
+      "value": "连接被重置，后端可能正在重启"
+    },
+    {
+      "name": "btn_retry",
+      "value": "重试"
     }
   ]
 }

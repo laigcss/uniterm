@@ -25,8 +25,22 @@
           "arkEnabled": true,
           "externalNativeOptions": {
             "path": "./entry/src/main/cpp/CMakeLists.txt",
-            "arguments": "",
-            "cppFlags": ""
+            "arguments": "-DCMAKE_BUILD_TYPE=Debug",
+            "cppFlags": "-fPIC -fvisibility=hidden"
+          }
+        }
+      },
+      {
+        "name": "release",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "arkEnabled": true,
+          "externalNativeOptions": {
+            "path": "./entry/src/main/cpp/CMakeLists.txt",
+            "arguments": "-DCMAKE_BUILD_TYPE=Release",
+            "cppFlags": "-fPIC -fvisibility=hidden -O2"
           }
         }
       }
@@ -41,7 +55,8 @@
         {
           "name": "default",
           "applyToProducts": [
-            "default"
+            "default",
+            "release"
           ]
         }
       ]

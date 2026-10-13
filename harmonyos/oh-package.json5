@@ -3,8 +3,13 @@
   "version": "1.0.0",
   "description": "ai-ops-terminal 鸿蒙应用壳（路径 D: ArkWeb + Go 子进程）",
   "main": "",
-  "author": "",
+  "author": "ai-ops-team",
   "license": "Apache-2.0",
+  "deviceType": [
+    "default",
+    "tablet",
+    "2in1"
+  ],
   "dependencies": {
     "@ohos/web.webview": "file:libs/ohos_web_webview"
   },

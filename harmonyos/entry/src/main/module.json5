@@ -31,6 +31,10 @@
               "action.system.home"
             ]
           }
+        ],
+        "backgroundModes": [
+          "dataTransfer",
+          "taskKeeping"
         ]
       }
     ],
@@ -54,6 +58,22 @@
           ],
           "when": "always"
         }
+      },
+      {
+        "name": "ohos.permission.KEEP_BACKGROUND_RUNNING",
+        "reason": "$string:reason_background",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "always"
+        }
+      }
+    ],
+    "metadata": [
+      {
+        "name": "ArkWeb",
+        "value": "ArkWeb"
       }
     ]
   }

@@ -2,6 +2,7 @@ import web_webview from '@ohos.web.webview';
 import { common, abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { resourceManager } from '@kit.LocalizationKit';
+import { fs } from '@kit.ArkUI';
 import { NativeProcess } from '../utils/NativeProcess';
 
 const DOMAIN: number = 0x9205;
@@ -19,12 +20,78 @@ const HEALTH_CHECK_INTERVAL_MS: number = 500;
 /** 健康检查最大等待时间（毫秒） */
 const HEALTH_CHECK_TIMEOUT_MS: number = 30000;
 
+/** 进程存活监控间隔（毫秒），每 5 秒检查一次 */
+const PROCESS_MONITOR_INTERVAL_MS: number = 5000;
+
+/** 进程崩溃后最大自动重启次数 */
+const MAX_AUTO_RESTART_COUNT: number = 3;
+
+/** JSBridge 在前端 window 上注册的对象名 */
+const JS_BRIDGE_NAME: string = 'harmonyBridge';
+
+/** 应用版本号（供前端查询） */
+const APP_VERSION: string = '1.0.0';
+
+/**
+ * JSBridge 通信对象。
+ *
+ * 通过 controller.registerJavaScriptProxy() 注册到前端 window 上，
+ * 前端可通过 window.harmonyBridge.xxx() 调用 ArkTS 方法，
+ * 实现原生与前端的双向通信。
+ */
+class JsBridge {
+  private port: number;
+  private version: string;
+  private onRestartCallback: () => void;
+  private onExitCallback: () => void;
+
+  constructor(port: number, version: string, onRestart: () => void, onExit: () => void) {
+    this.port = port;
+    this.version = version;
+    this.onRestartCallback = onRestart;
+    this.onExitCallback = onExit;
+  }
+
+  /** 获取应用版本号 */
+  getAppVersion(): string {
+    return this.version;
+  }
+
+  /** 获取后端服务端口 */
+  getBackendPort(): number {
+    return this.port;
+  }
+
+  /** 获取后端基础 URL */
+  getBackendUrl(): string {
+    return `http://localhost:${this.port}`;
+  }
+
+  /** 前端日志转发到 hilog，便于调试 */
+  log(message: string): void {
+    hilog.info(DOMAIN, 'JsBridge', message);
+  }
+
+  /** 重启 Go 后端子进程 */
+  restartBackend(): void {
+    hilog.info(DOMAIN, 'JsBridge', '前端请求重启后端');
+    this.onRestartCallback();
+  }
+
+  /** 退出应用 */
+  exitApp(): void {
+    hilog.info(DOMAIN, 'JsBridge', '前端请求退出应用');
+    this.onExitCallback();
+  }
+}
+
 /**
  * 主页面：ArkWeb 组件加载 Go 后端提供的前端 UI。
  *
  * 生命周期流程：
- *   aboutToAppear → 释放 Go 二进制 → 启动子进程 → 等待健康检查 → 显示 ArkWeb
- *   aboutToDisappear → 终止 Go 子进程
+ *   aboutToAppear → 请求权限 → 释放 Go 二进制 → 启动子进程 → 等待健康检查 → 显示 ArkWeb
+ *   运行中 → 进程监控定时器每 5 秒检查存活，崩溃自动重启
+ *   aboutToDisappear → 停止监控 → 终止 Go 子进程
  */
 @Entry
 @Component
@@ -34,9 +101,14 @@ struct Index {
   @State port: number = DEFAULT_PORT;
   @State errorMsg: string = '';
   @State retryCount: number = 0;
+  @State backendStatus: string = '正在启动...';
 
   private nativeProcess: NativeProcess = new NativeProcess();
   private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+  private jsBridge: JsBridge | null = null;
+  private monitorTimerId: number = -1;
+  private autoRestartCount: number = 0;
+  private binaryPath: string = '';
 
   build() {
     Stack() {
@@ -54,6 +126,7 @@ struct Index {
           .onlineImageAccess(true)
           .onControllerAttached(() => {
             hilog.info(DOMAIN, TAG, 'ArkWeb 控制器已附加');
+            this.registerJsBridge();
           })
           .onPageBegin((event) => {
             hilog.info(DOMAIN, TAG, `页面开始加载: ${event.url}`);
@@ -62,7 +135,25 @@ struct Index {
             hilog.info(DOMAIN, TAG, '页面加载完成');
           })
           .onErrorReceive((event) => {
-            hilog.error(DOMAIN, TAG, `页面加载错误: ${event.error?.errorString ?? 'unknown'}`);
+            const errCode: number = event.error?.errorCode ?? -1;
+            const errStr: string = event.error?.errorString ?? 'unknown';
+            hilog.error(DOMAIN, TAG, `页面加载错误: code=${errCode}, msg=${errStr}`);
+            this.handleWebError(errCode, errStr);
+          })
+          .onConsoleLog((event) => {
+            const level: number = event.messageLevel;
+            const msg: string = event.message;
+            const source: string = event.sourceId;
+            const line: number = event.lineNumber;
+            const tag: string = `WebConsole[${source}:${line}]`;
+            if (level === web_webview.ConsoleMode.Error) {
+              hilog.error(DOMAIN, tag, msg);
+            } else if (level === web_webview.ConsoleMode.Warn) {
+              hilog.warn(DOMAIN, tag, msg);
+            } else {
+              hilog.info(DOMAIN, tag, msg);
+            }
+            return false;
           })
       } else {
         // 启动等待页面
@@ -93,7 +184,7 @@ struct Index {
               .width(60)
               .height(60)
               .color('#007DFF')
-            Text('正在启动 ai-ops-terminal...')
+            Text(this.backendStatus)
               .fontSize(16)
               .margin({ top: 20 })
               .fontColor('#333333')
@@ -113,12 +204,37 @@ struct Index {
 
   async aboutToAppear(): Promise<void> {
     hilog.info(DOMAIN, TAG, 'aboutToAppear: 页面初始化');
+    // 注册子进程退出回调
+    this.nativeProcess.onExit((pid: number, exitCode: number) => {
+      this.handleProcessExit(pid, exitCode);
+    });
+    // 请求所需权限
+    await this.requestPermissions();
+    // 启动后端
     await this.startBackend();
   }
 
   aboutToDisappear(): void {
     hilog.info(DOMAIN, TAG, 'aboutToDisappear: 停止 Go 子进程');
+    this.stopProcessMonitor();
     this.stopBackend();
+  }
+
+  /**
+   * 请求应用所需权限（网络访问等）。
+   */
+  private async requestPermissions(): Promise<void> {
+    try {
+      const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
+      const permissions: Array<Permissions> = [
+        'ohos.permission.INTERNET',
+        'ohos.permission.GET_NETWORK_INFO'
+      ];
+      await atManager.requestPermissionsFromUser(this.context, permissions);
+      hilog.info(DOMAIN, TAG, '权限请求完成');
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, `权限请求失败: ${JSON.stringify(err)}`);
+    }
   }
 
   /**
@@ -126,9 +242,11 @@ struct Index {
    */
   private async startBackend(): Promise<void> {
     try {
+      this.backendStatus = '正在启动...';
       // 步骤 1：从 rawfile 释放 Go 二进制到可写目录
       hilog.info(DOMAIN, TAG, '步骤 1: 释放 Go 二进制到可写目录');
       const binaryPath: string = await this.extractBinary();
+      this.binaryPath = binaryPath;
 
       // 步骤 2：通过 NDK execve 启动 Go 子进程
       hilog.info(DOMAIN, TAG, `步骤 2: 启动 Go 子进程: ${binaryPath}`);
@@ -141,6 +259,8 @@ struct Index {
       if (healthy) {
         hilog.info(DOMAIN, TAG, '健康检查通过，服务器就绪');
         this.serverReady = true;
+        this.autoRestartCount = 0;
+        this.startProcessMonitor();
       } else {
         hilog.error(DOMAIN, TAG, '健康检查超时，服务器未就绪');
         this.errorMsg = '后端启动超时，请检查 Go 二进制是否正确';
@@ -160,6 +280,135 @@ struct Index {
       hilog.info(DOMAIN, TAG, 'Go 子进程已停止');
     } catch (err) {
       hilog.error(DOMAIN, TAG, `停止子进程失败: ${JSON.stringify(err)}`);
+    }
+  }
+
+  /**
+   * 重启后端：停止当前子进程后重新启动。
+   */
+  private async restartBackend(): Promise<void> {
+    hilog.info(DOMAIN, TAG, '重启后端');
+    this.stopProcessMonitor();
+    this.stopBackend();
+    this.serverReady = false;
+    this.backendStatus = '正在重启...';
+    await this.startBackend();
+  }
+
+  /**
+   * 退出应用：停止后端并终止自身。
+   */
+  private exitApp(): void {
+    hilog.info(DOMAIN, TAG, '退出应用');
+    this.stopProcessMonitor();
+    this.stopBackend();
+    this.context.terminateSelf();
+  }
+
+  /**
+   * 注册 JSBridge 到前端 window 对象。
+   *
+   * 在 ArkWeb 控制器附加后调用，通过 registerJavaScriptProxy 将
+   * ArkTS 对象注入前端，前端可通过 window.harmonyBridge 访问。
+   */
+  private registerJsBridge(): void {
+    try {
+      this.jsBridge = new JsBridge(
+        this.port,
+        APP_VERSION,
+        (): void => { this.restartBackend(); },
+        (): void => { this.exitApp(); }
+      );
+      this.controller.registerJavaScriptProxy({
+        object: this.jsBridge,
+        name: JS_BRIDGE_NAME,
+        methodList: ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp'],
+        asyncMethodList: []
+      });
+      // 刷新页面使 JavaScript 代理生效
+      this.controller.refresh();
+      hilog.info(DOMAIN, TAG, `JSBridge 已注册为 window.${JS_BRIDGE_NAME}`);
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, `注册 JSBridge 失败: ${JSON.stringify(err)}`);
+    }
+  }
+
+  /**
+   * 启动进程存活监控定时器。
+   *
+   * 每 5 秒检查 Go 子进程是否存活，若崩溃则尝试自动重启。
+   */
+  private startProcessMonitor(): void {
+    if (this.monitorTimerId !== -1) {
+      clearInterval(this.monitorTimerId);
+    }
+    this.monitorTimerId = setInterval((): void => {
+      this.checkProcessAlive();
+    }, PROCESS_MONITOR_INTERVAL_MS);
+    hilog.info(DOMAIN, TAG, '进程监控定时器已启动');
+  }
+
+  /**
+   * 停止进程存活监控定时器。
+   */
+  private stopProcessMonitor(): void {
+    if (this.monitorTimerId !== -1) {
+      clearInterval(this.monitorTimerId);
+      this.monitorTimerId = -1;
+      hilog.info(DOMAIN, TAG, '进程监控定时器已停止');
+    }
+  }
+
+  /**
+   * 检查 Go 子进程是否存活，崩溃时触发自动重启。
+   */
+  private checkProcessAlive(): void {
+    // 通过 NativeProcess 检测退出并触发 onExit 回调
+    this.nativeProcess.checkAndNotifyExit();
+  }
+
+  /**
+   * 处理子进程退出事件。
+   *
+   * @param exitedPid 退出的子进程 PID
+   * @param exitCode 退出码（-1 表示异常退出）
+   */
+  private handleProcessExit(exitedPid: number, exitCode: number): void {
+    hilog.error(DOMAIN, TAG, `Go 子进程退出: PID=${exitedPid}, exitCode=${exitCode}`);
+    if (this.autoRestartCount < MAX_AUTO_RESTART_COUNT) {
+      this.autoRestartCount++;
+      hilog.info(DOMAIN, TAG, `尝试自动重启 (${this.autoRestartCount}/${MAX_AUTO_RESTART_COUNT})`);
+      this.restartBackend();
+    } else {
+      hilog.error(DOMAIN, TAG, '已达到最大自动重启次数，停止重启');
+      this.stopProcessMonitor();
+      this.serverReady = false;
+      this.errorMsg = '后端进程多次崩溃，已停止自动重启';
+    }
+  }
+
+  /**
+   * 处理 ArkWeb 页面加载错误，区分错误类型给出友好提示。
+   *
+   * @param errCode 错误码
+   * @param errStr 错误描述
+   */
+  private handleWebError(errCode: number, errStr: string): void {
+    const lowerMsg: string = errStr.toLowerCase();
+    if (lowerMsg.includes('refused') || lowerMsg.includes('connection refused')) {
+      // 连接被拒绝：Go 服务器未启动或已崩溃
+      this.errorMsg = '无法连接到后端服务器，Go 子进程可能未运行';
+    } else if (lowerMsg.includes('timeout') || lowerMsg.includes('timed out')) {
+      // 连接超时
+      this.errorMsg = '连接后端超时，请检查网络或后端状态';
+    } else if (lowerMsg.includes('not found') || errCode === -6) {
+      // 资源未找到（可能是某个静态资源 404，不影响主页面）
+      hilog.warn(DOMAIN, TAG, `资源未找到: ${errStr}`);
+    } else if (lowerMsg.includes('reset') || lowerMsg.includes('broken pipe')) {
+      // 连接被重置：后端进程可能正在重启
+      this.errorMsg = '连接被重置，后端可能正在重启';
+    } else {
+      this.errorMsg = `页面加载失败: ${errStr}`;
     }
   }
 
@@ -187,7 +436,7 @@ struct Index {
     hilog.info(DOMAIN, TAG, `从 rawfile 读取二进制: ${binaryData.byteLength} 字节`);
 
     // 写入可写目录
-    const file = fs.openSync(targetPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+    const file: fs.File = fs.openSync(targetPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
     fs.writeSync(file.fd, binaryData.buffer);
     fs.closeSync(file);
     hilog.info(DOMAIN, TAG, `二进制已写入: ${targetPath}`);
@@ -221,6 +470,3 @@ struct Index {
     return false;
   }
 }
-
-// 导入文件系统模块（放在文件底部避免循环依赖）
-import { fs } from '@kit.ArkUI';
