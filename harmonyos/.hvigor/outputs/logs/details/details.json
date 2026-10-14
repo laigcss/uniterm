@@ -1,0 +1,129 @@
+{
+  "HVIGOR_OHOS_PLUGIN": {
+    "MODULES": [
+      {
+        "MODULE_NAME": "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf",
+        "API_TYPE": "stageMode",
+        "INCLUDE_IN_BUILD": true,
+        "IS_COMMAND_LINE_ENTRY_MODULE": true,
+        "BUILD_OPTION": [
+          {
+            "path": "debuggable",
+            "traceValue": true,
+            "value": true
+          },
+          {
+            "path": "copyFrom",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "strictMode",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "strictMode.caseSensitiveCheck",
+            "traceValue": true,
+            "value": true
+          },
+          {
+            "path": "strictMode.useNormalizedOHMUrl",
+            "traceValue": true,
+            "value": true
+          },
+          {
+            "path": "externalNativeOptions",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "externalNativeOptions.path",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "externalNativeOptions.arguments",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "externalNativeOptions.cppFlags",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "resOptions",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "resOptions.copyCodeResource",
+            "traceValue": false,
+            "value": ""
+          },
+          {
+            "path": "resOptions.copyCodeResource.enable",
+            "traceValue": true,
+            "value": false
+          }
+        ],
+        "PACKAGE_JSON": [],
+        "MODULE_TYPE": "entry",
+        "INCREMENTAL_TASKS": {
+          "BUILD_NATIVE_WITH_CMAKE": true,
+          "COMPILE_ARKTS": true
+        },
+        "IS_INCREMENTAL_MODULE": true
+      }
+    ],
+    "NATIVE_COMPILER": "Default",
+    "IS_FULL_BUILD": false,
+    "PACKAGE_JSON": [],
+    "BUILD_MODE": "debug"
+  },
+  "HVIGOR": {
+    "IS_INCREMENTAL": true,
+    "IS_DAEMON": true,
+    "IS_PARALLEL": true,
+    "IS_HVIGORFILE_TYPE_CHECK": false,
+    "IS_EXECUTION_OHPM_BY_HVIGOR": false,
+    "IS_SYNCNATIVE_COMPILATION": false,
+    "BUILD_ANALYSIS_MODE": "normal",
+    "OPTIMIZATION_STRATEGY": "memory",
+    "TASK_TIME": {
+      "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf": {
+        "CreateModuleInfo": 761208,
+        "ConfigureCmake": 21556833,
+        "PreCheckSyscap": 124500,
+        "GeneratePkgSdkInfo": 2160833,
+        "ProcessIntegratedHsp": 454834,
+        "BuildNativeWithCmake": 15131167,
+        "SyscapTransform": 2598000,
+        "ProcessStartupConfig": 880583,
+        "BuildJS": 480500,
+        "BuildNativeWithNinja": 125627125,
+        "CompileArkTS": 926417291,
+        "ProcessCompiledResources": 184833,
+        "PackageHap": 624788666,
+        "PackingCheck": 2545750,
+        "SignHap": 621250,
+        "CollectDebugSymbol": 239375,
+        "assembleHap": 87583
+      }
+    },
+    "CUSTOM_TASK_TIME": {},
+    "CUSTOM_PLUGIN_TIME": {},
+    "APIS": [
+      "getProperty"
+    ],
+    "CONFIG_EXPERIMENT": {
+      "ENABLE_MODULE_SKIP": false,
+      "ENABLE_CPP_FUNCTION_LEVEL_INCREMENTAL": false
+    },
+    "CONFIG_PROPERTIES": {},
+    "PID": 79895,
+    "TOTAL_TIME": 1799743750,
+    "BUILD_ID": "202610142031529890"
+  }
+}

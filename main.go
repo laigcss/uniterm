@@ -147,7 +147,7 @@ func main() {
 		// HarmonyOS does not match the server's host origin, so the default
 		// same-origin check would reject the WebSocket upgrade.
 		Server: application.ServerOptions{
-			Host:                     "localhost",
+			Host:                     "127.0.0.1",
 			Port:                     9245,
 			WebSocketAllowAllOrigins: true,
 		},
@@ -280,7 +280,7 @@ func startPprofIfDev() {
 		return
 	}
 	go func() {
-		if err := http.ListenAndServe("localhost:6060", nil); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil && err != http.ErrServerClosed {
 			log.Writef("pprof listener failed: %v", err)
 		}
 	}()

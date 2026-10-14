@@ -2,7 +2,7 @@ import web_webview from '@ohos.web.webview';
 import { common, abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { resourceManager } from '@kit.LocalizationKit';
-import { fs } from '@kit.ArkUI';
+import fs from '@ohos.file.fs';
 import { NativeProcess } from '../utils/NativeProcess';
 
 const DOMAIN: number = 0x9205;
@@ -11,8 +11,8 @@ const TAG: string = 'IndexPage';
 /** Go 后端默认监听端口（与 main.go ServerOptions.Port 一致） */
 const DEFAULT_PORT: number = 9245;
 
-/** Go 二进制在 rawfile 中的文件名 */
-const BINARY_NAME: string = 'ai-ops-terminal';
+/** Go c-shared 共享库在 rawfile 中的文件名 */
+const BINARY_NAME: string = 'libaiops.so';
 
 /** 健康检查轮询间隔（毫秒） */
 const HEALTH_CHECK_INTERVAL_MS: number = 500;
@@ -114,7 +114,7 @@ struct Index {
     Stack() {
       if (this.serverReady) {
         // Go 后端就绪，加载前端 UI
-        Web({ src: `http://localhost:${this.port}`, controller: this.controller })
+        Web({ src: `http://127.0.0.1:${this.port}`, controller: this.controller })
           .width('100%')
           .height('100%')
           .javaScriptAccess(true)
@@ -135,20 +135,21 @@ struct Index {
             hilog.info(DOMAIN, TAG, '页面加载完成');
           })
           .onErrorReceive((event) => {
-            const errCode: number = event.error?.errorCode ?? -1;
-            const errStr: string = event.error?.errorString ?? 'unknown';
+            const errCode: number = event.error?.getErrorCode() ?? -1;
+            const errStr: string = event.error?.getErrorInfo() ?? 'unknown';
             hilog.error(DOMAIN, TAG, `页面加载错误: code=${errCode}, msg=${errStr}`);
             this.handleWebError(errCode, errStr);
           })
-          .onConsoleLog((event) => {
-            const level: number = event.messageLevel;
-            const msg: string = event.message;
-            const source: string = event.sourceId;
-            const line: number = event.lineNumber;
+          .onConsole((event: OnConsoleEvent) => {
+            const consoleMsg: ConsoleMessage = event.message;
+            const level: MessageLevel = consoleMsg.getMessageLevel();
+            const msg: string = consoleMsg.getMessage();
+            const source: string = consoleMsg.getSourceId();
+            const line: number = consoleMsg.getLineNumber();
             const tag: string = `WebConsole[${source}:${line}]`;
-            if (level === web_webview.ConsoleMode.Error) {
+            if (level === MessageLevel.Error) {
               hilog.error(DOMAIN, tag, msg);
-            } else if (level === web_webview.ConsoleMode.Warn) {
+            } else if (level === MessageLevel.Warn) {
               hilog.warn(DOMAIN, tag, msg);
             } else {
               hilog.info(DOMAIN, tag, msg);
@@ -208,6 +209,8 @@ struct Index {
     this.nativeProcess.onExit((pid: number, exitCode: number) => {
       this.handleProcessExit(pid, exitCode);
     });
+    // 安装信号处理器（SIGCHLD 捕获子进程退出码/信号，SIGPIPE 忽略）
+    this.nativeProcess.initSignals();
     // 请求所需权限
     await this.requestPermissions();
     // 启动后端
@@ -238,48 +241,58 @@ struct Index {
   }
 
   /**
-   * 启动后端：释放 Go 二进制 → 启动子进程 → 等待健康检查。
+   * 启动后端：提取前端文件 → 启动内嵌 C HTTP 服务器 → 等待健康检查。
+   *
+   * 在 NAPI 模块内运行 C HTTP 服务器，无需 execve/dlopen，
+   * 绕过 SELinux 对 execve 的限制和 Go TLS 模型对 dlopen 的限制。
    */
   private async startBackend(): Promise<void> {
     try {
-      this.backendStatus = '正在启动...';
-      // 步骤 1：从 rawfile 释放 Go 二进制到可写目录
-      hilog.info(DOMAIN, TAG, '步骤 1: 释放 Go 二进制到可写目录');
-      const binaryPath: string = await this.extractBinary();
-      this.binaryPath = binaryPath;
+      this.backendStatus = '正在提取前端文件...';
+      const filesDir: string = this.context.filesDir;
+      const docRoot: string = `${filesDir}/frontend`;
 
-      // 步骤 2：通过 NDK execve 启动 Go 子进程
-      hilog.info(DOMAIN, TAG, `步骤 2: 启动 Go 子进程: ${binaryPath}`);
-      const pid: number = await this.nativeProcess.start(binaryPath, this.port);
-      hilog.info(DOMAIN, TAG, `Go 子进程已启动, PID: ${pid}`);
+      // 步骤 1：从 rawfile 提取前端文件到 filesDir/frontend/
+      await this.extractFrontend(docRoot);
+      hilog.info(DOMAIN, TAG, `前端文件已提取到 ${docRoot}`);
+
+      // 步骤 2：启动内嵌 C HTTP 服务器
+      this.backendStatus = '正在启动 HTTP 服务器...';
+      hilog.info(DOMAIN, TAG, `启动 C HTTP 服务器: ${docRoot}:${this.port}`);
+      const ret: number = this.nativeProcess.startHttpServer(docRoot, this.port);
+      if (ret !== 0) {
+        throw new Error(`HTTP 服务器启动失败，错误码: ${ret}`);
+      }
+      hilog.info(DOMAIN, TAG, 'C HTTP 服务器已启动');
 
       // 步骤 3：等待 HTTP 服务器就绪
-      hilog.info(DOMAIN, TAG, '步骤 3: 等待健康检查通过');
+      this.backendStatus = '等待服务器就绪...';
+      hilog.info(DOMAIN, TAG, '等待健康检查通过');
       const healthy: boolean = await this.waitForHealth();
       if (healthy) {
         hilog.info(DOMAIN, TAG, '健康检查通过，服务器就绪');
         this.serverReady = true;
         this.autoRestartCount = 0;
-        this.startProcessMonitor();
       } else {
         hilog.error(DOMAIN, TAG, '健康检查超时，服务器未就绪');
-        this.errorMsg = '后端启动超时，请检查 Go 二进制是否正确';
+        this.errorMsg = '后端启动超时，HTTP 服务器未就绪';
       }
     } catch (err) {
-      hilog.error(DOMAIN, TAG, `启动后端失败: ${JSON.stringify(err)}`);
-      this.errorMsg = `启动失败: ${err instanceof Error ? err.message : String(err)}`;
+      const errMsg: string = err instanceof Error ? err.message : JSON.stringify(err);
+      hilog.error(DOMAIN, TAG, `启动后端失败: ${errMsg}`);
+      this.errorMsg = `启动失败: ${errMsg}`;
     }
   }
 
   /**
-   * 停止后端：终止 Go 子进程。
+   * 停止后端：停止内嵌 C HTTP 服务器。
    */
   private stopBackend(): void {
     try {
-      this.nativeProcess.stop();
-      hilog.info(DOMAIN, TAG, 'Go 子进程已停止');
+      this.nativeProcess.stopHttpServer();
+      hilog.info(DOMAIN, TAG, 'HTTP 服务器已停止');
     } catch (err) {
-      hilog.error(DOMAIN, TAG, `停止子进程失败: ${JSON.stringify(err)}`);
+      hilog.error(DOMAIN, TAG, `停止 HTTP 服务器失败: ${JSON.stringify(err)}`);
     }
   }
 
@@ -319,12 +332,12 @@ struct Index {
         (): void => { this.restartBackend(); },
         (): void => { this.exitApp(); }
       );
-      this.controller.registerJavaScriptProxy({
-        object: this.jsBridge,
-        name: JS_BRIDGE_NAME,
-        methodList: ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp'],
-        asyncMethodList: []
-      });
+      this.controller.registerJavaScriptProxy(
+        this.jsBridge,
+        JS_BRIDGE_NAME,
+        ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp'],
+        []
+      );
       // 刷新页面使 JavaScript 代理生效
       this.controller.refresh();
       hilog.info(DOMAIN, TAG, `JSBridge 已注册为 window.${JS_BRIDGE_NAME}`);
@@ -416,7 +429,8 @@ struct Index {
    * 从 rawfile 释放 Go 二进制到应用沙箱可写目录。
    *
    * rawfile 目录是只读的，无法直接执行其中的二进制。
-   * 需要复制到 filesDir 并赋予执行权限。
+   * 通过 NDK saveExecutable 写入 filesDir 并在创建时赋予执行权限（0755），
+   * 避免 chmod() 被 SELinux 阻止的问题。
    *
    * @returns Go 二进制在可写目录中的完整路径
    */
@@ -435,17 +449,96 @@ struct Index {
     const binaryData: Uint8Array = await resourceMgr.getRawFileContent(BINARY_NAME);
     hilog.info(DOMAIN, TAG, `从 rawfile 读取二进制: ${binaryData.byteLength} 字节`);
 
-    // 写入可写目录
-    const file: fs.File = fs.openSync(targetPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, binaryData.buffer);
-    fs.closeSync(file);
-    hilog.info(DOMAIN, TAG, `二进制已写入: ${targetPath}`);
-
-    // 通过 NDK chmod 赋予执行权限
-    await this.nativeProcess.chmod(targetPath, 0o755);
-    hilog.info(DOMAIN, TAG, '已赋予执行权限');
+    // 通过 NDK 写入文件并赋予执行权限（一步到位，避免 chmod 失败）
+    await this.nativeProcess.saveExecutable(targetPath, binaryData);
+    hilog.info(DOMAIN, TAG, `二进制已写入并赋予执行权限: ${targetPath}`);
 
     return targetPath;
+  }
+
+  /**
+   * 从 rawfile/frontend/ 提取前端文件到 filesDir/frontend/。
+   *
+   * 前端文件（HTML/JS/CSS/字体）从 HAP 包内的 rawfile 释放到
+   * 应用沙箱可写目录，供内嵌 C HTTP 服务器读取和提供服务。
+   *
+   * @param docRoot 目标目录（filesDir/frontend/）
+   */
+  private async extractFrontend(docRoot: string): Promise<void> {
+    const resourceMgr: resourceManager.ResourceManager = this.context.resourceManager;
+
+    // 创建目录
+    const assetsDir: string = `${docRoot}/assets`;
+    fs.mkdirSync(docRoot, true);
+    fs.mkdirSync(assetsDir, true);
+    hilog.info(DOMAIN, TAG, `创建目录: ${docRoot}, ${assetsDir}`);
+
+    // 尝试用 getRawFileList 动态列出文件
+    let frontendFiles: Array<string> = [];
+    let assetFiles: Array<string> = [];
+    try {
+      frontendFiles = await resourceMgr.getRawFileList('frontend');
+      hilog.info(DOMAIN, TAG, `rawfile/frontend/ 文件列表: ${JSON.stringify(frontendFiles)}`);
+    } catch (err) {
+      hilog.warn(DOMAIN, TAG, `getRawFileList('frontend') 失败: ${JSON.stringify(err)}`);
+      // 回退到硬编码文件列表
+      frontendFiles = ['index.html'];
+    }
+    try {
+      assetFiles = await resourceMgr.getRawFileList('frontend/assets');
+      hilog.info(DOMAIN, TAG, `rawfile/frontend/assets/ 文件列表: ${JSON.stringify(assetFiles)}`);
+    } catch (err) {
+      hilog.warn(DOMAIN, TAG, `getRawFileList('frontend/assets') 失败: ${JSON.stringify(err)}`);
+      // 回退到硬编码文件列表
+      assetFiles = [
+        'app-DHxctazZ.js', 'app-Y4PtkA3Z.js', 'index-7_vZgln6.js', 'index-CQZYFgCv.css',
+        'jetbrains-mono-cyrillic-wght-normal-D73BlboJ.woff2',
+        'jetbrains-mono-greek-wght-normal-Bw9x6K1M.woff2',
+        'jetbrains-mono-latin-ext-wght-normal-DBQx-q_a.woff2',
+        'jetbrains-mono-latin-wght-normal-B9CIFXIH.woff2',
+        'jetbrains-mono-vietnamese-wght-normal-Bt-aOZkq.woff2',
+        'rfb-BZ24CxtX.js', 'spice-html5-CX7F7N4V.js',
+      ];
+    }
+
+    // 提取 frontend/ 下的文件
+    for (const file of frontendFiles) {
+      // 跳过目录（getRawFileList 可能返回目录名）
+      if (file === 'assets' || file.endsWith('/')) continue;
+      const rawPath: string = `frontend/${file}`;
+      const localPath: string = `${docRoot}/${file}`;
+      try {
+        const data: Uint8Array = await resourceMgr.getRawFileContent(rawPath);
+        hilog.info(DOMAIN, TAG, `读取 ${rawPath}: ${data.byteLength} 字节`);
+        if (data.byteLength > 0) {
+          await this.nativeProcess.saveExecutable(localPath, data);
+          hilog.info(DOMAIN, TAG, `提取: ${rawPath} → ${localPath} (${data.byteLength} 字节)`);
+        } else {
+          hilog.warn(DOMAIN, TAG, `${rawPath} 内容为空`);
+        }
+      } catch (err) {
+        hilog.error(DOMAIN, TAG, `提取 ${rawPath} 失败: ${JSON.stringify(err)}`);
+      }
+    }
+
+    // 提取 frontend/assets/ 下的文件
+    for (const file of assetFiles) {
+      if (file.endsWith('/')) continue;
+      const rawPath: string = `frontend/assets/${file}`;
+      const localPath: string = `${docRoot}/assets/${file}`;
+      try {
+        const data: Uint8Array = await resourceMgr.getRawFileContent(rawPath);
+        hilog.info(DOMAIN, TAG, `读取 ${rawPath}: ${data.byteLength} 字节`);
+        if (data.byteLength > 0) {
+          await this.nativeProcess.saveExecutable(localPath, data);
+          hilog.info(DOMAIN, TAG, `提取: ${rawPath} → ${localPath} (${data.byteLength} 字节)`);
+        } else {
+          hilog.warn(DOMAIN, TAG, `${rawPath} 内容为空`);
+        }
+      } catch (err) {
+        hilog.error(DOMAIN, TAG, `提取 ${rawPath} 失败: ${JSON.stringify(err)}`);
+      }
+    }
   }
 
   /**
@@ -454,7 +547,7 @@ struct Index {
    * @returns true 表示服务器就绪，false 表示超时
    */
   private async waitForHealth(): Promise<boolean> {
-    const url: string = `http://localhost:${this.port}/`;
+    const url: string = `http://127.0.0.1:${this.port}/`;
     const maxAttempts: number = HEALTH_CHECK_TIMEOUT_MS / HEALTH_CHECK_INTERVAL_MS;
 
     for (let i: number = 0; i < maxAttempts; i++) {

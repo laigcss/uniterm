@@ -115,6 +115,21 @@ int is_running(int pid);
 int do_chmod(const char *path, int mode);
 
 /*
+ * 将二进制数据写入文件并赋予执行权限。
+ * 使用 open(path, O_CREAT|O_WRONLY|O_TRUNC, 0755) 创建文件，
+ * 再用 fchmod(fd, 0755) 强制设置权限（覆盖 umask 影响），
+ * 避免 chmod() 被 SELinux 阻止的问题。
+ *
+ * 参数:
+ *   path   - 目标文件路径
+ *   data   - 二进制数据指针
+ *   length - 数据长度（字节）
+ *
+ * 返回: 0 成功, 非 0 为 errno
+ */
+int save_executable(const char *path, const void *data, size_t length);
+
+/*
  * 检查文件是否存在且可执行。
  *
  * 返回: 1 可执行, 0 不可执行或不存在

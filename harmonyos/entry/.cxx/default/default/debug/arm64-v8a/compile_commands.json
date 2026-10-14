@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/native/llvm/bin/clang --target=aarch64-linux-ohos --gcc-toolchain=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/native/llvm --sysroot=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/native/sysroot -Daiops_native_EXPORTS -I/Applications/DevEco-Studio.app/Contents/sdk/default/hms/native/sysroot/usr/include -I/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security  -D__MUSL__ -fPIC -fvisibility=hidden -Wall -O0 -g -DDEBUG -O0 -g -fno-limit-debug-info  -std=gnu99 -fPIC -o CMakeFiles/aiops_native.dir/native_process.c.o -c /Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp/native_process.c",
+  "file": "/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp/native_process.c",
+  "output": "CMakeFiles/aiops_native.dir/native_process.c.o"
+}
+]

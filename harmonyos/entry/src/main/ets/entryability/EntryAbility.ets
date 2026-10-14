@@ -1,4 +1,4 @@
-import { AbilityConstant, UIAbility, Want, ConfigurationConstant } from '@kit.AbilityKit';
+import { AbilityConstant, UIAbility, Want, Configuration } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 
@@ -107,7 +107,7 @@ export default class EntryAbility extends UIAbility {
    *
    * @param newConfig 新的系统配置
    */
-  onConfigurationUpdate(newConfig: ConfigurationConstant.Configuration): void {
+  onConfigurationUpdate(newConfig: Configuration): void {
     hilog.info(
       DOMAIN, TAG,
       `onConfigurationUpdate: language=${newConfig.language}, colorMode=${newConfig.colorMode}, direction=${newConfig.direction}`
