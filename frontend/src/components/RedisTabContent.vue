@@ -1,112 +1,112 @@
 <template>
   <div class="redis-tab-content">
-    <div class="redis-main">
+    <div class="redis-main" :class="{ 'm-tree-host': isNarrowScreen }">
       <!-- Left Panel: Key List -->
-      <div class="redis-left" :style="{ width: leftWidth + 'px' }">
+      <div v-if="isNarrowScreen && treeOpen" class="m-tree-overlay" @click="treeOpen = false" />
+      <div
+        v-show="isNarrowScreen || treeOpen"
+        class="redis-left"
+        :class="{ 'm-tree': isNarrowScreen, 'm-tree-open': isNarrowScreen && treeOpen }"
+        :style="isNarrowScreen ? {} : { width: leftWidth + 'px' }"
+      >
         <!-- Controls row -->
         <div class="redis-toolbar">
-          <el-select v-model="currentDb" size="small" style="width: 90px; flex-shrink: 0" @change="onSwitchDB">
+          <el-select v-model="currentDb" size="small" style="width: 5.625rem; flex-shrink: 0" @change="onSwitchDB">
             <el-option v-for="n in 16" :key="n-1" :label="`${n-1} (${dbSizes[n-1] ?? '?'})`" :value="n-1" />
           </el-select>
-          <el-input v-model="scanPattern" size="small" placeholder="*" style="flex: 1; min-width: 80px" @keyup.enter="onScan" />
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.refresh')" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="14" /></button>
+          <el-input v-model="scanPattern" size="small" placeholder="*" style="flex: 1; min-width: 5.0rem" @keyup.enter="onScan" />
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.refresh')" @click="onScan" style="flex-shrink: 0"><RefreshCw :size="'0.875rem'" /></button>
           <button class="btn btn-ghost btn-icon btn-sm" :title="treeMode ? t('redis.flatView') : t('redis.treeView')" @click="treeMode = !treeMode" style="flex-shrink: 0">
-            <FolderTree :size="14" v-if="!treeMode" />
-            <List :size="14" v-else />
+            <FolderTree :size="'0.875rem'" v-if="!treeMode" />
+            <List :size="'0.875rem'" v-else />
           </button>
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="14" /></button>
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('redis.newKey')" @click="onShowNewKeyDialog" style="flex-shrink: 0"><Plus :size="'0.875rem'" /></button>
         </div>
 
         <!-- Key tree / flat list -->
         <div class="redis-key-list" v-loading="loading">
           <div v-if="keys.length === 0 && !loading" class="redis-placeholder">{{ t('redis.noKeys') }}</div>
           <template v-else-if="treeMode">
-            <!-- P1: RecycleScroller 虚拟滚动（tree 模式），item-size=28 与 .table-item/.db-header 行高一致 -->
-            <RecycleScroller
-              :items="visibleTreeRows"
-              :item-size="28"
-              key-field="id"
-              class="redis-key-scroller"
-            >
-              <template #default="{ item }">
-                <div
-                  v-if="item.node.children.length > 0"
-                  class="db-header"
-                  :style="{ paddingLeft: (8 + item.depth * 18) + 'px' }"
-                  @click="onToggleFolder(item.node.id)"
-                >
-                  <span class="db-arrow" @click.stop="onToggleFolder(item.node.id)">
-                    <component :is="expandedFolders.has(item.node.id) ? ChevronDown : ChevronRight" :size="12" />
-                  </span>
-                  <Folder class="db-icon" :size="14" />
-                  <span class="db-name">{{ item.node.label }}</span>
-                </div>
-                <div
-                  v-else
-                  class="table-item"
-                  :class="{ selected: selectedKey === item.node.keyName }"
-                  :style="{ paddingLeft: (8 + item.depth * 18) + 'px' }"
-                  @click="onSelectTreeKey(item.node)"
-                >
-                  <span class="table-icon-spacer" />
-                  <component :is="typeIcon(item.node.keyType)" class="table-icon" :size="14" />
-                  <span class="table-name">{{ item.node.label }}</span>
-                </div>
-              </template>
-            </RecycleScroller>
+            <!-- Rows render directly in the template (the DB tree's mode) so
+                 the scoped .db-header/.table-item styles actually reach them.
+                 visibleTreeRows is the tree flattened depth-first to the
+                 folders currently expanded; indentation is a per-depth pad. -->
+            <template v-for="row in visibleTreeRows" :key="row.node.id">
+              <div
+                v-if="row.node.children.length > 0"
+                class="db-header"
+                :style="{ paddingLeft: (8 + row.depth * 18) + 'px' }"
+                @click="onToggleFolder(row.node.id)"
+              >
+                <span class="db-arrow" @click.stop="onToggleFolder(row.node.id)">
+                  <component :is="expandedFolders.has(row.node.id) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
+                </span>
+                <Folder class="db-icon" :size="'0.875rem'" />
+                <span class="db-name">{{ row.node.label }}</span>
+              </div>
+              <div
+                v-else
+                class="table-item"
+                :class="{ selected: selectedKey === row.node.keyName }"
+                :style="{ paddingLeft: (8 + row.depth * 18) + 'px' }"
+                @click="onSelectTreeKey(row.node)"
+              >
+                <span class="table-icon-spacer" />
+                <component :is="typeIcon(row.node.keyType)" class="table-icon" :size="'0.875rem'" />
+                <span class="table-name">{{ row.node.label }}</span>
+              </div>
+            </template>
           </template>
           <template v-else>
-            <!-- P1: RecycleScroller 虚拟滚动（flat 模式） -->
-            <RecycleScroller
-              :items="keys"
-              :item-size="28"
-              key-field="name"
-              class="redis-key-scroller"
+            <div
+              v-for="keyInfo in keys"
+              :key="keyInfo.name"
+              class="table-item"
+              :class="{ selected: selectedKey === keyInfo.name }"
+              @click="onSelectKey(keyInfo)"
             >
-              <template #default="{ item }">
-                <div
-                  class="table-item"
-                  :class="{ selected: selectedKey === item.name }"
-                  @click="onSelectKey(item)"
-                >
-                  <span class="table-icon-spacer" />
-                  <component :is="typeIcon(item.type)" class="table-icon" :size="14" />
-                  <span class="table-name">{{ item.name }}</span>
-                </div>
-              </template>
-            </RecycleScroller>
+              <span class="table-icon-spacer" />
+              <component :is="typeIcon(keyInfo.type)" class="table-icon" :size="'0.875rem'" />
+              <span class="table-name">{{ keyInfo.name }}</span>
+            </div>
           </template>
-
         </div>
 
         <!-- Pagination -->
         <div class="redis-pagination">
           <span class="result-count">{{ t('redis.scanCount', { n: keys.length }) }}</span>
           <span style="flex:1"></span>
-          <el-select v-model="pageSize" size="small" style="width: 70px" @change="onPageSizeChange">
+          <el-select v-model="pageSize" size="small" style="width: 4.375rem" @change="onPageSizeChange">
             <el-option v-for="s in pageSizes" :key="s" :label="String(s)" :value="s" />
           </el-select>
-          <button class="page-btn" :disabled="cursorStack.length === 0" @click="onPrevPage"><ChevronLeft :size="14" /></button>
+          <button class="page-btn" :disabled="cursorStack.length === 0" @click="onPrevPage"><ChevronLeft :size="'0.875rem'" /></button>
           <span class="page-num">{{ currentPage }}</span>
-          <button class="page-btn" :disabled="nextCursor === 0 && !hasMore" @click="onNextPage"><ChevronRight :size="14" /></button>
+          <button class="page-btn" :disabled="nextCursor === 0 && !hasMore" @click="onNextPage"><ChevronRight :size="'0.875rem'" /></button>
         </div>
       </div>
 
       <!-- Resizer -->
-      <div class="redis-resizer" @mousedown="onResizeStart" />
+      <div v-if="!isNarrowScreen && treeOpen" class="redis-resizer" @mousedown="onResizeStart" />
 
       <!-- Right Panel: Value Editor -->
       <div class="redis-right">
         <template v-if="selectedKey">
           <div class="key-meta">
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
             <div class="meta-row"><span class="meta-label">{{ t('redis.keyName') }}</span><span class="meta-value">{{ selectedKey }}</span></div>
             <div class="meta-row"><span class="meta-label">{{ t('redis.type') }}</span><span class="meta-value">{{ selectedKeyInfo?.type || '-' }}</span></div>
             <div class="meta-row">
               <span class="meta-label">{{ t('redis.ttl') }}</span>
               <span class="meta-value ttl-row">
-                <el-input-number v-model="editTTL" size="small" style="width: 100px" :min="-1" controls-position="right" />
+                <el-input-number v-model="editTTL" size="small" style="width: 6.25rem" :min="-1" controls-position="right" />
                 <el-button size="small" @click="onSetTTL">{{ t('redis.setTTL') }}</el-button>
-                <span style="font-size:11px;color:var(--text-muted)">{{ t('redis.ttlHint') }}</span>
+                <span style="font-size:0.6875rem;color:var(--text-muted)">{{ t('redis.ttlHint') }}</span>
               </span>
             </div>
           </div>
@@ -120,7 +120,7 @@
             <!-- Hash Editor -->
             <template v-else-if="selectedKeyInfo?.type === 'hash'">
               <el-table :data="hashEntries" border size="small">
-                <el-table-column type="index" label="#" width="40" />
+                <el-table-column type="index" label="#" :width="uiPx(40)" />
                 <el-table-column prop="field" :label="t('redis.field')">
                   <template #default="{ $index }">
                     <el-input v-model="hashEntries[$index].field" size="small" type="textarea" :rows="1" autosize />
@@ -131,77 +131,77 @@
                     <el-input v-model="hashEntries[$index].value" size="small" type="textarea" :rows="1" autosize />
                   </template>
                 </el-table-column>
-                <el-table-column width="50">
+                <el-table-column :width="uiPx(50)">
                   <template #default="{ $index }">
-                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="hashEntries.splice($index, 1)"><Trash2 :size="14" /></button>
+                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="hashEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button>
                   </template>
                 </el-table-column>
               </el-table>
-              <el-button size="small" style="margin-top: 4px" @click="hashEntries.push({ field: '', value: '' })"><Plus :size="14" /></el-button>
+              <el-button size="small" style="margin-top: 0.25rem" @click="hashEntries.push({ field: '', value: '' })"><Plus :size="'0.875rem'" /></el-button>
             </template>
 
             <!-- List Editor -->
             <template v-else-if="selectedKeyInfo?.type === 'list'">
               <el-table :data="listEntries" border size="small">
-                <el-table-column width="26" class-name="drag-col">
+                <el-table-column :width="uiPx(26)" class-name="drag-col">
                   <template #default="{ $index }">
-                    <span class="drag-handle" draggable="true" @dragstart="onListDragStart($index)" @dragover.prevent="onListDragOver($index)" @drop="onListDrop($index)"><GripVertical :size="14" /></span>
+                    <span class="drag-handle" draggable="true" @dragstart="onListDragStart($index)" @dragover.prevent="onListDragOver($index)" @drop="onListDrop($index)"><GripVertical :size="'0.875rem'" /></span>
                   </template>
                 </el-table-column>
-                <el-table-column type="index" label="#" width="40" />
+                <el-table-column type="index" label="#" :width="uiPx(40)" />
                 <el-table-column :label="t('redis.value')">
                   <template #default="{ $index }">
                     <el-input v-model="listEntries[$index]" size="small" type="textarea" :rows="1" autosize />
                   </template>
                 </el-table-column>
-                <el-table-column width="50">
+                <el-table-column :width="uiPx(50)">
                   <template #default="{ $index }">
-                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="listEntries.splice($index, 1)"><Trash2 :size="14" /></button>
+                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="listEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button>
                   </template>
                 </el-table-column>
               </el-table>
-              <el-button size="small" style="margin-top: 4px" @click="addListItem"><Plus :size="14" /></el-button>
+              <el-button size="small" style="margin-top: 0.25rem" @click="addListItem"><Plus :size="'0.875rem'" /></el-button>
             </template>
 
             <!-- Set Editor -->
             <template v-else-if="selectedKeyInfo?.type === 'set'">
               <el-table :data="setEntries" border size="small">
-                <el-table-column type="index" label="#" width="40" />
+                <el-table-column type="index" label="#" :width="uiPx(40)" />
                 <el-table-column :label="t('redis.member')">
                   <template #default="{ $index }">
                     <el-input v-model="setEntries[$index]" size="small" type="textarea" :rows="1" autosize />
                   </template>
                 </el-table-column>
-                <el-table-column width="50">
+                <el-table-column :width="uiPx(50)">
                   <template #default="{ $index }">
-                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="setEntries.splice($index, 1)"><Trash2 :size="14" /></button>
+                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="setEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button>
                   </template>
                 </el-table-column>
               </el-table>
-              <el-button size="small" style="margin-top: 4px" @click="setEntries.push('')"><Plus :size="14" /></el-button>
+              <el-button size="small" style="margin-top: 0.25rem" @click="setEntries.push('')"><Plus :size="'0.875rem'" /></el-button>
             </template>
 
             <!-- ZSet Editor -->
             <template v-else-if="selectedKeyInfo?.type === 'zset'">
               <el-table :data="zsetEntries" border size="small">
-                <el-table-column type="index" label="#" width="40" />
+                <el-table-column type="index" label="#" :width="uiPx(40)" />
                 <el-table-column :label="t('redis.member')">
                   <template #default="{ $index }">
                     <el-input v-model="zsetEntries[$index].member" size="small" type="textarea" :rows="1" autosize />
                   </template>
                 </el-table-column>
-                <el-table-column :label="t('redis.score')" width="100">
+                <el-table-column :label="t('redis.score')" :width="uiPx(100)">
                   <template #default="{ $index }">
                     <el-input-number v-model="zsetEntries[$index].score" size="small" controls-position="right" style="width: 100%" />
                   </template>
                 </el-table-column>
-                <el-table-column width="50">
+                <el-table-column :width="uiPx(50)">
                   <template #default="{ $index }">
-                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="zsetEntries.splice($index, 1)"><Trash2 :size="14" /></button>
+                    <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="zsetEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button>
                   </template>
                 </el-table-column>
               </el-table>
-              <el-button size="small" style="margin-top: 4px" @click="zsetEntries.push({ member: '', score: 0 })"><Plus :size="14" /></el-button>
+              <el-button size="small" style="margin-top: 0.25rem" @click="zsetEntries.push({ member: '', score: 0 })"><Plus :size="'0.875rem'" /></el-button>
             </template>
 
             <!-- Action buttons -->
@@ -212,27 +212,36 @@
             </div>
           </div>
         </template>
-        <div v-else class="redis-placeholder full">{{ t('redis.selectKey') }}</div>
+        <div v-else class="redis-placeholder full">
+          <button
+            class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+            :title="treeOpen ? t('common.collapse') : t('common.expand')"
+            @click="treeOpen = !treeOpen"
+          >
+            <PanelLeft :size="'0.875rem'" />
+          </button>
+          {{ t('redis.selectKey') }}
+        </div>
       </div>
     </div>
 
     <!-- New Key Dialog -->
-    <el-dialog append-to-body v-model="showNewKeyDialog" :title="t('redis.newKey')" width="500px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="showNewKeyDialog" :title="t('redis.newKey')" width="31.25rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('redis.keyName')">
           <el-input v-model="newKeyName" />
         </el-form-item>
         <el-form-item :label="t('redis.ttl')" v-if="newKeyType">
-          <el-input-number v-model="newKeyTTL" :min="-1" controls-position="right" style="width: 120px" />
-          <span style="font-size:11px;color:var(--text-muted);margin-left:8px">{{ t('redis.ttlHint') }}</span>
+          <el-input-number v-model="newKeyTTL" :min="-1" controls-position="right" style="width: 7.5rem" />
+          <span style="font-size:0.6875rem;color:var(--text-muted);margin-left:0.5rem">{{ t('redis.ttlHint') }}</span>
         </el-form-item>
         <el-form-item :label="t('redis.type')">
           <el-radio-group v-model="newKeyType" @change="onNewKeyTypeChange">
-            <el-radio-button label="string">String</el-radio-button>
-            <el-radio-button label="hash">Hash</el-radio-button>
-            <el-radio-button label="list">List</el-radio-button>
-            <el-radio-button label="set">Set</el-radio-button>
-            <el-radio-button label="zset">ZSet</el-radio-button>
+            <el-radio-button value="string">String</el-radio-button>
+            <el-radio-button value="hash">Hash</el-radio-button>
+            <el-radio-button value="list">List</el-radio-button>
+            <el-radio-button value="set">Set</el-radio-button>
+            <el-radio-button value="zset">ZSet</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <!-- String: value -->
@@ -249,46 +258,46 @@
               <el-table-column prop="value" :label="t('redis.value')">
                 <template #default="{ $index }"><el-input v-model="newHashEntries[$index].value" size="small" type="textarea" :rows="1" autosize /></template>
               </el-table-column>
-              <el-table-column width="50">
-                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newHashEntries.splice($index, 1)"><Trash2 :size="14" /></button></template>
+              <el-table-column :width="uiPx(50)">
+                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newHashEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button></template>
               </el-table-column>
             </el-table>
-            <el-button size="small" style="margin-top: 4px" @click="newHashEntries.push({ field: '', value: '' })"><Plus :size="14" /></el-button>
+            <el-button size="small" style="margin-top: 0.25rem" @click="newHashEntries.push({ field: '', value: '' })"><Plus :size="'0.875rem'" /></el-button>
           </el-form-item>
         </template>
         <!-- List: value table -->
         <template v-if="newKeyType === 'list'">
           <el-form-item :label="t('redis.entryValue')">
             <el-table :data="newListEntries" border size="small">
-              <el-table-column width="26" class-name="drag-col">
+              <el-table-column :width="uiPx(26)" class-name="drag-col">
                 <template #default="{ $index }">
-                  <span class="drag-handle" draggable="true" @dragstart="onNewListDragStart($index)" @dragover.prevent="onNewListDragOver($index)" @drop="onNewListDrop($index)"><GripVertical :size="14" /></span>
+                  <span class="drag-handle" draggable="true" @dragstart="onNewListDragStart($index)" @dragover.prevent="onNewListDragOver($index)" @drop="onNewListDrop($index)"><GripVertical :size="'0.875rem'" /></span>
                 </template>
               </el-table-column>
-              <el-table-column type="index" label="#" width="40" />
+              <el-table-column type="index" label="#" :width="uiPx(40)" />
               <el-table-column :label="t('redis.value')">
                 <template #default="{ $index }"><el-input v-model="newListEntries[$index]" size="small" type="textarea" :rows="1" autosize /></template>
               </el-table-column>
-              <el-table-column width="50">
-                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newListEntries.splice($index, 1)"><Trash2 :size="14" /></button></template>
+              <el-table-column :width="uiPx(50)">
+                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newListEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button></template>
               </el-table-column>
             </el-table>
-            <el-button size="small" style="margin-top: 4px" @click="newListEntries.push('')"><Plus :size="14" /></el-button>
+            <el-button size="small" style="margin-top: 0.25rem" @click="newListEntries.push('')"><Plus :size="'0.875rem'" /></el-button>
           </el-form-item>
         </template>
         <!-- Set: member table -->
         <template v-if="newKeyType === 'set'">
           <el-form-item :label="t('redis.entryValue')">
             <el-table :data="newSetEntries" border size="small">
-              <el-table-column type="index" label="#" width="40" />
+              <el-table-column type="index" label="#" :width="uiPx(40)" />
               <el-table-column :label="t('redis.member')">
                 <template #default="{ $index }"><el-input v-model="newSetEntries[$index]" size="small" type="textarea" :rows="1" autosize /></template>
               </el-table-column>
-              <el-table-column width="50">
-                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newSetEntries.splice($index, 1)"><Trash2 :size="14" /></button></template>
+              <el-table-column :width="uiPx(50)">
+                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newSetEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button></template>
               </el-table-column>
             </el-table>
-            <el-button size="small" style="margin-top: 4px" @click="newSetEntries.push('')"><Plus :size="14" /></el-button>
+            <el-button size="small" style="margin-top: 0.25rem" @click="newSetEntries.push('')"><Plus :size="'0.875rem'" /></el-button>
           </el-form-item>
         </template>
         <!-- ZSet: member/score table -->
@@ -298,14 +307,14 @@
               <el-table-column prop="member" :label="t('redis.member')">
                 <template #default="{ $index }"><el-input v-model="newZSetEntries[$index].member" size="small" type="textarea" :rows="1" autosize /></template>
               </el-table-column>
-              <el-table-column prop="score" :label="t('redis.score')" width="100">
+              <el-table-column prop="score" :label="t('redis.score')" :width="uiPx(100)">
                 <template #default="{ $index }"><el-input-number v-model="newZSetEntries[$index].score" size="small" controls-position="right" style="width: 100%" /></template>
               </el-table-column>
-              <el-table-column width="50">
-                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newZSetEntries.splice($index, 1)"><Trash2 :size="14" /></button></template>
+              <el-table-column :width="uiPx(50)">
+                <template #default="{ $index }"><button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" @click="newZSetEntries.splice($index, 1)"><Trash2 :size="'0.875rem'" /></button></template>
               </el-table-column>
             </el-table>
-            <el-button size="small" style="margin-top: 4px" @click="newZSetEntries.push({ member: '', score: 0 })"><Plus :size="14" /></el-button>
+            <el-button size="small" style="margin-top: 0.25rem" @click="newZSetEntries.push({ member: '', score: 0 })"><Plus :size="'0.875rem'" /></el-button>
           </el-form-item>
         </template>
       </el-form>
@@ -321,8 +330,10 @@
 import { ref, watch, computed, onUnmounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { msg } from '../services/message'
-import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, FolderTree, List, Type, TableProperties, ListMinus, ListOrdered } from '@lucide/vue'
+import { Trash2, Plus, GripVertical, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Folder, FolderTree, List, Type, TableProperties, ListMinus, ListOrdered, PanelLeft } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { useI18n } from '../i18n'
+import { uiPx } from '../utils/uiScale'
 import {
   RedisScanKeys,
   RedisGetKeyInfo,
@@ -427,6 +438,7 @@ function onToggleFolder(id: string) {
 }
 
 function onSelectTreeKey(node: KeyNode) {
+  closeTree()
   if (node.keyName) {
     onSelectKey({ name: node.keyName, type: node.keyType || 'string', ttl: -1 } as RedisKeyInfo)
   }
@@ -438,7 +450,6 @@ function onSelectTreeKey(node: KeyNode) {
 // DB tree renders — so the scoped row styles reach every row. Indentation is
 // a per-depth left pad on the row itself.
 interface VisibleRow {
-  id: string
   node: KeyNode
   depth: number
 }
@@ -446,7 +457,7 @@ const visibleTreeRows = computed<VisibleRow[]>(() => {
   const rows: VisibleRow[] = []
   const walk = (nodes: KeyNode[], depth: number) => {
     for (const n of nodes) {
-      rows.push({ id: n.id, node: n, depth })
+      rows.push({ node: n, depth })
       if (n.children.length > 0 && expandedFolders.value.has(n.id)) {
         walk(n.children, depth + 1)
       }
@@ -471,6 +482,13 @@ function typeIcon(type?: RedisKeyInfo['type']) {
 
 // --- Resize ---
 const leftWidth = ref(280)
+
+// Narrow screens turn the key tree into an overlay drawer (closed by
+// default); wide screens keep it inline and the toggle collapses it.
+const treeOpen = ref(!isNarrowScreen.value)
+function closeTree() {
+  if (isNarrowScreen.value) treeOpen.value = false
+}
 const resizing = ref(false)
 let resizeStartX = 0
 let resizeStartWidth = 0
@@ -618,6 +636,7 @@ async function onSwitchDB(idx: number) {
 
 // --- Key selection ---
 async function onSelectKey(info: RedisKeyInfo) {
+  closeTree()
   selectedKey.value = info.name
   keyLoading.value = true
   try {
@@ -642,13 +661,13 @@ async function onSave() {
   saving.value = true
   try {
     const key = selectedKey.value
-    const keyType = selectedKeyInfo.value?.type
-    switch (keyType) {
+    const t = selectedKeyInfo.value?.type
+    switch (t) {
       case 'string': await RedisSetString(props.sessionId, key, stringValue.value); break
       case 'hash': {
         const current = await RedisGetHashAll(props.sessionId, key)
-        const toDelete = current.filter((e: { field: string }) => !hashEntries.value.find(h => h.field === e.field))
-        if (toDelete.length > 0) await RedisHashDel(props.sessionId, key, toDelete.map((e: { field: string }) => e.field))
+        const toDelete = current.filter(e => !hashEntries.value.find(h => h.field === e.field))
+        if (toDelete.length > 0) await RedisHashDel(props.sessionId, key, toDelete.map(e => e.field))
         for (const e of hashEntries.value) { if (e.field) await RedisHashSet(props.sessionId, key, e.field, e.value) }
         break
       }
@@ -660,16 +679,16 @@ async function onSave() {
       }
       case 'set': {
         const current = await RedisGetSetAll(props.sessionId, key)
-        const r = current.filter((m: string) => !setEntries.value.includes(m))
-        const a = setEntries.value.filter((m: string) => !current.includes(m))
+        const r = current.filter(m => !setEntries.value.includes(m))
+        const a = setEntries.value.filter(m => !current.includes(m))
         if (r.length > 0) await RedisSetRemove(props.sessionId, key, r)
         if (a.length > 0) await RedisSetAdd(props.sessionId, key, a)
         break
       }
       case 'zset': {
         const current = await RedisGetSortedSetRange(props.sessionId, key, '-inf', '+inf')
-        const r = current.filter((m: { member: string }) => !zsetEntries.value.find(z => z.member === m.member))
-        if (r.length > 0) await RedisZSetRemove(props.sessionId, key, r.map((m: { member: string }) => m.member))
+        const r = current.filter(m => !zsetEntries.value.find(z => z.member === m.member))
+        if (r.length > 0) await RedisZSetRemove(props.sessionId, key, r.map(m => m.member))
         if (zsetEntries.value.length > 0) await RedisZSetAdd(props.sessionId, key, zsetEntries.value)
         break
       }
@@ -812,14 +831,26 @@ watch(() => props.sessionId, async (newId) => {
   overflow: hidden;
 }
 .redis-resizer {
-  width: 4px;
+  /* Hover area floats over the tree edge (negative margin) so it takes
+     no layout width when idle and never blanks the content side. */
+  width: 0.25rem;
+  margin-left: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-.redis-resizer:hover {
-  background: var(--border-subtle);
+.redis-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 .redis-right {
   flex: 1;
@@ -829,9 +860,9 @@ watch(() => props.sessionId, async (newId) => {
 }
 .redis-toolbar {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   align-items: center;
-  padding: 8px;
+  padding: 0.5rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -839,21 +870,16 @@ watch(() => props.sessionId, async (newId) => {
   flex: 1;
   overflow-y: auto;
 }
-/* P1: RecycleScroller 虚拟滚动容器 */
-.redis-key-scroller {
-  height: 100%;
-}
 /* Rows share the DB tree's .table-item/.table-name rule set so key leaves
    match database tables exactly; folders use the shared .db-header classes.
    Flat mode (no nesting) is the same leaf row as tree mode. Indentation: the
-   30px spacer (arrow 12 + gap + icon 14 + gap) lines leaf text up with the
+   1.875rem spacer (arrow 12 + gap + icon 14 + gap) lines leaf text up with the
    folder label above. */
 .table-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -864,7 +890,7 @@ watch(() => props.sessionId, async (newId) => {
      the same column as its folder's arrow/icon — indentation is then purely
      the per-depth pad, and a leaf under a folder is exactly one level deeper
      (DB's table-under-db relationship) instead of two. */
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
 }
 .table-icon {
@@ -873,7 +899,7 @@ watch(() => props.sessionId, async (newId) => {
 }
 .table-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -882,25 +908,23 @@ watch(() => props.sessionId, async (newId) => {
 .db-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   user-select: none;
   transition: background 0.12s ease;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 .db-header:hover {
   background: var(--bg-hover);
 }
 .db-arrow {
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  cursor: pointer;
 }
 .db-arrow:hover {
   color: var(--text-primary);
@@ -911,7 +935,7 @@ watch(() => props.sessionId, async (newId) => {
 }
 .db-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -921,55 +945,62 @@ watch(() => props.sessionId, async (newId) => {
 .redis-pagination {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 .result-count {
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 .page-btn {
   border: 1px solid var(--border-subtle);
   background: var(--bg-base);
   color: var(--text-secondary);
-  cursor: pointer;
-  padding: 2px 4px;
+  padding: 0.125rem 0.25rem;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .page-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-.page-btn:disabled { opacity: 0.4; cursor: default; }
+.page-btn:disabled { opacity: 0.4; }
 .page-num {
-  min-width: 20px;
+  min-width: 1.25rem;
   text-align: center;
 }
 .key-meta {
-  padding: 8px 12px 12px;
+  padding: 0.5rem 0.75rem 0.75rem 2.5rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
+  position: relative;
+}
+/* Tree toggle lives at the far left of the key-meta block. */
+.key-meta .m-tree-toggle {
+  position: absolute;
+  top: 0.375rem;
+  left: 0.375rem;
+  margin-right: 0;
 }
 .meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
 }
 .meta-label {
   color: var(--text-muted);
-  min-width: 32px;
+  min-width: 2rem;
 }
 .meta-value {
   color: var(--text-primary);
@@ -981,34 +1012,43 @@ watch(() => props.sessionId, async (newId) => {
 .ttl-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .redis-right-content {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 0.5rem;
 }
 .value-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 .redis-placeholder {
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 14px;
-  padding: 16px;
+  font-size: 0.875rem;
+  padding: 1rem;
 }
 .redis-placeholder.full {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+/* Empty state keeps the toggle reachable at the same top-left spot the
+   key-meta block occupies once a key is selected. */
+.redis-placeholder .m-tree-toggle {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  margin-right: 0;
 }
 /* .btn.btn-ghost.btn-icon(.danger) now supplies the base look; keep only
    Redis-specific overrides here (font-size for icon glyphs, table-cell reset). */
 .btn-icon.is-disabled,
-.btn-icon:disabled { opacity: 0.3; cursor: default; }
+.btn-icon:disabled { opacity: 0.3; }
 .btn-icon:disabled:hover { color: var(--text-secondary); background: none; }
 :deep(.el-table .btn-icon) { background: none; }
 .drag-handle {

@@ -3,11 +3,10 @@
     append-to-body
     v-model="visible"
     :title="t('container.create')"
-    width="560px"
+    width="35rem"
     :close-on-click-modal="false"
-    destroy-on-close
   >
-    <el-form label-width="110px" size="small">
+    <el-form label-width="6.875rem">
       <el-form-item :label="t('container.createDialog.image')" required :error="imageError">
         <el-input v-model="form.image" placeholder="nginx:latest" @input="imageError = ''" />
       </el-form-item>
@@ -83,7 +82,7 @@ import { useI18n } from '../i18n'
 import { useContainerStore } from '../stores/containerStore'
 import type { ContainerCreateOptions } from '../types/container'
 
-const props = defineProps<{ modelValue: boolean; tabId: string }>()
+const props = defineProps<{ modelValue: boolean; tabId: string; initialImage?: string }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void; (e: 'created'): void }>()
 
 const { t } = useI18n()
@@ -114,7 +113,7 @@ const portErrors = ref<boolean[]>([])
 watch(() => props.modelValue, (v) => { if (v) resetForm() })
 
 function resetForm() {
-  form.image = ''
+  form.image = props.initialImage || ''
   form.name = ''
   form.ports = []
   form.volumes = []
@@ -183,14 +182,14 @@ async function onSubmit() {
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
   width: 100%;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 
 .row-sep {
@@ -199,15 +198,15 @@ async function onSubmit() {
 }
 
 .port-input {
-  width: 110px;
+  width: 6.875rem;
 }
 
 .proto-select {
-  width: 90px;
+  width: 5.625rem;
 }
 
 .restart-select {
-  width: 180px;
+  width: 11.25rem;
 }
 
 .row-error :deep(.el-input__wrapper) {

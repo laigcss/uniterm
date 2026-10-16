@@ -6,6 +6,7 @@ package session
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,13 +15,15 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/UserExistsError/conpty"
 	"golang.org/x/sys/windows"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
+
+	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/laigcss/ai-ops-terminal/backend/platform"
 )
 
 const cpUTF8 = 65001
@@ -111,15 +114,35 @@ func (s *LocalSession) updateMouseTrackingState(data []byte) {
 		}
 	}
 }
+
 type LocalSession struct {
 	baseSession
 	cpty                 *conpty.ConPty
+	admin                *adminPty // elevated shell relayed from the broker process
 	stdin                io.WriteCloser
 	stdout               io.Reader
 	cmd                  *exec.Cmd
 	quit                 chan struct{}
 	disconnectOnce       sync.Once
 	mouseTrackingEnabled atomic.Bool
+
+	// osc7 extracts injected OSC-7 cwd reports from the raw ConPTY/pipe
+	// output stream (see shell_integration.go). Only used from readLoop.
+	osc7 osc7Scanner
+
+	// WSL typed cwd-hook injection (two-phase). wslDistro is non-empty only
+	// for wsl:// shells. bash/zsh run in two phases: the arm line turns
+	// stty -echo on and the hook body is written only once the echo-armed
+	// marker is seen in the output stream, so the body never renders. fish
+	// skips phase 1 (no stty in its snippet) and accepts the single-line
+	// echo leak, same as SSH fish. The marker scanners and the arm/body
+	// handoff live in the shared typedCwdHookState.
+	wslDistro        string
+	wslShellBase     string
+	wslCwdHookBody   string
+	cwdHookFollow    bool
+	cwdHookTriggered atomic.Bool
+	hook             typedCwdHookState
 
 	mu             sync.RWMutex
 	enc            encoding.Encoding
@@ -142,6 +165,7 @@ func NewLocalSession(id string) *LocalSession {
 	// Set a generous default size so the PTY is unlikely to scroll before
 	// the frontend sends its first Resize() with the real dimensions.
 	s.SetPendingSize(200, 60)
+	s.hook = newTypedCwdHookState()
 	return s
 }
 
@@ -153,6 +177,31 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 	if shell == "" {
 		shell = defaultShell()
 	}
+	displayPath := shell
+
+	// admin:// shells spawn elevated. When uniTerm itself already runs as
+	// administrator the prefix is dropped and the shell starts like any
+	// other; otherwise an elevated broker process relays the ConPTY.
+	elevate := false
+	if inner, ok := ParseAdminShellPath(shell); ok {
+		shell = inner
+		elevate = !IsProcessElevated()
+	}
+
+	// clink:// shells run cmd.exe with clink injected (Tabby-style). The
+	// WT_SESSION hint tells clink the host is a ConPTY terminal like Windows
+	// Terminal, so it renders through the terminal's native VT stream instead
+	// of its own ANSI emulation layer.
+	clinkExe := ""
+	var clinkEnv []string
+	if p, ok := ParseClinkShellPath(shell); ok {
+		clinkExe = p
+		clinkEnv = []string{"WT_SESSION=0"}
+	}
+	clinkProfile := ""
+	if clinkExe != "" {
+		clinkProfile = ensureClinkProfile()
+	}
 
 	// Determine working directory: use config.Cwd if set, otherwise user home.
 	workDir := config.Cwd
@@ -162,7 +211,7 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		}
 	}
 
-	s.title = shellName(shell)
+	s.title = shellName(displayPath)
 
 	var commandLine string
 	var cmd *exec.Cmd
@@ -173,9 +222,36 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 			s.setStatus(StatusError)
 			return fmt.Errorf("empty WSL distribution name")
 		}
-		commandLine = wslCommandLine(distro)
-		cmd = exec.Command("wsl.exe", "-d", distro)
+		// SSH-style typed cwd hook: the distro starts through its native
+		// login flow (`wsl.exe` without -e), so the MOTD banner and profile
+		// scripts run exactly as in any other terminal; the OSC-7 hook is
+		// then typed into the running shell, never injected via launch args.
+		// Any probe failure or timeout degrades to a plain shell — the hook
+		// is optional and must never fail the session.
+		s.wslDistro = distro
+		s.cwdHookFollow = config.CwdHookMode == CwdHookModeFollow
+		if s.cwdHookFollow {
+			log.Writef("wsl: cwd hook deferred to directory-follow toggle")
+		} else if sh, ok := wslDetectShell(distro); ok {
+			if body, ok := buildShellCwdHookBody(sh); ok {
+				s.wslShellBase = shellBasename(sh)
+				s.wslCwdHookBody = body
+			} else {
+				log.Writef("wsl: cwd hook skipped (unsupported shell %q)", sh)
+			}
+		}
+		wslArgs := buildWSLStartArgs(distro, config.Cwd, nil)
+		commandLine = "wsl.exe " + strings.Join(wslArgs, " ")
+		cmd = exec.Command("wsl.exe", wslArgs...)
 		cmd.Env = os.Environ()
+	} else if clinkExe != "" {
+		// Tabby-style clink injection: cmd.exe /k <clink> inject --profile
+		// <dir>, started through ConPTY (clink's DLL injection needs the
+		// console context ConPTY provides, so the pipe fallback below runs
+		// plain cmd instead).
+		commandLine = buildClinkCommandLine(clinkExe, clinkProfile)
+		cmd = exec.Command("cmd.exe")
+		cmd.Env = append(os.Environ(), clinkEnv...)
 	} else {
 		commandLine = buildCommandLine(shell)
 		lowerShell := strings.ToLower(shell)
@@ -185,7 +261,13 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 				cmd.Env = os.Environ()
 			} else {
 				cmd = exec.Command(shell, "--login", "-i")
-				cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+				// MSYS bash reads TERM from the environment; honor the
+				// connection's explicit terminal type when one is set.
+				term := "TERM=" + DefaultTermType
+				if t := ExplicitTermType(config.TermType); t != "" {
+					term = "TERM=" + t
+				}
+				cmd.Env = append(os.Environ(), term)
 				isMSYSBash = true
 			}
 		} else {
@@ -194,8 +276,40 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		}
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	platform.HideConsoleWindow(cmd)
 	cmd.Dir = workDir
+
+	// Elevated shell: the ConPTY lives in the elevated broker process and is
+	// relayed to us over the control pipe, so everything below (direct
+	// conpty.Start / pipe fallback) only applies to unelevated shells.
+	if elevate {
+		cols, rows := s.GetPendingSize()
+		if cols <= 0 || rows <= 0 {
+			cols, rows = 80, 24
+		}
+		tp, err := startElevatedPty(localPtySpawn{
+			CommandLine: commandLine,
+			WorkDir:     workDir,
+			Env:         clinkEnv,
+			Cols:        cols,
+			Rows:        rows,
+		})
+		if errors.Is(err, errElevationCancelled) {
+			s.setStatus(StatusError)
+			return fmt.Errorf("administrator terminal: %w", err)
+		}
+		if err != nil {
+			s.setStatus(StatusError)
+			return fmt.Errorf("administrator terminal: %w", err)
+		}
+		s.admin = tp
+		s.setStatus(StatusConnected)
+		s.startEmitLoop()
+		go s.readLoop()
+		go s.runPostLoginScript(config.PostLoginScript)
+		s.injectStartupCwdHook()
+		return nil
+	}
 
 	// Try ConPTY first for a real pseudo-terminal experience.
 	if conpty.IsConPtyAvailable() {
@@ -203,7 +317,11 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		if cols <= 0 || rows <= 0 {
 			cols, rows = 80, 24
 		}
-		c, err := conpty.Start(commandLine, conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(workDir), conpty.ConPtyEnv(os.Environ()))
+		env := os.Environ()
+		if len(clinkEnv) > 0 {
+			env = append(env, clinkEnv...)
+		}
+		c, err := conpty.Start(commandLine, conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(workDir), conpty.ConPtyEnv(env))
 		if err == nil {
 			s.cpty = c
 			if isMSYSBash {
@@ -218,8 +336,10 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 				s.Disconnect()
 			}()
 			s.setStatus(StatusConnected)
+			s.startEmitLoop()
 			go s.readLoop()
 			go s.runPostLoginScript(config.PostLoginScript)
+			s.injectStartupCwdHook()
 			return nil
 		}
 		// Fall through to pipe mode if ConPTY fails.
@@ -253,8 +373,10 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 	}()
 
 	s.setStatus(StatusConnected)
+	s.startEmitLoop()
 	go s.readLoop()
 	go s.runPostLoginScript(config.PostLoginScript)
+	s.injectStartupCwdHook()
 	return nil
 }
 
@@ -266,13 +388,177 @@ func parseWSLPath(path string) (distro string, ok bool) {
 	return path[len(prefix):], true
 }
 
-func wslCommandLine(distro string) string {
-	// Note: do not quote the distro name here. In the ConPTY path, quoted
-	// names are interpreted literally by wsl.exe and cause
-	// WSL_E_DISTRO_NOT_FOUND. Distribution names with spaces are uncommon;
-	// if needed, the pipe fallback (exec.Command with separate args) handles
-	// them correctly.
-	return fmt.Sprintf(`wsl.exe -d %s`, distro)
+// wslIntegrationTimeout bounds every wsl.exe one-shot call of the WSL shell
+// integration (shell detection, temp file/dir writes). WSL cold starts can
+// take a few seconds per call; any timeout or error silently degrades to a
+// plain `wsl.exe -d <distro>`.
+const wslIntegrationTimeout = 10 * time.Second
+
+// wslDetectShell probes the distro's default shell via a one-shot
+// wsl.exe -e process. This probe is throwaway and does not affect the
+// session's own shell, mirroring the SSH probe design: the session shell
+// starts untouched (MOTD and profile scripts intact) and the OSC-7 hook is
+// typed in afterwards.
+func wslDetectShell(distro string) (shell string, ok bool) {
+	shell, err := wslRunCommand(distro, "echo $SHELL", "", wslIntegrationTimeout)
+	if err != nil {
+		log.Writef("wsl: shell detection failed for %s: %v", distro, err)
+		return "", false
+	}
+	return strings.TrimSpace(shell), true
+}
+
+// wslCwdHookRowCleanup is prepended to the hook body (phase 2, echo off) to
+// wipe the conhost echo of phase 1: save the cursor, clear the home row,
+// restore. Absolute positioning, so it cannot drift with the prompt layout.
+const wslCwdHookRowCleanup = " printf '\\0337\\033[H\\033[2K\\0338';"
+
+// injectStartupCwdHook starts the typed cwd-hook injection right after the
+// PTY starts. ConPTY buffers the bytes, so the shell executes the phases in
+// order: phase 1 arms echo-off (bash/zsh) and the hook body is written only
+// after the echo-armed marker is seen in the output stream (read loop);
+// phase 2's body must never render. fish skips phase 1 (no stty in its
+// snippet) and accepts the single-line echo leak, same as SSH fish.
+func (s *LocalSession) injectStartupCwdHook() {
+	if s.cwdHookFollow || s.wslDistro == "" || s.wslCwdHookBody == "" {
+		return
+	}
+	if s.wslShellBase == "bash" || s.wslShellBase == "zsh" {
+		// The body carries the row cleanup with it: the arm line's conhost
+		// echo must be erased by the time the body runs (echo off).
+		s.hook.arm(wslCwdHookRowCleanup + s.wslCwdHookBody)
+		_ = s.Write([]byte(cwdHookArmLine))
+		return
+	}
+	// fish and other supported shells without an echo-off prefix: single
+	// phase, watch for the ready marker.
+	if err := s.Write([]byte(s.wslCwdHookBody)); err != nil {
+		log.Writef("wsl: cwd hook write failed: %v", err)
+		return
+	}
+	log.Writef("wsl: cwd hook injected (shell=%s)", s.wslShellBase)
+	go s.watchCwdHookConfirm()
+}
+
+// writeWslCwdHookBody is phase 2: runs once the echo-armed marker confirmed
+// that stty -echo took effect, so the hook body cannot echo. The body already
+// carries the home-row cleanup that erases the conhost echo of phase 1 (it is
+// prepended when the hook is armed).
+func (s *LocalSession) writeWslCwdHookBody(body string) {
+	if body == "" {
+		return
+	}
+	if err := s.Write([]byte(body)); err != nil {
+		log.Writef("wsl: cwd hook body write failed: %v", err)
+		return
+	}
+	log.Writef("wsl: cwd hook injected (shell=%s)", s.wslShellBase)
+	go s.watchCwdHookConfirm()
+}
+
+// watchCwdHookConfirm bounds how long the session waits for the injected
+// hook's ready marker. If the hook never confirms (unsupported setup, the
+// user exited the shell instantly), echo is restored blindly so the session
+// is never left with terminal echo off.
+func (s *LocalSession) watchCwdHookConfirm() {
+	select {
+	case <-time.After(cwdHookConfirmTimeout):
+	case <-s.quit:
+		return
+	}
+	if s.hook.isInstalled() || s.Status() != StatusConnected {
+		return
+	}
+	log.Writef("wsl: cwd hook not confirmed after %s, restoring echo blindly", cwdHookConfirmTimeout)
+	_ = s.Write([]byte(cwdHookBlindRestoreLine))
+}
+
+// InjectCwdHook types the OSC-7 cwd hook into the running shell on demand,
+// for WSL sessions with CwdHookMode "follow" (the startup injection was
+// skipped). WSLSession satisfies session.CwdHookInjector through embedding,
+// so the frontend's directory-follow toggle reaches it via the same
+// App.SessionInjectCwdHook route SSH uses. Repeated calls are no-ops; a
+// transiently failed attempt re-arms so a later call can retry.
+func (s *LocalSession) InjectCwdHook() error {
+	if s.wslDistro == "" {
+		return fmt.Errorf("on-demand cwd hook injection is only available for WSL sessions")
+	}
+	if !s.cwdHookTriggered.CompareAndSwap(false, true) {
+		return nil
+	}
+	if s.Status() != StatusConnected {
+		s.cwdHookTriggered.Store(false)
+		return fmt.Errorf("wsl session not connected")
+	}
+	if s.hook.isInstalled() {
+		return nil
+	}
+	shell, ok := wslDetectShell(s.wslDistro)
+	if !ok {
+		s.cwdHookTriggered.Store(false)
+		return fmt.Errorf("wsl shell detection failed")
+	}
+	base := shellBasename(shell)
+	body, ok := buildShellCwdHookBody(shell)
+	if !ok {
+		s.cwdHookTriggered.Store(false)
+		return fmt.Errorf("cwd hook unavailable (shell %q)", shell)
+	}
+	if base == "bash" || base == "zsh" {
+		// Two-phase: arm echo-off, then let the read loop write the body
+		// once the echo-armed marker confirms stty -echo took effect. The
+		// body carries the home-row cleanup for the arm line's conhost echo.
+		s.mu.Lock()
+		s.wslShellBase = base
+		s.mu.Unlock()
+		s.hook.arm(wslCwdHookRowCleanup + body)
+		if err := s.Write([]byte(cwdHookArmLine)); err != nil {
+			s.hook.disarm()
+			s.cwdHookTriggered.Store(false)
+			return fmt.Errorf("cwd hook write: %w", err)
+		}
+		return nil
+	}
+	if err := s.Write([]byte(body)); err != nil {
+		s.cwdHookTriggered.Store(false)
+		return fmt.Errorf("cwd hook write: %w", err)
+	}
+	log.Writef("wsl: cwd hook injected on demand (shell=%s)", base)
+	go s.watchCwdHookConfirm()
+	return nil
+}
+// wslRunCommand runs a one-shot command inside the distro via wsl.exe -e
+// with a timeout, optionally feeding stdin, and returns stdout.
+func wslRunCommand(distro, command, stdin string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", distro, "-e", "sh", "-c", command)
+	platform.HideConsoleWindow(cmd)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// buildWSLStartArgs returns the full wsl.exe argument list for launching a
+// distro. Without an explicit cwd, `--cd ~` makes wsl.exe start the shell in
+// the distro user's Linux home; otherwise the shell inherits uniTerm's own
+// working directory, which wsl.exe maps to /mnt/c/Users/<name>.
+//
+// Note: the distro name is not quoted here. In the ConPTY path, quoted names
+// are interpreted literally by wsl.exe and cause WSL_E_DISTRO_NOT_FOUND.
+// Distribution names with spaces are uncommon; if needed, the pipe fallback
+// (exec.Command with separate args) handles them correctly.
+func buildWSLStartArgs(distro string, cwd string, startArgs []string) []string {
+	args := []string{"-d", distro}
+	if cwd == "" {
+		args = append(args, "--cd", "~")
+	}
+	return append(args, startArgs...)
 }
 
 func buildCommandLine(shell string) string {
@@ -293,11 +579,36 @@ func buildCommandLine(shell string) string {
 }
 
 func shellName(path string) string {
+	if inner, ok := ParseAdminShellPath(path); ok {
+		return shellName(inner) + " (Admin)"
+	}
+	if _, ok := ParseClinkShellPath(path); ok {
+		return "CMD (Clink)"
+	}
 	if distro, ok := parseWSLPath(path); ok {
 		return "WSL - " + distro
 	}
 	base := filepath.Base(path)
 	base = strings.TrimSuffix(base, ".exe")
+	// Disambiguate bash flavors by install path: Git for Windows, Cygwin and
+	// MSYS2 all ship a bash.exe, and a bare "bash" title tells the user
+	// nothing. Mirrors the frontend getShellLabel rules.
+	if strings.EqualFold(base, "bash") {
+		lower := strings.ToLower(path)
+		if strings.Contains(lower, `\git\`) || strings.Contains(lower, `/git/`) ||
+			strings.Contains(lower, "chocolatey") {
+			if strings.Contains(lower, `\scoop\`) || strings.Contains(lower, `/scoop/`) {
+				return "Git Bash (Scoop)"
+			}
+			return "Git Bash"
+		}
+		if strings.Contains(lower, "cygwin") {
+			return "Cygwin bash"
+		}
+		if strings.Contains(lower, "msys") {
+			return "MSYS2 bash"
+		}
+	}
 	return base
 }
 
@@ -382,7 +693,9 @@ func (s *LocalSession) readLoop() {
 		var n int
 		var err error
 		usingConPty := s.cpty != nil
-		if usingConPty {
+		if s.admin != nil {
+			n, err = s.admin.Read(buf)
+		} else if usingConPty {
 			n, err = s.cpty.Read(buf)
 		} else {
 			n, err = s.stdout.Read(buf)
@@ -391,8 +704,29 @@ func (s *LocalSession) readLoop() {
 		if n > 0 {
 			s.RecordReadActivity()
 			data := append([]byte(nil), buf[:n]...)
-			s.emitData(s.decodeOutput(data))
-			s.updateMouseTrackingState(data)
+			// OSC-7 extraction runs on the RAW byte stream, BEFORE decoding:
+			// the sequence is pure ASCII while legacy codecs (GBK/Big5/...)
+			// could mangle its bytes or withhold a fragment in their
+			// cross-chunk multibyte leftover. The cleaned remainder replaces
+			// the data for every downstream consumer so stripped sequences
+			// never render.
+			cwd, cleaned, found := s.osc7.Feed(data)
+			if found {
+				recordSessionCwd(s.id, cwd)
+				if TerminalCwdSink != nil {
+					TerminalCwdSink(s.id, cwd)
+				}
+			}
+			cleaned, armed, confirmed := s.hook.onOutput(cleaned)
+			if armed {
+				go s.writeWslCwdHookBody(s.hook.takeArmedBody())
+			}
+			if confirmed {
+				s.hook.confirm()
+				log.Writef("wsl: cwd hook confirmed via ready marker")
+			}
+			s.emitData(s.decodeOutput(cleaned))
+			s.updateMouseTrackingState(cleaned)
 		}
 		if err != nil {
 			// If the quit channel is already closed, another goroutine
@@ -403,6 +737,13 @@ func (s *LocalSession) readLoop() {
 			case <-s.quit:
 				return
 			default:
+			}
+			// If a terminal application enabled mouse tracking and then exited
+			// without disabling it, reset tracking now that the process is gone
+			// — this restores native text selection.
+			if s.mouseTrackingEnabled.Load() {
+				s.emitData(mouseTrackingReset)
+				s.mouseTrackingEnabled.Store(false)
 			}
 			if err != io.EOF {
 				// On ConPTY (and pipe fallback), any read error after a
@@ -424,24 +765,14 @@ func (s *LocalSession) readLoop() {
 func (s *LocalSession) Write(data []byte) error {
 	encoded := s.encodeInput(data)
 	var err error
-	if s.cpty != nil {
+	if s.admin != nil {
+		_, err = s.admin.Write(encoded)
+	} else if s.cpty != nil {
 		_, err = s.cpty.Write(encoded)
 	} else if s.stdin != nil {
 		_, err = s.stdin.Write(encoded)
 	} else {
 		return fmt.Errorf("not connected")
-	}
-	// If a terminal application enabled mouse tracking and then exited
-	// without disabling it, automatically reset tracking when the user
-	// presses Enter — this restores native text selection.
-	if err == nil && s.mouseTrackingEnabled.Load() {
-		for _, b := range data {
-			if b == '\r' || b == '\n' {
-				s.emitData(mouseTrackingReset)
-				s.mouseTrackingEnabled.Store(false)
-				break
-			}
-		}
 	}
 	return err
 }
@@ -452,6 +783,11 @@ func (s *LocalSession) Write(data []byte) error {
 func (s *LocalSession) Disconnect() error {
 	s.disconnectOnce.Do(func() {
 		close(s.quit)
+		if s.admin != nil {
+			// Closing the control pipe makes the elevated broker kill the
+			// shell and exit.
+			s.admin.Close()
+		}
 		if s.cpty != nil {
 			// Close but leave the field set: readLoop, Write and Resize read
 			// s.cpty without holding a lock, and nilling it here raced them.
@@ -471,6 +807,9 @@ func (s *LocalSession) Disconnect() error {
 
 func (s *LocalSession) Resize(cols, rows int) error {
 	s.SetPendingSize(cols, rows)
+	if s.admin != nil {
+		return s.admin.Resize(cols, rows)
+	}
 	if s.cpty != nil {
 		return s.cpty.Resize(cols, rows)
 	}

@@ -7,6 +7,8 @@ build/windows/installer/*
 !build/windows/installer/project.nsi
 !build/windows/icon.ico
 !build/appicon.png
+!build/appicon_tray.png
+!build/appicon_tray_template.png
 !build/linux/
 # Wails v3 task-driven build config (must be tracked so `wails3 build` works)
 !build/Taskfile.yml
@@ -55,6 +57,8 @@ Thumbs.db
 
 # Go build artifacts
 *.exe~
+# bare `go build .` output (the wails3 pipeline builds into bin/)
+/uniTerm
 *.test
 /uniterm
 
@@ -78,3 +82,14 @@ designs/
 /design.md
 docs/articles/
 docker/
+
+# Android scaffold (copied from wails build assets; outputs stay ignored)
+!build/android/
+!build/android/**
+build/android/app/build/
+build/android/build/
+build/android/.gradle/
+build/android/app/src/main/jniLibs/
+build/android/gen/
+build/android/overlay.json
+build/android/local.properties

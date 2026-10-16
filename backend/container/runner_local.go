@@ -2,8 +2,10 @@ package container
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,14 +66,101 @@ func (r *LocalRunner) command(ctx context.Context, argv []string) (*exec.Cmd, er
 }
 
 func (r *LocalRunner) Run(ctx context.Context, argv []string) ([]byte, error) {
+	return r.run(ctx, argv, nil)
+}
+
+func (r *LocalRunner) RunStdin(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
+	return r.run(ctx, argv, stdin)
+}
+
+// localRawStream 是本地进程 stdout 的二进制流；Close 杀进程，Wait 等退出。
+// stderr 收进缓冲，非零退出时并入错误（docker cp 失败原因在此）。
+type localRawStream struct {
+	io.ReadCloser
+	cmd    *exec.Cmd
+	stderr *bytes.Buffer
+	once   sync.Once
+}
+
+func (s *localRawStream) Wait() error {
+	err := s.cmd.Wait()
+	if err != nil {
+		if msg := strings.TrimSpace(s.stderr.String()); msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
+			return fmt.Errorf("%s", strings.TrimSpace(string(ee.Stderr)))
+		}
+	}
+	return err
+}
+
+func (s *localRawStream) Close() error {
+	s.once.Do(func() {
+		if s.cmd.Process != nil {
+			_ = s.cmd.Process.Kill()
+		}
+		_ = s.Wait()
+	})
+	return nil
+}
+
+func (r *LocalRunner) RunStdinStream(ctx context.Context, argv []string, stdin io.Reader) ([]byte, error) {
 	cmd, err := r.command(ctx, argv)
 	if err != nil {
 		return nil, err
+	}
+	if stdin != nil {
+		cmd.Stdin = stdin
 	}
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
 			return nil, fmt.Errorf("%s", strings.TrimSpace(string(ee.Stderr)))
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *LocalRunner) RunRaw(ctx context.Context, argv []string) (RawStream, error) {
+	cmd, err := r.command(ctx, argv)
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return &localRawStream{ReadCloser: stdout, cmd: cmd, stderr: stderr}, nil
+}
+
+func (r *LocalRunner) run(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
+	cmd, err := r.command(ctx, argv)
+	if err != nil {
+		return nil, err
+	}
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			msg := strings.TrimSpace(string(ee.Stderr))
+			if msg == "" {
+				// 有的 CLI 失败时把原因写在 stdout、stderr 为空（wslc 的 exec
+				// 就是如此），只看 stderr 会退化成 "exit status 126" 丢掉原因，
+				// 例如镜像内没有 sh 时上层无法给出可读提示。
+				msg = strings.TrimSpace(string(out))
+			}
+			if msg != "" {
+				return nil, fmt.Errorf("%s", msg)
+			}
 		}
 		return nil, err
 	}

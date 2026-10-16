@@ -1,6 +1,6 @@
 # Cloud Sync
 
-Encrypted synchronization of ai-ops-terminal settings through your own private Git repository — no centralized server required, and your data security is fully under your control.
+Supports **dual-mode cloud sync over Git or WebDAV** with encrypted synchronization of uniTerm settings: the Git mode uses your own private repository (GitHub / GitLab / Gitee), while the WebDAV mode works with any standard WebDAV service. Your data security stays fully under your control.
 
 ![Cloud Sync](/imgs/cloud_sync_light.webp)
 
@@ -34,12 +34,20 @@ Encrypted synchronization of ai-ops-terminal settings through your own private G
 - Check **user_info** and **projects** permissions
 - Copy the token after generation (it is shown only once)
 
-### 2. Configure ai-ops-terminal
+#### WebDAV
 
-1. Open Settings → Cloud Sync and click "Add Repository"
-2. Enter the repository URL, username (optional), and access token
-3. Set a **master password** (used to encrypt data; it is not uploaded to the repository)
-4. Click OK, and ai-ops-terminal will automatically complete the initial synchronization
+The WebDAV mode needs no repository — just prepare a WebDAV service:
+
+- **Server URL**: works with WebDAV-capable clouds (Nextcloud, Jianguoyun, InfiniCloud, ...) or a self-hosted service; the URL must include protocol and port
+- **Account**: the username and password (app password) of that service
+
+### 2. Configure uniTerm
+
+1. Open Settings → Cloud Sync and click "Add Repository", choosing **Git** or **WebDAV** as the sync source
+2. Git: enter the repository URL, username (optional), and access token; WebDAV: enter the server URL (with protocol and port), username, and password
+3. Set a **master password** (used to encrypt data; it is not uploaded to the repository or cloud drive)
+4. Click OK, and uniTerm will automatically complete the initial synchronization
+5. Tick the data to sync under "Sync Scope" as needed
 
 ::: warning Note
 - Keep your token and master password safe. The token is shown only once
@@ -51,7 +59,7 @@ Encrypted synchronization of ai-ops-terminal settings through your own private G
 
 ### Manual Sync
 
-Click the "Sync Now" button, and ai-ops-terminal will automatically compare local and remote differences:
+Click the "Sync Now" button, and uniTerm will automatically compare local and remote differences:
 - **Local is newer → Push to remote** (upload)
 - **Remote is newer → Pull to local** (download)
 - **No differences → Already up to date**
@@ -60,25 +68,30 @@ Click the "Sync Now" button, and ai-ops-terminal will automatically compare loca
 
 When auto-sync is enabled:
 - Sync automatically once at **startup**
-- Upload automatically after **each modification** to connections, settings, or quick commands
+- Upload automatically after **each modification** to connections, favorites, quick commands, tunnels, identities, or proxies
 
 ## Sync Contents
 
-The following data is synchronized (encrypted before storage):
+The following data is synchronized (stored encrypted):
 
 - Connection list and groups
-- Application settings (including AI model configuration)
+- Connection favorites
+- AI configuration (model catalog and autonomous turn limit)
 - Quick commands
+- SSH tunnels
+- Keystore identities
+- Proxies
 
 Data that is NOT synchronized:
 
+- Application personalization settings (theme, paths, shell, shortcuts, interface layout, etc. — effective only on the local machine)
+- AI sessions and skills (local only)
 - Cloud sync configuration itself (configured independently per device)
-- Interface layout state
 - Terminal history
 
 ## Conflict Handling
 
-When multiple devices modify data simultaneously and the latest version is not pulled before pushing, conflicts may occur. ai-ops-terminal will show a conflict resolution dialog with two options:
+Synchronization pulls from the remote before pushing, so conflicts generally do not occur when two machines are used alternately. When multiple devices modify the same data at the same time without pulling the latest version before pushing, uniTerm shows a conflict resolution dialog with two options:
 
 - **Use Local Data** — Use the current device's data as authoritative, overwriting the remote repository
 - **Use Remote Data** — Use the remote repository's data as authoritative, overwriting the current device
@@ -96,7 +109,7 @@ When multiple devices modify data simultaneously and the latest version is not p
 
 Click "Edit Repository" to modify the username and access token. The repository URL cannot be modified (you must unbind first and then reconfigure).
 
-When modifying credentials, ai-ops-terminal automatically verifies that the new token can access the repository and that the master password can decrypt the remote data.
+When modifying credentials, uniTerm automatically verifies that the new token can access the repository and that the master password can decrypt the remote data.
 
 ### Change Master Password
 

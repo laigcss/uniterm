@@ -4,6 +4,8 @@ import { Events } from '@wailsio/runtime'
 import {
   LoadTunnels, SaveTunnels, StartTunnel, StopTunnel, ListTunnelStates,
 } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { msg } from '../services/message'
+import { t } from '../i18n'
 // Module-level un-subscribers for tunnel:state / store:tunnels:changed listeners.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).
@@ -11,7 +13,7 @@ let unsubTunnelState: (() => void) | null = null
 let unsubTunnelsChanged: (() => void) | null = null
 
 export type TunnelMode = 'local' | 'remote' | 'dynamic'
-export type TunnelStatus = 'stopped' | 'running' | 'error'
+export type TunnelStatus = 'stopped' | 'connecting' | 'running' | 'reconnecting' | 'error'
 
 export interface SocksProxy {
   kind: string // 'socks5' | 'http'
@@ -32,6 +34,9 @@ export interface Tunnel {
   targetPort?: number
   upstream?: SocksProxy
   autoStart?: boolean
+  autoReconnect?: boolean
+  reconnectInterval?: number
+  reconnectJitter?: number
   groupId?: string
   sortOrder?: number
 }
@@ -59,28 +64,54 @@ export const useTunnelStore = defineStore('tunnels', () => {
   const tunnels = ref<Tunnel[]>([])
   const states = ref<Record<string, TunnelState>>({})
   const loaded = ref(false)
+  const requests = new Map<string, symbol>()
+  let loading: Promise<void> | undefined
+  let loadGeneration = 0
 
-  async function load() {
-    if (loaded.value) return
+  function load(): Promise<void> {
+    if (loaded.value) return Promise.resolve()
+    if (loading) return loading
+    const generation = loadGeneration
+    loading = loadInitial(generation).finally(() => {
+      if (generation === loadGeneration) loading = undefined
+    })
+    return loading
+  }
+
+  async function loadInitial(generation: number) {
     try {
       const data = await LoadTunnels()
+      if (generation !== loadGeneration) return
       groups.value = (data.groups as TunnelGroup[]) || []
       tunnels.value = (data.tunnels as Tunnel[]) || []
     } catch (e) {
+      if (generation !== loadGeneration) return
       console.error('Failed to load tunnels:', e)
       groups.value = []
       tunnels.value = []
     }
-    // Seed runtime states from the backend (auto-started tunnels).
-    try {
-      const list = await ListTunnelStates()
-      for (const st of list) states.value[st.id] = st as TunnelState
-    } catch (e) {
-      console.error('Failed to list tunnel states:', e)
-    }
-    // Live state pushes.
+    const receivedStates = new Set<string>()
+    // Live state pushes. Errors are toasted here — one place covers manual
+    // starts, auto-start failures at app boot and mid-run disconnects. The
+    // bare backend error (e.g. "ssh handshake 10.x.x.x:22: ...") carries no
+    // tunnel identity, so the toast prefixes the localized tunnel name; the
+    // mid-run disconnect gets its own wording instead of "failed to start".
+    let lastToastError = ''
     unsubTunnelState?.()
-    unsubTunnelState =Events.On('tunnel:state', (ev) => { const st: TunnelState = ev.data; 
+    unsubTunnelState =Events.On('tunnel:state', (ev) => { const st: TunnelState = ev.data;
+      receivedStates.add(st.id)
+      // Backend events can supersede responses still in flight, including
+      // changes from another window and an immediate post-connect disconnect.
+      requests.delete(st.id)
+      if (st.status === 'error' && st.error && st.error !== lastToastError) {
+        lastToastError = st.error
+        const name = tunnels.value.find(x => x.id === st.id)?.name || st.id
+        if (st.error === 'ssh chain disconnected') {
+          msg.error(t('tunnels.disconnected', { name }))
+        } else {
+          msg.error(`${t('tunnels.startFailed', { name })}: ${st.error}`)
+        }
+      }
       states.value = { ...states.value, [st.id]: st }
      })
     // Cross-window sync.
@@ -89,10 +120,25 @@ export const useTunnelStore = defineStore('tunnels', () => {
       groups.value = data.groups || []
       tunnels.value = data.tunnels || []
      })
+    // Subscribe before the snapshot so an auto-start/reconnect transition
+    // cannot be missed or overwritten by an older snapshot response.
+    try {
+      const list = await ListTunnelStates()
+      if (generation !== loadGeneration) return
+      for (const st of list) {
+        if (!receivedStates.has(st.id)) states.value[st.id] = st as TunnelState
+      }
+    } catch (e) {
+      if (generation !== loadGeneration) return
+      console.error('Failed to list tunnel states:', e)
+    }
     loaded.value = true
   }
 
   function dispose() {
+    loadGeneration++
+    loading = undefined
+    loaded.value = false
     unsubTunnelState?.()
     unsubTunnelState = null
     unsubTunnelsChanged?.()
@@ -115,6 +161,26 @@ export const useTunnelStore = defineStore('tunnels', () => {
     return states.value[id]?.status || 'stopped'
   }
 
+  function isActive(id: string): boolean {
+    return ['connecting', 'running', 'reconnecting'].includes(statusOf(id))
+  }
+
+  function statusLabel(id: string): string {
+    const labels: Record<TunnelStatus, string> = {
+      stopped: 'tunnels.statusStopped',
+      connecting: 'tunnels.statusConnecting',
+      running: 'tunnels.statusRunning',
+      reconnecting: 'tunnels.statusReconnecting',
+      error: 'tunnels.statusError',
+    }
+    return t(labels[statusOf(id)])
+  }
+
+  function statusTitle(id: string): string {
+    const error = states.value[id]?.error
+    return error ? `${statusLabel(id)}: ${error}` : statusLabel(id)
+  }
+
   function addTunnel(t: Omit<Tunnel, 'id' | 'sortOrder'>): Tunnel {
     const tunnel: Tunnel = {
       ...t,
@@ -134,10 +200,10 @@ export const useTunnelStore = defineStore('tunnels', () => {
     }
   }
 
-  function deleteTunnel(id: string) {
-    stop(id)
+  async function deleteTunnel(id: string) {
+    if (!await stop(id)) return
     tunnels.value = tunnels.value.filter(t => t.id !== id)
-    save()
+    await save()
   }
 
   function getTunnelsByGroup(groupId?: string): Tunnel[] {
@@ -158,35 +224,60 @@ export const useTunnelStore = defineStore('tunnels', () => {
     if (g) { g.name = name; save() }
   }
 
-  function deleteGroup(id: string, deleteTunnels: boolean) {
+  async function deleteGroup(id: string, deleteTunnels: boolean) {
     if (deleteTunnels) {
-      tunnels.value.filter(t => t.groupId === id).forEach(t => stop(t.id))
+      const stopped = await Promise.all(tunnels.value.filter(t => t.groupId === id).map(t => stop(t.id)))
+      if (stopped.some(ok => !ok)) return
       tunnels.value = tunnels.value.filter(t => t.groupId !== id)
     } else {
       tunnels.value.forEach(t => { if (t.groupId === id) t.groupId = undefined })
     }
     groups.value = groups.value.filter(g => g.id !== id)
-    save()
+    await save()
   }
 
-  async function start(id: string): Promise<TunnelState> {
-    const st = await StartTunnel(id)
-    states.value = { ...states.value, [id]: st as TunnelState }
-    return st as TunnelState
+  async function start(id: string, user?: string, password?: string): Promise<TunnelState> {
+    if (isActive(id)) return states.value[id]
+    const request = Symbol(id)
+    requests.set(id, request)
+    states.value = { ...states.value, [id]: { id, status: 'connecting' } }
+    try {
+      const st = await StartTunnel(id, user || '', password || '') as TunnelState
+      if (requests.get(id) === request) states.value = { ...states.value, [id]: st }
+      return st
+    } catch (e) {
+      const st: TunnelState = { id, status: 'error', error: String(e) }
+      if (requests.get(id) === request) {
+        states.value = { ...states.value, [id]: st }
+        const name = tunnels.value.find(x => x.id === id)?.name || id
+        msg.error(`${t('tunnels.startFailed', { name })}: ${st.error}`)
+      }
+      return st
+    } finally {
+      if (requests.get(id) === request) requests.delete(id)
+    }
   }
 
   async function stop(id: string) {
+    // A slow StartTunnel response must not restore a manually stopped tunnel.
+    const request = Symbol(id)
+    requests.set(id, request)
     try {
       await StopTunnel(id)
-      states.value = { ...states.value, [id]: { id, status: 'stopped' } }
+      if (requests.get(id) === request) states.value = { ...states.value, [id]: { id, status: 'stopped' } }
+      return true
     } catch (e) {
       console.error('Failed to stop tunnel:', e)
+      msg.error(String(e))
+      return false
+    } finally {
+      if (requests.get(id) === request) requests.delete(id)
     }
   }
 
   return {
     groups, tunnels, states, loaded,
-    load, save, statusOf,
+    load, save, statusOf, isActive, statusLabel, statusTitle,
     addTunnel, updateTunnel, deleteTunnel, getTunnelsByGroup,
     addGroup, renameGroup, deleteGroup,
     start, stop,

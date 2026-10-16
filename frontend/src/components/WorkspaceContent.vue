@@ -3,10 +3,24 @@
     class="workspace-content"
     @dragover.prevent="onWorkspaceDragOver"
   >
+    <!-- Empty workspace: drop target for sidebar connections / terminal tabs -->
+    <div
+      v-if="tab.panelIds.length === 0"
+      class="ws-empty"
+      :class="{ 'drag-over': emptyDragOver }"
+      @dragover.prevent="onEmptyDragOver"
+      @dragleave="onEmptyDragLeave"
+      @drop="onEmptyDrop"
+    >
+      <LayoutDashboard class="ws-empty-icon" />
+      <div class="ws-empty-text">{{ t('workspace.dropHint') }}</div>
+    </div>
     <PanelGrid
+      v-else
       :layout="tab.layout"
       :panel-ids="tab.panelIds"
       :active-panel-id="tab.activePanelId"
+      :maximized-panel-id="tab.maximizedPanelId || null"
       :tab-id="tab.id"
       @close-panel="closePanel"
       @toggle-ai-lock="onToggleAiLock"
@@ -22,15 +36,17 @@
 <script setup lang="ts">
 defineOptions({ name: 'WorkspaceContent' })
 
+import { ref } from 'vue'
+import { LayoutDashboard } from '@lucide/vue'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useCompanionStore } from '../stores/companionStore'
+import { useConnectionStore } from '../stores/connectionStore'
 import type { WorkspaceTab } from '../types/workspace'
-import type { ConnectionConfig } from '../types/session'
-import { waitForTerminalSize } from '../services/terminalManager'
+import { useDuplicateSession } from '../composables/useDuplicateSession'
 import PanelGrid from './PanelGrid.vue'
-import { CreateSession, CloseSession, SessionStart } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { CloseSession } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 
@@ -42,7 +58,9 @@ const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const companionStore = useCompanionStore()
+const connectionStore = useConnectionStore()
 const { t } = useI18n()
+const { duplicateSession } = useDuplicateSession()
 
 async function closePanel(panelId: string) {
   const panel = panelStore.getPanel(panelId)
@@ -79,38 +97,10 @@ function onToggleAiLock(panelId: string) {
 async function onDuplicatePanel(panelId: string) {
   const panel = panelStore.getPanel(panelId)
   if (!panel) return
-
-  const newPanel = panelStore.createPanel(
-    panel.config ? { ...panel.config } as ConnectionConfig : null,
-    panel.type
+  await duplicateSession(
+    { type: 'terminal', panelId, title: panel.title },
+    { workspaceId: props.tab.id, targetPanelId: panelId },
   )
-  panelStore.updateTitle(newPanel.id, panel.title)
-
-  if (panel.config) {
-    try {
-      const config: ConnectionConfig = {
-        ...panel.config,
-        initialCols: 0,
-        initialRows: 0,
-      }
-      const info = await CreateSession(panel.config.type, config)
-      panelStore.bindSession(newPanel.id, info.id)
-      // Create tab AFTER session is bound, so BaseTerminal mounts with valid sessionId
-      const newTab = tabStore.createTerminalTab(newPanel.title, newPanel.id)
-      panelStore.movePanelToTab(newPanel.id, newTab.id)
-      const size = await waitForTerminalSize(info.id)
-      if (size.cols > 0 && size.rows > 0) {
-        config.initialCols = size.cols
-        config.initialRows = size.rows
-      }
-      await SessionStart(info.id, config).catch((e: unknown) => {
-        console.error('Failed to start duplicated session:', e)
-        CloseSession(info.id).catch(() => {})
-      })
-    } catch (e) {
-      console.error('Failed to duplicate session:', e)
-    }
-  }
 }
 
 function onRenamePanel(panelId: string, newName: string) {
@@ -132,13 +122,44 @@ function onPanelDrop(e: DragEvent, targetPanelId: string, targetRect?: DOMRect) 
   const draggedPanelId = e.dataTransfer?.getData('application/panel-id')
   const draggedTabId = e.dataTransfer?.getData('application/tab-id')
   const sourceTabId = e.dataTransfer?.getData('application/source-tab-id')
+  const draggedConnId = e.dataTransfer?.getData('application/conn-id')
+
+  // Case 0: Sidebar connection dragged in — connect it and split at the drop
+  // position. Connecting must go through App (credentials, CreateSession, PTY
+  // sizing), so hand off via the window event App listens for.
+  if (draggedConnId && !draggedPanelId && !draggedTabId) {
+    const conn = connectionStore.connections.find(c => c.id === draggedConnId)
+    if (!conn) return
+
+    const rect = targetRect || (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const xRatio = x / rect.width
+    const yRatio = y / rect.height
+
+    let direction: 'horizontal' | 'vertical'
+    let insertBefore: boolean
+    if (Math.abs(xRatio - 0.5) >= Math.abs(yRatio - 0.5)) {
+      direction = 'horizontal'
+      insertBefore = xRatio < 0.5
+    } else {
+      direction = 'vertical'
+      insertBefore = yRatio < 0.5
+    }
+
+    window.dispatchEvent(new CustomEvent('app:connect-workspace-panel', {
+      detail: { config: conn, workspaceTabId: props.tab.id, targetPanelId, direction, insertBefore }
+    }))
+    return
+  }
 
   // Case 1: Terminal tab dragged into workspace (from TabBar)
   if (draggedTabId && !draggedPanelId) {
     const draggedTab = tabStore.tabs.find(t => t.id === draggedTabId)
     if (!draggedTab || draggedTab.type !== 'terminal') return
 
-    // Save the adjacent tab that was activated during dragstart
+    // Save the tab that was active before the drop, so dropping a background
+    // terminal tab into this workspace doesn't steal the user's focus
     const adjacentTabId = tabStore.activeTabId
 
     const rect = targetRect || (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -223,6 +244,50 @@ function onWorkspaceDragOver(e: DragEvent) {
   }
 }
 
+// ── Empty workspace: drop connections / terminal tabs to join ──
+
+const emptyDragOver = ref(false)
+
+function onEmptyDragOver(e: DragEvent) {
+  const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : []
+  const accepts = types.includes('application/conn-id') || types.includes('application/tab-id')
+  if (!accepts) return
+  emptyDragOver.value = true
+  e.dataTransfer!.dropEffect = 'move'
+}
+
+function onEmptyDragLeave(e: DragEvent) {
+  const related = e.relatedTarget as HTMLElement | null
+  const el = e.currentTarget as HTMLElement
+  if (!related || !el.contains(related)) emptyDragOver.value = false
+}
+
+function onEmptyDrop(e: DragEvent) {
+  emptyDragOver.value = false
+  const connId = e.dataTransfer?.getData('application/conn-id')
+  const draggedTabId = e.dataTransfer?.getData('application/tab-id')
+
+  // Sidebar connection dropped in → connect through App (credentials,
+  // CreateSession, PTY sizing) and land it via the empty-shell branch.
+  if (connId) {
+    const conn = connectionStore.connections.find(c => c.id === connId)
+    if (conn) {
+      window.dispatchEvent(new CustomEvent('app:connect-workspace-panel', {
+        detail: { config: conn, workspaceTabId: props.tab.id }
+      }))
+    }
+    return
+  }
+
+  // Terminal tab dropped in → fold the tab into this workspace.
+  if (draggedTabId) {
+    const draggedTab = tabStore.tabs.find(t => t.id === draggedTabId)
+    if (draggedTab?.type !== 'terminal') return
+    tabStore.addPanelToWorkspaceTab(draggedTabId, props.tab.id, '', 'horizontal', false)
+    tabStore.setActiveTab(props.tab.id)
+  }
+}
+
 function onResize(payload: { node: any, index: number, delta: number }) {
   const { node, index, delta } = payload
   if (node.type !== 'split') return
@@ -248,5 +313,31 @@ function onResize(payload: { node: any, index: number, delta: number }) {
   overflow: hidden;
   background: var(--bg-base);
   position: relative;
+}
+
+.ws-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  user-select: none;
+  outline: 2px dashed transparent;
+  outline-offset: -0.75rem;
+  transition: outline-color 0.12s, background 0.12s;
+}
+.ws-empty.drag-over {
+  outline-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.ws-empty-icon {
+  width: 2rem;
+  height: 2rem;
+  opacity: 0.5;
+}
+.ws-empty-text {
+  font-size: 0.875rem;
 }
 </style>

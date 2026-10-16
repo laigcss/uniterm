@@ -1,19 +1,18 @@
 package store
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
-
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
 )
 
 const settingsFileName = "settings.json"
 
-func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int    { return &i }
+func boolPtr(b bool) *bool    { return &b }
+func intPtr(i int) *int       { return &i }
+func strPtr(s string) *string { return &s }
 
 type TerminalSettings struct {
 	Theme             string `json:"theme"`
@@ -38,8 +37,14 @@ type TerminalSettings struct {
 	CtrlWheelZoom *bool `json:"ctrlWheelZoom,omitempty"`
 	// SessionLogDir overrides the default directory used for session
 	// output logs (issue #227). Empty means: use the OS-appropriate
-	// default under ~/Documents/ai-ops-terminal/logs.
+	// default under ~/Documents/uniTerm/logs.
 	SessionLogDir string `json:"sessionLogDir,omitempty"`
+	// ZmodemDownloadDir is the device-local default directory for files
+	// received with sz. Empty preserves the directory picker behavior.
+	ZmodemDownloadDir string `json:"zmodemDownloadDir,omitempty"`
+	// SessionLogFilename controls names for new output logs. Supported tokens:
+	// %S session name, %H host, %M month, %D day, %h hour, %m minute.
+	SessionLogFilename string `json:"sessionLogFilename,omitempty"`
 	// WordSeparator overrides xterm.js's double-click word-selection
 	// separators. Empty means the frontend falls back to its built-in
 	// default. Mirrors the `wordSeparator` Terminal option.
@@ -104,14 +109,6 @@ type CustomTerminalTheme struct {
 	Colors TerminalThemeColors `json:"colors"`
 }
 
-// AIConfig is the legacy flat AI config type, kept for Wails binding compatibility.
-// New code should use AppSettings.AI (active model from AISettings).
-type AIConfig struct {
-	APIKey  string `json:"apiKey"`
-	BaseURL string `json:"baseURL"`
-	Model   string `json:"model"`
-}
-
 type AIModelConfig struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -133,6 +130,31 @@ type AISettings struct {
 	ActiveModelID string          `json:"activeModelId"`
 }
 
+// MCPSettings configures the external-agent MCP server endpoint. Pointer on
+// AppSettings + omitempty so settings.json written by older builds still
+// loads; nil means "feature off with defaults". The former per-group tool
+// toggles ("tools" in old settings.json) are gone — all tools are available
+// and side effects are governed by the approval policy alone; the stale
+// field is ignored on load.
+type MCPSettings struct {
+	// Enabled starts the localhost Streamable HTTP endpoint on launch.
+	Enabled bool `json:"enabled"`
+	// Port for the 127.0.0.1 listener; 0 = DefaultPort.
+	Port int `json:"port,omitempty"`
+	// Policy is the approval policy: confirm_write (default) / confirm_all /
+	// confirm_dangerous / bypass. Unknown or empty values fall back to
+	// confirm_write when the policy is evaluated (mcpPolicy in app_mcp.go).
+	Policy string `json:"policy,omitempty"`
+}
+
+// DefaultMCPSettings is the off-by-default MCP block for settings.json.
+func DefaultMCPSettings() MCPSettings {
+	return MCPSettings{
+		Enabled: false,
+		Policy:  "confirm_write",
+	}
+}
+
 type KeyBinding struct {
 	Ctrl  bool   `json:"ctrl"`
 	Meta  bool   `json:"meta"`
@@ -142,18 +164,55 @@ type KeyBinding struct {
 }
 
 type AppSettings struct {
-	Theme                string                `json:"theme"`
-	Language             string                `json:"language"`
-	Terminal             TerminalSettings      `json:"terminal"`
-	AI                   AISettings            `json:"ai"`
-	Keyboard             map[string]KeyBinding `json:"keyboard"`
-	AutoCheckUpdate      *bool                 `json:"autoCheckUpdate"`
-	CloseTabPrompt       *bool                 `json:"closeTabPrompt"`
-	CloseAppPrompt       *bool                 `json:"closeAppPrompt"`
-	SFTPBookmarks        SFTPBookmarks         `json:"sftpBookmarks"`
-	CustomTerminalThemes []CustomTerminalTheme `json:"customTerminalThemes"`
-	DefaultLocalShell    string                `json:"defaultLocalShell"`
-	TabCloseButton       string                `json:"tabCloseButton"`
+	Theme    string `json:"theme"`
+	Language string `json:"language"`
+	// UiFontSize is the UI design baseline in px (how large "normal" text
+	// renders): the rem root derives from it as uiFontSize/12*16. Pointer +
+	// omitempty so settings.json written by older builds still loads; nil
+	// means "use the platform default" (14 on macOS, 12 elsewhere). Stored
+	// per device on purpose — settings.json is not synced.
+	UiFontSize      *int                  `json:"uiFontSize,omitempty"`
+	Terminal        TerminalSettings      `json:"terminal"`
+	AI              AISettings            `json:"ai"`
+	Keyboard        map[string]KeyBinding `json:"keyboard"`
+	AutoCheckUpdate *bool                 `json:"autoCheckUpdate"`
+	// UpdateSource selects where update checks and downloads come from:
+	// "auto" (default, picks by UI language with fallback), "github" or
+	// "gitee" (domestic mirror). Pointer + omitempty so settings.json written
+	// by older builds still load; nil means "auto".
+	UpdateSource   *string `json:"updateSource,omitempty"`
+	CloseTabPrompt *bool   `json:"closeTabPrompt"`
+	CloseAppPrompt *bool   `json:"closeAppPrompt"`
+	// RestoreTabsPrompt gates the "reopen last session's tabs" prompt at
+	// startup (issue #937). Pointer + omitempty so settings.json written by
+	// older builds still loads; nil means "on" (frontend default).
+	RestoreTabsPrompt *bool         `json:"restoreTabsPrompt,omitempty"`
+	SFTPBookmarks     SFTPBookmarks `json:"sftpBookmarks"`
+	// SftpTransferPanelVisible remembers whether the SFTP transfer panel was
+	// last left visible. Pointer + omitempty so settings.json written by older
+	// builds (which lack this field) still load; nil means "use the frontend
+	// default" (hidden).
+	SftpTransferPanelVisible *bool                 `json:"sftpTransferPanelVisible,omitempty"`
+	CustomTerminalThemes     []CustomTerminalTheme `json:"customTerminalThemes"`
+	DefaultLocalShell        string                `json:"defaultLocalShell"`
+	// GitBashPath is an optional user-supplied Git for Windows location (the
+	// install directory or bash.exe itself, e.g. a scoop install). Resolved on
+	// Windows when listing the available local shells.
+	GitBashPath    string `json:"gitBashPath,omitempty"`
+	TabCloseButton string `json:"tabCloseButton"`
+	// ShowTabShortcutHints toggles the per-tab numeric shortcut hint
+	// (e.g. Ctrl+1) on the tab itself. Pointer + omitempty so settings.json
+	// written by older builds (which lack this field) still loads; the
+	// frontend defaults to `true` when nil.
+	ShowTabShortcutHints *bool `json:"showTabShortcutHints,omitempty"`
+	// HostListMenuStyle selects how the host list opens the connection
+	// menu: "button" (hover buttons) or "rightclick". Empty means the
+	// frontend falls back to `button`.
+	HostListMenuStyle string `json:"hostListMenuStyle,omitempty"`
+	// NewTabAction selects what the tab bar's "+" button (and the
+	// newConnection shortcut) opens: "startPage" or "localTerminal".
+	// Empty means the frontend falls back to "startPage".
+	NewTabAction string `json:"newTabAction,omitempty"`
 	// SidebarTabs toggles which connection-sidebar tab icons are visible,
 	// keyed by view id (connections/files/monitor/tunnels/quickCommands/
 	// history/personalization). "connections" is always shown in the UI and
@@ -161,18 +220,12 @@ type AppSettings struct {
 	// builds (which lack this field) still load; a nil map means "use the
 	// frontend defaults" (everything visible).
 	SidebarTabs map[string]bool `json:"sidebarTabs,omitempty"`
-	// HostKeyStrategy controls SSH host-key verification. Empty means
-	// "accept-new" (TOFU). Other values: "strict", "off". See
-	// backend/session/hostkey.go. Omitempty so older settings.json files
-	// still load; the backend defaults to accept-new when empty (S1).
-	HostKeyStrategy string `json:"hostKeyStrategy,omitempty"`
-	// AutoRecord enables automatic terminal recording on new sessions (F4).
-	// Pointer + omitempty so older settings.json files still load; the
-	// frontend defaults to false when nil.
-	AutoRecord *bool `json:"autoRecord,omitempty"`
-	// RecordingsDir overrides the default directory for terminal recordings
-	// (~/.ai-ops-terminal/records/). Empty means use the default. (F4)
-	RecordingsDir string `json:"recordingsDir,omitempty"`
+	// StartPage controls which blocks (search/favorites/recent/groups) the
+	// start page shows and in what order. Pointer + omitempty so
+	// settings.json written by older builds (which lack this field) still
+	// loads; a nil value means "use the frontend defaults" (everything
+	// visible, search → favorites → recent → groups).
+	StartPage *StartPageSettings `json:"startPage,omitempty"`
 }
 
 type SFTPBookmarks struct {
@@ -180,10 +233,21 @@ type SFTPBookmarks struct {
 	RemotePaths []string `json:"remotePaths"`
 }
 
+// StartPageSettings controls the layout of the new-tab start page: which
+// blocks (search/favorites/recent/groups) are visible and in what order.
+// Block ids are strings rather than a typed enum so hand-edited or
+// cross-version settings.json files degrade gracefully (unknown ids are
+// ignored by the frontend).
+type StartPageSettings struct {
+	Visible map[string]bool `json:"visible,omitempty"`
+	Order   []string        `json:"order,omitempty"`
+}
+
 type SettingsStore struct {
 	configDir     string
 	passwordStore PasswordStore
 	mu            sync.Mutex // serializes Save + Load migration writes (STORE-05/06).
+	lastSavedHash string     // F-105 skip state (pre-encryption content hash)
 }
 
 func NewSettingsStore(configDir string) (*SettingsStore, error) {
@@ -202,6 +266,18 @@ func (s *SettingsStore) filePath() string {
 }
 
 func (s *SettingsStore) Save(settings AppSettings) error {
+	return s.save(settings, false)
+}
+
+// ForceSave rewrites the file even when the content hash matches the
+// seeded state. Used by re-keying: the plaintext is unchanged, so the
+// F-105 hash-skip would otherwise swallow the re-encryption and leave
+// the file under the old key.
+func (s *SettingsStore) ForceSave(settings AppSettings) error {
+	return s.save(settings, true)
+}
+
+func (s *SettingsStore) save(settings AppSettings, force bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -209,30 +285,17 @@ func (s *SettingsStore) Save(settings AppSettings) error {
 	models := make([]AIModelConfig, len(settings.AI.Models))
 	copy(models, settings.AI.Models)
 
-	// Encrypt model apiKeys in place before writing JSON.
-	for i := range models {
-		m := &models[i]
-		if m.APIKey == "" || credentials.IsEncrypted(m.APIKey) {
-			continue
-		}
-		if s.passwordStore == nil {
-			continue // no cipher — keep as-is (best effort; never leak is N/A for settings)
-		}
-		enc, err := s.passwordStore.Encrypt(m.APIKey)
-		if err != nil {
-			return err
-		}
-		m.APIKey = enc
-	}
-
 	settings.AI.Models = models
-	// Settings file is internal — no indent. Encoder streams into the buf
-	// so we skip the intermediate allocation of json.Marshal.
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(settings); err != nil {
-		return err
+	// Shared Save envelope (filestore.go): hash-skip, encrypt, atomic write.
+	skip := s.lastSavedHash
+	if force {
+		// Re-keying saves unchanged plaintext under a new key — the
+		// F-105 hash-skip would otherwise swallow the rewrite.
+		skip = forceWrite
 	}
-	return atomicWriteFile(s.filePath(), buf.Bytes(), 0600)
+	h, err := saveEncryptedFile(settingsFileName, s.filePath(), &settings, s.passwordStore, skip)
+	s.lastSavedHash = h
+	return err
 }
 
 func (s *SettingsStore) Load() (AppSettings, error) {
@@ -240,49 +303,40 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 	// Disk I/O on the settings file can be slow (cold cache, encrypted FS);
 	// holding the mutex across os.ReadFile would block every concurrent Save.
 	path := s.filePath()
-	data, err := os.ReadFile(path)
+	settings, res, hash, existed, err := loadEncryptedFile[AppSettings](settingsFileName, path, s.passwordStore)
+	if !existed {
+		return defaultSettings(), nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, errUnparseableConfig) {
+			// STORE-09: the corrupt file was quarantined before falling back
+			// to defaults so the next Save doesn't silently overwrite the
+			// user's prior data.
 			return defaultSettings(), nil
 		}
 		return AppSettings{}, err
 	}
-	var settings AppSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
-		// STORE-09: preserve corrupt file before falling back to defaults so
-		// the next Save doesn't silently overwrite the user's prior data.
-		s.mu.Lock()
-		quarantineCorrupt(path)
-		s.mu.Unlock()
-		return defaultSettings(), nil
-	}
-
-	// Snapshot passwordStore under the lock; everything below mutates only
-	// the local `settings` value, so the rest of Load runs lock-free.
-	s.mu.Lock()
-	ps := s.passwordStore
-	s.mu.Unlock()
-
-	// Decrypt model apiKeys; migrate legacy plaintext to encrypted on save.
-	needsSave := false
-	for i := range settings.AI.Models {
-		m := &settings.AI.Models[i]
-		if m.APIKey == "" || ps == nil {
-			continue
-		}
-		if credentials.IsEncrypted(m.APIKey) {
-			ak, err := ps.Decrypt(m.APIKey)
-			if err != nil {
-				return AppSettings{}, err
-			}
-			m.APIKey = ak
-		} else {
-			needsSave = true // legacy plaintext — re-save will encrypt
-		}
-	}
+	needsSave := res.Plaintext > 0 // legacy plaintext — re-save will encrypt
 	// Default autoCheckUpdate to true if not present
 	if settings.AutoCheckUpdate == nil {
 		settings.AutoCheckUpdate = boolPtr(true)
+		needsSave = true
+	}
+	// Default updateSource to "auto" if not present
+	if settings.UpdateSource == nil {
+		settings.UpdateSource = strPtr("auto")
+		needsSave = true
+	}
+	// Default maxTurns when missing (older settings.json files predating the
+	// multi-model AI block, or hand-edited files). Pointer + backfill so the
+	// stored copy always carries an explicit value.
+	if settings.AI.MaxTurns == nil {
+		settings.AI.MaxTurns = intPtr(defaultMaxTurns)
+		needsSave = true
+	}
+	if settings.UiFontSize == nil {
+		n := defaultUiFontSize()
+		settings.UiFontSize = &n
 		needsSave = true
 	}
 	if settings.CloseTabPrompt == nil {
@@ -294,41 +348,34 @@ func (s *SettingsStore) Load() (AppSettings, error) {
 		needsSave = true
 	}
 	if needsSave {
-		// Re-save through Save() which takes the lock itself.
-		_ = s.Save(settings)
+		// Force: the legacy-plaintext case changes nothing in the plaintext
+		// content, so the hash-skip would swallow the lazy encryption.
+		_ = s.ForceSave(settings)
+	} else {
+		s.lastSavedHash = hash
 	}
 
 	return settings, nil
 }
 
 func defaultSettings() AppSettings {
+	n := defaultUiFontSize()
 	return AppSettings{
-		Theme:    "dark",
-		Language: "system",
+		Theme:      "dark",
+		Language:   "system",
+		UiFontSize: &n,
 		Terminal: TerminalSettings{
-			Theme:            "aiops-dark",
+			Theme:            "uniterm-dark",
 			FontFamily:       "Consolas, \"Courier New\", monospace",
 			FontSize:         14,
 			SelectionAction:  "none",
 			RightClickAction: "menu",
 			MaxHistoryLines:  5000,
 		},
-		AI: AISettings{
-			MaxTurns: intPtr(20),
-			Models: []AIModelConfig{
-				{
-					ID:       "model-default",
-					Name:     "Default",
-					APIKey:   "",
-					BaseURL:  "https://api.openai.com/v1",
-					Model:    "gpt-4o",
-					Protocol: "anthropic",
-				},
-			},
-			ActiveModelID: "model-default",
-		},
+		AI:              defaultAISettings(),
 		Keyboard:        defaultKeyboard(),
 		AutoCheckUpdate: boolPtr(true),
+		UpdateSource:    strPtr("auto"),
 		CloseTabPrompt:  boolPtr(true),
 		CloseAppPrompt:  boolPtr(true),
 		SFTPBookmarks: SFTPBookmarks{
@@ -337,6 +384,43 @@ func defaultSettings() AppSettings {
 		},
 		CustomTerminalThemes: []CustomTerminalTheme{},
 	}
+}
+
+// defaultUiFontSize returns the platform UI text baseline in px: macOS
+// native text runs larger (HIG 13pt+) than the Windows 12px design size,
+// and users sit further from laptop Retina screens.
+func defaultUiFontSize() int {
+	if runtime.GOOS == "darwin" {
+		return 14
+	}
+	return 12
+}
+
+const defaultMaxTurns = 20
+
+// defaultAISettings is the seed AI block for a fresh settings.json. Shared
+// with AIConfigStore so the settings and ai.json defaults can never drift.
+func defaultAISettings() AISettings {
+	return AISettings{
+		MaxTurns: intPtr(defaultMaxTurns),
+		Models: []AIModelConfig{
+			{
+				ID:       "model-default",
+				Name:     "Default",
+				APIKey:   "",
+				BaseURL:  "https://api.openai.com/v1",
+				Model:    "gpt-4o",
+				Protocol: "anthropic",
+			},
+		},
+		ActiveModelID: "model-default",
+	}
+}
+
+// defaultAIConfig mirrors defaultAISettings for the standalone ai.json file.
+func defaultAIConfig() AIStoreData {
+	ai := defaultAISettings()
+	return AIStoreData{MaxTurns: ai.MaxTurns, Models: ai.Models}
 }
 
 func defaultKeyboard() map[string]KeyBinding {
@@ -354,4 +438,17 @@ func defaultKeyboard() map[string]KeyBinding {
 		"navigateNext":     {Ctrl: false, Shift: false, Alt: true, Key: "arrowright"},
 		"openSettings":     {Ctrl: true, Shift: false, Alt: false, Key: ","},
 	}
+}
+
+// BlobName, ExportPlain and ImportPlain implement the sync exchange contract
+// (SyncableStore, declared in backend/sync/backend.go).
+
+func (s *SettingsStore) BlobName() string { return settingsFileName }
+
+func (s *SettingsStore) ExportPlain() ([]byte, error) {
+	return exportPlainStore(settingsFileName, s.filePath(), s.Load)
+}
+
+func (s *SettingsStore) ImportPlain(raw []byte) error {
+	return importPlainStore(raw, s.Save)
 }

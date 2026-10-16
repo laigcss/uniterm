@@ -10,28 +10,121 @@
       @close-tab-batch="closeTabBatch"
       @toggle-ai-lock="onToggleAiLock"
       @tab-dragstart="onTabDragStart"
+      @new-local-terminal="createNewTab"
     />
     <div class="main-content">
-      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-only="onConnectOnly" @connect-serial="showSerialDialog = true" @connect-sftp="(c: any) => { const p = tabStore.activeTab; onConnectSftp(c, p?.type === 'start' ? p : undefined) }" @connect-wsl-file="(c: any) => { const p = tabStore.activeTab; onConnectWslFile(c, p?.type === 'start' ? p : undefined) }" @connect-ftp="(c: any) => { const p = tabStore.activeTab; onConnectFtp(c, p?.type === 'start' ? p : undefined) }" @connect-smb="(c: any) => { const p = tabStore.activeTab; onConnectSmb(c, p?.type === 'start' ? p : undefined) }" @connect-webdav="(c: any) => { const p = tabStore.activeTab; onConnectWebdav(c, p?.type === 'start' ? p : undefined) }" @connect-s3="(c: any) => { const p = tabStore.activeTab; onConnectS3(c, p?.type === 'start' ? p : undefined) }" @connect-rdp="(c: any) => { const p = tabStore.activeTab; onConnectRDP(c, p?.type === 'start' ? p : undefined) }" @connect-vnc="(c: any) => { const p = tabStore.activeTab; onConnectVNC(c, p?.type === 'start' ? p : undefined) }" @connect-spice="(c: any) => { const p = tabStore.activeTab; onConnectSPICE(c, p?.type === 'start' ? p : undefined) }" @connect-x11-desktop="(c: any) => { const p = tabStore.activeTab; onConnectX11Desktop(c, p?.type === 'start' ? p : undefined) }" @connect-d-b="(c: any) => { const p = tabStore.activeTab; onConnectDB(c, p?.type === 'start' ? p : undefined) }" @connect-monitor="(c: any) => { const p = tabStore.activeTab; onConnectMonitor(c, p?.type === 'start' ? p : undefined) }" @connect-k8s="(c: any) => { const p = tabStore.activeTab; onConnectK8s(c, p?.type === 'start' ? p : undefined) }" />
+      <Sidebar ref="sidebarRef" :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onSidebarConnect" @connect-to-workspace="({ config, workspaceId }: any) => onConnect(config, undefined, undefined, true, workspaceId)" @create-workspace="(configs: any) => onCreateWorkspaceFromConfigs(configs)" @connect-only="onConnectOnly" />
       <div class="tab-area">
         <template v-if="activeTab">
-          <TabRenderer
-            :tab="activeTab"
-            @close="closeTab"
-            @connect="onConnect"
-            @new-connection="onNewConnectionFromStart"
-            @local-terminal="createLocalTerminalWithShell"
-            @close-self="(tabId: string) => closeTab(tabId)"
-            @edit-connection="onEditConnection"
-            @change-group="onChangeGroupFromStart"
-            @change-group-ids="onChangeGroupFromStartIds"
-            @change-group-parent="onChangeGroupParentFromStart"
-          />
+          <KeepAlive>
+            <TerminalTabContent
+              v-if="activeTab.type === 'terminal'"
+              :key="activeTab.id"
+              :tab="activeTab"
+              @close="closeTab"
+            />
+            <SettingsTabContent
+              v-else-if="activeTab.type === 'settings'"
+            />
+            <WorkspaceContent
+              v-else-if="activeTab.type === 'workspace'"
+              :tab="activeTab"
+            />
+            <FileTabContent
+              v-else-if="activeTab.type === 'sftp'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+            />
+            <RDPTabContent
+              v-else-if="activeTab.type === 'rdp'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
+            <VNCTabContent
+              v-else-if="activeTab.type === 'vnc'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
+            <SPICETabContent
+              v-else-if="activeTab.type === 'spice'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
+            <X11DesktopTabContent
+              v-else-if="activeTab.type === 'x11-desktop'"
+              :key="activeTab.id"
+              :panel-id="activeTab.panelId"
+              :config="getPanelConfig(activeTab.panelId)"
+              :session-id="getPanelSessionId(activeTab.panelId)"
+            />
+            <DBTabContent
+              v-else-if="activeTab.type === 'database'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+              :host-name="getPanelConfig(activeTab.panelId)?.host || ''"
+              :default-db-name="getPanelConfig(activeTab.panelId)?.dbName"
+              :db-type="getPanelConfig(activeTab.panelId)?.dbType || ''"
+            />
+            <RedisTabContent
+              v-else-if="activeTab.type === 'redis'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+              :key-separator="getPanelConfig(activeTab.panelId)?.redisKeySeparator ?? ''"
+            />
+            <MongoDBTabContent
+              v-else-if="activeTab.type === 'mongodb'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
+            <ElasticsearchTabContent
+              v-else-if="activeTab.type === 'elasticsearch'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
+            <MonitorTabContent
+              v-else-if="activeTab.type === 'monitor'"
+              :key="activeTab.id"
+              :session-id="getPanelSessionId(activeTab.panelId) || ''"
+            />
+            <K8sTabContent
+              v-else-if="activeTab.type === 'k8s'"
+              :key="activeTab.id"
+              :tab="activeTab"
+              :connection="k8sConnectionForTab(activeTab)"
+            />
+            <ContainerTabContent
+              v-else-if="activeTab.type === 'container'"
+              :key="activeTab.id"
+              :tab="activeTab"
+            />
+            <StartTabContent
+              v-else-if="activeTab.type === 'start'"
+              :key="activeTab.id"
+              :tab="activeTab"
+              @connect="onConnect"
+              @connect-to-workspace="({ configs, workspaceId }: any) => { for (const c of configs) onConnect(c, undefined, undefined, true, workspaceId) }"
+              @create-workspace="(configs: any) => onCreateWorkspaceFromConfigs(configs)"
+              @new-workspace="onNewWorkspace"
+              @new-connection="onNewConnectionFromStart"
+              @local-terminal="createLocalTerminalWithShell"
+              @close-self="(tabId: string) => closeTab(tabId)"
+              @edit-connection="onEditConnection"
+              @change-group="onChangeGroupFromStart"
+              @change-group-ids="onChangeGroupFromStartIds"
+              @change-group-parent="onChangeGroupParentFromStart"
+            />
+          </KeepAlive>
         </template>
       </div>
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
-    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig ?? undefined" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
+    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
 
     <CredentialPrompt
       v-model:visible="credentialVisible"
@@ -50,21 +143,19 @@
       <MenuItem @click="inputMenuSelectAll">{{ t('input.selectAll') }}</MenuItem>
     </Menu>
 
+    <MCPApprovalDialog
+      v-model:visible="mcpApprovalVisible"
+      :request="mcpApprovalRequest"
+      @resolve="onMcpApprovalResolve"
+    />
+
     <SyncConflictDialog />
+    <UpdateDialog />
+    <WorkspaceSaveDialog />
     <DataDirDialog v-model:visible="dataDirVisible" :first-run="credStore.firstRun || credStore.dataDirInfo.firstRun" @done="onDataDirDone" />
     <EncryptionModeDialog v-model:visible="encryptVisible" :existing-secrets="credStore.status.existingSecrets" @done="onEncryptDone" />
     <CredentialUnlockDialog v-model:visible="unlockVisible" @done="onUnlockDone" @reset="onReset" />
-    <KeychainLostDialog v-model:visible="keychainLostVisible" @done="onKeychainLostDone" />
-
-    <HostKeyChangedDialog
-      v-model:visible="hostKeyDialogVisible"
-      :payload="hostKeyPayload"
-      @accepted="onHostKeyAccepted"
-      @rejected="onHostKeyRejected"
-    />
-
-    <!-- F4: 录制列表弹窗 -->
-    <RecordList v-model:visible="recordListVisible" />
+    <MobileKeyBar v-if="keyBarSessionId" :session-id="keyBarSessionId" />
   </div>
   </el-config-provider>
 </template>
@@ -82,19 +173,38 @@ import fr from 'element-plus/es/locale/lang/fr'
 import ru from 'element-plus/es/locale/lang/ru'
 import AppHeader from './components/AppHeader.vue'
 import Sidebar from './components/Sidebar.vue'
-import TabRenderer from './components/TabRenderer.vue'
+import TerminalTabContent from './components/TerminalTabContent.vue'
+import MobileKeyBar from './components/MobileKeyBar.vue'
+import { isMobilePlatform } from './utils/platform'
+import { startAndroidKeepAlive, stopAndroidKeepAlive } from './utils/androidKeepAlive'
+import { writeClipboard } from './composables/useClipboardWrite'
+import SettingsTabContent from './components/SettingsTabContent.vue'
+import WorkspaceContent from './components/WorkspaceContent.vue'
+import FileTabContent from './components/FileTabContent.vue'
+import RDPTabContent from './components/RDPTabContent.vue'
+import VNCTabContent from './components/VNCTabContent.vue'
+import SPICETabContent from './components/SPICETabContent.vue'
+import X11DesktopTabContent from './components/X11DesktopTabContent.vue'
+import DBTabContent from './components/DBTabContent.vue'
+import RedisTabContent from './components/RedisTabContent.vue'
+import MongoDBTabContent from './components/MongoDBTabContent.vue'
+import ElasticsearchTabContent from './components/ElasticsearchTabContent.vue'
+import MonitorTabContent from './components/MonitorTabContent.vue'
+import K8sTabContent from './components/K8sTabContent.vue'
+import ContainerTabContent from './components/ContainerTabContent.vue'
+import StartTabContent from './components/StartTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
 import SyncConflictDialog from './components/SyncConflictDialog.vue'
+import WorkspaceSaveDialog from './components/WorkspaceSaveDialog.vue'
+import UpdateDialog from './components/UpdateDialog.vue'
 import DataDirDialog from './components/DataDirDialog.vue'
 import EncryptionModeDialog from './components/EncryptionModeDialog.vue'
 import CredentialUnlockDialog from './components/CredentialUnlockDialog.vue'
-import KeychainLostDialog from './components/KeychainLostDialog.vue'
 import CredentialPrompt from './components/CredentialPrompt.vue'
 import type { CredentialResult } from './components/CredentialPrompt.vue'
-import HostKeyChangedDialog from './components/HostKeyChangedDialog.vue'
-import type { HostKeyChangedPayload } from './components/HostKeyChangedDialog.vue'
-import RecordList from './components/RecordList.vue'
+import MCPApprovalDialog from './components/MCPApprovalDialog.vue'
+import type { MCPApprovalRequest } from './types/mcp'
 import Menu from './components/Menu.vue'
 import MenuItem from './components/MenuItem.vue'
 import { ElMessageBox, ElCheckbox } from 'element-plus'
@@ -106,35 +216,147 @@ import { useAIStore } from './stores/aiStore'
 import { useCompanionStore } from './stores/companionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useQuickCommandStore } from './stores/quickCommandStore'
+import { useSkillStore } from './stores/skillStore'
+import { useCommandStore } from './stores/commandStore'
 import { useTunnelStore } from './stores/tunnelStore'
 import { useLocalStateStore } from './stores/localStateStore'
 import { useContainerStore } from './stores/containerStore'
 import { useSyncStore } from './stores/syncStore'
+import { useCredentialStore } from './stores/credentialStore'
 import { disposeSessionStore } from './stores/sessionStore'
 import { useUpdateCheck } from './composables/useUpdateCheck'
-import { useKeybindings } from './composables/useKeybindings'
+import { loadKeybindings, installGlobalListener, uninstallGlobalListener, matchDigitShortcut, isRebinding } from './composables/useKeyboardShortcuts'
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import { useDuplicateSession } from './composables/useDuplicateSession'
-import { useBackgroundImage } from './composables/useBackgroundImage'
-import { useContextMenu } from './composables/useContextMenu'
-import { useCredentials } from './composables/useCredentials'
-
+import { useTunnelCredentials } from './composables/useTunnelCredentials'
+import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, SessionStart } from '../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval } from '../bindings/github.com/laigcss/ai-ops-terminal/app'
 import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
+import { unregisterTransferRoute } from './services/transferTaskCenter'
 import type { ConnectionConfig } from './types/session'
-import { Events } from '@wailsio/runtime'
+import { Application, Clipboard, Events } from '@wailsio/runtime'
 import { parseQuickConnect } from './utils/quickConnect'
-import { fileTransferProto } from './utils/fileTransferUtils'
+import { getShellLabel as getShellLabelBase, parseWslFromShell } from './utils/shellLabel'
+import { reconnectFileTransferPanel } from './composables/usePanelReconnect'
+import { launchConnection, launchFileBrowser, launchMonitor, launchWslFileBrowser, launchContainerFileBrowser, persistConnection, configureLauncher } from './composables/connectionLauncher'
+import { openSavedWorkspace } from './composables/savedWorkspace'
+import { installTabSnapshotSaver, restoreTabsSnapshot } from './composables/tabSnapshot'
+import { createWorkspaceFromSelection } from './composables/createWorkspace'
 
-const { bgVisible, bgStyle, loadBackgroundImage } = useBackgroundImage()
+const bgDataUrl = ref('')
+
+async function loadBackgroundImage() {
+  const ls = localStateStore.state
+  if (ls.backgroundEnabled && ls.backgroundImage) {
+    try {
+      bgDataUrl.value = await GetBackgroundImage(ls.backgroundImage)
+    } catch {
+      bgDataUrl.value = ''
+    }
+  } else {
+    bgDataUrl.value = ''
+  }
+}
+
+const bgVisible = computed(
+  () => localStateStore.state.backgroundEnabled && !!bgDataUrl.value
+)
+
+const bgStyle = computed(() => {
+  const ls = localStateStore.state
+  const fit = ls.backgroundFit || 'cover'
+  const style: Record<string, string> = {
+    backgroundImage: `url("${bgDataUrl.value}")`,
+    filter: ls.backgroundBlur ? `blur(${ls.backgroundBlur}px)` : 'none',
+  }
+  if (fit === 'cover') {
+    style.backgroundSize = 'cover'; style.backgroundPosition = 'center'; style.backgroundRepeat = 'no-repeat'
+  } else if (fit === 'contain') {
+    style.backgroundSize = 'contain'; style.backgroundPosition = 'center'; style.backgroundRepeat = 'no-repeat'
+  } else if (fit === 'center') {
+    style.backgroundSize = 'auto'; style.backgroundPosition = 'center'; style.backgroundRepeat = 'no-repeat'
+  } else {
+    style.backgroundSize = 'auto'; style.backgroundRepeat = 'repeat'
+  }
+  style['--bg-mask-opacity'] = String((ls.backgroundOpacity ?? 60) / 100)
+  return style
+})
 
 const connectionStore = useConnectionStore()
 const tabStore = useTabStore()
 const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+
+// ── Mobile key bar (app-level) ──
+// Soft keyboards lack Esc/Tab/arrows/Ctrl combos. The bar floats at the bottom
+// of .app-container — directly above the soft keyboard, because MainActivity
+// pads the app root by the IME inset. It shows only while the keyboard is up
+// from a terminal textarea focus and an SSH-family session is connected.
+const isMobile = isMobilePlatform()
+const terminalFocusActive = ref(false)
+
+function onDocFocusIn(e: FocusEvent) {
+  const el = e.target as HTMLElement | null
+  terminalFocusActive.value = !!el?.classList?.contains('xterm-helper-textarea')
+}
+function onDocFocusOut() {
+  // Focus may move between xterm instances or to nothing; re-check after the
+  // focusin/focusout pair settles.
+  requestAnimationFrame(() => {
+    const el = document.activeElement as HTMLElement | null
+    terminalFocusActive.value = !!el?.classList?.contains('xterm-helper-textarea')
+  })
+}
+if (isMobile) {
+  document.addEventListener('focusin', onDocFocusIn)
+  document.addEventListener('focusout', onDocFocusOut)
+}
+
+// ── Background keep-alive (Android) ──
+// Without a foreground service, Android freezes the cached process shortly
+// after the app is switched away — timers stop and network is suspended,
+// which drops live SSH/SFTP sessions. While the app is hidden with live
+// sessions, run the keep-alive foreground service (notification appears);
+// stop it when the app is visible again.
+function hasLiveSessions(): boolean {
+  for (const s of sessionStore.sessions.values()) {
+    if (s.status === 'connected' || s.status === 'connecting') return true
+  }
+  return false
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    if (hasLiveSessions()) {
+      startAndroidKeepAlive('uniTerm', t('app.backgroundKeepAlive'))
+    }
+  } else {
+    stopAndroidKeepAlive()
+  }
+}
+onUnmounted(() => {
+  if (isMobile) {
+    document.removeEventListener('focusin', onDocFocusIn)
+    document.removeEventListener('focusout', onDocFocusOut)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
+  stopAndroidKeepAlive()
+})
+
+const keyBarSessionId = computed(() => {
+  if (!isMobile || !terminalFocusActive.value) return null
+  const tab = activeTab.value
+  if (!tab || tab.type !== 'terminal') return null
+  const panel = panelStore.getPanel(tab.panelId)
+  if (!panel?.sessionId) return null
+  // local/wsl panels have no need for the escape-sequence bar
+  if (panel.type === 'local' || panel.type === 'wsl') return null
+  if (sessionStore.getStatus(panel.sessionId) !== 'connected') return null
+  return panel.sessionId
+})
 const { duplicateSession } = useDuplicateSession()
 const aiStore = useAIStore()
 const companionStore = useCompanionStore()
@@ -149,42 +371,89 @@ let uninstallFocusRestore: (() => void) | null = null
 let unsubRdpFullscreenExit: (() => void) | null = null
 let unsubRdpMoveResizeStart: (() => void) | null = null
 let unsubRdpMoveResizeEnd: (() => void) | null = null
-// S1: SSH host-key change confirmation dialog state + listener.
-let unsubHostKeyChanged: (() => void) | null = null
-const hostKeyDialogVisible = ref(false)
-const hostKeyPayload = ref<HostKeyChangedPayload | null>(null)
-// F4: 录制列表弹窗可见状态。由 SettingsTab "管理录制" 按钮或全局事件触发。
-const recordListVisible = ref(false)
-let unsubOpenRecordList: (() => void) | null = null
+let unsubRdpAdaptive: (() => void) | null = null
+// Tray menu → open the settings tab (Go shows the window first).
+let unsubTrayOpenSettings: (() => void) | null = null
+let unsubTrayOpenAbout: (() => void) | null = null
 const { t, locale } = useI18n()
 const EL_LOCALE_MAP: Record<string, typeof enUs> = {
   'zh-CN': zhCn, 'zh-TW': zhTw, en: enUs, ja, ko, de, es, fr, ru,
 }
 const elLocale = computed(() => EL_LOCALE_MAP[locale.value] || enUs)
 
-// ── Credential / first-run flow (下沉 useCredentials) ────────────
-const {
-  credStore,
-  credentialVisible, credentialTitle, credentialSubtitle, credentialFields,
-  credentialInitialUser, credentialInitialPassword,
-  showCredentialDialog, onCredentialResolve, ensureCredentials,
-  dataDirVisible, encryptVisible, unlockVisible, keychainLostVisible,
-  onDataDirDone, onEncryptDone, onUnlockDone, onKeychainLostDone, onReset,
-  checkCredentials,
-} = useCredentials()
-provide('showCredentialDialog', showCredentialDialog)
+// ── Credential / first-run flow ─────────────────────────────────
+const credStore = useCredentialStore()
+const dataDirVisible = ref(false)
+const encryptVisible = ref(false)
+const unlockVisible = ref(false)
 
-// S1: SSH host-key change dialog result handlers. The backend has already
-// rewritten known_hosts by the time 'accepted' fires (the dialog calls
-// AcceptHostKeyChange itself); we just clear the payload. On reject the
-// connection stays failed — the user can reconnect from the panel.
-function onHostKeyAccepted(_p: HostKeyChangedPayload) {
-  hostKeyPayload.value = null
-}
-function onHostKeyRejected(_p: HostKeyChangedPayload) {
-  hostKeyPayload.value = null
+// Determine which credential dialog (recovery-unlock / setup) to show based
+// on the current store status. Shared by startup and by the first-run
+// data-dir selection path so that pointing at a directory that already holds
+// master-password config correctly prompts for the password.
+//
+// Mode selection is a first-run (and post-reset) decision only: any state
+// with existing local data — a lost keychain key on a copied dir, a failed
+// decrypt, missing meta over surviving ciphertext — lands in the unlock
+// dialog, whose reset button is the only path that may clear credentials
+// before a new mode is chosen. resolveCredentialDialog must never route
+// straight to EncryptionModeDialog over existing secrets.
+function resolveCredentialDialog() {
+  const st = credStore.status
+  if (st.needsSetup && !st.existingSecrets) { encryptVisible.value = true; return }
+  if (!st.unlocked) { unlockVisible.value = true }
 }
 
+function onDataDirDone(restart: boolean) {
+  if (restart) {
+    ElMessageBox.confirm(t('dataDir.restartMsg'), t('dataDir.restartTitle'),
+      { confirmButtonText: t('settings.restartNow'), cancelButtonText: t('conn.cancel'), type: 'warning' })
+      .then(() => RelaunchApp()).catch(() => {})
+    return
+  }
+  // Backend just initialized the stores for the newly selected data dir. Reload
+  // so the frontend reflects existing connections/settings/quick-commands/tunnels.
+  // When credentials are still locked the loads come back empty and onUnlockDone
+  // re-loads after unlock.
+  connectionStore.load()
+  settingsStore.reload()
+  useQuickCommandStore().load()
+  useSkillStore().reload()
+  useCommandStore().reload()
+  tunnelStore.load()
+  resolveCredentialDialog()
+}
+function onEncryptDone() { connectionStore.load() }
+function onUnlockDone() {
+  connectionStore.load()
+  settingsStore.reload()
+}
+async function onReset() {
+  try {
+    await ElMessageBox.confirm(t('unlock.resetConfirm'), t('unlock.reset'), { type: 'warning' })
+    await credStore.reset()
+    encryptVisible.value = true
+    unlockVisible.value = false
+  } catch { /* cancelled */ }
+}
+
+async function checkCredentials() {
+  credStore.watchEvents()
+  await credStore.loadDataDir()
+  await credStore.loadStatus()
+  // Backend unreachable (wails3 dev browser preview): every binding call
+  // rejects and the placeholder status would wrongly pop the encryption
+  // dialog. Skip the whole credential flow so the UI renders for debugging.
+  if (!credStore.backendAvailable) {
+    console.warn('[uniTerm] Backend unreachable — browser debug mode: credential flow skipped')
+    return
+  }
+  if (credStore.firstRun || credStore.dataDirInfo.firstRun) {
+    dataDirVisible.value = true
+    return
+  }
+  resolveCredentialDialog()
+}
 // ── RDP position sync ──
 // Called explicitly on tab switch and overlay restore; no polling needed.
 
@@ -321,29 +590,320 @@ function RDPShowForOverlay() {
 
 
 const showConnectionForm = ref(false)
-const showSerialDialog = ref(false)
 const sidebarVisible = ref(false)
 const sidebarRef = ref<any>(null)
 const aiSidebarRef = ref<any>(null)
 
 
-// Input context menu (下沉 useContextMenu)
-const {
-  inputMenuVisible, inputMenuReadonly, inputMenuRef,
-  inputMenuCut, inputMenuCopy, inputMenuPaste, inputMenuSelectAll,
-  init: initInputMenu, dispose: disposeInputMenu,
-} = useContextMenu()
+// Input context menu state
+const inputMenuVisible = ref(false)
+const inputMenuReadonly = ref(false)
+const inputMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 
+// ── Credential prompt ──────────────────────────────────────────
+const credentialVisible = ref(false)
+const credentialTitle = ref('')
+const credentialSubtitle = ref('')
+const credentialFields = ref<('user' | 'password')[]>([])
+const credentialResolve = ref<((result: CredentialResult | null) => void) | null>(null)
 
-// ── Keybindings / font zoom / panel navigation (下沉 useKeybindings) ──
-const {
-  onWheel, isMac, onMacSystemShortcut,
-  applyKeybindings,
-  installGlobalListener, uninstallGlobalListener,
-} = useKeybindings({
-  sidebarVisible, sidebarRef, aiSidebarRef,
-  closeTab, openSettings, duplicateSession, onToggleAiLock,
-})
+const credentialInitialUser = ref('')
+const credentialInitialPassword = ref('')
+
+function showCredentialDialog(
+  title: string,
+  subtitle: string,
+  fields: ('user' | 'password')[],
+  initialUser = '',
+  initialPassword = ''
+): Promise<CredentialResult | null> {
+  return new Promise((resolve) => {
+    credentialTitle.value = title
+    credentialSubtitle.value = subtitle
+    credentialFields.value = fields
+    credentialInitialUser.value = initialUser
+    credentialInitialPassword.value = initialPassword
+    credentialResolve.value = resolve
+    credentialVisible.value = true
+  })
+}
+
+provide('showCredentialDialog', showCredentialDialog)
+
+function onCredentialResolve(result: CredentialResult | null) {
+  credentialVisible.value = false
+  if (credentialResolve.value) {
+    credentialResolve.value(result)
+    credentialResolve.value = null
+  }
+}
+
+// ── MCP approval bridge (external AI agents) ──────────────────────
+// backend mcp:approval-request event → dialog → ResolveMCPApproval binding.
+const mcpApprovalVisible = ref(false)
+const mcpApprovalRequest = ref<MCPApprovalRequest | null>(null)
+let unsubMcpApproval: (() => void) | null = null
+let unsubMcpSessionCreated: (() => void) | null = null
+
+function onMcpApprovalResolve(approved: boolean, reason: string) {
+  const req = mcpApprovalRequest.value
+  mcpApprovalVisible.value = false
+  mcpApprovalRequest.value = null
+  if (req) ResolveMCPApproval(req.id, approved, reason).catch(() => {})
+}
+
+// backend mcp:session-created: an agent opened a new SSH session; mount a
+// visible terminal tab for it so the user can watch and control it.
+function onMcpSessionCreated(payload: { sessionId: string; name?: string; host?: string }) {
+  const cfg: Partial<ConnectionConfig> = {
+    type: 'ssh',
+    name: payload.name || payload.host || 'MCP',
+    host: payload.host || '',
+  }
+  const panel = panelStore.createPanel(cfg as ConnectionConfig, 'ssh')
+  const title = payload.name || payload.host || 'MCP'
+  panelStore.updateTitle(panel.id, title)
+  panelStore.bindSession(panel.id, payload.sessionId)
+  sessionStore.initSession(payload.sessionId)
+  sessionStore.updateStatus(payload.sessionId, 'connecting')
+  const tab = tabStore.activeTab?.type === 'start'
+    ? tabStore.replaceStartTab(tabStore.activeTab.id, title, panel.id)
+    : tabStore.createTerminalTab(title, panel.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+}
+
+// 凭据补全统一在 composables/useTunnelCredentials.ts：终端连接、容器、K8s 等
+// 入口共用同一实现。App.vue 自身的 showCredentialDialog 无法被本组件
+// inject 到，需显式传入。
+const { ensureConnectionCredentials: ensureCredentials } = useTunnelCredentials(showCredentialDialog)
+
+let inputMenuTarget: HTMLInputElement | HTMLTextAreaElement | HTMLElement | null = null
+interface InputMenuSelection {
+  text: string
+  range?: Range
+  start?: number | null
+  end?: number | null
+}
+let inputMenuSelection: InputMenuSelection | null = null
+
+function closeInputMenu() {
+  inputMenuVisible.value = false
+  inputMenuTarget = null
+  inputMenuSelection = null
+}
+
+function onInputContextMenu(e: Event) {
+  const { x, y, target, readonly } = (e as CustomEvent).detail as {
+    x: number; y: number; target: HTMLElement; readonly?: boolean
+  }
+  inputMenuTarget = target
+  inputMenuReadonly.value = !!readonly
+  inputMenuSelection = captureInputMenuSelection(target, !!readonly)
+  inputMenuRef.value?.openAt(x, y)
+}
+
+function captureInputMenuSelection(target: HTMLElement, readonly: boolean): InputMenuSelection {
+  if (readonly) {
+    return { text: window.getSelection()?.toString() || target.textContent || '' }
+  }
+  if (target.isContentEditable) {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      if (target.contains(range.commonAncestorContainer)) {
+        return { text: selection.toString(), range: range.cloneRange() }
+      }
+    }
+    const range = document.createRange()
+    range.selectNodeContents(target)
+    range.collapse(false)
+    return { text: '', range }
+  }
+  const input = target as HTMLInputElement | HTMLTextAreaElement
+  return {
+    text: input.value.substring(input.selectionStart ?? 0, input.selectionEnd ?? 0),
+    start: input.selectionStart,
+    end: input.selectionEnd,
+  }
+}
+
+function restoreInputMenuSelection(el: HTMLElement, selection: InputMenuSelection) {
+  if (el.isContentEditable) {
+    el.focus()
+    const current = window.getSelection()
+    current?.removeAllRanges()
+    current?.addRange(selection.range!.cloneRange())
+    return
+  }
+  if (typeof selection.start === 'number' && typeof selection.end === 'number') {
+    const input = el as HTMLInputElement | HTMLTextAreaElement
+    input.focus()
+    input.setSelectionRange(selection.start, selection.end)
+  }
+}
+
+async function inputMenuCut() {
+  const el = inputMenuTarget
+  const selection = inputMenuSelection
+  closeInputMenu()
+  if (!el || !selection) return
+  if (!selection.text) return
+  const copied = await writeClipboard(selection.text)
+  if (!copied) return
+  if (el.isContentEditable) {
+    restoreInputMenuSelection(el, selection)
+    const s = window.getSelection()
+    if (s && s.rangeCount > 0) { s.getRangeAt(0).deleteContents() }
+  } else {
+    setInputSelection(el as HTMLInputElement | HTMLTextAreaElement, '')
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+function inputMenuCopy() {
+  const el = inputMenuTarget
+  const selection = inputMenuSelection
+  closeInputMenu()
+  if (!el || !selection) return
+  if (!selection.text) return
+  void writeClipboard(selection.text)
+}
+
+function inputMenuPaste() {
+  const el = inputMenuTarget
+  const selection = inputMenuSelection
+  closeInputMenu()
+  if (!el || !selection) return
+  Clipboard.Text().then(text => {
+    if (el.isContentEditable) {
+      restoreInputMenuSelection(el, selection)
+      insertTextAtContentEditable(el, text)
+    } else {
+      restoreInputMenuSelection(el, selection)
+      setInputSelection(el as HTMLInputElement | HTMLTextAreaElement, text)
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }).catch(() => {})
+}
+
+function inputMenuSelectAll() {
+  const el = inputMenuTarget
+  const readonly = inputMenuReadonly.value
+  if (el && readonly) {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  } else if (el && 'select' in el) {
+    (el as HTMLInputElement | HTMLTextAreaElement).select()
+  }
+  closeInputMenu()
+}
+
+function setInputSelection(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  // <input type="number"> (e.g. the port field) doesn't expose a text selection, so
+  // selectionStart/End are null. Falling the offsets back to 0 would prepend the pasted
+  // text instead of replacing it. Treat the unreadable selection as select-all so paste
+  // overwrites the whole value (issue #555).
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  if (start === null || end === null) {
+    el.value = text
+    el.setSelectionRange(text.length, text.length)
+    el.focus()
+    return
+  }
+  el.value = el.value.substring(0, start) + text + el.value.substring(end)
+  const pos = start + text.length
+  el.setSelectionRange(pos, pos)
+  el.focus()
+}
+
+function insertTextAtContentEditable(el: HTMLElement, text: string) {
+  el.focus()
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0)
+    range.deleteContents()
+    range.insertNode(document.createTextNode(text))
+    range.collapse(false)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  } else {
+    el.textContent += text
+  }
+}
+
+// Adjust the terminal font size, clamped to the valid range. Shared by the
+// Ctrl/Cmd+wheel zoom and the zoom-font-in/out shortcuts.
+function adjustFontSize(delta: number) {
+  const ts = settingsStore.settings.terminal
+  const next = Math.max(8, Math.min(32, ts.fontSize + delta))
+  if (next !== ts.fontSize) {
+    ts.fontSize = next
+    settingsStore.save()
+  }
+}
+
+function onWheel(e: WheelEvent) {
+  // Ctrl/Cmd + wheel zooms the terminal font — macOS (Cmd) and Windows/Linux
+  // (Ctrl) alike. Skipped when the user disables it (issue #671, e.g. for
+  // scroll-sensitive Mac mice); without preventDefault the wheel then scrolls
+  // normally.
+  if ((e.ctrlKey || e.metaKey) && settingsStore.settings.terminal.ctrlWheelZoom !== false) {
+    e.preventDefault()
+    adjustFontSize(e.deltaY < 0 ? 1 : -1)
+  }
+}
+
+// Platform digit shortcuts: macOS uses Cmd/Option, Windows and Linux use
+// Ctrl/Alt. Cmd/Ctrl+1…9 switches tabs, Alt/Option+1…9 switches workspace
+// panels. Both digit families are user-configurable
+// (keyboard.tabSwitchModifier / keyboard.panelSwitchModifier); when they
+// resolve to the same combo the panel shortcuts step aside and their badges
+// hide. Panel maximizing moved to the configurable keyboard settings
+// (maximizePanel action).
+let isMac = false
+function onPlatformSystemShortcut(e: KeyboardEvent) {
+  // Stand down while the settings page captures a rebind — otherwise
+  // recording e.g. Ctrl+1 would switch tabs (and Cmd+Q would quit on mac).
+  if (e.defaultPrevented || isRebinding()) return
+  const digitMatch = e.code.match(/^Digit([1-9])$/)
+  if (digitMatch) {
+    const kb = settingsStore.settings.keyboard
+    const target = matchDigitShortcut(e, isMac, kb.tabSwitchModifier, kb.panelSwitchModifier)
+    if (target === 'panel') {
+      const tab = tabStore.activeTab
+      if (!tab || tab.type !== 'workspace') return
+      const panelId = tab.panelIds[Number(digitMatch[1]) - 1]
+      if (!panelId) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      tabStore.setActivePanel(tab.id, panelId)
+      nextTick(() => focusPanelTerminal(panelId))
+      return
+    }
+    if (target === 'tab') {
+      const tab = tabStore.tabs[Number(digitMatch[1]) - 1]
+      if (!tab) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      tabStore.setActiveTab(tab.id)
+      return
+    }
+  }
+  if (!isMac || !e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+  const key = e.key.toLowerCase()
+  if (key === 'q') {
+    e.preventDefault()
+    Application.Quit()
+  } else if (key === 'w') {
+    e.preventDefault()
+    const t = tabStore.activeTab
+    if (t) closeTab(t.id)
+  }
+}
 
 onMounted(async () => {
   connectionStore.load()
@@ -353,7 +913,11 @@ onMounted(async () => {
   // Load local-only state (sidebar visibility, background image, etc.)
   await localStateStore.init()
   await loadBackgroundImage()
-  sidebarVisible.value = localStateStore.state.sidebarVisible ?? false
+  // Mobile always opens with both sidebars closed, regardless of the
+  // persisted desktop state — screen space is too tight to restore panels.
+  sidebarVisible.value = isMobilePlatform()
+    ? false
+    : (localStateStore.state.sidebarVisible ?? false)
   // Pre-load quick commands so suggestions can read them immediately
   useQuickCommandStore().load()
   // Pre-load tunnels so auto-start state and the panel are ready
@@ -362,17 +926,30 @@ onMounted(async () => {
   if (tabStore.tabs.length === 0) {
     tabStore.createStartTab()
   }
+  // Reopen-last-session prompt (issue #937): ask before touching tabs, then
+  // start recording so the snapshot always mirrors what's open. Not awaited —
+  // the dialog must not block the rest of the mount sequence.
+  maybeRestoreLastTabs()
+  installTabSnapshotSaver()
   // Pre-load noVNC so VNC tab switches don't pay the dynamic import cost.
   import('@novnc/novnc').then((m: any) => {
     ;(window as any).__novnc_RFB = m.default || m
   }).catch(() => {})
-  initInputMenu()
+  window.addEventListener('input:contextmenu', onInputContextMenu)
   // Capture phase: xterm v6's viewport stopPropagation()s wheel events it
   // scrolls, but bails on defaultPrevented — so we must preempt it.
   document.addEventListener('wheel', onWheel, { passive: false, capture: true })
-  // macOS system shortcuts (Cmd+Q / Cmd+W) — only armed on darwin.
-  try { isMac.value = (await GetPlatform()) === 'darwin' } catch { isMac.value = false }
-  if (isMac.value) document.addEventListener('keydown', onMacSystemShortcut, true)
+  // macOS system shortcuts (Cmd+Q / Cmd+W) — the digit shortcuts in
+  // onPlatformSystemShortcut are armed on every platform.
+  try {
+    const platform = await GetPlatform()
+    isMac = platform === 'darwin'
+    // Expose for platform-specific CSS (e.g. dialog close-button styles)
+    document.documentElement.dataset.platform = platform
+  } catch {
+    isMac = false
+  }
+  document.addEventListener('keydown', onPlatformSystemShortcut, true)
   // Keyboard shortcuts — load once on mount, watch for settings changes
   applyKeybindings()
   installGlobalListener()
@@ -391,6 +968,17 @@ onMounted(async () => {
   window.addEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
   // Exit is emitted from Go when the user uses the connection bar's restore button.
   unsubRdpFullscreenExit =Events.On('rdp:fullscreen-exit', () => onRdpFullScreenExit())
+  // Tray menu: "Settings" / "About" show the window (Go side) then land here.
+  unsubTrayOpenSettings = Events.On('app:open-settings', () => openSettings())
+  unsubTrayOpenAbout = Events.On('app:open-about', () => openSettings('about'))
+  // MCP (external AI agents): approval dialogs + session takeover.
+  unsubMcpApproval = Events.On('mcp:approval-request', (ev) => {
+    mcpApprovalRequest.value = ev.data as MCPApprovalRequest
+    mcpApprovalVisible.value = true
+  })
+  unsubMcpSessionCreated = Events.On('mcp:session-created', (ev) => {
+    onMcpSessionCreated(ev.data)
+  })
   // Go-side WndProc events: window move/resize start/end. The RDP window is a
   // WS_CHILD, so it moves with the main window automatically; only a resize of
   // the .rdp-area (or a re-show after an overlay) needs a position sync.
@@ -406,23 +994,6 @@ onMounted(async () => {
     }, 100)
   })
 
-  // S1: SSH host-key changed — backend emits this when a server's host key
-  // differs from the recorded TOFU fingerprint. Surface a confirmation
-  // dialog; on accept the backend rewrites known_hosts and the user can
-  // reconnect.
-  unsubHostKeyChanged = Events.On('session:hostkey-changed', (ev) => {
-    const data = ev.data as HostKeyChangedPayload
-    if (data) {
-      hostKeyPayload.value = data
-      hostKeyDialogVisible.value = true
-    }
-  })
-
-  // F4: 监听"打开录制列表"事件（来自 SettingsTab / BaseTerminal 等）。
-  unsubOpenRecordList = Events.On('app:open-record-list', () => {
-    recordListVisible.value = true
-  })
-
   // Keep native RDP window position in sync when the .rdp-area changes size
   rdpAreaObserver = new ResizeObserver(() => rdpSyncPosition())
   const observeRdpArea = () => {
@@ -432,37 +1003,267 @@ onMounted(async () => {
   observeRdpArea()
   watch(() => activeTab.value, () => nextTick(observeRdpArea))
 
-  // Panel/Tab/StartTab menu actions — 批量注册（A1 重构）：13 个事件统一模式
-  const connectEvents: Array<[string, (c: any, p?: any) => void]> = [
-    ['app:connect-sftp', onConnectSftp], ['app:connect-wsl-file', onConnectWslFile],
-    ['app:connect-monitor', onConnectMonitor], ['app:connect-rdp', onConnectRDP],
-    ['app:connect-vnc', onConnectVNC], ['app:connect-spice', onConnectSPICE],
-    ['app:connect-x11-desktop', onConnectX11Desktop], ['app:connect-db', onConnectDB],
-    ['app:connect-k8s', onConnectK8s], ['app:connect-ftp', onConnectFtp],
-    ['app:connect-smb', onConnectSmb], ['app:connect-webdav', onConnectWebdav],
-    ['app:connect-s3', onConnectS3],
-  ]
-  for (const [evt, handler] of connectEvents) {
-    window.addEventListener(evt, ((e: CustomEvent) => {
-      const d = e.detail; const c = d?.config || d
-      if (c) { const prev = tabStore.activeTab; handler(c, prev?.type === 'start' ? prev : undefined) }
-    }) as EventListener)
-  }
+  // Adaptive resize lifecycle: freeze the last good frame over .rdp-area for
+  // the disconnect/reconnect cycle, restore the live window at the end.
+  unsubRdpAdaptive = Events.On('rdp:adaptive', (ev: any) => {
+    const d = ev?.data as { id: string; event: string; snapshot?: string }
+    if (!d?.id || d.id !== getActiveRdpSessionId()) return
+    if (d.event === 'start') {
+      if (rdpOverlayCount.value > 0 || !d.snapshot) return
+      const url = `data:image/png;base64,${d.snapshot}`
+      const img = new Image()
+      img.onload = () => {
+        const sid = getActiveRdpSessionId()
+        if (!sid) return
+        setRdpSnapshotBg(url)
+        RDPHide(sid)
+      }
+      img.src = url
+    } else if (d.event === 'end') {
+      if (rdpOverlayCount.value > 0) return
+      const sid = getActiveRdpSessionId()
+      if (sid) {
+        RDPShow(sid)
+        RDPInvalidate(sid)
+      }
+      setTimeout(() => {
+        rdpSyncPosition()
+        clearRdpSnapshotBg()
+      }, 300)
+    }
+  })
 
-  // DB/Redis/Mongo tabs create their connection in App.vue (onConnectDB), not in
-  // a content component, so their right-click 「重连」(Reconnect) is handled here.
+  // Panel/Tab/StartTab menu actions
+  // Sidebar connection dropped onto a workspace panel: connect it and split
+  // in at the drop position (see WorkspaceContent.onPanelDrop Case 0).
+  window.addEventListener('app:connect-workspace-panel', ((e: CustomEvent) => {
+    const { config, workspaceTabId, targetPanelId, direction, insertBefore } = e.detail || {}
+    if (config && workspaceTabId) {
+      connectTerminalSession(config, true, undefined, workspaceTabId, { targetPanelId, direction, insertBefore })
+    }
+  }) as EventListener)
+  window.addEventListener('app:open-connection-at', ((e: CustomEvent) => {
+    const { connId, index } = e.detail || {}
+    const c = connId ? connectionStore.connections.find(x => x.id === connId) : undefined
+    if (c) void openConnectionAtIndex(c, typeof index === 'number' ? index : tabStore.tabs.length)
+  }) as EventListener)
+  window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openFileBrowser(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
+  window.addEventListener('app:connect-terminal', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) onConnect(c)
+  }) as EventListener)
+  window.addEventListener('app:connect-wsl-file', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchWslFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-container-file', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchContainerFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-monitor', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openMonitorPanel(c, prev?.type === 'start' ? prev : undefined) }
+  }) as EventListener)
+  window.addEventListener('app:connect-rdp', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-vnc', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-spice', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-x11-desktop', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-db', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-k8s', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-ftp', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-smb', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-webdav', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+  window.addEventListener('app:connect-s3', ((e: CustomEvent) => {
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+  }) as EventListener)
+
+  // DB/Redis/Mongo tabs create their connection via connectionLauncher (runSpec),
+  // not in a content component, so their right-click 「重连」(Reconnect) is handled here.
   // Terminal and desktop-protocol panels handle the same event themselves.
   window.addEventListener('panel:reconnect', onPanelReconnectEvent)
 
   await checkCredentials()
- })
+})
+
+function navigatePanel(dir: number) {
+  const t = tabStore.activeTab
+  if (!t || t.type !== 'workspace') return
+  if (t.panelIds.length <= 1) return
+  const current = t.activePanelId || t.panelIds[0]
+  const idx = t.panelIds.indexOf(current)
+  if (idx < 0) return
+  const next = t.panelIds[(idx + dir + t.panelIds.length) % t.panelIds.length]
+  tabStore.setActivePanel(t.id, next)
+}
+
+// What the tab bar "+" button (relayed from TabsList) and the newConnection
+// shortcut open (issue #1043): the start page by default, or a local terminal
+// with the default shell when newTabAction says so. No shell available ->
+// fall back to the start page.
+function createNewTab() {
+  if (settingsStore.settings.newTabAction === 'localTerminal') {
+    const shells = settingsStore.availableShells
+    const preferred = settingsStore.settings.defaultLocalShell
+    const shell = preferred && shells.includes(preferred) ? preferred : shells[0]
+    if (shell) {
+      createLocalTerminalWithShell(shell)
+      return
+    }
+  }
+  tabStore.createStartTab()
+}
+
+// ── Keyboard shortcut handlers (module-level so watch can access them) ──
+const actionHandlers: Record<ShortcutAction, () => void> = {
+  nextTab: () => tabStore.nextTab(),
+  prevTab: () => tabStore.prevTab(),
+  newConnection: () => { createNewTab() },
+  toggleSidebar: () => {
+    if (sidebarVisible.value) {
+      sidebarVisible.value = false
+      const pid = tabStore.getActivePanelId()
+      if (pid) nextTick(() => focusPanelTerminal(pid))
+    } else {
+      sidebarVisible.value = true
+      nextTick(() => sidebarRef.value?.focusSearch())
+    }
+  },
+  openQuickCommands: () => {
+    sidebarVisible.value = true
+    nextTick(() => sidebarRef.value?.openQuickCommands())
+  },
+  focusTerminal: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) focusPanelTerminal(pid)
+  },
+  maximizePanel: () => {
+    const tab = tabStore.activeTab
+    if (!tab || tab.type !== 'workspace' || !tab.activePanelId) return
+    const panelId = tab.activePanelId
+    tabStore.toggleWorkspacePanelMaximize(tab.id)
+    nextTick(() => focusPanelTerminal(panelId))
+  },
+  lockAI: () => {
+    const t = tabStore.activeTab
+    if (!t) return
+    let panelId: string | null = null
+    if (t.type === 'workspace') {
+      panelId = t.activePanelId || t.panelIds[0] || null
+    } else if (t.type === 'terminal') {
+      panelId = t.panelId
+    }
+    if (panelId) onToggleAiLock(panelId)
+  },
+  focusAI: () => {
+    if (aiStore.visible) {
+      aiStore.visible = false
+      const pid = tabStore.getActivePanelId()
+      if (pid) nextTick(() => focusPanelTerminal(pid))
+    } else {
+      aiStore.visible = true
+      nextTick(() => aiSidebarRef.value?.focusInput())
+    }
+  },
+  closePanel: () => {
+    const t = tabStore.activeTab
+    if (!t) return
+    if (t.locked) return
+    if (t.type === 'workspace' && t.panelIds.length > 1) {
+      const panelId = t.activePanelId || t.panelIds[t.panelIds.length - 1]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
+      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
+    } else if (t.type === 'workspace' && t.panelIds.length === 1) {
+      const panelId = t.panelIds[0]
+      const p = panelStore.getPanel(panelId)
+      if (p?.sessionId) CloseSession(p.sessionId).catch(() => {})
+      companionStore.disposeForPanel(panelId).catch(() => {})
+      tabStore.removePanelFromWorkspaceTab(t.id, panelId)
+      panelStore.removePanel(panelId)
+    } else {
+      closeTab(t.id)
+    }
+  },
+  terminalSearch: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:open-search', { detail: { panelId: pid } }))
+  },
+  copy: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:copy', { detail: { panelId: pid } }))
+  },
+  toggleLineNumbers: () => {
+    // Line numbers / timestamps are global terminal settings, so these toggle
+    // them directly rather than dispatching a per-panel event.
+    const cur = settingsStore.settings.terminal.showLineNumbers ?? false
+    settingsStore.updateTerminal({ showLineNumbers: !cur })
+  },
+  toggleTimestamps: () => {
+    const cur = settingsStore.settings.terminal.showTimestamps ?? false
+    settingsStore.updateTerminal({ showTimestamps: !cur })
+  },
+  zoomFontIn: () => adjustFontSize(1),
+  zoomFontOut: () => adjustFontSize(-1),
+  paste: () => {
+    const pid = tabStore.getActivePanelId()
+    if (pid) window.dispatchEvent(new CustomEvent('terminal:paste', { detail: { panelId: pid } }))
+  },
+  navigatePrev: () => navigatePanel(-1),
+  navigateNext: () => navigatePanel(1),
+  openSettings: () => openSettings(),
+  duplicateSession: () => {
+    // Same logic as the tab context menu's "复制会话": delegate to the shared
+    // duplicate routine so both entry points behave identically.
+    const tab = tabStore.activeTab
+    if (!tab) return
+    if (tab.type === 'workspace') {
+      // A workspace holds several panels; the shortcut duplicates the focused
+      // one and keeps the duplicate beside it in the same workspace.
+      const pid = tabStore.getActivePanelId()
+      const panel = pid ? panelStore.getPanel(pid) : undefined
+      if (panel) {
+        duplicateSession(
+          { type: 'terminal', panelId: pid, title: panel.title },
+          { workspaceId: tab.id, targetPanelId: pid },
+        )
+      }
+      return
+    }
+    duplicateSession(tab)
+  },
+}
+
+function applyKeybindings() {
+  // Digit shortcuts (Ctrl/Cmd+digit → tab, Alt/Option+digit → workspace
+  // panel) are fixed platform bindings handled by onPlatformSystemShortcut.
+  loadKeybindings(settingsStore.settings.keyboard, actionHandlers)
+}
 
 onUnmounted(() => {
   uninstallGlobalListener()
   uninstallFocusRestore?.()
-  disposeInputMenu()
+  updateCheck.dispose()
+  window.removeEventListener('input:contextmenu', onInputContextMenu)
   document.removeEventListener('wheel', onWheel, { capture: true })
-  document.removeEventListener('keydown', onMacSystemShortcut, true)
+  document.removeEventListener('keydown', onPlatformSystemShortcut, true)
   // RDP overlay tracking
   window.removeEventListener('rdp:overlay-push', RDPHideForOverlay)
   window.removeEventListener('rdp:overlay-pop', RDPShowForOverlay)
@@ -475,13 +1276,12 @@ onUnmounted(() => {
   unsubRdpFullscreenExit?.()
   unsubRdpMoveResizeStart?.()
   unsubRdpMoveResizeEnd?.()
-  unsubHostKeyChanged?.()
-  unsubHostKeyChanged = null
-  unsubOpenRecordList?.()
-  unsubOpenRecordList = null
+  unsubRdpAdaptive?.()
+  unsubTrayOpenSettings?.()
+  unsubTrayOpenAbout?.()
+  unsubMcpApproval?.()
+  unsubMcpSessionCreated?.()
   rdpAreaObserver?.disconnect()
-  // Tear down store-level EventsOn registrations (FE-03)
-  ;(aiStore as any).dispose?.()
   settingsStore.dispose?.()
   connectionStore.dispose?.()
   syncStore.dispose?.()
@@ -498,7 +1298,7 @@ function openSettings(category?: string) {
   } else {
     const panel = panelStore.createPanel(null, 'settings')
     panelStore.updateTitle(panel.id, t('settings.title'))
-    const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+    const tab = tabStore.createTab('settings', t('settings.title'), panel.id)
     panelStore.movePanelToTab(panel.id, tab.id)
   }
   // Jump to the requested category (e.g. ai / identities / proxies)
@@ -537,10 +1337,10 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
         RDPHideForOverlay()
         try {
           await ElMessageBox.confirm(
-            h('div', { style: 'display:flex;flex-direction:column;gap:10px' }, [
+            h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
               h('span', t('tab.closeConnectedConfirm')),
               h(ElCheckbox, {
-                'onUpdate:modelValue': (v: any) => { dontShowAgain.value = v }
+                'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
               }, () => t('tab.dontShowAgain'))
             ]),
             t('tab.closeConfirmTitle'),
@@ -634,6 +1434,14 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
   const panelIds = tabStore.closeTab(tabId)
   // Dispose SSH companion sidebars (sftp/monitor) bound to these panels
   companionStore.disposeForPanels(panelIds).catch(() => {})
+  panelIds.forEach(pid => {
+    // Drop transfer-event routing and the panel's task list at close time —
+    // KeepAlive may keep the tab component cached, so its onUnmounted (if any)
+    // can run much later or never.
+    const p = panelStore.getPanel(pid)
+    if (p?.sessionId) unregisterTransferRoute(p.sessionId)
+    panelStore.removeTransferTasks(pid)
+  })
   panelIds.forEach(pid => panelStore.removePanel(pid))
   nextTick(() => {
     if (tabStore.tabs.length === 0) {
@@ -667,10 +1475,10 @@ async function closeTabBatch(tabIds: string[]) {
     const dontShowAgain = ref(false)
     try {
       await ElMessageBox.confirm(
-        h('div', { style: 'display:flex;flex-direction:column;gap:10px' }, [
+        h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
           h('span', t('tab.closeConnectedBatchConfirm', { count: connectedCount })),
           h(ElCheckbox, {
-            'onUpdate:modelValue': (v: any) => { dontShowAgain.value = v }
+            'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
           }, () => t('tab.dontShowAgain'))
         ]),
         t('tab.closeConfirmTitle'),
@@ -690,14 +1498,34 @@ async function closeTabBatch(tabIds: string[]) {
   }
 }
 
+function getPanelConfig(panelId: string): ConnectionConfig | null {
+  return panelStore.getPanel(panelId)?.config || null
+}
 
-function onSaveOnly(config: ConnectionConfig) {
-  if (editConfig.value?.id) {
-    connectionStore.update(config.id, config)
-  } else {
-    connectionStore.add(config)
-  }
-  RecordRecentConnection(config.id)
+function getPanelSessionId(panelId: string): string | null {
+  return panelStore.getPanel(panelId)?.sessionId || null
+}
+
+function k8sConnectionForTab(tab: any): ConnectionConfig {
+  const conn = connectionStore.connections.find((c: ConnectionConfig) => c.id === tab.connectionId)
+  return conn || ({
+    id: tab.connectionId,
+    name: tab.name,
+    type: 'k8s',
+    host: '',
+    port: 0,
+    user: '',
+    authType: 'password',
+    k8sConfigPath: '',
+    k8sConfigInline: '',
+    k8sContext: '',
+    k8sNamespace: '',
+  } as ConnectionConfig)
+}
+
+function onSaveOnly(saveOnlyConfig: ConnectionConfig) {
+  persistConnection(saveOnlyConfig, !!editConfig.value?.id)
+  RecordRecentConnection(saveOnlyConfig.id)
 }
 
 // Transient connection ("connect only"): connect a new form config without
@@ -705,6 +1533,26 @@ function onSaveOnly(config: ConnectionConfig) {
 function onConnectOnly(config: ConnectionConfig) {
   editConfig.value = null
   onConnect(config, undefined, false, false)
+}
+
+// Companion entries that force a spec regardless of config.type (used by the
+// sidebar's `kind` routing and the app:connect-sftp / app:connect-monitor
+// window events).
+function onSidebarConnect(config: ConnectionConfig, kind?: 'file' | 'wsl-file' | 'monitor') {
+  const prev = tabStore.activeTab
+  const prevStart = prev?.type === 'start' ? prev : undefined
+  if (kind === 'file') return void openFileBrowser(config, prevStart)
+  if (kind === 'monitor') return void openMonitorPanel(config, prevStart)
+  if (kind === 'wsl-file') return void launchWslFileBrowser(config, { prevStart })
+  return onConnect(config)
+}
+
+function openFileBrowser(config: ConnectionConfig, prevStart?: any) {
+  return launchFileBrowser(config, { prevStart })
+}
+
+function openMonitorPanel(config: ConnectionConfig, prevStart?: any) {
+  return launchMonitor(config, { prevStart })
 }
 
 // Atomically remove a start tab and place a newly-created tab in its position.
@@ -721,39 +1569,72 @@ function closeStartAndReposition(prevTab: any): (newTabId: string) => void {
   }
 }
 
-async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?: boolean, persist = true) {
+configureLauncher({ ensureCredentials, closeStartAndReposition })
+
+// ── Reopen last session's tabs (issue #937-4) ──
+// The snapshot itself is written continuously by installTabSnapshotSaver;
+// this is the startup half: prompt (when the setting is on) and re-open the
+// recorded tabs through the regular connect flows.
+async function maybeRestoreLastTabs() {
+  if (!settingsStore.settings.restoreTabsPrompt) return
+  const snapshot = localStateStore.state.lastTabsSnapshot
+  if (!snapshot?.tabs?.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('start.restoreTabsMessage', { count: snapshot.tabs.length }),
+      t('start.restoreTabsTitle'),
+      {
+        confirmButtonText: t('start.restoreTabsConfirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'info'
+      }
+    )
+  } catch {
+    // One-shot prompt: a decline means "don't offer these tabs again", so
+    // drop the snapshot. It only re-accumulates once the user actually opens
+    // tabs (the watcher in installTabSnapshotSaver re-records on change).
+    localStateStore.update({ lastTabsSnapshot: null })
+    return // user declined
+  }
+  await restoreTabsSnapshot(snapshot, {
+    connectTerminal: (c, p) => connectTerminalSession(c, p, undefined),
+    connectMember: workspaceConnectMember
+  })
+}
+
+async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?: boolean, persist = true, targetWorkspaceId?: string) {
+  // Saved workspace connection: open it as a live workspace instead of the
+  // per-type launch flow (no spec exists — and must not exist — for this type).
+  if (config.type === 'workspace') {
+    await openSavedWorkspace(config, { connectMember: workspaceConnectMember })
+    return
+  }
   const prev = tabStore.activeTab
   const prevStart = (prev?.type === 'start' && !keepOpen) ? prev : undefined
-  // Persist form changes BEFORE dispatching by type. The type-specific
-  // handlers below only call connectionStore.add(), which is a silent
-  // no-op for existing ids and would otherwise drop edits made in the
-  // "Save & Connect" flow. When persist=false (transient "connect only"
-  // session) skip both the store write and the recent-connection entry.
-  if (persist) {
-    if (wasEdit) {
-      connectionStore.update(config.id, config)
-    } else {
-      connectionStore.add(config)
-    }
-  } else if (!config.id) {
-    // Give the transient session a stable id for panel/tab wiring even
-    // though it will not be persisted to the connection list.
-    config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-  }
-  // 工厂查表分发（A1 重构）：消除 13 个 if-else 分支链。各 onConnectXxx 为
-  // 函数声明（hoisted），此处可安全引用。sftp 签名不含 persist，多余参数被忽略。
-  const connectDispatch: Record<string, (c: ConnectionConfig, p: any, s: boolean) => any> = {
-    sftp: onConnectSftp, scp: onConnectScp, ftp: onConnectFtp, smb: onConnectSmb,
-    webdav: onConnectWebdav, s3: onConnectS3, rdp: onConnectRDP, vnc: onConnectVNC,
-    spice: onConnectSPICE, 'x11-desktop': onConnectX11Desktop, database: onConnectDB,
-    k8s: onConnectK8s, container: onConnectContainer,
-  }
-  const dispatcher = connectDispatch[config.type]
-  if (dispatcher) { await dispatcher(config, prevStart, persist); return }
+  await launchConnection(config, {
+    persist,
+    wasEdit,
+    prevStart,
+    connectTerminal: (c, p) => connectTerminalSession(c, p, prev, targetWorkspaceId),
+  })
+}
 
+// Generic terminal connect path (ssh/telnet/mosh/local/wsl/tcp/serial).
+// Persistence bookkeeping happened in launchConnection. The type-specific
+// non-terminal specs live in connectionLauncher.ts.
+// Returns the created panel id so workspace orchestration (create/restore)
+// can remap layouts; status distinguishes credential-cancel from failure.
+// placement (workspace targets only): where the new panel splits in relative
+// to targetPanelId — used by the sidebar-connection-onto-workspace-panel drop.
+interface WorkspacePlacement {
+  targetPanelId: string
+  direction: 'horizontal' | 'vertical'
+  insertBefore: boolean
+}
+async function connectTerminalSession(config: ConnectionConfig, persist: boolean, prev: any, targetWorkspaceId?: string, placement?: WorkspacePlacement): Promise<{ status: 'ok' | 'cancelled' | 'failed'; panelId?: string }> {
   // Credential check
   const resolved = await ensureCredentials(config)
-  if (!resolved) return
+  if (!resolved) return { status: 'cancelled' }
   config = resolved
 
   // Create session BEFORE panel so the terminal has a sessionId when it first
@@ -775,12 +1656,12 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     sessionId = info.id
   } catch (e) {
     console.error('Failed to create session:', e)
-    return
+    return { status: 'failed' }
   }
 
-  const panel = panelStore.createPanel(config, config.type as any)
+  const panel = panelStore.createPanel(config, config.type)
   const displayTitle = config.name || (config.type === 'local' || config.type === 'wsl'
-    ? getShellLabel(config.shellPath || '')
+    ? getShellLabel(config.shellPath)
     : config.type === 'serial'
     ? `${config.serialPort || 'Serial'} (${config.serialBaudRate || 115200})`
     : config.type === 'telnet'
@@ -789,9 +1670,20 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
   panelStore.updateTitle(panel.id, displayTitle)
   panelStore.bindSession(panel.id, sessionId)
   sessionStore.initSession(sessionId)
-  const tab = prev?.type === 'start'
-    ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
-    : tabStore.createTerminalTab(panel.title, panel.id)
+  const addedToWorkspace = targetWorkspaceId
+    ? tabStore.addNewPanelToWorkspace(
+        targetWorkspaceId,
+        panel.id,
+        placement?.targetPanelId,
+        placement?.direction ?? 'horizontal',
+        placement?.insertBefore ?? false
+      )
+    : false
+  const tab = addedToWorkspace
+    ? tabStore.tabs.find(t => t.id === targetWorkspaceId)!
+    : prev?.type === 'start'
+      ? tabStore.replaceStartTab(prev.id, panel.title, panel.id)
+      : tabStore.createTerminalTab(panel.title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
   if (persist) RecordRecentConnection(config.id)
 
@@ -813,20 +1705,122 @@ async function onConnect(config: ConnectionConfig, keepOpen?: boolean, wasEdit?:
     // responsibility (this helper is reused across connect / duplicate).
     CloseSession(sessionId).catch(() => {})
   }
+  return { status: 'ok', panelId: panel.id }
+}
+
+// ── Workspace orchestration ──
+// One connect Member primitive shared by create-from-selection and open-saved;
+// wraps the generic terminal path with workspace targeting.
+
+function workspaceConnectMember(config: ConnectionConfig, workspaceTabId: string, persist: boolean) {
+  return connectTerminalSession(config, persist, undefined, workspaceTabId)
+}
+
+// Sidebar connection dropped onto the tab bar: open it as a new tab at the
+// requested position. Works for every connection type — the connect flow is
+// the same as clicking the connection (workspace type opens as a workspace).
+// The new tab is created wherever the flow puts it, then moved into place.
+async function openConnectionAtIndex(config: ConnectionConfig, index: number) {
+  const before = new Set(tabStore.tabs.map(t => t.id))
+  await onConnect(config)
+  const newTab = tabStore.tabs.find(t => !before.has(t.id))
+  if (!newTab) return // nothing opened (credential cancelled / connect failed)
+  const fromIdx = tabStore.tabs.findIndex(t => t.id === newTab.id)
+  const toIdx = Math.max(0, Math.min(index, tabStore.tabs.length - 1))
+  if (fromIdx !== toIdx) tabStore.moveTab(fromIdx, toIdx)
+}
+
+// Entry: 「在工作区打开 → 新建工作区」 from the sidebar/start-page context
+// menu (targets = the multi-selection or the right-clicked connection).
+async function onCreateWorkspaceFromConfigs(configs: ConnectionConfig[]) {
+  await createWorkspaceFromSelection('', [], configs, { connectMember: workspaceConnectMember })
+}
+
+// Entry: 新建工作区 button (start page) — opens an empty workspace tab the
+// user fills by dragging connections / terminal tabs in. Point-and-click
+// creation from a selection lives in the「在工作区打开」context menu.
+function onNewWorkspace() {
+  tabStore.createWorkspaceTab(tabStore.generateWorkspaceName(tabStore.tabs), [], { root: { type: 'leaf', panelId: '' } })
+}
+
+// Force-reconnect a database-family panel (database/redis/mongodb/
+// elasticsearch) from the tab's right-click 「重连」(Reconnect) menu. These
+// sessions are created in connectionLauncher (runSpec), so — unlike terminal/
+// desktop panels — no content component owns the lifecycle: close the old
+// session, then create a fresh one and rebind the same panel.
+async function reconnectDatabasePanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  const oldId = panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  const cfg = panel.config
+  if (!cfg) return
+  // Standalone NoSQL types carry their session type in config.type; the SQL
+  // family stays on the generic 'database' session.
+  const sessionType = cfg.type === 'redis' || cfg.type === 'mongodb' || cfg.type === 'elasticsearch'
+    ? cfg.type
+    : 'database'
+  try {
+    const info = await CreateSession(sessionType, cfg)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('db.connectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+// Force-reconnect a monitor panel. The session is created in
+// connectionLauncher (runSpec), so it's re-initiated here like the database panels.
+async function reconnectMonitorPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  const oldId = panel.sessionId
+  if (oldId) {
+    try { await CloseSession(oldId) } catch (_) {}
+  }
+  const cfg = panel.config
+  if (!cfg) return
+  try {
+    const info = await CreateSession('monitor', cfg)
+    panelStore.bindSession(panel.id, info.id)
+    sessionStore.initSession(info.id)
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+// Force-reconnect a file-transfer panel (sftp/ftp/smb/webdav/s3). The actual
+// close→create→rebind orchestration lives in usePanelReconnect, shared with
+// the refresh-triggered auto-reconnect in the file tab content.
+async function reconnectSftpPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
+  try {
+    const newId = await reconnectFileTransferPanel(panel.id)
+    if (!newId) panelStore.updateStatus(panel.id, 'error')
+  } catch (e: any) {
+    panelStore.updateStatus(panel.id, 'error')
+    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
+  }
+}
+
+// Panel kinds whose sessions are created in connectionLauncher's database
+// family spec (shared 'database' panel type + own session kind).
+const DB_FAMILY_PANEL_TYPES = ['database', 'redis', 'mongodb', 'elasticsearch']
+
+function onPanelReconnectEvent(e: Event) {
+  const panelId = (e as CustomEvent)?.detail?.panelId
+  if (!panelId) return
+  const panel = panelStore.getPanel(panelId)
+  if (!panel) return
+  // These session types are created in connectionLauncher (not in a content
+  // component), so their right-click 「重连」(Reconnect) is handled here.
+  // Terminal and desktop-protocol panels handle the same event themselves.
+  if (DB_FAMILY_PANEL_TYPES.includes(panel.type)) reconnectDatabasePanel(panel)
+  else if (panel.type === 'monitor') reconnectMonitorPanel(panel)
+  else if (panel.type === 'sftp') reconnectSftpPanel(panel)
 }
 
 function getShellLabel(path: string): string {
-  if (!path) return 'Local'
-  const lower = path.toLowerCase()
-  if (lower.startsWith('wsl://')) {
-    const distro = path.slice(6)
-    return distro ? `WSL - ${distro}` : 'WSL'
-  }
-  if (lower.includes('pwsh')) return 'PowerShell'
-  if (lower.includes('powershell')) return 'Windows PowerShell'
-  if (lower.includes('bash')) return 'Git Bash'
-  if (lower.includes('cmd')) return 'Command Prompt'
-  return path.replace(/\\/g, '/').split('/').pop() || 'Local'
+  return getShellLabelBase(path, 'Local')
 }
 
 async function createLocalTerminalWithShell(shellPath: string, keepOpen?: boolean) {
@@ -835,15 +1829,6 @@ async function createLocalTerminalWithShell(shellPath: string, keepOpen?: boolea
   const distro = parseWslFromShell(shellPath)
   if (distro) return createWslTerminal(distro, keepOpen)
   await createLocalTerminal(shellPath, keepOpen)
-}
-
-/** Parses the distro name from a `wsl://<distro>` shell path, else null. */
-function parseWslFromShell(shellPath?: string): string | null {
-  if (shellPath && shellPath.toLowerCase().startsWith('wsl://')) {
-    const distro = shellPath.slice(6)
-    return distro || null
-  }
-  return null
 }
 
 const pendingGroupId = ref<string | undefined>(undefined)
@@ -894,7 +1879,7 @@ function onTabDragStart(_e: DragEvent, _tabId: string) {
 
 async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
   const panel = panelStore.createPanel(null, 'local')
-  const shellName = getShellLabel(shellPath || '')
+  const shellName = getShellLabel(shellPath)
   panelStore.updateTitle(panel.id, shellName)
 
   try {
@@ -951,7 +1936,7 @@ async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
 async function createWslTerminal(distro: string, keepOpen?: boolean) {
   const shellPath = 'wsl://' + distro
   const panel = panelStore.createPanel(null, 'wsl')
-  const shellName = getShellLabel(shellPath || '')
+  const shellName = getShellLabel(shellPath)
   panelStore.updateTitle(panel.id, shellName)
 
   try {
@@ -996,405 +1981,6 @@ async function createWslTerminal(distro: string, keepOpen?: boolean) {
     panelStore.removePanel(panel.id)
   }
 }
-
-// ── 文件传输 Tab 工厂 (A1 重构) ──────────────────────────────────
-// 合并原 onConnectSftp / onConnectScp / onConnectFtp / onConnectSmb /
-// onConnectWebdav / onConnectS3 六个近乎逐字重复的函数。差异点：
-//   - proto: sftp 用 fileTransferProto(config)（scp/ssh 子系统偏好），其余固定
-//   - tabKind: sftp → createSFPTab，其余 → createFtpTab
-//   - s3 跳过 ensureCredentials 且 displayTitle 用 s3Bucket
-interface FileTransferOpts {
-  proto: 'auto' | 'scp' | 'ftp' | 'smb' | 'webdav' | 's3'
-  tabKind: 'sftp' | 'ftp'
-  persist?: boolean
-  skipCredentialCheck?: boolean
-}
-
-async function openFileTransferTab(
-  config: ConnectionConfig,
-  opts: FileTransferOpts,
-  prevStart?: any,
-) {
-  const persist = opts.persist ?? true
-  if (persist) connectionStore.add(config)
-
-  if (!opts.skipCredentialCheck) {
-    const resolved = await ensureCredentials(config)
-    if (!resolved) return
-    config = resolved
-  }
-
-  const panel = panelStore.createPanel(config, 'sftp')
-  const proto = opts.proto === 'auto' ? fileTransferProto(config) : opts.proto
-  const displayTitle = config.name || (opts.proto === 's3'
-    ? (config.s3Bucket ? `s3://${config.s3Bucket}` : config.host)
-    : `${config.user}@${config.host}`)
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = opts.tabKind === 'sftp'
-    ? tabStore.createSFPTab(displayTitle, panel.id)
-    : tabStore.createFtpTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-
-  try {
-    const info = await CreateSession(proto, config)
-    panelStore.bindSession(panel.id, info.id)
-  } catch (e) {
-    console.error(`Failed to create ${proto} session:`, e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
-}
-
-// 薄包装：保留原函数名供 onConnect 分发与 onMounted 的 window.addEventListener 引用
-async function onConnectSftp(config: ConnectionConfig, prevStart?: any) {
-  await openFileTransferTab(config, { proto: 'auto', tabKind: 'sftp' }, prevStart)
-}
-async function onConnectScp(config: ConnectionConfig, prevStart?: any, persist = true) {
-  await openFileTransferTab(config, { proto: 'scp', tabKind: 'ftp', persist }, prevStart)
-}
-async function onConnectFtp(config: ConnectionConfig, prevStart?: any, persist = true) {
-  await openFileTransferTab(config, { proto: 'ftp', tabKind: 'ftp', persist }, prevStart)
-}
-async function onConnectSmb(config: ConnectionConfig, prevStart?: any, persist = true) {
-  await openFileTransferTab(config, { proto: 'smb', tabKind: 'ftp', persist }, prevStart)
-}
-async function onConnectWebdav(config: ConnectionConfig, prevStart?: any, persist = true) {
-  await openFileTransferTab(config, { proto: 'webdav', tabKind: 'ftp', persist }, prevStart)
-}
-async function onConnectS3(config: ConnectionConfig, prevStart?: any, persist = true) {
-  await openFileTransferTab(config, { proto: 's3', tabKind: 'ftp', persist, skipCredentialCheck: true }, prevStart)
-}
-
-// Standalone file tab for a WSL distro opened from the file sidebar. The file
-// browser UI is protocol-agnostic (same two-pane layout as SFTP); the backing
-// session is a wsl-file session over //wsl.localhost that auto-connects on
-// CreateSession, so the tab just lists once it reports connected.
-async function onConnectWslFile(config: ConnectionConfig, prevStart?: any) {
-  const fileConfig: ConnectionConfig = { ...config, type: 'wsl-file' as any }
-  const panel = panelStore.createPanel(fileConfig, 'sftp')
-  const displayTitle = config.name || `WSL ${parseWslFromShell(config.shellPath) || ''}`
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createSFPTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  try {
-    const info = await CreateSession('wsl-file', fileConfig)
-    panelStore.bindSession(panel.id, info.id)
-  } catch (e) {
-    console.error('Failed to create WSL file session:', e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
-}
-
-
-async function onConnectRDP(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-  config = resolved
-
-  const displayTitle = config.name || `${config.user}@${config.host}`
-
-  const panel = panelStore.createPanel(config, 'rdp')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createRDPTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-
-  try {
-    const info = await CreateSession('rdp', config)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e) {
-    console.error('Failed to create RDP session:', e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
-}
-
-async function onConnectVNC(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-  config = resolved
-
-  const displayTitle = config.name || config.host
-
-  const panel = panelStore.createPanel(config, 'vnc')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-
-  // Create the session BEFORE the tab so VNCTabContent mounts with its
-  // sessionId and proxyAddr already bound. Mounting first and calling
-  // CreateSession from the component created a duplicate session and lost
-  // the session:status 'connected' event (emitted during CreateSession,
-  // before the component set its session id), leaving VNC stuck on
-  // "connecting". Mirrors onConnectLocal.
-  let info
-  try {
-    info = await CreateSession('vnc', config)
-  } catch (e) {
-    console.error('Failed to create VNC session:', e)
-    panelStore.removePanel(panel.id)
-    return
-  }
-  if (info.proxyAddr) panelStore.setProxyAddr(panel.id, info.proxyAddr)
-  panelStore.bindSession(panel.id, info.id)
-  sessionStore.initSession(info.id)
-
-  const tab = tabStore.createVNCTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-}
-async function onConnectSPICE(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-  config = resolved
-
-  const displayTitle = config.name || config.host
-
-  const panel = panelStore.createPanel(config, 'spice')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-
-  // Create the session BEFORE the tab so SPICETabContent mounts with its
-  // sessionId and proxyAddr already bound — same v3 race as VNC.
-  let info
-  try {
-    info = await CreateSession('spice', config)
-  } catch (e) {
-    console.error('Failed to create SPICE session:', e)
-    panelStore.removePanel(panel.id)
-    return
-  }
-  if (info.proxyAddr) panelStore.setProxyAddr(panel.id, info.proxyAddr)
-  panelStore.bindSession(panel.id, info.id)
-  sessionStore.initSession(info.id)
-
-  const tab = tabStore.createSPICETab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-}
-
-async function onConnectX11Desktop(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  // Ensure the X11 desktop config itself has saved credentials before
-  // handing off to X11DesktopConnect.
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-
-  const displayTitle = config.name || config.host || 'X11 Desktop'
-
-  const panel = panelStore.createPanel(config, 'x11-desktop')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createX11DesktopTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-
-  // The X11DesktopTabContent owns CreateSession + X11DesktopConnect.
-  // It runs when the tab mounts and has access to the resolved config.
-}
-
-async function onConnectMonitor(config: ConnectionConfig, prevStart?: any) {
-  connectionStore.add(config)
-
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-  config = resolved
-
-  const panel = panelStore.createPanel(config, 'monitor')
-  const displayTitle = config.name || `${config.user}@${config.host}`
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createMonitorTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  RecordRecentConnection(config.id)
-
-  try {
-    const info = await CreateSession('monitor', config)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e) {
-    console.error('Failed to create monitor session:', e)
-    tabStore.closeTab(tab.id)
-    panelStore.removePanel(panel.id)
-  }
-}
-
-async function onConnectDB(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const resolved = await ensureCredentials(config)
-  if (!resolved) return
-  config = resolved
-
-  if (!config.dbType) {
-    config.dbType = 'mysql'
-  }
-  const displayTitle = config.name || `${config.dbType}:${config.user}@${config.host}`
-
-  const panel = panelStore.createPanel(config, 'database')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createDBTab(displayTitle, panel.id)
-  if (reposition) reposition(tab.id)
-  if (config.dbType === 'redis') {
-    tab.type = 'redis'
-  } else if (config.dbType === 'mongodb') {
-    tab.type = 'mongodb'
-  } else if (config.dbType === 'elasticsearch') {
-    tab.type = 'elasticsearch'
-  }
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-
-  try {
-    let sessionType: string
-    if (config.dbType === 'redis') {
-      sessionType = 'redis'
-    } else if (config.dbType === 'mongodb') {
-      sessionType = 'mongodb'
-    } else if (config.dbType === 'elasticsearch') {
-      sessionType = 'elasticsearch'
-    } else {
-      sessionType = 'database'
-    }
-    const info = await CreateSession(sessionType, config)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e: any) {
-    const errMsg = e?.message || String(e)
-    console.error('Failed to create database session:', errMsg)
-    panelStore.updateStatus(panel.id, 'error')
-    msg.error(`${t('db.connectFailed')}: ${errMsg}`)
-  }
-}
-
-// Force-reconnect a database/redis/mongodb panel from the tab's right-click
-// 「重连」(Reconnect) menu. These sessions are created in App.vue (onConnectDB),
-// so — unlike terminal/desktop panels — no content component owns the lifecycle:
-// close the old session, then create a fresh one and rebind the same panel.
-async function reconnectDatabasePanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
-  const oldId = panel.sessionId
-  if (oldId) {
-    try { await CloseSession(oldId) } catch (_) {}
-  }
-  const cfg = panel.config
-  if (!cfg) return
-  let sessionType = 'database'
-  if (cfg.dbType === 'redis') sessionType = 'redis'
-  else if (cfg.dbType === 'mongodb') sessionType = 'mongodb'
-  else if (cfg.dbType === 'elasticsearch') sessionType = 'elasticsearch'
-  try {
-    const info = await CreateSession(sessionType, cfg)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e: any) {
-    panelStore.updateStatus(panel.id, 'error')
-    msg.error(`${t('db.connectFailed')}: ${e?.message || String(e)}`)
-  }
-}
-
-// Force-reconnect a monitor panel. The session is created in App.vue
-// (onConnectMonitor), so it's re-initiated here like the database panels.
-async function reconnectMonitorPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
-  const oldId = panel.sessionId
-  if (oldId) {
-    try { await CloseSession(oldId) } catch (_) {}
-  }
-  const cfg = panel.config
-  if (!cfg) return
-  try {
-    const info = await CreateSession('monitor', cfg)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e: any) {
-    panelStore.updateStatus(panel.id, 'error')
-    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
-  }
-}
-
-// Force-reconnect a file-transfer panel (sftp/ftp/smb/webdav/s3). Like database
-// and monitor, the session is created in App.vue; its type string equals
-// config.type. The tab content reads the session from the panel reactively.
-async function reconnectSftpPanel(panel: { id: string; sessionId: string | null; config: ConnectionConfig | null }) {
-  const oldId = panel.sessionId
-  if (oldId) {
-    try { await CloseSession(oldId) } catch (_) {}
-  }
-  const cfg = panel.config
-  if (!cfg || !cfg.type) return
-  try {
-    // SSH-based file panels carry the protocol preference on the config; the
-    // file-transfer types (ftp/smb/...) already match their session type.
-    const proto = fileTransferProto(cfg)
-    const sessionType = cfg.type === 'ssh' ? proto : cfg.type
-    const info = await CreateSession(sessionType, cfg)
-    panelStore.bindSession(panel.id, info.id)
-    sessionStore.initSession(info.id)
-  } catch (e: any) {
-    panelStore.updateStatus(panel.id, 'error')
-    msg.error(`${t('tab.reconnectFailed')}: ${e?.message || String(e)}`)
-  }
-}
-
-function onPanelReconnectEvent(e: Event) {
-  const panelId = (e as CustomEvent)?.detail?.panelId
-  if (!panelId) return
-  const panel = panelStore.getPanel(panelId)
-  if (!panel) return
-  // These session types are created in App.vue (not in a content component), so
-  // their right-click 「重连」(Reconnect) is handled here. Terminal and desktop-
-  // protocol panels handle the same event themselves.
-  if (panel.type === 'database') reconnectDatabasePanel(panel)
-  else if (panel.type === 'monitor') reconnectMonitorPanel(panel)
-  else if (panel.type === 'sftp') reconnectSftpPanel(panel)
-}
-
-async function onConnectK8s(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const displayTitle = config.name || 'K8s'
-  const panel = panelStore.createPanel(config, 'k8s')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const nsDefault = config.k8sNamespace || 'default'
-  const tab = tabStore.createK8sTab(displayTitle, panel.id, config.id, nsDefault)
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-}
-
-function onConnectContainer(config: ConnectionConfig, prevStart?: any, persist = true) {
-  if (persist) connectionStore.add(config)
-
-  const displayTitle = config.name || 'Container'
-  const panel = panelStore.createPanel(config, 'container')
-  panelStore.updateTitle(panel.id, displayTitle)
-  const reposition = prevStart ? closeStartAndReposition(prevStart) : null
-  const tab = tabStore.createContainerTab(displayTitle, panel.id, config.id, config.containerRuntime ?? 'docker')
-  if (reposition) reposition(tab.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
-  if (persist) RecordRecentConnection(config.id)
-}
-
 
 // Show/hide native RDP window on tab switch.
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),
@@ -1450,6 +2036,7 @@ watch(
   width: 100%;
   height: 100%;
   background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
   position: relative;
 }
 .main-content {
@@ -1467,18 +2054,16 @@ watch(
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-base);
-  padding: 3px;
 }
 
 .group-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 .group-list .group-item {
-  padding: 10px 14px;
-  border-radius: 6px;
-  cursor: pointer;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-sm);
   transition: background .15s;
 }
 .group-list .group-item:hover {
@@ -1500,7 +2085,7 @@ watch(
   opacity: var(--bg-mask-opacity, 0.6);
 }
 .app-container.has-bg .main-content,
-.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground))),
+.app-container.has-bg .main-content :deep(*:not(:where(.xterm-cursor, [class*="xterm-bg-"], .xterm-selection, .xterm-selection *, .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground, .el-progress-bar__inner, .perf-nav-bar-inner))),
 .app-container.has-bg .app-header,
 .app-container.has-bg :deep(.app-header *) {
   background-color: transparent !important;
@@ -1516,7 +2101,7 @@ watch(
 }
 /* 标签栏毛玻璃 */
 .app-container.has-bg :deep(.app-header) {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 /* 对话框、下拉/右键菜单保持不透明背景（覆盖全局 * 透明规则）*/
 .app-container.has-bg .main-content :deep(.el-dialog),
@@ -1560,6 +2145,105 @@ body > .conn-context-menu {
 .app-container.has-bg .main-content :deep(.el-slider__button) {
   background-color: #ffffff !important;
 }
+/* 进度条/传输面板：背景图下保持可见（通配透明会把 el-progress 轨道和
+   传输面板容器一并抹掉，只剩淡灰小字浮在背景上）。填充色(.el-progress-bar__inner)
+   按状态着色，不能一刀切，已在上方 :where 排除列表里整体豁免 */
+.app-container.has-bg .main-content :deep(.transfer-panel),
+.app-container.has-bg .main-content :deep(.transfer-progress-bar),
+.app-container.has-bg .main-content :deep(.el-progress-bar__outer) {
+  background-color: var(--bg-elevated) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel) {
+  background-color: var(--bg-surface) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel .progress-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.zmodem-transfer-panel .progress-fill) {
+  background-color: var(--accent) !important;
+}
+/* K8s 总览用量条：轨道底色是 color-mix、填充按 ok/warn/danger 着色，
+   不能一刀切，逐级恢复 */
+.app-container.has-bg .main-content :deep(.ov-meter.m-ok) {
+  background-color: color-mix(in srgb, var(--el-color-primary) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter.m-warn) {
+  background-color: color-mix(in srgb, var(--warning) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter.m-danger) {
+  background-color: color-mix(in srgb, var(--el-color-danger) 16%, var(--bg-elevated)) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.ok) {
+  background-color: var(--el-color-primary) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.warn) {
+  background-color: var(--warning) !important;
+}
+.app-container.has-bg .main-content :deep(.ov-meter-fill.danger) {
+  background-color: var(--el-color-danger) !important;
+}
+/* 容器镜像页拉取/推送进度条 */
+.app-container.has-bg .main-content :deep(.task-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.task-bar-fill) {
+  background-color: var(--accent) !important;
+}
+/* K8s 总览：可点行 hover（纯毛玻璃，不改底色）与 pod 状态点着色 */
+.app-container.has-bg .main-content :deep(.ov-clickable:hover) {
+  backdrop-filter: blur(0.875rem);
+}
+.app-container.has-bg .main-content :deep(.state-dot) {
+  background-color: var(--text-muted) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='running']) {
+  background-color: var(--el-color-success) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='pending']) {
+  background-color: var(--warning) !important;
+}
+.app-container.has-bg .main-content :deep(.state-dot[data-state='failed']) {
+  background-color: var(--el-color-danger) !important;
+}
+/* 树形结构选中项（K8s / 容器 / 数据库 / Mongo）：纯毛玻璃高亮，
+   否则背景图下看不出选中了哪一项 */
+.app-container.has-bg .main-content :deep(.table-item.selected),
+.app-container.has-bg .main-content :deep(.db-header.selected) {
+  backdrop-filter: blur(0.875rem);
+}
+/* 监控-性能左侧导航选中项 */
+.app-container.has-bg .main-content :deep(.perf-nav-item.active) {
+  backdrop-filter: blur(0.875rem);
+}
+/* 监控-性能：CPU/磁盘等展开行的百分比条与左侧导航迷你条
+   （.perf-nav-bar-inner 的颜色是行内样式，已在上方 :where 排除）*/
+.app-container.has-bg .main-content :deep(.sub-bar),
+.app-container.has-bg .main-content :deep(.perf-nav-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.sub-fill) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow)) !important;
+}
+/* 监控边栏：CPU/内存/磁盘百分比条（填充是各资源专属渐变，逐个恢复）*/
+.app-container.has-bg .main-content :deep(.mem-bar),
+.app-container.has-bg .main-content :deep(.detail-bar) {
+  background-color: var(--bg-hover) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.cpu) {
+  background: linear-gradient(90deg, #6366f1, #818cf8) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.phys) {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.swap) {
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf) !important;
+}
+.app-container.has-bg .main-content :deep(.mem-fill.disk) {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa) !important;
+}
+.app-container.has-bg .main-content :deep(.detail-fill) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-glow)) !important;
+}
 /* 开背景时，开始页「新建连接」主按钮改用普通按钮样式（透明+blur 与其它按钮一致），
    仅修正文字/边框颜色，避免深色文字糊在图上 */
 .app-container.has-bg .main-content :deep(.start-action-btn.primary) {
@@ -1586,23 +2270,23 @@ body > .conn-context-menu {
 .app-container.has-bg .main-content :deep(.sidebar),
 .app-container.has-bg .main-content :deep(.ai-sidebar),
 .app-container.has-bg .main-content :deep(.companion-sidebar) {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 /* 开始页卡片、按钮毛玻璃 */
 .app-container.has-bg .main-content :deep(.start-card),
 .app-container.has-bg .main-content :deep(.start-action-btn),
 .app-container.has-bg .main-content :deep(.start-action-btn-dropdown-arrow) {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 /* 各类输入框毛玻璃 */
 .app-container.has-bg .main-content :deep(.el-input__wrapper),
 .app-container.has-bg .main-content :deep(.el-textarea__inner),
 .app-container.has-bg .main-content :deep(.el-input-number),
 .app-container.has-bg .main-content :deep(.el-select__wrapper) {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 /* 表格固定列（el-table fixed right/left）：背景图模式下被透明规则抹掉背景，
-   固定列会和下方内容重叠 → 加毛玻璃遮住滚动内容。
+   固定列会和下方内容重叠 → 用毛玻璃遮住滚动内容（透明底 + blur）。
    旧版用 .el-table__fixed 容器，新版(2.5+)用 sticky 单元格 .el-table-fixed-column--*，两种都覆盖。 */
 .app-container.has-bg .main-content :deep(.el-table__fixed-right),
 .app-container.has-bg .main-content :deep(.el-table__fixed),
@@ -1610,15 +2294,14 @@ body > .conn-context-menu {
 .app-container.has-bg .main-content :deep(.el-table-fixed-column--left),
 .app-container.has-bg .main-content :deep(.k8s-action-cell),
 .app-container.has-bg .main-content :deep(.db-action-cell) {
-  background-color: var(--bg-surface) !important;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.875rem);
   pointer-events: auto !important;
   z-index: 3 !important;
 }
 /* 划出面板（K8sDetailDrawer / MonitorTabContent 等）：背景图模式下同样被透明规则抹掉背景，
    加毛玻璃保证内容在背景图上清晰。 */
 .app-container.has-bg .main-content :deep(.detail-drawer) {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 /* 拖拽/等待遮罩：全局透明规则会抹掉底色，这里给几处遮罩恢复颜色，
    保证背景图下 SFTP 拖入、终端拖文件、分屏落位提示、loading 蒙层仍清晰可见 */

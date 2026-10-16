@@ -30,6 +30,8 @@ func Parse(format, srcPath string, opts ParseOptions) (*ImportResult, error) {
 		return parseXshell(data)
 	case FormatMobaXterm:
 		return parseMobaXterm(data)
+	case FormatMRemoteNG:
+		return parseMRemoteNG(data, opts)
 	case FormatWindTerm:
 		return parseWindTerm(data, srcPath, opts)
 	case FormatSecureCRT:
@@ -40,6 +42,8 @@ func Parse(format, srcPath string, opts ParseOptions) (*ImportResult, error) {
 		return parseDBeaver(srcPath, opts)
 	case FormatNavicat:
 		return parseNavicat(srcPath, ParseOptions{})
+	case FormatVirtViewer:
+		return parseVirtViewer(data, srcPath)
 	default:
 		return nil, fmt.Errorf("unknown import format %q", format)
 	}

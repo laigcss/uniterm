@@ -72,9 +72,21 @@ function onDragOver(e: DragEvent) {
   // Allow: panel drags, terminal tab drags (has tab-id + tab-type, NOT workspace)
   const isTerminalTab = hasTab && hasTabType && !hasWorkspace
   if (!hasPanel && !isTerminalTab) return
-  // Reject dragging onto itself (dragged tab id === this tab id)
-  const draggedTabId = e.dataTransfer?.getData('application/tab-id')
-  if (draggedTabId && draggedTabId === props.tab.id) return
+  // The dragged tab hovering its own visible content can only be the active
+  // tab. Switch to the adjacent tab so its content becomes the drop target
+  // for merging into a workspace. The switch happens here — not at dragstart
+  // — so plain tab-bar reorders never lose the selection; if the drag returns
+  // to the tab bar, TabItem's dragend restores the original active tab.
+  const draggingTabId = tabStore.draggingTabId
+  if (draggingTabId && draggingTabId === props.tab.id) {
+    const tabs = tabStore.tabs
+    const fromIdx = tabs.findIndex(t => t.id === draggingTabId)
+    const adjacentTab = tabs[fromIdx - 1] || tabs[fromIdx + 1]
+    if (adjacentTab && tabStore.activeTabId !== adjacentTab.id) {
+      tabStore.setActiveTab(adjacentTab.id)
+    }
+    return
+  }
 
   dragOver.value = true
   e.dataTransfer!.dropEffect = 'move'
@@ -185,7 +197,7 @@ function onDrop(e: DragEvent) {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .drop-zone-overlay {
@@ -201,6 +213,8 @@ function onDrop(e: DragEvent) {
 }
 .dz.active {
   background: var(--accent-glow);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
 }
 .dz-left { left: 0; top: 0; width: 50%; height: 100%; }
 .dz-right { right: 0; top: 0; width: 50%; height: 100%; }

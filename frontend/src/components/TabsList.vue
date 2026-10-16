@@ -8,8 +8,10 @@
 
       <TabItem
         :tab="tab"
+        :shortcut-index="index + 1"
         :is-active="tab.id === activeTabId"
         :has-notification="tabStore.hasTabNotification(tab.id)"
+        :progress="tabStore.getTabProgress(tab.id)"
         @activate="setActiveTab"
         @close="(id: string) => $emit('close-tab', id)"
         @close-batch="(ids: string[]) => $emit('close-tab-batch', ids)"
@@ -24,23 +26,26 @@
       v-if="dragOverTabIndex === tabs.length - 1 && dragOverInsertAfter"
       class="tab-drop-indicator"
     ></div>
-    <!-- Drop indicator at end when dragging over empty tabs area -->
+    <!-- Drop indicator at end when dragging over empty tabs area (renders
+         inline after the last tab, same spot as the per-tab insert-after
+         indicator — no auto margin, which used to fling the + button to the
+         far right edge, #922) -->
     <div
       v-if="dragOverContainer"
-      class="tab-drop-indicator tab-drop-indicator-end"
+      class="tab-drop-indicator"
     ></div>
     <button
       v-if="!showMore"
       class="tab-add-btn"
-      :title="t('startTab.defaultName') + shortcutSuffix('newConnection')"
+      :title="addBtnTitle + shortcutSuffix('newConnection')"
       @click="onAddStartTab"
     >
-      <Plus :size="14" />
+      <Plus :size="'0.875rem'" />
     </button>
   </div>
   <div class="tab-more" v-if="showMore">
-    <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget as HTMLElement)">
-      <el-icon class="tab-more-icon"><MoreHorizontal :size="14" /></el-icon>
+    <span class="tab-more-btn" :title="t('tab.more')" @click.stop="tabMoreRef?.toggle($event.currentTarget)">
+      <el-icon class="tab-more-icon"><MoreHorizontal :size="'0.875rem'" /></el-icon>
     </span>
     <Menu ref="tabMoreRef" v-model:visible="tabMoreVisible" align="end">
       <MenuItem
@@ -54,10 +59,10 @@
     </Menu>
     <button
       class="tab-add-btn"
-      :title="t('startTab.defaultName') + shortcutSuffix('newConnection')"
+      :title="addBtnTitle + shortcutSuffix('newConnection')"
       @click="onAddStartTab"
     >
-      <Plus :size="14" />
+      <Plus :size="'0.875rem'" />
     </button>
   </div>
 </template>
@@ -70,6 +75,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import { isMobilePlatform } from '../utils/platform'
 import TabItem from './TabItem.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -83,7 +89,9 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 // " (Ctrl+Shift+N)" suffix for the new-tab tooltip, '' when unset. Reactive via
 // settingsStore, so the tooltip updates when the user rebinds the shortcut.
+// '' on mobile too — no hardware keyboard, so the hint is meaningless.
 function shortcutSuffix(action: 'newConnection'): string {
+  if (isMobilePlatform()) return ''
   const b = settingsStore.settings.keyboard[action]
   if (!b) return ''
   const key = formatKeyBinding(b, isMac)
@@ -127,16 +135,29 @@ onUnmounted(() => {
   window.removeEventListener('dragend', clearDragState)
 })
 
-defineEmits<{
+const emit = defineEmits<{
   'close-tab': [id: string]
   'close-tab-batch': [ids: string[]]
   'toggle-ai-lock': [panelId: string]
   'tab-dragstart': [e: DragEvent, tabId: string]
+  'new-local-terminal': []
 }>()
 
+// "+" opens the start page by default; the newTabAction setting (issue #1043)
+// switches it (and the newConnection shortcut) to a local terminal instead.
 function onAddStartTab() {
-  tabStore.createStartTab()
+  if (settingsStore.settings.newTabAction === 'localTerminal') {
+    emit('new-local-terminal')
+  } else {
+    tabStore.createStartTab()
+  }
 }
+
+const addBtnTitle = computed(() =>
+  settingsStore.settings.newTabAction === 'localTerminal'
+    ? t('conn.localTerminal')
+    : t('startTab.defaultName')
+)
 
 function onWheel(e: WheelEvent) {
   if (!tabsListRef.value) return
@@ -172,9 +193,26 @@ function scrollToTab(tabId: string) {
 }
 
 function onTabDragOver(e: DragEvent, index: number) {
+  // A terminal-type connection dragged over a workspace tab activates it so
+  // the user can aim at a panel for the connect-and-split drop (drop on the
+  // tab itself opens a new tab at that position instead).
+  if (e.dataTransfer?.types.includes('application/conn-id')) {
+    clearDragState()
+    const tab = tabStore.tabs[index]
+    if (tab.type === 'workspace') tabStore.setActiveTab(tab.id)
+  }
+
   const hasPanel = e.dataTransfer?.types.includes('application/panel-id')
   const hasTab = e.dataTransfer?.types.includes('application/tab-id')
-  if (!hasPanel && !hasTab) return
+  const hasConnOpen = e.dataTransfer?.types.includes('application/conn-open')
+  if (!hasPanel && !hasTab && !hasConnOpen) return
+
+  if (hasConnOpen) {
+    const tab = tabStore.tabs[index]
+    // Keep workspace tabs revealed while aiming at their panels.
+    if (tab.type === 'workspace') tabStore.setActiveTab(tab.id)
+    dragOverContainer.value = false
+  }
 
   dragOverContainer.value = false
   const el = e.currentTarget as HTMLElement
@@ -205,7 +243,8 @@ function clearDragState() {
 function onTabsContainerDragOver(e: DragEvent) {
   const hasPanel = e.dataTransfer?.types.includes('application/panel-id')
   const hasTab = e.dataTransfer?.types.includes('application/tab-id')
-  if (!hasPanel && !hasTab) return
+  const hasConnOpen = e.dataTransfer?.types.includes('application/conn-open')
+  if (!hasPanel && !hasTab && !hasConnOpen) return
 
   // Ignore if hovering over a tab item (handled by onTabDragOver)
   const target = e.target as HTMLElement
@@ -232,8 +271,17 @@ function onTabsContainerDrop(e: DragEvent) {
   const draggedTabId = e.dataTransfer?.getData('application/tab-id')
   const panelId = e.dataTransfer?.getData('application/panel-id')
   const sourceTabId = e.dataTransfer?.getData('application/source-tab-id')
+  const connOpenId = e.dataTransfer?.getData('application/conn-open')
 
   clearDragState()
+
+  // Case 0: Sidebar connection dropped on empty bar area → open at the end
+  if (connOpenId) {
+    window.dispatchEvent(new CustomEvent('app:open-connection-at', {
+      detail: { connId: connOpenId, index: tabs.value.length }
+    }))
+    return
+  }
 
   // Case 1: Tab dragged to empty area → move to end
   if (draggedTabId && !panelId) {
@@ -265,6 +313,15 @@ function onTabDrop(e: DragEvent, targetTabId: string, index: number) {
 
   const insertAfter = dragOverInsertAfter.value
   clearDragState()
+
+  // Sidebar connection dropped between tabs → open a new tab there.
+  const connOpenId = e.dataTransfer?.getData('application/conn-open')
+  if (connOpenId) {
+    window.dispatchEvent(new CustomEvent('app:open-connection-at', {
+      detail: { connId: connOpenId, index: index + (insertAfter ? 1 : 0) }
+    }))
+    return
+  }
 
   const draggedTabId = e.dataTransfer?.getData('application/tab-id')
   const draggedPanelId = e.dataTransfer?.getData('application/panel-id')
@@ -320,18 +377,17 @@ function onTabDrop(e: DragEvent, targetTabId: string, index: number) {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 0 4px;
-  height: 28px;
+  padding: 0 0.25rem;
+  height: 1.75rem;
 }
 .tab-more-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 1px;
@@ -345,33 +401,32 @@ function onTabDrop(e: DragEvent, targetTabId: string, index: number) {
 }
 
 .tab-drop-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
-  border-radius: 1px;
+  margin: 0.25rem 0;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
-.tab-drop-indicator-end {
-  margin-left: auto;
-}
-
+/* 拖到标签条空白处时的"插到末尾"指示条。不带 margin-left:auto——那会把
+   自由空间全吸到自己前面，连着后面的新增 + 按钮一起甩到最右边 (#922)。
+   不加 auto 时它落在最后一个标签之后、+ 按钮之前，与"拖过末尾标签右半"
+   的指示条（onTabDragOver 的 insert-after 分支）位置一致。 */
 .tab-add-btn {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s, color 0.15s;
-  margin-left: 2px;
+  margin-left: 0.125rem;
   --wails-draggable: no-drag;
 }
 .tab-add-btn:hover {

@@ -1,6 +1,6 @@
 # 容器
 
-ai-ops-terminal 内置容器管理界面，支持 **Kubernetes** 集群管理，以及 **Docker / Podman / nerdctl** 容器引擎，可管理本机或 SSH 远程主机上的集群资源与容器镜像。
+uniTerm 内置容器管理界面，支持 **Kubernetes** 集群管理，以及 **Docker / Podman / nerdctl / WSLC** 容器运行时，可管理本机或 SSH 远程主机上的集群资源与容器镜像。
 
 ## Kubernetes
 
@@ -10,13 +10,24 @@ ai-ops-terminal 内置容器管理界面，支持 **Kubernetes** 集群管理，
 
 | 参数 | 说明 |
 |------|------|
-| 来源 | 选择 **本地文件**（指定 kubeconfig 路径）或 **Kubeconfig 文本**（直接粘贴内容） |
+| 配置来源 | **本地文件**（指定 kubeconfig 路径，带文件选择按钮）或 **kubeconfig 文本**（默认收起，点击「显示配置」展开后粘贴内容，可「从文件导入」） |
 | Context | 从 kubeconfig 中选择上下文，可点击「重新加载」刷新列表 |
 | 命名空间 | 默认查看的命名空间，可勾选「全部命名空间」浏览整个集群 |
 | 跳过 TLS 验证 | 跳过 API Server 证书校验（不安全，仅用于自签名测试环境） |
 | SSH 隧道 | 可选，通过 SSH 跳板机访问内网集群 API |
 
 填写后可点击「测试连接」验证 kubeconfig 与网络是否可达。
+
+### 集群总览
+
+进入连接后默认展示集群总览，一屏掌握集群全貌：
+
+- **集群信息** — Kubernetes 版本、当前 Context、命名空间数量
+- **节点** — 节点总数与就绪状态（未就绪节点数高亮）
+- **资源概览** — 工作负载 / 网络 / 存储与配置等资源数量统计
+- **Pod 状态** — 按运行状态分布统计
+- **资源用量** — 集群 CPU / 内存的实际用量与请求量对比（需集群安装 metrics-server）
+- **最近事件** — 最近的告警事件列表，点击资源统计可直接跳转到对应资源列表
 
 ### 资源浏览
 
@@ -25,7 +36,7 @@ ai-ops-terminal 内置容器管理界面，支持 **Kubernetes** 集群管理，
 | 分组 | 资源 |
 |------|------|
 | Workloads | Pods、Deployments、StatefulSets、DaemonSets、ReplicaSets、Jobs、CronJobs、HPAs |
-| Network | Services、Ingresses、Endpoints、NetworkPolicies |
+| Network | Services、Ingresses、Endpoints、NetworkPolicies、Gateways、HTTPRoutes、GRPCRoutes |
 | Config | ConfigMaps、Secrets、ResourceQuotas、LimitRanges |
 | Storage | PVCs、PVs、StorageClasses |
 | RBAC | ServiceAccounts、Roles、RoleBindings、ClusterRoles、ClusterRoleBindings |
@@ -53,33 +64,40 @@ ai-ops-terminal 内置容器管理界面，支持 **Kubernetes** 集群管理，
 - **日志** — 实时跟随 Pod 日志，支持暂停/恢复、时间戳、上一个容器（previous）、自动滚动、换行、清屏
 - **终端** — 直接 exec 进入 Pod 容器，获得交互式 Shell
 
+### 容器文件浏览器
+
+对运行中的 Pod，可打开双栏文件浏览器直接浏览容器内的文件系统，支持在本地与容器之间上传 / 下载文件，传输以任务列表呈现进度（进行中 / 已完成 / 失败），无需手动执行 `kubectl cp`。
+
 ## 容器引擎
 
 ![容器管理](/imgs/container_light.webp)
 
-ai-ops-terminal 支持 **Docker**、**Podman** 和 **nerdctl** 三种容器引擎。
+支持 **Docker**、**Podman**、**nerdctl(containerd)** 和 **WSLC**（Windows WSL2 Container，仅 Windows）四种运行时，新建连接时选择子类型。
 
 ### 连接参数
 
 | 参数 | 说明 |
 |------|------|
-| 传输方式 | **本地** 使用本机安装的容器运行时；**SSH 远程** 复用已有 SSH 连接（含凭据与跳板机）管理远程主机上的容器 |
-| SSH 连接 | 传输方式为 SSH 远程时，选择一个已保存的 SSH 连接作为通道 |
+| 传输方式 | **远程主机 (SSH)**（默认）引用已有 SSH 连接，继承其凭证与跳板机配置管理远程主机上的容器；**本机** 使用本机安装的容器运行时 |
+| SSH 连接 | 传输方式为远程主机时，选择一个已保存的 SSH 连接作为通道 |
 
-> nerdctl 支持在顶部切换 containerd 的 namespace。
+> nerdctl 支持在顶部切换 containerd 的 namespace。WSLC 运行时不提供「重启」「重命名」操作；其镜像分层来自 `image inspect`，只有层摘要（该 CLI 没有 `history` 命令）。
 
 ### 容器管理
 
-顶部标签切换「容器」与「镜像」两个视图。
+左侧树形面板切换「总览」「容器」「镜像」三个视图。
+
+**总览** 显示运行时与主机信息（客户端 / 服务端版本、内核、存储驱动、CPU、内存）以及容器、镜像数量统计。
 
 **容器列表** 显示名称、镜像、状态、端口映射、创建时间，提供以下操作：
 
 - **生命周期** — 启动、停止、重启、暂停、恢复
 - **Exec** — 进入容器交互式终端
+- **目录** — 打开容器文件浏览器，浏览运行中容器的文件系统并上传 / 下载文件（同 Kubernetes 的容器文件浏览器，见上文）
 - **日志** — 查看容器日志输出
 - **重命名** — 修改容器名称
 - **删除** — 确认后移除容器
-- **详情** — 查看概览、命令、网络、挂载、环境变量、状态等信息
+- **详情** — 查看概要、命令、网络、挂载、环境变量、状态等信息
 - **新建容器** — 指定镜像、名称、端口映射、数据卷、环境变量、重启策略、启动命令后创建
 
 ### 镜像管理

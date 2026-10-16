@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,21 +54,39 @@ func (s *MoshSession) Connect(config ConnectionConfig) error {
 	}
 
 	// Step 1: SSH to remote and start mosh-server to get key + UDP port.
-	// 走 dialSSH 统一封装，共享主机密钥校验、cipher 回退与代理拨号。
-	client, err := dialSSH(DialSSHOptions{
-		Host:            config.Host,
-		Port:            config.Port,
-		User:            config.User,
-		AuthMethods:     makeSSHAuthMethods(config, nil),
-		HostKeyStrategy: config.HostKeyStrategy,
-		Timeout:         30 * time.Second,
-		Proxy:           config.Proxy,
-		CipherFallback:  true,
-	})
+	authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, nil)
+	if err != nil {
+		s.setStatus(StatusError)
+		return fmt.Errorf("mosh ssh auth: %w", err)
+	}
+	defer cleanup()
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	algoSet, _, err := resolveSSHAlgorithms(config.SSHAlgorithms)
+	if err != nil {
+		return fmt.Errorf("mosh ssh auth: %w", err)
+	}
+	clientConfig := &ssh.ClientConfig{
+		User:              config.User,
+		Auth:              authMethods,
+		Timeout:           30 * time.Second,
+		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+		Config:            algoSet.config(),
+		HostKeyAlgorithms: algoSet.HostKeys,
+	}
+
+	conn, err := net.DialTimeout("tcp", addr, clientConfig.Timeout)
 	if err != nil {
 		s.setStatus(StatusError)
 		return fmt.Errorf("mosh ssh dial: %w", err)
 	}
+
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
+	if err != nil {
+		conn.Close()
+		s.setStatus(StatusError)
+		return fmt.Errorf("mosh ssh handshake: %w", err)
+	}
+	client := ssh.NewClient(sshConn, chans, reqs)
 
 	key, udpPort, err := startMoshServer(client)
 	if err != nil {
@@ -100,6 +120,7 @@ func (s *MoshSession) Connect(config ConnectionConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
+	s.startEmitLoop()
 	go s.readLoop(ctx)
 	go s.runPostLoginScript(ctx, config.PostLoginScript)
 

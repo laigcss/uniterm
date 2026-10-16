@@ -15,15 +15,23 @@
 
     <!-- Documents -->
     <div v-if="activeSubTab === 'docs'" class="docs-section">
-      <div class="editor-top" :style="{ height: topHeight + 'px' }">
+      <div class="editor-top" :style="editorCollapsed ? {} : { height: topHeight + 'px' }">
         <div class="editor-toolbar">
           <el-radio-group v-model="queryMode" size="small">
-            <el-radio-button label="simple">{{ t('es.querySimple') }}</el-radio-button>
-            <el-radio-button label="dsl">{{ t('es.queryDsl') }}</el-radio-button>
+            <el-radio-button value="simple">{{ t('es.querySimple') }}</el-radio-button>
+            <el-radio-button value="dsl">{{ t('es.queryDsl') }}</el-radio-button>
           </el-radio-group>
           <button class="btn btn-primary btn-sm search-btn" title="Ctrl+Enter" @click="runSearch">{{ t('es.search') }}</button>
+          <button
+            class="btn btn-ghost btn-icon btn-sm editor-collapse-btn"
+            :title="editorCollapsed ? t('common.expand') : t('common.collapse')"
+            @click="editorCollapsed = !editorCollapsed"
+          >
+            <ChevronDown v-if="editorCollapsed" :size="'0.875rem'" />
+            <ChevronUp v-else :size="'0.875rem'" />
+          </button>
         </div>
-        <div v-if="queryMode === 'simple'" class="simple-query-wrap">
+        <div v-if="queryMode === 'simple' && !editorCollapsed" class="simple-query-wrap">
           <input
             v-model="simpleQuery"
             class="search-input"
@@ -31,7 +39,7 @@
             @keydown.enter="runSearch"
           />
         </div>
-        <div v-else class="query-editor-wrap">
+        <div v-else-if="!editorCollapsed" class="query-editor-wrap">
           <SyntaxEditor
             v-model="dslBody"
             lang="json"
@@ -41,7 +49,7 @@
         </div>
       </div>
 
-      <div class="editor-resizer" @mousedown="onTopResizeStart" />
+      <div v-show="!editorCollapsed" class="editor-resizer" @mousedown="onTopResizeStart" />
 
       <div class="editor-bottom">
         <div v-if="queryError" class="error-msg">{{ queryError }}</div>
@@ -60,24 +68,48 @@
             :placeholder="t('db.filterResults')"
           />
           <button class="btn btn-default btn-sm result-toolbar-add" @click="openNewDocument">
-            <Plus :size="14" /> {{ t('es.newDocument') }}
+            <Plus :size="'0.875rem'" /> {{ t('es.newDocument') }}
           </button>
         </div>
 
         <div v-if="columns.length > 0" class="result-grid">
           <div class="result-table-wrap">
-            <el-auto-resizer>
-              <template #default="{ height, width }">
-                <el-table-v2
-                  :columns="v2Columns"
-                  :data="filteredTableData"
-                  :width="width"
-                  :height="height"
-                  :row-height="28"
-                  fixed
-                />
-              </template>
-            </el-auto-resizer>
+            <el-table
+              :data="filteredTableData"
+              border
+              size="small"
+              style="width:100%"
+              class="db-result-table"
+              :empty-text="t('db.noData')"
+              @row-click="onRowClick"
+              @row-dblclick="onRowDblClick"
+            >
+              <el-table-column
+                v-for="col in columns"
+                :key="col"
+                :prop="col"
+                :label="col"
+                :min-width="uiPx(120)"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <span
+                    class="cell-value"
+                    :class="{ 'cell-null': row[col] === null || row[col] === undefined }"
+                  >{{ formatCellValue(row[col]) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column :width="uiPx(80)" fixed="right">
+                <template #default="{ row }">
+                  <button class="btn btn-ghost btn-icon btn-sm" @click.stop="onRowDblClick(row)">
+                    <Pencil :size="'0.875rem'" />
+                  </button>
+                  <button class="btn btn-ghost btn-icon btn-sm danger" @click.stop="deleteDocument(row)">
+                    <Trash2 :size="'0.875rem'" />
+                  </button>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
           <div class="result-footer">
             <span class="result-count" v-if="searchResult">
@@ -91,7 +123,7 @@
               :total="searchResult?.total || 0"
               :current-page="currentPage"
               :pager-count="5"
-              small
+              size="small"
               @size-change="onPageSizeChange"
               @current-change="onPageChange"
             />
@@ -117,10 +149,10 @@
     <el-dialog
       v-model="docDialogVisible"
       :title="docDialogMode === 'create' ? t('es.newDocument') : t('es.editDocument')"
-      width="640px"
+      width="40rem"
       destroy-on-close
     >
-      <el-form label-width="80px">
+      <el-form label-width="5rem">
         <el-form-item v-if="docDialogMode === 'create'" :label="t('es.documentId')">
           <el-input v-model="docEditId" :placeholder="t('es.documentIdAuto')" />
         </el-form-item>
@@ -137,11 +169,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
-import { Pencil, Trash2, Plus } from '@lucide/vue'
+import { ref, computed, onMounted } from 'vue'
+import { Pencil, Trash2, Plus, ChevronUp, ChevronDown } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
+import { uiPx } from '../utils/uiScale'
 import {
   EsSearch,
   EsGetMapping,
@@ -162,7 +196,11 @@ const props = defineProps<{
   indexName: string
 }>()
 
-const topHeight = ref(200)
+// Collapsed shows only the toolbar so the result grid gets the height; on
+// narrow screens (phone or small window) start collapsed. All platforms
+// get the toggle button.
+const editorCollapsed = ref(isNarrowScreen.value)
+const topHeight = ref(isNarrowScreen.value ? 140 : 200)
 const activeSubTab = ref<'docs' | 'mapping' | 'settings'>('docs')
 
 const queryMode = ref<'simple' | 'dsl'>('simple')
@@ -212,38 +250,6 @@ const columns = computed(() => {
   // Prefer _id first, then sorted field names (cap columns)
   const rest = [...cols].filter(c => c !== '_id').sort()
   return ['_id', ...rest].slice(0, 40)
-})
-
-// P1: el-table-v2 虚拟滚动列配置。单击选中行，双击打开文档编辑器。
-const v2Columns = computed<any[]>(() => {
-  const dataCols = columns.value.map((col) => ({
-    key: col,
-    dataKey: col,
-    title: col,
-    width: 150,
-    flexGrow: 1,
-    cellRenderer: ({ cellData, rowData }: { cellData: any; rowData: any }) =>
-      h('span', {
-        class: { 'cell-value': true, 'cell-null': cellData === null || cellData === undefined },
-        onClick: () => onRowClick(rowData),
-        onDblclick: () => onRowDblClick(rowData),
-      }, formatCellValue(cellData)),
-  }))
-  return [
-    ...dataCols,
-    {
-      key: '__actions',
-      dataKey: '__actions',
-      title: '',
-      width: 80,
-      fixed: 'right' as const,
-      cellRenderer: ({ rowData }: { rowData: any }) =>
-        h('div', { class: 'row-actions-v2' }, [
-          h('button', { class: 'btn btn-ghost btn-icon btn-sm', onClick: (e: Event) => { e.stopPropagation(); onRowDblClick(rowData) } }, h(Pencil, { size: 14 })),
-          h('button', { class: 'btn btn-ghost btn-icon btn-sm danger', onClick: (e: Event) => { e.stopPropagation(); deleteDocument(rowData) } }, h(Trash2, { size: 14 })),
-        ]),
-    },
-  ]
 })
 
 const currentPage = computed(() => Math.floor(pageFrom.value / pageSize.value) + 1)
@@ -437,18 +443,17 @@ function onTopResizeStart(e: MouseEvent) {
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  padding: 0 8px;
-  min-height: 32px;
+  padding: 0 0.5rem;
+  min-height: 2rem;
 }
 .iv-tab {
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border: none;
   background: none;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 .iv-tab:hover {
@@ -467,19 +472,19 @@ function onTopResizeStart(e: MouseEvent) {
   min-height: 0;
 }
 .editor-top {
-  padding: 8px;
+  padding: 0.5rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
   overflow: hidden;
 }
 .editor-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
   flex-shrink: 0;
 }
 .search-btn { margin-left: auto; }
@@ -488,8 +493,8 @@ function onTopResizeStart(e: MouseEvent) {
 .search-input {
   width: 100%;
   font-family: var(--font-ui);
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
@@ -501,34 +506,49 @@ function onTopResizeStart(e: MouseEvent) {
 .result-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   flex-shrink: 0;
 }
 .result-toolbar-add { margin-left: auto; }
 .result-filter {
-  width: 200px;
-  padding: 3px 8px;
+  width: 12.5rem;
+  padding: 0.1875rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .result-filter:focus { border-color: var(--accent); }
 .editor-resizer {
-  height: 4px;
+  /* Hover accent floats over the editor's bottom edge (negative margin)
+     so it takes no layout height when idle - matches the tree resizers. */
+  height: 0.25rem;
+  margin-top: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: row-resize;
+  background: transparent;
   flex-shrink: 0;
 }
-.editor-resizer:hover { background: var(--border-subtle); }
+.editor-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
+}
 .editor-bottom {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 0.5rem;
   position: relative;
   overflow: hidden;
 }
@@ -552,44 +572,38 @@ function onTopResizeStart(e: MouseEvent) {
   --el-table-header-text-color: var(--text-secondary);
   --el-table-text-color: var(--text-primary);
   --el-table-bg-color: var(--bg-surface);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .cell-value {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .cell-null {
   color: var(--text-muted);
   font-style: italic;
 }
-.row-actions-v2 {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-.row-actions-v2 :deep(svg) { pointer-events: none; }
 .result-footer {
-  padding-top: 8px;
+  padding-top: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 .result-count {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 .error-msg {
   color: var(--error);
-  padding: 8px;
+  padding: 0.5rem;
   background: var(--error-subtle);
   border-radius: var(--radius-sm);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: pre-wrap;
 }
 .loading-overlay {
@@ -605,47 +619,47 @@ function onTopResizeStart(e: MouseEvent) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-subtle);
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0.125rem solid var(--border-subtle);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: iv-spin 0.8s linear infinite;
 }
 @keyframes iv-spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 12px; color: var(--text-secondary); }
+.loading-text { font-size: 0.75rem; color: var(--text-secondary); }
 
 .select-hint {
-  padding: 16px;
+  padding: 1rem;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 .json-pane {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 0.75rem;
 }
 .json-pre {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
 }
 .tree-loading {
-  padding: 12px;
+  padding: 0.75rem;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .doc-editor {
   width: 100%;
-  height: 320px;
+  height: 20rem;
 }
 </style>

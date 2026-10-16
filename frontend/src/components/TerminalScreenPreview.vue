@@ -43,6 +43,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { getManagedTerminal } from '../services/terminalManager'
+import { getLineHighlightColors, isOverlayHighlightActive } from '../composables/overlayHighlight'
 import { useSettingsStore } from '../stores/settingsStore'
 import { formatTimestampMs, resolveRowMeta } from '../utils/terminalGutter'
 import {
@@ -349,6 +350,8 @@ function show(t: Terminal, sbRect: DOMRect) {
 
   const withNumbers = showLineNumbers.value
   const withTimestamps = showTimestamps.value && managed
+  // Mirror the terminal's gating exactly (attached + enabled).
+  const highlightOn = isOverlayHighlightActive(t)
   const tsFormat = settingsStore.settings.terminal.timestampFormat || 'HH:mm:ss'
   const alternate = buf.type === 'alternate'
   const registry = managed?.lineRegistry
@@ -360,7 +363,12 @@ function show(t: Terminal, sbRect: DOMRect) {
     const bufferLine = start + i
     const line = buf.getLine(bufferLine)
     const isWrapped = line?.isWrapped ?? false
-    const runs = line ? lineToRuns(line, t.cols, palette) : []
+    // Keyword highlight colors, matching what the terminal itself renders
+    // (same rules + palette source as overlayHighlight).
+    const hlColors = line && highlightOn
+      ? getLineHighlightColors(line, t.cols, t.options.theme)
+      : undefined
+    const runs = line ? lineToRuns(line, t.cols, palette, hlColors ? (col) => hlColors[col] : undefined) : []
     // Mirror the gutter's semantics: numbers/timestamps come from the logical
     // line registry; wrapped continuation rows belong to the line above, so
     // they carry no number/timestamp of their own.
@@ -529,8 +537,8 @@ onBeforeUnmount(unbind)
   border: none;
   border-top: 1px solid var(--el-border-color, rgba(255, 255, 255, 0.2));
   border-bottom: 1px solid var(--el-border-color, rgba(255, 255, 255, 0.2));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  padding: 2px 4px;
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.35);
+  padding: 0.125rem 0.25rem;
   box-sizing: content-box;
   /* Frosted glass: translucent background (inline, theme-tinted) + backdrop
      blur so the content beneath the popup shows through, blurred. Keep this
@@ -538,7 +546,7 @@ onBeforeUnmount(unbind)
      -webkit- alias makes the CSS minifier merge the two into the prefixed
      form, which WebView2 (Chromium) does not honor — that silently removed
      the blur in production builds. */
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
   /* Display-only: never intercepts the mouse, so hovering/clicking near it
      keeps working and the preview keeps refreshing underneath. */
   pointer-events: none;
@@ -555,13 +563,13 @@ onBeforeUnmount(unbind)
 .preview-col-time {
   flex: none;
   text-align: right;
-  padding-right: 2px;
+  padding-right: 0.125rem;
 }
 
 .preview-col-num {
   flex: none;
   text-align: right;
-  padding-right: 8px;
+  padding-right: 0.5rem;
 }
 
 .preview-content {

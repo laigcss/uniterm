@@ -2,11 +2,13 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { Clipboard } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
-import { writeClipboard } from './useClipboardWrite'
+import { writeClipboard, readClipboardText } from './useClipboardWrite'
 export interface UseTerminalMenuOptions {
   getSelection: () => string
   onPaste: (text: string) => Promise<void> | void
   onAskAI?: (text: string) => void
+  /** Select the entire scrollback buffer. Host wires it to term.selectAll(). */
+  onSelectAll?: () => void
   /** Position + open the actual menu. The host wires this to its <Menu>
    *  instance (openAt), so the composable stays decoupled from the component
    *  and its viewport clamping lives in Menu. */
@@ -20,6 +22,7 @@ export interface UseTerminalMenuReturn {
   openMenu: (e: MouseEvent) => void
   closeMenu: () => void
   copySelection: () => void
+  selectAll: () => void
   copyAndPaste: () => Promise<void>
   pasteFromClipboard: () => Promise<void>
   askAI: () => void
@@ -42,6 +45,13 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     // Either modifier is accepted so the intent reads the same on macOS (Cmd)
     // and Windows/Linux (Ctrl).
     const forceMenu = e.ctrlKey || e.metaKey
+    if (rightClickAction === 'none' && !forceMenu) {
+      // Issue #1088: leave the click to mouse-tracking terminal apps, but still
+      // swallow the event so the WebView's own context menu doesn't appear.
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
     if (rightClickAction === 'paste' && !forceMenu) {
       e.preventDefault()
       e.stopPropagation()
@@ -74,6 +84,11 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     closeMenu()
   }
 
+  function selectAll() {
+    options.onSelectAll?.()
+    closeMenu()
+  }
+
   async function copyAndPaste() {
     const text = options.getSelection()
     if (text) {
@@ -93,9 +108,10 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
 
   async function pasteFromClipboard() {
     try {
-      // Wails clipboard, not navigator.clipboard.readText() — the latter pops
-      // a system "Paste" confirmation on macOS WKWebView.
-      const text = await Clipboard.Text()
+      // readClipboardText, not navigator.clipboard.readText() — the latter pops
+      // a system "Paste" confirmation on macOS WKWebView. It also retries once
+      // on empty so a transient clipboard lock doesn't kill the paste.
+      const text = await readClipboardText()
       if (text) {
         await options.onPaste(text)
       }
@@ -112,6 +128,7 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     openMenu,
     closeMenu,
     copySelection,
+    selectAll,
     copyAndPaste,
     pasteFromClipboard,
     askAI,

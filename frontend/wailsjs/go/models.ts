@@ -684,6 +684,7 @@ export namespace session {
 	    port: number;
 	    user: string;
 	    authType: string;
+	    kerberosRealm?: string;
 	    identityId?: string;
 	    password?: string;
 	    keyPath?: string;
@@ -732,6 +733,7 @@ export namespace session {
 	    s3UrlStyle?: string;
 	    encoding?: string;
 	    x11Forwarding?: boolean;
+	    agentForwarding?: boolean;
 	    backspaceKey?: string;
 	    telnetNegotiationMode?: string;
 	    localEcho?: boolean;
@@ -763,6 +765,7 @@ export namespace session {
 	        this.port = source["port"];
 	        this.user = source["user"];
 	        this.authType = source["authType"];
+	        this.kerberosRealm = source["kerberosRealm"];
 	        this.identityId = source["identityId"];
 	        this.password = source["password"];
 	        this.keyPath = source["keyPath"];
@@ -811,6 +814,7 @@ export namespace session {
 	        this.s3UrlStyle = source["s3UrlStyle"];
 	        this.encoding = source["encoding"];
 	        this.x11Forwarding = source["x11Forwarding"];
+	        this.agentForwarding = source["agentForwarding"];
 	        this.backspaceKey = source["backspaceKey"];
 	        this.telnetNegotiationMode = source["telnetNegotiationMode"];
 	        this.localEcho = source["localEcho"];
@@ -1433,6 +1437,9 @@ export namespace session {
 	    targetPort?: number;
 	    upstream?: SocksProxy;
 	    autoStart?: boolean;
+	    autoReconnect?: boolean;
+	    reconnectInterval?: number;
+	    reconnectJitter?: number;
 	    groupId?: string;
 	    sortOrder?: number;
 	
@@ -1452,6 +1459,9 @@ export namespace session {
 	        this.targetPort = source["targetPort"];
 	        this.upstream = this.convertValues(source["upstream"], SocksProxy);
 	        this.autoStart = source["autoStart"];
+	        this.autoReconnect = source["autoReconnect"];
+	        this.reconnectInterval = source["reconnectInterval"];
+	        this.reconnectJitter = source["reconnectJitter"];
 	        this.groupId = source["groupId"];
 	        this.sortOrder = source["sortOrder"];
 	    }
@@ -1682,6 +1692,7 @@ export namespace store {
 	
 	export class AISettings {
 	    maxTurns?: number;
+	    fontSize?: number;
 	    models: AIModelConfig[];
 	    activeModelId: string;
 	
@@ -1692,6 +1703,7 @@ export namespace store {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.maxTurns = source["maxTurns"];
+	        this.fontSize = source["fontSize"];
 	        this.models = this.convertValues(source["models"], AIModelConfig);
 	        this.activeModelId = source["activeModelId"];
 	    }
@@ -1846,6 +1858,7 @@ export namespace store {
 	    highlightEnabled?: boolean;
 	    cursorBlink?: boolean;
 	    sessionLogDir?: string;
+	    sessionLogFilename?: string;
 	    wordSeparator?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1865,6 +1878,7 @@ export namespace store {
 	        this.highlightEnabled = source["highlightEnabled"];
 	        this.cursorBlink = source["cursorBlink"];
 	        this.sessionLogDir = source["sessionLogDir"];
+	        this.sessionLogFilename = source["sessionLogFilename"];
 	        this.wordSeparator = source["wordSeparator"];
 	    }
 	}
@@ -2274,4 +2288,3 @@ export namespace update {
 	}
 
 }
-

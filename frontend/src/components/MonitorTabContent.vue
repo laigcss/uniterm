@@ -41,7 +41,7 @@
         <div class="perf-extras">
           <template v-if="selectedPerf === 'cpu'">
             <div class="perf-sub-toggle" @click="showCores = !showCores">
-              <ChevronRight :size="14" class="chev" :class="{ open: showCores }" />
+              <ChevronRight :size="'0.875rem'" class="chev" :class="{ open: showCores }" />
               <span>{{ t('monitor.allCores') }} ({{ cpus.length }})</span>
             </div>
             <div v-if="showCores" class="perf-sub-list">
@@ -55,7 +55,7 @@
 
           <template v-else-if="selectedPerf === 'network'">
             <div class="perf-sub-toggle" @click="showNets = !showNets">
-              <ChevronRight :size="14" class="chev" :class="{ open: showNets }" />
+              <ChevronRight :size="'0.875rem'" class="chev" :class="{ open: showNets }" />
               <span>{{ t('monitor.allNetworks') }} ({{ nets.length }})</span>
             </div>
             <div v-if="showNets" class="perf-sub-list">
@@ -69,13 +69,13 @@
 
           <template v-else-if="selectedPerf === 'disk'">
             <div class="perf-sub-toggle" @click="toggleDisks">
-              <ChevronRight :size="14" class="chev" :class="{ open: showDisks }" />
+              <ChevronRight :size="'0.875rem'" class="chev" :class="{ open: showDisks }" />
               <span>{{ t('monitor.allDisks') }} ({{ mountedDisks.length }})</span>
             </div>
             <div v-if="showDisks" class="perf-sub-list">
               <div v-if="diskLoading" class="perf-sub-empty">{{ t('monitor.loading') }}</div>
-              <div v-for="d in mountedDisks" v-else :key="d.name + d.mountPoint" class="perf-sub-row">
-                <span class="sub-name" :title="d.name">{{ d.mountPoint || d.name }}</span>
+              <div v-for="d in mountedDisks" v-else :key="d.name + d.mountPoint" class="perf-sub-row disk">
+                <span class="sub-name" :title="d.mountPoint || d.name">{{ d.mountPoint || d.name }}</span>
                 <div class="sub-bar"><div class="sub-fill" :style="{ width: fmtWidth(d.usage) }" /></div>
                 <span class="sub-val">{{ d.used }} / {{ d.total }}</span>
               </div>
@@ -121,20 +121,29 @@
         </div>
       </div>
       <el-input v-model="processSearch" :placeholder="t('monitor.searchProcess')" clearable class="process-search" />
-      <el-table :data="filteredProcesses" size="small" height="calc(100% - 40px)" class="process-table" @row-click="onProcessRowClick">
-        <el-table-column prop="pid" label="PID" sortable width="80" />
-        <el-table-column prop="name" :label="t('monitor.processName')" sortable />
-        <el-table-column prop="user" :label="t('monitor.user')" sortable width="100" />
-        <el-table-column prop="state" :label="t('monitor.state')" sortable width="80">
+      <el-table
+        ref="processTableRef"
+        :data="visibleProcesses"
+        size="small"
+        border
+        height="calc(100% - 2.5rem)"
+        class="process-table"
+        @sort-change="onProcessSortChange"
+        @row-click="onProcessRowClick"
+      >
+        <el-table-column prop="pid" label="PID" sortable="custom" :width="uiPx(80)" />
+        <el-table-column prop="name" :label="t('monitor.processName')" sortable="custom" />
+        <el-table-column prop="user" :label="t('monitor.user')" sortable="custom" :width="uiPx(100)" />
+        <el-table-column prop="state" :label="t('monitor.state')" sortable="custom" :width="uiPx(80)">
           <template #default="{ row }">{{ row.state ? String(row.state)[0] : '-' }}</template>
         </el-table-column>
-        <el-table-column prop="cpu" :label="t('monitor.cpu')" sortable width="90">
+        <el-table-column prop="cpu" :label="t('monitor.cpu')" sortable="custom" :width="uiPx(90)">
           <template #default="{ row }">{{ row.cpu }}%</template>
         </el-table-column>
-        <el-table-column prop="mem" :label="t('monitor.mem')" sortable width="90">
+        <el-table-column prop="mem" :label="t('monitor.mem')" sortable="custom" :width="uiPx(90)">
           <template #default="{ row }">{{ row.mem }}%</template>
         </el-table-column>
-        <el-table-column :label="''" width="86" align="center" class-name="proc-act-cell">
+        <el-table-column :label="''" :width="uiPx(86)" align="center" class-name="proc-act-cell">
           <template #default="{ row }">
             <el-button size="small" @click.stop="onTableSignal(row, $event)">
               {{ t('monitor.sendSignal') }}
@@ -152,9 +161,9 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredPorts" size="small" v-loading="loadingPorts" height="calc(100% - 36px)" class="od-table">
-        <el-table-column prop="protocol" :label="t('monitor.port.protocol')" sortable width="90" />
-        <el-table-column prop="localAddr" :label="t('monitor.port.localAddr')" sortable width="160" />
+      <el-table :data="filteredPorts" size="small" border v-loading="loadingPorts" height="calc(100% - 2.25rem)" class="od-table">
+        <el-table-column prop="protocol" :label="t('monitor.port.protocol')" sortable :width="uiPx(90)" />
+        <el-table-column prop="localAddr" :label="t('monitor.port.localAddr')" sortable :width="uiPx(160)" />
         <el-table-column prop="process" :label="t('monitor.port.process')" sortable />
       </el-table>
     </div>
@@ -167,23 +176,23 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredDisks" size="small" v-loading="loadingDisks" height="calc(100% - 36px)" class="od-table">
+      <el-table :data="filteredDisks" size="small" border v-loading="loadingDisks" height="calc(100% - 2.25rem)" class="od-table">
         <el-table-column prop="name" :label="t('monitor.disk.name')" sortable>
           <template #default="{ row }">
             <span :style="{ paddingLeft: (row.name.match(/^ +/)?.[0].length || 0) * 6 + 'px' }">{{ row.name.trim() }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="type" :label="t('monitor.disk.type')" sortable width="90" />
+        <el-table-column prop="type" :label="t('monitor.disk.type')" sortable :width="uiPx(90)" />
         <el-table-column prop="mountPoint" :label="t('monitor.disk.mountPoint')" sortable />
-        <el-table-column prop="size" :label="t('monitor.disk.size')" sortable width="100" />
-        <el-table-column prop="used" :label="t('monitor.disk.used')" sortable width="90" />
-        <el-table-column prop="usage" :label="t('monitor.disk.usage')" sortable width="100">
+        <el-table-column prop="size" :label="t('monitor.disk.size')" sortable :width="uiPx(100)" />
+        <el-table-column prop="used" :label="t('monitor.disk.used')" sortable :width="uiPx(90)" />
+        <el-table-column prop="usage" :label="t('monitor.disk.usage')" sortable :width="uiPx(100)">
           <template #default="{ row }">{{ row.usage ? row.usage + '%' : '-' }}</template>
         </el-table-column>
-        <el-table-column prop="media" :label="t('monitor.disk.media')" sortable width="80" />
-        <el-table-column prop="fsType" :label="t('monitor.disk.fstype')" sortable width="100" />
-        <el-table-column prop="uuid" :label="t('monitor.disk.uuid')" sortable width="180" />
-        <el-table-column prop="vendor" :label="t('monitor.disk.vendor')" sortable width="120" />
+        <el-table-column prop="media" :label="t('monitor.disk.media')" sortable :width="uiPx(80)" />
+        <el-table-column prop="fsType" :label="t('monitor.disk.fstype')" sortable :width="uiPx(100)" />
+        <el-table-column prop="uuid" :label="t('monitor.disk.uuid')" sortable :width="uiPx(180)" />
+        <el-table-column prop="vendor" :label="t('monitor.disk.vendor')" sortable :width="uiPx(120)" />
         <el-table-column prop="model" :label="t('monitor.disk.model')" sortable />
       </el-table>
     </div>
@@ -196,13 +205,13 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredNetCards" size="small" v-loading="loadingNetCards" height="calc(100% - 36px)" class="od-table">
-        <el-table-column prop="name" :label="t('monitor.net.name')" sortable width="120" />
-        <el-table-column prop="state" :label="t('monitor.net.state')" sortable width="90" />
-        <el-table-column prop="mac" :label="t('monitor.net.mac')" sortable width="160" />
-        <el-table-column prop="speed" :label="t('monitor.net.speed')" sortable width="120" />
-        <el-table-column prop="type" :label="t('monitor.net.type')" sortable width="100" />
-        <el-table-column prop="bondMaster" :label="t('monitor.net.bond')" sortable width="120" />
+      <el-table :data="filteredNetCards" size="small" border v-loading="loadingNetCards" height="calc(100% - 2.25rem)" class="od-table">
+        <el-table-column prop="name" :label="t('monitor.net.name')" sortable :width="uiPx(120)" />
+        <el-table-column prop="state" :label="t('monitor.net.state')" sortable :width="uiPx(90)" />
+        <el-table-column prop="mac" :label="t('monitor.net.mac')" sortable :width="uiPx(160)" />
+        <el-table-column prop="speed" :label="t('monitor.net.speed')" sortable :width="uiPx(120)" />
+        <el-table-column prop="type" :label="t('monitor.net.type')" sortable :width="uiPx(100)" />
+        <el-table-column prop="bondMaster" :label="t('monitor.net.bond')" sortable :width="uiPx(120)" />
         <el-table-column prop="ipAddrs" :label="t('monitor.net.ipAddrs')" sortable>
           <template #default="{ row }">{{ row.ipAddrs?.join(', ') || '-' }}</template>
         </el-table-column>
@@ -233,18 +242,18 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="filteredServices" size="small" v-loading="loadingServices" height="calc(100% - 36px)" class="od-table" @row-click="onServiceRowClick">
-        <el-table-column prop="name" :label="t('monitor.service.name')" sortable min-width="220" />
-        <el-table-column prop="active" :label="t('monitor.service.active')" sortable width="100">
+      <el-table :data="filteredServices" size="small" border v-loading="loadingServices" height="calc(100% - 2.25rem)" class="od-table" @row-click="onServiceRowClick">
+        <el-table-column prop="name" :label="t('monitor.service.name')" sortable :min-width="uiPx(220)" />
+        <el-table-column prop="active" :label="t('monitor.service.active')" sortable :width="uiPx(100)">
           <template #default="{ row }">
             <span class="svc-state" :class="serviceStateClass(row)">{{ row.active }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="enabled" :label="t('monitor.service.enabled')" sortable width="110">
+        <el-table-column prop="enabled" :label="t('monitor.service.enabled')" sortable :width="uiPx(110)">
           <template #default="{ row }">{{ row.enabled || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="description" :label="t('monitor.service.description')" min-width="220" show-overflow-tooltip />
-        <el-table-column :label="t('monitor.service.actions')" width="120" align="center">
+        <el-table-column prop="description" :label="t('monitor.service.description')" :min-width="uiPx(220)" show-overflow-tooltip />
+        <el-table-column :label="t('monitor.service.actions')" :width="uiPx(120)" align="center">
           <template #default="{ row }">
             <el-button size="small" @click.stop="onServiceActionMenu(row, $event)">
               {{ t('monitor.service.actions') }}
@@ -262,20 +271,20 @@
           {{ t('monitor.refresh') }}
         </el-button>
       </div>
-      <el-table :data="deviceTreeData" row-key="rowKey" :tree-props="{ children: 'children' }" size="small" v-loading="loadingDevices" height="calc(100% - 36px)" class="od-table">
-        <el-table-column prop="id" :label="t('monitor.device.slot')" sortable width="150" show-overflow-tooltip />
-        <el-table-column prop="class" :label="t('monitor.device.class')" min-width="150" show-overflow-tooltip>
+      <el-table :data="deviceTreeData" row-key="rowKey" :tree-props="{ children: 'children' }" size="small" border v-loading="loadingDevices" height="calc(100% - 2.25rem)" class="od-table">
+        <el-table-column prop="id" :label="t('monitor.device.slot')" sortable :width="uiPx(150)" show-overflow-tooltip />
+        <el-table-column prop="class" :label="t('monitor.device.class')" :min-width="uiPx(150)" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.isGroup">{{ t('monitor.device.cat.' + row.category) }} ({{ row.count }})</span>
             <span v-else>{{ row.class }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="vendor" :label="t('monitor.device.vendor')" sortable min-width="150" show-overflow-tooltip />
-        <el-table-column prop="product" :label="t('monitor.device.device')" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="driver" :label="t('monitor.device.driver')" sortable width="120" show-overflow-tooltip />
-        <el-table-column prop="serial" :label="t('monitor.device.serial')" width="140" show-overflow-tooltip />
-        <el-table-column prop="capacity" :label="t('monitor.device.capacity')" sortable width="100" />
-        <el-table-column prop="rev" :label="t('monitor.device.rev')" width="90" show-overflow-tooltip />
+        <el-table-column prop="vendor" :label="t('monitor.device.vendor')" sortable :min-width="uiPx(150)" show-overflow-tooltip />
+        <el-table-column prop="product" :label="t('monitor.device.device')" :min-width="uiPx(220)" show-overflow-tooltip />
+        <el-table-column prop="driver" :label="t('monitor.device.driver')" sortable :width="uiPx(120)" show-overflow-tooltip />
+        <el-table-column prop="serial" :label="t('monitor.device.serial')" :width="uiPx(140)" show-overflow-tooltip />
+        <el-table-column prop="capacity" :label="t('monitor.device.capacity')" sortable :width="uiPx(100)" />
+        <el-table-column prop="rev" :label="t('monitor.device.rev')" :width="uiPx(90)" show-overflow-tooltip />
       </el-table>
     </div>
 
@@ -343,18 +352,18 @@
         <div v-if="hardwareSensors && !hardwareSensors.hasIpmi" class="health-hint health-bottom-hint">
           {{ t('monitor.health.noIpmi') }}
         </div>
-        <el-table v-if="hardwareSensors && hardwareSensors.sensors.length" :data="filteredSensors" size="small" v-loading="loadingHardwareSensors" height="calc(100% - 36px)" class="od-table health-table">
-          <el-table-column prop="name" :label="t('monitor.health.name')" sortable min-width="160" />
-          <el-table-column prop="value" :label="t('monitor.health.value')" min-width="140" />
-          <el-table-column prop="unit" :label="t('monitor.health.unit')" width="110">
+        <el-table v-if="hardwareSensors && hardwareSensors.sensors.length" :data="filteredSensors" size="small" border v-loading="loadingHardwareSensors" height="calc(100% - 2.25rem)" class="od-table health-table">
+          <el-table-column prop="name" :label="t('monitor.health.name')" sortable :min-width="uiPx(160)" />
+          <el-table-column prop="value" :label="t('monitor.health.value')" :min-width="uiPx(140)" />
+          <el-table-column prop="unit" :label="t('monitor.health.unit')" :width="uiPx(110)">
             <template #default="{ row }">{{ row.unit || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="status" :label="t('monitor.health.status')" width="110">
+          <el-table-column prop="status" :label="t('monitor.health.status')" :width="uiPx(110)">
             <template #default="{ row }">
               <span class="svc-state" :class="sensorStatusClass(row.status)">{{ row.status }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="source" :label="t('monitor.health.source')" width="110" />
+          <el-table-column prop="source" :label="t('monitor.health.source')" :width="uiPx(110)" />
         </el-table>
       </div>
     </div>
@@ -455,7 +464,7 @@
     </div>
 
     <!-- Kill Confirmation Dialog -->
-    <el-dialog append-to-body v-model="killDialogVisible" :title="killType === 'kill' ? t('monitor.forceKill') : t('monitor.kill')" width="360px" align-center>
+    <el-dialog append-to-body v-model="killDialogVisible" :title="killType === 'kill' ? t('monitor.forceKill') : t('monitor.kill')" width="22.5rem" align-center>
       <p>{{ killMessage }}</p>
       <template #footer>
         <el-button @click="killDialogVisible = false">{{ t('common.cancel') }}</el-button>
@@ -464,7 +473,7 @@
     </el-dialog>
 
     <!-- Service Action Confirmation Dialog -->
-    <el-dialog append-to-body v-model="serviceDialogVisible" :title="serviceActionCmd ? t('monitor.service.' + serviceActionCmd) : ''" width="360px" align-center>
+    <el-dialog append-to-body v-model="serviceDialogVisible" :title="serviceActionCmd ? t('monitor.service.' + serviceActionCmd) : ''" width="22.5rem" align-center>
       <p>{{ serviceActionMessage }}</p>
       <template #footer>
         <el-button @click="serviceDialogVisible = false">{{ t('common.cancel') }}</el-button>
@@ -475,7 +484,7 @@
     <!-- Service Detail Drawer (slides out like the process detail drawer);
          two tabs: properties detail / k8s-style journal logs -->
     <div class="detail-drawer-backdrop" :class="{ open: serviceDetailVisible }" @click="serviceDetailVisible = false"></div>
-    <div class="detail-drawer" :class="{ open: serviceDetailVisible }" :style="serviceDetailVisible ? { width: svcDrawerWidth + 'px' } : undefined">
+    <div ref="svcDrawerEl" class="detail-drawer" :class="{ open: serviceDetailVisible }" :style="serviceDetailVisible ? { width: svcDrawerWidth + 'px' } : undefined">
       <div class="svc-resizer" @mousedown="onServiceResizeStart"></div>
       <div class="detail-drawer-header">
         <span class="detail-drawer-title">{{ serviceDetailName }}</span>
@@ -521,7 +530,7 @@
           @contextmenu="showContextMenu"
         >
           <div v-for="(l, i) in serviceLogLines" :key="i" class="log-line"><span class="log-ts">{{ l.ts }}</span>{{ l.msg }}</div>
-          <div v-if="!loadingServiceLogs && serviceLogLines.length === 0" class="health-hint" style="padding: 8px 0;">{{ t('monitor.service.noLogs') }}</div>
+          <div v-if="!loadingServiceLogs && serviceLogLines.length === 0" class="health-hint" style="padding: 0.5rem 0;">{{ t('monitor.service.noLogs') }}</div>
         </div>
       </div>
     </div>
@@ -559,6 +568,7 @@ import { msg } from '../services/message'
 import { Close, RefreshRight } from '@element-plus/icons-vue'
 import { ChevronRight } from '@lucide/vue'
 import { useI18n } from '../i18n'
+import { uiPx } from '../utils/uiScale'
 
 import Menu from './Menu.vue'
 import { Events } from '@wailsio/runtime'
@@ -607,6 +617,10 @@ const currentSwap = ref({ total: 0, used: 0, usage: 0 })
 const currentDisk = ref({ total: '', used: '', usage: 0 })
 const currentNet = ref({ rx: 0, tx: 0, rxTotal: 0, txTotal: 0 })
 const processList = ref<any[]>([])
+const processTableRef = ref<any>(null)
+// False while the component is hidden by KeepAlive: the full process payload
+// is skipped instead of being rendered in a hidden pane.
+const monitorActive = ref(true)
 const systemInfo = ref<Record<string, any> | null>(null)
 
 // Expandable detail lists: per-core / per-NIC (live from perf payload) and
@@ -673,14 +687,22 @@ const loadingServiceLogs = ref(false)
 const logViewerRef = ref<HTMLElement | null>(null)
 
 // Drawer width (draggable via the left-edge resizer, same as the k8s drawer;
-// not persisted across sessions).
+// not persisted across sessions). Max width tracks the actual parent container
+// (not the window) so the drawer never extends past the container's left edge
+// on any screen size.
+const svcDrawerEl = ref<HTMLElement | null>(null)
 const svcDrawerWidth = ref(420)
 let svcResizeStartX = 0
 let svcResizeStartW = 0
 
+function maxSvcDrawerWidth() {
+  const parent = svcDrawerEl.value?.parentElement
+  return parent ? Math.max(320, parent.clientWidth - 40) : window.innerWidth - 120
+}
+
 function onServiceResizeMove(e: MouseEvent) {
   const dx = svcResizeStartX - e.clientX
-  svcDrawerWidth.value = Math.max(320, Math.min(window.innerWidth - 120, svcResizeStartW + dx))
+  svcDrawerWidth.value = Math.max(320, Math.min(maxSvcDrawerWidth(), svcResizeStartW + dx))
 }
 
 function onServiceResizeEnd() {
@@ -846,6 +868,14 @@ function fmtWidth(v: unknown): string {
   return Math.min(100, Math.max(0, n)) + '%'
 }
 
+// --- Process table ----------------------------------------------------------
+// The poll now delivers the FULL process list, which can be thousands of rows.
+// Like the SFTP file list, only a bounded slice is handed to el-table and it
+// grows as the user scrolls near the bottom; search and sort always operate
+// on the complete list.
+const PAGE_SIZE = 200
+const NEAR_BOTTOM_PX = 300
+
 const filteredProcesses = computed(() => {
   const q = processSearch.value.trim().toLowerCase()
   if (!q) return processList.value
@@ -854,6 +884,61 @@ const filteredProcesses = computed(() => {
     String(p.user).toLowerCase().includes(q) ||
     String(p.pid).includes(q)
   )
+})
+
+// Client-side sort over the full (filtered) list; el-table's own sort would
+// only order the rendered slice.
+const processSortState = ref<{ prop: string; order: string } | null>(null)
+
+function onProcessSortChange({ prop, order }: { prop: string; order: string | null }) {
+  processSortState.value = order ? { prop, order } : null
+}
+
+const sortedProcesses = computed(() => {
+  const list = [...filteredProcesses.value]
+  const s = processSortState.value
+  if (!s) return list
+  const dir = s.order === 'descending' ? -1 : 1
+  return list.sort((a: any, b: any) => {
+    const av = a[s.prop]
+    const bv = b[s.prop]
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+    return String(av ?? '').localeCompare(String(bv ?? '')) * dir
+  })
+})
+
+const processVisiblePages = ref(1)
+const visibleProcesses = computed(() => sortedProcesses.value.slice(0, processVisiblePages.value * PAGE_SIZE))
+
+let processScrollWrapEl: HTMLElement | null = null
+
+function bindProcessTableScroll() {
+  const el = (processTableRef.value?.$el ?? null) as HTMLElement | null
+  processScrollWrapEl = el?.querySelector('.el-scrollbar__wrap') ?? null
+  if (processScrollWrapEl && !processScrollWrapEl.dataset.lazyBinded) {
+    processScrollWrapEl.dataset.lazyBinded = '1'
+    processScrollWrapEl.addEventListener('scroll', onProcessTableScroll, { passive: true })
+  }
+}
+
+function onProcessTableScroll() {
+  // Defer to the next frame so the threshold is computed against the scroll
+  // height AFTER any just-triggered batch has been added to the DOM.
+  requestAnimationFrame(loadMoreProcessesIfNeeded)
+}
+
+function loadMoreProcessesIfNeeded() {
+  if (!processScrollWrapEl) return
+  const { scrollTop, clientHeight, scrollHeight } = processScrollWrapEl
+  if (scrollHeight - scrollTop - clientHeight < NEAR_BOTTOM_PX) {
+    processVisiblePages.value += 1
+  }
+}
+
+// New search text restarts at the top. Incoming poll data must NOT reset the
+// scroll position, so this watches only the filter.
+watch(processSearch, () => {
+  processVisiblePages.value = 1
 })
 
 const filteredPorts = computed(() => {
@@ -1160,13 +1245,23 @@ async function fetchPorts() {
   }
 }
 
+let diskFetchRetried = false
 async function fetchDisks() {
   loadingDisks.value = true
   try {
     diskList.value = await GetDisks(props.sessionId)
+    diskFetchRetried = false
   } catch (e: any) {
     msg.error(e?.message || 'Failed to fetch disks')
     diskList.value = []
+    // The monitor session may still be connecting on the first attempt;
+    // retry once so the list shows without a manual refresh.
+    if (!diskFetchRetried) {
+      diskFetchRetried = true
+      setTimeout(() => {
+        if (diskList.value.length === 0 && activeTab.value === 'disks') fetchDisks()
+      }, 3000)
+    }
   } finally {
     loadingDisks.value = false
   }
@@ -1447,6 +1542,9 @@ onMounted(() => {
   clockNow.value = Date.now()
   clockTimer = window.setInterval(() => { clockNow.value = Date.now() }, 1000)
 
+  // Progressive process list: grow the rendered slice on scroll.
+  bindProcessTableScroll()
+
   unlisten =Events.On('session:data', (ev) => { const data: any = ev.data;
     if (data?.id !== props.sessionId) return
     try {
@@ -1480,7 +1578,6 @@ onMounted(() => {
         if (Array.isArray(payload.cpus)) cpus.value = payload.cpus
       }
       if (payload.type === 'processes' && payload.processes) {
-        processList.value = payload.processes
         if (payload.summary) {
           if (payload.summary.cpu) {
             processSummaryCpu.value = payload.summary.cpu
@@ -1488,6 +1585,12 @@ onMounted(() => {
           if (payload.summary.memory) {
             processSummaryMem.value = payload.summary.memory
           }
+        }
+        // The full listing can be thousands of rows — only feed it into the
+        // reactive tree (and the table) while the processes pane is actually
+        // on screen, so hidden panes never re-render it.
+        if (monitorActive.value && activeTab.value === 'processes') {
+          processList.value = payload.processes
         }
       }
       nextTick(drawChart)
@@ -1501,12 +1604,14 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  monitorActive.value = true
   // Sync active tab when component is reactivated from KeepAlive cache
   SetMonitorActiveTab(props.sessionId, activeTab.value).catch(() => {})
   SetMonitorPaused(props.sessionId, false).catch(() => {})
 })
 
 onDeactivated(() => {
+  monitorActive.value = false
   // Pause data collection when component is hidden by KeepAlive
   SetMonitorPaused(props.sessionId, true).catch(() => {})
 })
@@ -1570,13 +1675,12 @@ watch(activeTab, (tab) => {
 }
 
 .tab-item {
-  padding: 8px 20px;
-  font-size: 13px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.8125rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 
@@ -1601,18 +1705,17 @@ watch(activeTab, (tab) => {
 }
 
 .perf-sidebar {
-  width: 180px;
+  width: 11.25rem;
   flex-shrink: 0;
   border-right: 1px solid var(--border-subtle);
-  padding: 8px;
+  padding: 0.5rem;
   overflow-y: auto;
 }
 
 .perf-nav-item {
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
   transition: background 0.12s ease;
 }
 
@@ -1625,28 +1728,28 @@ watch(activeTab, (tab) => {
 }
 
 .perf-nav-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-ui);
 }
 
 .perf-nav-value {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   font-family: var(--font-mono);
-  margin: 4px 0;
+  margin: 0.25rem 0;
 }
 
 .perf-nav-bar {
-  height: 4px;
+  height: 0.25rem;
   background: var(--bg-hover);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .perf-nav-bar-inner {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 
@@ -1654,20 +1757,20 @@ watch(activeTab, (tab) => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 20px;
+  padding: 1rem 1.25rem;
   overflow-y: auto;
   min-height: 0;
 }
 
 .perf-big-value {
-  font-size: 48px;
+  font-size: 3rem;
   font-weight: 700;
   font-family: var(--font-mono);
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 
 .perf-chart {
-  height: 180px;
+  height: 11.25rem;
   width: 100%;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
@@ -1675,27 +1778,27 @@ watch(activeTab, (tab) => {
 
 .perf-details {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border-subtle);
 }
 
 .perf-detail-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .detail-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
 }
 
 .detail-value {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   font-family: var(--font-mono);
   user-select: text;
@@ -1703,21 +1806,20 @@ watch(activeTab, (tab) => {
 
 /* Expandable per-core / per-NIC / per-disk lists */
 .perf-extras {
-  margin-top: 18px;
-  padding-top: 12px;
+  margin-top: 1.125rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border-subtle);
 }
 .perf-sub-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  font-size: 12px;
+  gap: 0.25rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
   font-family: var(--font-ui);
   user-select: none;
-  padding: 2px 0 6px;
+  padding: 0.125rem 0 0.375rem;
 }
 .perf-sub-toggle:hover { color: var(--text-primary); }
 .perf-sub-toggle .chev { transition: transform 0.15s ease; }
@@ -1725,18 +1827,18 @@ watch(activeTab, (tab) => {
 .perf-sub-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 220px;
+  gap: 0.25rem;
+  max-height: 13.75rem;
   overflow-y: auto;
 }
 .perf-sub-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 12px;
+  gap: 0.625rem;
+  font-size: 0.75rem;
   min-width: 0;
-  padding: 1px 4px;
-  border-radius: 4px;
+  padding: 1px 0.25rem;
+  border-radius: var(--radius-sm);
   transition: background 0.12s ease;
 }
 .perf-sub-row:hover {
@@ -1744,7 +1846,7 @@ watch(activeTab, (tab) => {
 }
 .sub-name {
   flex: 1;
-  min-width: 60px;
+  min-width: 3.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1753,20 +1855,20 @@ watch(activeTab, (tab) => {
 }
 .sub-bar {
   flex: 1;
-  height: 6px;
-  max-width: 160px;
-  border-radius: 999px;
+  height: 0.375rem;
+  max-width: 10rem;
+  border-radius: 62.4375rem;
   background: var(--bg-hover);
   overflow: hidden;
 }
 .sub-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
   background: linear-gradient(90deg, var(--accent), var(--accent-glow));
   transition: width 0.3s ease;
 }
 .sub-val {
-  min-width: 56px;
+  min-width: 3.5rem;
   text-align: right;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -1774,39 +1876,55 @@ watch(activeTab, (tab) => {
 }
 .sub-val.tx { color: #f59e0b; }
 .perf-sub-row.net .sub-val {
-  width: 104px;
+  width: 6.5rem;
   min-width: 0;
   text-align: right;
   white-space: nowrap;
 }
+/* Disk rows: fixed name/bar columns so bars and values line up across rows
+   regardless of how long the mount point or the used/total string is. */
+.perf-sub-row.disk .sub-name {
+  flex: 0 0 9rem;
+}
+.perf-sub-row.disk .sub-bar {
+  flex: 0 0 7rem;
+  max-width: 7rem;
+}
+.perf-sub-row.disk .sub-val {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .perf-sub-empty {
-  padding: 8px 0;
+  padding: 0.5rem 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Processes pane */
 .processes-pane {
   flex-direction: column;
-  padding: 12px;
+  padding: 0.75rem;
 }
 
 .process-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
   flex-shrink: 0;
 }
 
 .process-summary {
   display: flex;
-  gap: 20px;
-  padding: 8px 12px;
+  gap: 1.25rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   flex: 1;
 }
@@ -1814,22 +1932,22 @@ watch(activeTab, (tab) => {
 .summary-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 60px;
+  gap: 0.125rem;
+  min-width: 3.75rem;
   justify-content: center;
 }
 
 .summary-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
   text-transform: uppercase;
-  height: 14px;
-  line-height: 14px;
+  height: 0.875rem;
+  line-height: 0.875rem;
 }
 
 .summary-value {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -1840,8 +1958,8 @@ watch(activeTab, (tab) => {
 }
 
 .process-search {
-  width: 280px;
-  margin-bottom: 8px;
+  width: 17.5rem;
+  margin-bottom: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -1856,25 +1974,25 @@ watch(activeTab, (tab) => {
 
 /* System pane */
 .system-pane {
-  padding: 20px;
+  padding: 1.25rem;
   overflow-y: auto;
 }
 
 .system-content {
-  max-width: 600px;
+  max-width: 37.5rem;
 }
 
 .system-group {
-  margin-bottom: 24px;
+  margin-bottom: 1.5rem;
 }
 
 .system-group-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1887,8 +2005,8 @@ watch(activeTab, (tab) => {
 .system-row {
   display: flex;
   align-items: baseline;
-  padding: 8px 0;
-  gap: 40px;
+  padding: 0.5rem 0;
+  gap: 2.5rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1897,16 +2015,16 @@ watch(activeTab, (tab) => {
 }
 
 .system-row-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
   flex-shrink: 0;
-  width: 120px;
-  min-width: 120px;
+  width: 7.5rem;
+  min-width: 7.5rem;
 }
 
 .system-row-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   font-family: var(--font-mono);
   word-break: break-all;
@@ -1921,7 +2039,7 @@ watch(activeTab, (tab) => {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* Process detail drawer */
@@ -1934,14 +2052,14 @@ watch(activeTab, (tab) => {
 .process-detail .detail-section {
   flex: 1;
   overflow-y: auto;
-  padding: 0 16px;
+  padding: 0 1rem;
 }
 
 .process-detail .detail-row {
   display: flex;
-  padding: 10px 0;
+  padding: 0.625rem 0;
   border-bottom: 1px solid var(--border-subtle);
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .process-detail .detail-row:last-child {
@@ -1949,16 +2067,16 @@ watch(activeTab, (tab) => {
 }
 
 .process-detail .detail-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-family: var(--font-ui);
   flex-shrink: 0;
-  width: 100px;
-  min-width: 100px;
+  width: 6.25rem;
+  min-width: 6.25rem;
 }
 
 .process-detail .detail-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   font-family: var(--font-mono);
   word-break: break-all;
@@ -1974,16 +2092,16 @@ watch(activeTab, (tab) => {
 .process-detail .io-stats {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .process-detail .detail-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
   border-top: 1px solid var(--border-subtle);
-  margin-top: 12px;
+  margin-top: 0.75rem;
 }
 
 .process-detail-empty {
@@ -1992,7 +2110,7 @@ watch(activeTab, (tab) => {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* Detail drawer (inside monitor-tab) */
@@ -2016,7 +2134,8 @@ watch(activeTab, (tab) => {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 420px;
+  width: 26.25rem;
+  max-width: 100%;
   background: var(--bg-elevated);
   border-left: 1px solid var(--border-subtle);
   transform: translateX(100%);
@@ -2034,13 +2153,13 @@ watch(activeTab, (tab) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .detail-drawer-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -2051,13 +2170,13 @@ watch(activeTab, (tab) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   flex-shrink: 0;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .od-search {
-  width: 240px;
+  width: 15rem;
 }
 
 .ports-pane,
@@ -2079,15 +2198,25 @@ watch(activeTab, (tab) => {
   user-select: text;
 }
 
+/* Column drag-resize only works in el-table's border mode; hide the vertical
+   grid lines it adds so the tables keep their original look. */
+.monitor-tab :deep(.el-table--border .el-table__cell) {
+  border-right: none;
+}
+.monitor-tab :deep(.el-table--border::after),
+.monitor-tab :deep(.el-table--border::before) {
+  display: none;
+}
+
 /* Services / devices / hardware health */
 .svc-state {
   font-variant-numeric: tabular-nums;
 }
 .svc-state.state-ok {
-  color: #67c23a;
+  color: var(--success);
 }
 .svc-state.state-bad {
-  color: #f56c6c;
+  color: var(--error);
 }
 .svc-state.state-idle {
   color: var(--text-muted);
@@ -2103,13 +2232,13 @@ watch(activeTab, (tab) => {
 .health-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 0 12px;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
 }
 
 .health-card {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -2117,13 +2246,13 @@ watch(activeTab, (tab) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   flex-shrink: 0;
 }
 
 .health-card-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -2131,16 +2260,16 @@ watch(activeTab, (tab) => {
 .health-card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .health-search {
-  width: 180px;
+  width: 11.25rem;
 }
 
 .health-card-body {
-  padding: 0 12px 10px;
-  min-height: 24px;
+  padding: 0 0.75rem 0.625rem;
+  min-height: 1.5rem;
 }
 
 .health-bottom {
@@ -2151,7 +2280,7 @@ watch(activeTab, (tab) => {
 }
 
 .health-bottom-hint {
-  padding: 0 12px 12px;
+  padding: 0 0.75rem 0.75rem;
 }
 
 /* Single-column label/value grid for FRU and IPMI LAN blocks */
@@ -2168,7 +2297,7 @@ watch(activeTab, (tab) => {
 .health-hint {
   flex: 1;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Service drawer: detail/logs tabs and the k8s-style log viewer */
@@ -2178,7 +2307,7 @@ watch(activeTab, (tab) => {
   top: 0;
   left: 0;
   bottom: 0;
-  width: 5px;
+  width: 0.3125rem;
   cursor: col-resize;
   z-index: 101;
   background: transparent;
@@ -2191,19 +2320,18 @@ watch(activeTab, (tab) => {
 
 .svc-drawer-tabs {
   display: flex;
-  gap: 4px;
-  padding: 0 12px;
+  gap: 0.25rem;
+  padding: 0 0.75rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .svc-tab {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  cursor: pointer;
   user-select: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 0.125rem solid transparent;
 }
 
 .svc-tab.active {
@@ -2233,8 +2361,8 @@ watch(activeTab, (tab) => {
 .svc-logs-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
   flex-shrink: 0;
   /* wrap instead of squeezing controls (same as the k8s log toolbar) */
   flex-wrap: wrap;
@@ -2249,7 +2377,7 @@ watch(activeTab, (tab) => {
 }
 
 .svc-log-lines {
-  width: 60px;
+  width: 3.75rem;
   flex-shrink: 0;
 }
 
@@ -2257,9 +2385,9 @@ watch(activeTab, (tab) => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 0.75rem;
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--bg-base);
   user-select: text;
 }
@@ -2278,7 +2406,7 @@ watch(activeTab, (tab) => {
 
 .svc-log-viewer .log-ts {
   color: var(--text-muted);
-  margin-right: 8px;
+  margin-right: 0.5rem;
 }
 
 .svc-log-viewer .log-ts:empty {

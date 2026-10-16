@@ -1,321 +1,171 @@
 <template>
   <div class="container-tab">
-    <div class="container-toolbar">
-      <el-select
-        v-if="session?.runtime === 'nerdctl'"
-        :model-value="session.namespace"
-        size="small"
-        style="width: 140px"
-        filterable
-        allow-create
-        @change="onNamespaceChange"
-      >
-        <el-option v-for="ns in namespaceOptions" :key="ns" :label="ns" :value="ns" />
-      </el-select>
-      <el-input
-        v-model="filter"
-        size="small"
-        :placeholder="t('k8s.filter')"
-        clearable
-        style="width: 200px"
-      />
-      <div class="toolbar-spacer" />
-      <el-button size="small" @click="createOpen = true">{{ t('container.create') }}</el-button>
-      <el-button size="small" :icon="RefreshCw" @click="store.refresh(tab.id)" />
-      <el-radio-group :model-value="view" size="small" @change="onViewChange">
-        <el-radio-button value="containers">{{ t('container.containers') }}</el-radio-button>
-        <el-radio-button value="images">{{ t('container.images') }}</el-radio-button>
-      </el-radio-group>
-    </div>
-
     <div v-if="session?.error" class="container-error">{{ session.error }}</div>
     <div v-else-if="!session || session.loading" class="container-loading">{{ t('container.loading') }}</div>
 
-    <template v-else>
-      <div v-show="view === 'containers'" class="container-table-wrap">
-        <el-table
-          :data="filteredContainers"
-          size="small"
-          height="calc(100% - 40px)"
-          class="k8s-list-table"
-          border
-          @row-click="openDetail"
-        >
-          <el-table-column :label="t('container.colName')" min-width="180" sortable :sort-method="(a, b) => a.name.localeCompare(b.name)" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span>{{ row.name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('container.colImage')" min-width="220" sortable :sort-method="(a, b) => a.image.localeCompare(b.image)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.image }}</template>
-          </el-table-column>
-          <el-table-column
-            :label="t('container.colState')"
-            width="110"
-            sortable
-            :sort-method="(a, b) => a.state.localeCompare(b.state)"
-            :filters="stateFilters"
-            :filter-method="(val, row) => row.state === val"
-          >
-            <template #default="{ row }">
-              <span :data-state="row.state" class="container-state">{{ row.state }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('container.colPorts')" min-width="160" sortable :sort-method="(a, b) => a.ports.localeCompare(b.ports)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.ports }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colCreated')" min-width="130" sortable :sort-method="(a, b) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.createdAt }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colActions')" width="172" fixed="right" class-name="k8s-action-cell">
-            <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.exec')" @click.stop="openExec(row as ContainerInfo)">
-                <SquareTerminal :size="14" />
-              </button>
-              <button class="btn btn-ghost btn-icon btn-sm" :title="t('container.logs')" @click.stop="openLogs(row as ContainerInfo)">
-                <ScrollText :size="14" />
-              </button>
-              <button v-if="row.state !== 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.start')" @click.stop="runAction(row as ContainerInfo, 'start')">
-                <Play :size="14" />
-              </button>
-              <button v-if="row.state === 'running'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.stop')" @click.stop="runAction(row as ContainerInfo, 'stop')">
-                <Square :size="14" />
-              </button>
-              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.restart')" @click.stop="runAction(row as ContainerInfo, 'restart')">
-                <Power :size="14" />
-              </button>
-              <button v-if="session?.runtime !== 'wslc'" class="btn btn-ghost btn-icon btn-sm" :title="t('container.rename')" @click.stop="onRename(row as ContainerInfo)">
-                <Pencil :size="14" />
-              </button>
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.remove')" @click.stop="onRemove(row as ContainerInfo)">
-                <Trash2 :size="14" />
-              </button>
-            </template>
-          </el-table-column>
-        </el-table>
+    <div v-else class="db-main" :class="{ 'm-tree-host': isNarrowScreen }">
+      <div v-if="isNarrowScreen && treeOpen" class="m-tree-overlay" @click="treeOpen = false" />
+      <div
+        v-show="isNarrowScreen || treeOpen"
+        class="db-left"
+        :class="{ 'm-tree': isNarrowScreen, 'm-tree-open': isNarrowScreen && treeOpen }"
+        :style="isNarrowScreen ? {} : { width: leftWidth + 'px' }"
+      >
+        <ContainerTree v-model="view" />
       </div>
-
-      <div v-show="view === 'images'" class="container-table-wrap">
-        <el-table
-          :data="filteredImages"
-          size="small"
-          height="calc(100% - 80px)"
-          class="k8s-list-table"
-          border
+      <div v-if="!isNarrowScreen && treeOpen" class="db-resizer" @mousedown="onResizeStart" />
+      <div class="db-right">
+        <OverviewView
+          v-if="view === 'overview'"
+          :tab="tab"
+          :session="session"
+          @show-state="onShowState"
+          @show-images="view = 'images'"
         >
-          <el-table-column :label="t('container.colRepository')" min-width="220" sortable :sort-method="(a, b) => a.repository.localeCompare(b.repository)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.repository }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colTag')" min-width="140" sortable :sort-method="(a, b) => a.tag.localeCompare(b.tag)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.tag }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colId')" width="130">
-            <template #default="{ row }">{{ shortId(row.id) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colSize')" width="110" sortable :sort-method="(a, b) => a.size.localeCompare(b.size)">
-            <template #default="{ row }">{{ row.size }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colCreated')" min-width="130" sortable :sort-method="(a, b) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.createdAt }}</template>
-          </el-table-column>
-          <el-table-column :label="t('container.colActions')" width="38" fixed="right" class-name="k8s-action-cell">
-            <template #default="{ row }">
-              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('container.removeImage')" @click.stop="onRemoveImage(row as ContainerImage)">
-                <Trash2 :size="14" />
-              </button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="pull-actions">
-          <el-input v-model="pullImage" size="small" :placeholder="t('container.pullPlaceholder')" style="width: 320px" @keyup.enter="onPull" />
-          <el-button size="small" :loading="pulling" @click="onPull">{{ t('container.pull') }}</el-button>
-        </div>
-        <div v-if="pullLines.length" class="pull-log">
-          <div v-for="(l, i) in pullLines" :key="i" class="log-line">{{ l }}</div>
-        </div>
+          <template #toggle>
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
+          </template>
+        </OverviewView>
+        <!-- v-show 常驻：切换视图不销毁组件，进行中的拉取/推送任务面板跨视图存活 -->
+        <ContainersView
+          v-show="view === 'containers'"
+          :tab="tab"
+          :session="session"
+          :image-filter="imageFilter"
+          :state-filter="stateFilter"
+          @clear-image-filter="imageFilter = ''"
+          @clear-state-filter="stateFilter = ''"
+        >
+          <template #toggle>
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
+          </template>
+        </ContainersView>
+        <ImagesView
+          v-show="view === 'images'"
+          :tab="tab"
+          :session="session"
+          @view-related="onViewRelated"
+        >
+          <template #toggle>
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
+          </template>
+        </ImagesView>
       </div>
-    </template>
-
-    <ContainerDetailDrawer
-      :mode="drawerMode"
-      :tab-id="tab.id"
-      :target="drawerTarget"
-      @close="drawerMode = null"
-    />
-    <ContainerCreateDialog v-model="createOpen" :tab-id="tab.id" @created="store.refresh(tab.id)" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
-import { RefreshCw, SquareTerminal, ScrollText, Play, Square, Power, Pencil, Trash2 } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { PanelLeft } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { useContainerStore } from '../stores/containerStore'
-import * as client from '../services/containerClient'
-import type { StreamHandle } from '../services/containerClient'
+import { useConnectionStore } from '../stores/connectionStore'
+import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import { useI18n } from '../i18n'
-import ContainerDetailDrawer from './ContainerDetailDrawer.vue'
-import ContainerCreateDialog from './ContainerCreateDialog.vue'
-import type { ContainerImage, ContainerInfo, ContainerTab } from '../types/container'
+import ContainerTree from './ContainerTree.vue'
+import OverviewView from './OverviewView.vue'
+import ContainersView from './ContainersView.vue'
+import ImagesView from './ImagesView.vue'
+import type { ContainerTab } from '../types/container'
 
 const props = defineProps<{ tab: ContainerTab }>()
 
 const { t } = useI18n()
 const store = useContainerStore()
+const connectionStore = useConnectionStore()
+const { ensureConnectionCredentials } = useTunnelCredentials()
 const session = computed(() => store.sessions[props.tab.id])
 
-const namespaceOptions = computed(() => {
-  const s = session.value
-  if (!s) return []
-  const set = new Set(s.namespaces.length ? s.namespaces : [s.namespace])
-  set.add('default')
-  return [...set]
-})
-
-const view = ref<'containers' | 'images'>('containers')
-
-// ── search / filter ────────────────────────────────────────────
-const filter = ref('')
-const filteredContainers = computed(() => {
-  const f = filter.value.trim().toLowerCase()
-  const list = session.value?.containers || []
-  return f ? list.filter(c => c.name.toLowerCase().includes(f)) : list
-})
-const filteredImages = computed(() => {
-  const f = filter.value.trim().toLowerCase()
-  const list = session.value?.images || []
-  return f ? list.filter(i => i.repository.toLowerCase().includes(f)) : list
-})
-const stateFilters = computed(() => {
-  const set = new Set<string>()
-  for (const c of session.value?.containers || []) set.add(c.state)
-  return [...set].filter(Boolean).sort().map(v => ({ text: v, value: v }))
-})
-
-function onViewChange(v: string | number | boolean) {
-  view.value = v as 'containers' | 'images'
-  if (view.value === 'images') store.loadImages(props.tab.id)
-}
-
-async function onNamespaceChange(ns: string) {
-  try {
-    await store.setNamespace(props.tab.id, ns)
-  } catch (e: any) {
-    ElMessage.error(String(e?.message || e))
-  }
-}
-
-// ── drawer / create ────────────────────────────────────────────
-const drawerMode = ref<'detail' | 'logs' | null>(null)
-const drawerTarget = ref<ContainerInfo | null>(null)
-const createOpen = ref(false)
-
-function openDetail(c: ContainerInfo) {
-  drawerMode.value = 'detail'
-  drawerTarget.value = c
-}
-function openLogs(c: ContainerInfo) {
-  drawerTarget.value = c
-  drawerMode.value = 'logs'
-}
-async function openExec(c: ContainerInfo) {
-  try {
-    await store.openContainerExec(props.tab, c)
-  } catch (e: any) {
-    ElMessage.error(String(e?.message || e))
-  }
-}
-
-// ── actions ────────────────────────────────────────────────────
-async function runAction(c: ContainerInfo, act: string) {
-  try {
-    if (act === 'start' || act === 'stop' || act === 'restart') {
-      await ElMessageBox.confirm(
-        t('container.actionConfirm', { action: t('container.' + act), name: c.name }),
-        t('common.confirm'),
-        { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') },
-      )
+// SSH 传输的容器连接先走统一的凭据补全（含跳板机链），被引用的 SSH 主机
+// 未保存密码时弹窗补全而不是直接报认证错误；取消则中止连接。无需补全时
+// ensureConnectionCredentials 原样返回，不影响正常连接。
+async function openWithCredentials() {
+  const conn = connectionStore.connections.find(c => c.id === props.tab.connectionId)
+  if (conn && conn.containerTransport === 'ssh' && conn.containerSSHConnId) {
+    const sshCfg = connectionStore.connections.find(c => c.id === conn.containerSSHConnId)
+    if (sshCfg) {
+      const resolved = await ensureConnectionCredentials(sshCfg)
+      if (!resolved) {
+        await store.open(props.tab, { error: t('credential.cancelled') })
+        return
+      }
+      await store.open(props.tab, {
+        sshUser: resolved.user,
+        sshPassword: resolved.password,
+        tunnelUser: resolved.tunnelSSHUser,
+        tunnelPassword: resolved.tunnelSSHPassword,
+      })
+      return
     }
-    await store.action(props.tab.id, c.id, act)
-  } catch (e: any) {
-    if (e === 'cancel' || e === 'close') return
-    ElMessage.error(String(e?.message || e))
   }
+  await store.open(props.tab)
 }
 
-async function onRename(c: ContainerInfo) {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      t('container.renameMessage', { name: c.name }),
-      t('container.rename'),
-      { inputValue: c.name, confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') },
-    )
-    if (value && value !== c.name) await store.rename(props.tab.id, c.id, value)
-  } catch (e: any) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e))
-  }
+// ── view switch（左树：总览分组 + 概览/容器/镜像）──────────────
+const view = ref<'overview' | 'containers' | 'images'>('overview')
+const imageFilter = ref('')
+const stateFilter = ref('')
+
+// Narrow screens turn the tree into an overlay drawer (closed by default);
+// wide screens keep it inline and the toggle collapses it.
+const treeOpen = ref(!isNarrowScreen.value)
+watch(view, () => {
+  if (isNarrowScreen.value) treeOpen.value = false
+})
+
+// 镜像列表「关联容器」点击：切到容器页并按镜像过滤。
+function onViewRelated(ref: string) {
+  imageFilter.value = ref
+  stateFilter.value = ''
+  view.value = 'containers'
 }
 
-async function onRemove(c: ContainerInfo) {
-  try {
-    await ElMessageBox.confirm(
-      t('container.removeConfirm', { name: c.name }),
-      t('common.confirm'),
-      { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') },
-    )
-    await store.action(props.tab.id, c.id, 'rm')
-  } catch (e: any) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e))
-  }
+// 概览页状态统计点击：切到容器页并按状态过滤。
+function onShowState(state: string) {
+  stateFilter.value = state
+  imageFilter.value = ''
+  view.value = 'containers'
 }
 
-async function onRemoveImage(img: ContainerImage) {
-  try {
-    await ElMessageBox.confirm(
-      t('container.removeImageConfirm', { name: `${img.repository}:${img.tag}` }),
-      t('common.confirm'),
-      { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') },
-    )
-    const s = session.value
-    if (!s) return
-    await client.removeImage(s.connId, img.id)
-    await store.loadImages(props.tab.id)
-  } catch (e: any) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e?.message || e))
-  }
+// ── 左侧宽度 + resizer（抄 K8sTabContent / DBTabContent）───────
+const leftWidth = ref(180)
+let resizeStartX = 0
+let resizeStartWidth = 0
+let resizing = false
+function onResizeStart(e: MouseEvent) {
+  resizeStartX = e.clientX
+  resizeStartWidth = leftWidth.value
+  resizing = true
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', onResizeEnd)
 }
-
-// ── image pull ─────────────────────────────────────────────────
-const pullImage = ref('')
-const pulling = ref(false)
-const pullLines = ref<string[]>([])
-let pullHandle: StreamHandle | null = null
-
-async function onPull() {
-  const s = session.value
-  const image = pullImage.value.trim()
-  if (!s || !image || pulling.value) return
-  pullLines.value = []
-  pulling.value = true
-  try {
-    pullHandle = await client.startPull(s.connId, image,
-      (line) => pullLines.value.push(line),
-      (err) => {
-        pulling.value = false
-        pullHandle = null
-        if (err) ElMessage.error(err)
-        else store.loadImages(props.tab.id)
-      },
-    )
-  } catch (e: any) {
-    pulling.value = false
-    ElMessage.error(String(e?.message || e))
-  }
+function onResizeMove(e: MouseEvent) {
+  const dx = e.clientX - resizeStartX
+  leftWidth.value = Math.max(120, Math.min(360, resizeStartWidth + dx))
 }
-
-function shortId(id: string) {
-  const raw = id.replace(/^sha256:/, '')
-  return raw.length > 12 ? raw.slice(0, 12) : raw
+function onResizeEnd() {
+  resizing = false
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', onResizeEnd)
 }
 
 function onReconnectEvent(e: Event) {
@@ -327,22 +177,26 @@ function onReconnectEvent(e: Event) {
 // (open() re-initializes loading/error state and reconnects the client).
 async function reconnect() {
   try { store.close(props.tab.id) } catch (_) {}
-  await store.open(props.tab)
+  await openWithCredentials()
 }
 
 onMounted(() => {
-  store.open(props.tab)
+  openWithCredentials()
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this tab.
   window.addEventListener('panel:reconnect', onReconnectEvent)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('panel:reconnect', onReconnectEvent)
-  pullHandle?.stop()
+  if (resizing) {
+    document.removeEventListener('mousemove', onResizeMove)
+    document.removeEventListener('mouseup', onResizeEnd)
+  }
   store.close(props.tab.id)
 })
 </script>
 
 <style scoped>
+/* 直接抄 K8sTabContent 的骨架 CSS，class 同名 */
 .container-tab {
   flex: 1;
   display: flex;
@@ -351,87 +205,53 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-.container-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--el-border-color-lighter, #333);
-  flex-shrink: 0;
-}
-
-.toolbar-spacer {
+.db-main {
   flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.db-left {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle, #333);
+  overflow: hidden;
+}
+.db-resizer {
+  /* Hover area floats over the tree edge (negative margin) so it takes
+     no layout width when idle and never blanks the content side. */
+  width: 0.25rem;
+  margin-left: -0.25rem;
+  position: relative;
+  z-index: 1;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.db-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
+}
+.db-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .container-error {
   color: var(--el-color-danger, #f56);
-  padding: 12px;
+  padding: 0.75rem;
   white-space: pre-wrap;
 }
 
 .container-loading {
-  padding: 12px;
+  padding: 0.75rem;
   opacity: 0.7;
-}
-
-.container-table-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.k8s-list-table {
-  flex: 1;
-}
-
-/* Action-column cell: tighter padding + 4px gap between .btn-icon buttons
-   (mirrors K8sResourceList's action-cell styling). */
-.k8s-list-table :deep(.k8s-action-cell .cell) {
-  padding: 0 4px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-}
-.k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
-  margin-left: 4px;
-}
-
-.k8s-list-table :deep(.el-table__row) {
-  cursor: pointer;
-}
-
-.container-state[data-state='running'] {
-  color: var(--el-color-success, #67c23a);
-}
-
-.container-state[data-state='paused'] {
-  color: var(--el-color-warning, #e6a23c);
-}
-
-.pull-actions {
-  display: flex;
-  gap: 8px;
-  padding: 6px 10px;
-  flex-shrink: 0;
-}
-
-.pull-log {
-  margin: 0 10px 10px;
-  padding: 8px 12px;
-  max-height: 240px;
-  overflow: auto;
-  background: var(--bg-surface);
-  border: 1px solid var(--el-border-color-lighter, #333);
-  border-radius: var(--radius-sm, 4px);
-  font-family: var(--font-mono, monospace);
-  font-size: 12px;
-  user-select: text;
-}
-
-.pull-log .log-line {
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 </style>
