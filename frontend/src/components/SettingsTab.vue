@@ -969,7 +969,7 @@
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
         <div class="about-content">
-          <div class="about-appname">uniTerm</div>
+          <div class="about-appname">ai-ops-terminal</div>
           <p class="about-desc">{{ t('settings.aboutDesc') }}</p>
           <div class="about-version">
             {{ t('settings.version') }}: {{ updateCheck.updateInfo?.current || '...' }}

@@ -48,7 +48,7 @@ function estimateMessageTokens(msg: AIMessage): number {
  * Static AI system rules — immutable per app version, always cacheable.
  * Dynamic shell/panel context is injected into the latest user message instead.
  */
-const SYSTEM_RULES = `You are an AI assistant inside uniTerm, a terminal emulator. You can execute shell commands in the user's active terminal to help them complete tasks.
+const SYSTEM_RULES = `You are an AI assistant inside ai-ops-terminal, a terminal emulator. You can execute shell commands in the user's active terminal to help them complete tasks.
 
 AVAILABLE TOOLS:
 1. execute_command — Run a shell command and wait for its output. Set timeout based on expected duration. Use head_lines/tail_lines to control how much output you receive.
@@ -509,7 +509,7 @@ export const useAIStore = defineStore('ai', () => {
     const lines: string[] = [
       `# ${s.name}`,
       '',
-      `> ${new Date(s.createdAt).toLocaleString()} · uniTerm AI Assistant`,
+      `> ${new Date(s.createdAt).toLocaleString()} · ai-ops-terminal AI Assistant`,
     ]
     for (const m of s.messages) {
       if (m.role === 'tool') continue
