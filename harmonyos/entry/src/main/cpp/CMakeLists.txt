@@ -37,19 +37,30 @@ set(GO_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
 # 添加链接搜索路径（让链接器能找到 libaiops.so）
 link_directories(${GO_LIB_DIR})
 
-# 链接 HarmonyOS 系统库
+# 链接 HarmonyOS 系统库 + Go c-shared 库
 # libace_napi.z.so  - Node-API 运行时
 # libhilog_ndk.z.so - hilog 日志
-# libaiops.so       - Go c-shared 共享库（暂时移除，测试 NAPI 模块是否能独立加载）
+# libaiops.so       - Go c-shared 库（Wails server 模式）
+#
+# libaiops.so 包含完整的 Go Wails server（终端/SSH/k8s/容器等后端），
+# 通过弱符号 StartServer/SetDataDirRoot 供 NAPI 调用。
+# Go runtime 在 libaiops_native.so 被 dlopen 加载时自动初始化。
+#
+# 前提条件：
+#   1. libaiops.so 必须用 GOOS=android 编译（避免 TLS initial-exec 重定位问题）
+#   2. Go 安装中的 gcc_android.c 必须包含 tls_g=0 修复
+#   3. 构建标签: -tags server,cshared
 target_link_libraries(aiops_native
     libace_napi.z.so
     libhilog_ndk.z.so
+    ${GO_LIB_DIR}/libaiops.so
 )
 
 # 包含目录
 target_include_directories(aiops_native
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+
 )
 
 # 设置输出目录到 libs/<arch>

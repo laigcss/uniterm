@@ -11,6 +11,7 @@ import {
   native_is_executable,
   native_wait_for_health,
   native_init_signals,
+  native_set_data_dir_root,
 } from 'libaiops_native.so';
 
 const DOMAIN: number = 0x9206;
@@ -284,6 +285,24 @@ export class NativeProcess {
       native_stop_http_server();
     } catch (err) {
       hilog.error(DOMAIN, TAG, `stopHttpServer 失败: ${JSON.stringify(err)}`);
+    }
+  }
+
+  /**
+   * 设置 Go 后端的数据目录根。
+   *
+   * 调用 Go 导出的 SetDataDirRoot 函数，设置 DataDirRoot、HOME、XDG_CONFIG_HOME 等。
+   * 必须在 startServer 之前调用，确保 Go 后端能正确初始化数据目录。
+   *
+   * @param path 数据目录根路径（app 的 filesDir 或其子目录）
+   */
+  setDataDirRoot(path: string): void {
+    hilog.info(DOMAIN, TAG, `setDataDirRoot: path=${path}`);
+    try {
+      native_set_data_dir_root(path);
+      hilog.info(DOMAIN, TAG, 'setDataDirRoot 成功');
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, `setDataDirRoot 失败: ${JSON.stringify(err)}`);
     }
   }
 }

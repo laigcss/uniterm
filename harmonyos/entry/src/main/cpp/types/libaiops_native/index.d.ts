@@ -16,4 +16,4 @@ export const native_get_process_info: (pid: number) => Record<string, number | b
 export const native_watch_process: (pid: number, binaryPath: string, port: number) => number;
 export const native_stop_watch: () => void;
 export const native_init_signals: () => void;export const native_start_server: (soPath: string, port: number) => number;export const native_start_http_server: (docRoot: string, port: number) => number;
-export const native_stop_http_server: () => void;
+export const native_stop_http_server: () => void;export const native_set_data_dir_root: (path: string) => void;

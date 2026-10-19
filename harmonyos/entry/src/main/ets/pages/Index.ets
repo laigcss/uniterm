@@ -241,10 +241,18 @@ struct Index {
   }
 
   /**
-   * 启动后端：提取前端文件 → 启动内嵌 C HTTP 服务器 → 等待健康检查。
+   * 启动后端：提取前端文件 → 设置数据目录 → 启动 Go Wails server → 等待健康检查。
    *
-   * 在 NAPI 模块内运行 C HTTP 服务器，无需 execve/dlopen，
-   * 绕过 SELinux 对 execve 的限制和 Go TLS 模型对 dlopen 的限制。
+   * Go Wails server 在 NAPI 模块内运行（libaiops.so 作为 libaiops_native.so 的
+   * 依赖链接，Go runtime 在 NAPI 模块加载时自动初始化）。
+   *
+   * Go Wails server 既提供前端静态文件（//go:embed all:frontend/dist），
+   * 又处理 Wails binding 请求（SSH/终端/k8s/容器等），无需 C HTTP 服务器。
+   *
+   * 前提条件：
+   *   - libaiops.so 用 GOOS=android 编译（避免 TLS initial-exec 重定位问题）
+   *   - Go 安装中包含 tls_g=0 修复（gcc_android.c）
+   *   - CMakeLists.txt 将 libaiops.so 链接到 libaiops_native.so
    */
   private async startBackend(): Promise<void> {
     try {
@@ -253,19 +261,31 @@ struct Index {
       const docRoot: string = `${filesDir}/frontend`;
 
       // 步骤 1：从 rawfile 提取前端文件到 filesDir/frontend/
+      // （Go Wails server 也需要前端文件在可读目录，但主要使用 embed 的资源）
       await this.extractFrontend(docRoot);
       hilog.info(DOMAIN, TAG, `前端文件已提取到 ${docRoot}`);
 
-      // 步骤 2：启动内嵌 C HTTP 服务器
-      this.backendStatus = '正在启动 HTTP 服务器...';
-      hilog.info(DOMAIN, TAG, `启动 C HTTP 服务器: ${docRoot}:${this.port}`);
-      const ret: number = this.nativeProcess.startHttpServer(docRoot, this.port);
-      if (ret !== 0) {
-        throw new Error(`HTTP 服务器启动失败，错误码: ${ret}`);
-      }
-      hilog.info(DOMAIN, TAG, 'C HTTP 服务器已启动');
+      // 步骤 2：设置 Go 后端数据目录（必须在 startServer 之前调用）
+      // 设置 DataDirRoot、HOME、XDG_CONFIG_HOME 等，确保 SSH known_hosts、
+      // 配置文件等写入正确的可写目录
+      this.backendStatus = '正在设置数据目录...';
+      this.nativeProcess.setDataDirRoot(filesDir);
+      hilog.info(DOMAIN, TAG, `数据目录已设置: ${filesDir}`);
 
-      // 步骤 3：等待 HTTP 服务器就绪
+      // 步骤 3：启动 Go Wails server
+      // libaiops.so 已链接到 libaiops_native.so，Go runtime 已初始化，
+      // 直接调用导出的 StartServer 函数即可
+      this.backendStatus = '正在启动 Go Wails server...';
+      hilog.info(DOMAIN, TAG, `启动 Go Wails server: port=${this.port}`);
+      const soPath: string = `${filesDir}/${BINARY_NAME}`;
+      const ret: number = await this.nativeProcess.startServer(soPath, this.port);
+      if (ret !== 0) {
+        throw new Error(`Go Wails server 启动失败，错误码: ${ret}`);
+      }
+      hilog.info(DOMAIN, TAG, 'Go Wails server 已启动');
+
+      // 步骤 4：等待服务器就绪（Go HTTP 服务器需要时间 bind+listen）
+      await new Promise<void>((resolve): void => { setTimeout(resolve, 500); });
       this.backendStatus = '等待服务器就绪...';
       hilog.info(DOMAIN, TAG, '等待健康检查通过');
       const healthy: boolean = await this.waitForHealth();
@@ -275,7 +295,7 @@ struct Index {
         this.autoRestartCount = 0;
       } else {
         hilog.error(DOMAIN, TAG, '健康检查超时，服务器未就绪');
-        this.errorMsg = '后端启动超时，HTTP 服务器未就绪';
+        this.errorMsg = '后端启动超时，Go Wails server 未就绪';
       }
     } catch (err) {
       const errMsg: string = err instanceof Error ? err.message : JSON.stringify(err);
@@ -285,15 +305,15 @@ struct Index {
   }
 
   /**
-   * 停止后端：停止内嵌 C HTTP 服务器。
+   * 停止后端：Go Wails server 在进程内运行，无需显式停止。
+   *
+   * Go server 在 goroutine 中运行，没有导出 StopServer 函数。
+   * 应用退出时进程终止，Go runtime 自动清理。
    */
   private stopBackend(): void {
-    try {
-      this.nativeProcess.stopHttpServer();
-      hilog.info(DOMAIN, TAG, 'HTTP 服务器已停止');
-    } catch (err) {
-      hilog.error(DOMAIN, TAG, `停止 HTTP 服务器失败: ${JSON.stringify(err)}`);
-    }
+    hilog.info(DOMAIN, TAG, 'Go Wails server 将随进程退出自动停止');
+    // 同时停止 C HTTP 服务器（如果之前启动过）
+    try { this.nativeProcess.stopHttpServer(); } catch (e) { /* 忽略 */ }
   }
 
   /**
@@ -467,10 +487,10 @@ struct Index {
   private async extractFrontend(docRoot: string): Promise<void> {
     const resourceMgr: resourceManager.ResourceManager = this.context.resourceManager;
 
-    // 创建目录
+    // 创建目录（目录已存在时忽略错误，鸿蒙 mkdirSync 即使 recursive=true 也可能抛 "File exists"）
     const assetsDir: string = `${docRoot}/assets`;
-    fs.mkdirSync(docRoot, true);
-    fs.mkdirSync(assetsDir, true);
+    try { fs.mkdirSync(docRoot, true); } catch (e) { hilog.warn(DOMAIN, TAG, `mkdirSync(${docRoot}) 忽略: ${JSON.stringify(e)}`); }
+    try { fs.mkdirSync(assetsDir, true); } catch (e) { hilog.warn(DOMAIN, TAG, `mkdirSync(${assetsDir}) 忽略: ${JSON.stringify(e)}`); }
     hilog.info(DOMAIN, TAG, `创建目录: ${docRoot}, ${assetsDir}`);
 
     // 尝试用 getRawFileList 动态列出文件

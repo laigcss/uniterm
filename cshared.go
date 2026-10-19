@@ -13,8 +13,13 @@
 //
 // 编译命令：
 //   CC="<ohos-clang> --target=aarch64-linux-ohos --sysroot=<sysroot>" \
-//   GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
+//   GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
 //   go build -buildmode=c-shared -tags server,cshared -o libaiops.so .
+//
+// 注意：必须使用 GOOS=android（不是 GOOS=linux），因为：
+//   1. GOOS=android 使用 TLS local-dynamic 模型，兼容 NAPI 模块的 dlopen 加载
+//   2. GOOS=linux 使用 TLS initial-exec 模型，dlopen 时触发 SIGSEGV
+//   3. 需配合 Go 安装中 gcc_android.c 的 tls_g=0 修复
 //
 // 现有 Mac/Windows/Linux 桌面构建完全不受影响（!cshared tag 排除本文件）。
 
@@ -31,10 +36,10 @@ import (
 	"os"
 	"sync"
 
+	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/store"
 	unisync "github.com/ys-ll/uniterm/backend/sync"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // 前端静态资源（编译时嵌入 .so 文件）

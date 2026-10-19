@@ -1294,7 +1294,7 @@ static const char *get_mime_type(const char *path)
 /* 发送 HTTP 响应头 */
 static void send_response_header(int fd, int status, const char *contentType, long contentLength)
 {
-    const char *statusText = (status == 200) ? "OK" : (status == 404) ? "Not Found" : "Internal Server Error";
+    const char *statusText = (status == 200) ? "OK" : (status == 404) ? "Not Found" : (status == 503) ? "Service Unavailable" : "Internal Server Error";
     char header[512];
     int n = snprintf(header, sizeof(header),
         "HTTP/1.1 %d %s\r\n"
@@ -1411,10 +1411,10 @@ static void *http_server_thread(void *arg)
             continue;
         }
 
-        /* API 端点返回占位响应 */
+        /* API 端点：返回 503 让 Wails runtime 抛异常，store catch 块使用默认值 */
         if (strncmp(path, "/api/", 5) == 0 || strncmp(path, "/wails/", 7) == 0) {
             const char *json = "{\"error\":\"backend not available\"}";
-            send_response_header(clientFd, 200, "application/json", (long)strlen(json));
+            send_response_header(clientFd, 503, "application/json", (long)strlen(json));
             write(clientFd, json, strlen(json));
             close(clientFd);
             continue;
@@ -1480,9 +1480,6 @@ void stop_http_server(void)
 /* ========================================================================== */
 
 /*
- * libaiops.so 作为 libaiops_native.so 的直接依赖链接，
- * 在应用启动时自动加载，解决 Go initial-exec TLS 模型问题。
- *
  * StartServer 由 Go 代码导出（//export StartServer），
  * 在独立 goroutine 中启动 HTTP 服务器。
  * 返回: 0 成功，非 0 失败
@@ -1491,6 +1488,15 @@ void stop_http_server(void)
  * 运行时通过 dlsym 动态查找。
  */
 extern int StartServer(int port) __attribute__((weak));
+
+/*
+ * SetDataDirRoot 由 Go 代码导出（//export SetDataDirRoot），
+ * 设置 Go 后端的数据目录根（DataDirRoot、HOME、XDG_CONFIG_HOME 等）。
+ * 必须在 StartServer 之前调用。
+ *
+ * 声明为弱符号，允许在没有 libaiops.so 的情况下链接。
+ */
+extern void SetDataDirRoot(const char *path) __attribute__((weak));
 
 /*
  * dlopen 加载 Go c-shared 共享库的全局句柄。
@@ -1577,6 +1583,61 @@ static napi_value NapiStartServer(napi_env env, napi_callback_info info)
     napi_value result;
     napi_create_int32(env, ret, &result);
     return result;
+}
+
+/*
+ * NAPI 方法: native_set_data_dir_root(path) → void
+ * 设置 Go 后端的数据目录根。必须在 native_start_server 之前调用。
+ * 调用 Go 导出的 SetDataDirRoot 函数（弱符号）。
+ */
+static napi_value NapiSetDataDirRoot(napi_env env, napi_callback_info info)
+{
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+
+    char path[MAX_PATH_LEN];
+    size_t pathLen = 0;
+    napi_get_value_string_utf8(env, args[0], path, sizeof(path), &pathLen);
+
+    if (SetDataDirRoot == NULL) {
+        int logFd = open(DEFAULT_LOG_PATH ".crash", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (logFd >= 0) {
+            const char *m = "\n=== SetDataDirRoot is NULL (weak symbol not resolved) ===\n";
+            write(logFd, m, strlen(m));
+            close(logFd);
+        }
+        napi_value undefined;
+        napi_get_undefined(env, &undefined);
+        return undefined;
+    }
+
+    /* 直接调用 Go 导出的 SetDataDirRoot 函数（弱符号） */
+    if (SetDataDirRoot == NULL) {
+        int logFd = open(DEFAULT_LOG_PATH ".crash", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (logFd >= 0) {
+            const char *m = "\n=== SetDataDirRoot is NULL (weak symbol not resolved) ===\n";
+            write(logFd, m, strlen(m));
+            close(logFd);
+        }
+        napi_value undefined;
+        napi_get_undefined(env, &undefined);
+        return undefined;
+    }
+
+    SetDataDirRoot(path);
+
+    int logFd = open(DEFAULT_LOG_PATH ".crash", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (logFd >= 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf), "\n=== SetDataDirRoot called with: %s ===\n", path);
+        write(logFd, buf, (size_t)n);
+        close(logFd);
+    }
+
+    napi_value undefined;
+    napi_get_undefined(env, &undefined);
+    return undefined;
 }
 
 /*
@@ -1669,6 +1730,7 @@ static napi_value Init(napi_env env, napi_value exports)
         { "native_start_server",    NULL, NapiStartServer,     NULL, NULL, NULL, napi_default, NULL },
         { "native_start_http_server", NULL, NapiStartHttpServer, NULL, NULL, NULL, napi_default, NULL },
         { "native_stop_http_server",  NULL, NapiStopHttpServer,  NULL, NULL, NULL, napi_default, NULL },
+        { "native_set_data_dir_root",  NULL, NapiSetDataDirRoot,  NULL, NULL, NULL, napi_default, NULL },
     };
 
     napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors);
