@@ -8,7 +8,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // startForegroundKeepalive promotes the app to a foreground service so the

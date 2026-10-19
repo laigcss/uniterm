@@ -17,7 +17,7 @@ jobs:
       - name: Checkout scoop bucket repo
         uses: actions/checkout@v7
         with:
-          repository: laigcss/scoop-ai-ops-terminal
+          repository: laigcss/scoop-uniterm
           token: ${{ secrets.PAT }}
 
       - name: Get version
@@ -29,23 +29,23 @@ jobs:
 
       - name: Download portable zip and compute hash
         run: |
-          URL="https://github.com/laigcss/ai-ops-terminal/releases/download/$TAG/ai-ops-terminal-windows-amd64-portable-$TAG.zip"
-          curl -sLo /tmp/ai-ops-terminal.zip "$URL"
-          SHA256=$(sha256sum /tmp/ai-ops-terminal.zip | cut -d' ' -f1)
+          URL="https://github.com/laigcss/uniterm/releases/download/$TAG/uniterm-windows-amd64-portable-$TAG.zip"
+          curl -sLo /tmp/uniterm.zip "$URL"
+          SHA256=$(sha256sum /tmp/uniterm.zip | cut -d' ' -f1)
           echo "SHA256=$SHA256" >> $GITHUB_ENV
 
       - name: Update manifest
         run: |
           jq --arg v "$VERSION" \
              --arg h "sha256:$SHA256" \
-             --arg url "https://github.com/laigcss/ai-ops-terminal/releases/download/$TAG/ai-ops-terminal-windows-amd64-portable-$TAG.zip" \
+             --arg url "https://github.com/laigcss/uniterm/releases/download/$TAG/uniterm-windows-amd64-portable-$TAG.zip" \
              '.version = $v | .architecture."64bit".url = $url | .architecture."64bit".hash = $h' \
-             bucket/ai-ops-terminal.json > tmp.json && mv tmp.json bucket/ai-ops-terminal.json
+             bucket/uniterm.json > tmp.json && mv tmp.json bucket/uniterm.json
 
       - name: Commit and push
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add bucket/ai-ops-terminal.json
+          git add bucket/uniterm.json
           git commit -m "Update to $TAG" || true
           git push

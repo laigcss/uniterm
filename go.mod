@@ -1,4 +1,4 @@
-module github.com/laigcss/ai-ops-terminal
+module github.com/ys-ll/uniterm
 
 go 1.26.2
 

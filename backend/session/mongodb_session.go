@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

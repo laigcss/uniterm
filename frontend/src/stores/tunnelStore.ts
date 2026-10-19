@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import {
   LoadTunnels, SaveTunnels, StartTunnel, StopTunnel, ListTunnelStates,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { t } from '../i18n'
 // Module-level un-subscribers for tunnel:state / store:tunnels:changed listeners.

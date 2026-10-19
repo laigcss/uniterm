@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# 构建鸿蒙版 ai-ops-terminal
+# 构建鸿蒙版 uniterm
 # 用法: scripts/build-harmonyos.sh [--output <path>] [--version <ver>] [--skip-frontend]
 # 产出: 静态链接 ELF ARM64 二进制，可在鸿蒙设备上运行
 # 原理: Wails server 模式（-tags server）+ CGO_ENABLED=0 + GOOS=linux GOARCH=arm64
 #
 # 参数:
-#   --output <path>      指定输出路径（默认: bin/ai-ops-terminal-harmonyos）
+#   --output <path>      指定输出路径（默认: bin/uniterm-harmonyos）
 #   --version <ver>      指定版本号（默认: 从 git tag 或 dev）
 #   --skip-frontend      跳过前端构建（假设 frontend/dist 已存在）
 #
@@ -29,7 +29,7 @@ TARGET_GOOS="linux"
 TARGET_GOARCH="arm64"
 BUILD_TAGS="server,production"
 
-DEFAULT_OUTPUT="bin/ai-ops-terminal-harmonyos"
+DEFAULT_OUTPUT="bin/uniterm-harmonyos"
 
 # -----------------------------------------------------------------------------
 # 辅助函数

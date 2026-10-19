@@ -74,4 +74,4 @@ Fast-typing character loss/duplication, IME Enter keystrokes accidentally trigge
 
 If your issue is not listed here, please reach out through the following channel:
 
-- [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues)
+- [GitHub Issues](https://github.com/laigcss/uniTerm/issues)

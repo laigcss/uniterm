@@ -9,7 +9,7 @@ const { createSessionMock, recordRecentMock } = vi.hoisted(() => ({
   recordRecentMock: vi.fn(),
 }))
 
-vi.mock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   CreateSession: createSessionMock,
   RecordRecentConnection: recordRecentMock,
   SaveConnections: vi.fn(async () => {}),

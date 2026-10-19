@@ -1,6 +1,6 @@
 # 标签和工作区
 
-ai-ops-terminal 通过标签页管理多个连接，通过工作区将多个终端分栏并排展示。
+uniTerm 通过标签页管理多个连接，通过工作区将多个终端分栏并排展示。
 
 ![工作区](/imgs/workspace_light.webp)
 

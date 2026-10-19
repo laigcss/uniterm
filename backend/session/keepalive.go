@@ -3,7 +3,7 @@ package session
 import (
 	"sync"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // Foreground keepalive. On Android the app process is frozen a few seconds

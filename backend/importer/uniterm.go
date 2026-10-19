@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/ys-ll/uniterm/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 const unitermFormat = "uniterm"

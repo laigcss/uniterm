@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // enc returns the fakeCipherStore encoding of pw (used to seed encrypted fields).

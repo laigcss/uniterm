@@ -10,7 +10,7 @@ import (
 
 	"github.com/UserExistsError/conpty"
 
-	"github.com/laigcss/ai-ops-terminal/backend/platform"
+	"github.com/ys-ll/uniterm/backend/platform"
 )
 
 // setHideWindow delegates to the shared platform helper so every console

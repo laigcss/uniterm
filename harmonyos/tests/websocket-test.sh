@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # WebSocket 连通性测试脚本
-# 测试 ai-ops-terminal server 模式的 WebSocket 事件推送和流连接
+# 测试 uniTerm server 模式的 WebSocket 事件推送和流连接
 #
 # 用法: bash harmonyos/tests/websocket-test.sh [port]
 # 默认端口: 9245
@@ -230,7 +230,7 @@ test_env_override() {
 
 # 主函数
 main() {
-    log "ai-ops-terminal WebSocket 连通性测试"
+    log "uniTerm WebSocket 连通性测试"
     log "目标: ${BASE_URL}"
     echo ""
 

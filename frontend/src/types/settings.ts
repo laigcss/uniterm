@@ -130,7 +130,7 @@ export interface AIModelConfig {
 }
 
 export const USER_AGENT_PRESETS: { label: string; value: string }[] = [
-  { label: 'ai-ops-terminal', value: 'uniTerm' },
+  { label: 'uniTerm', value: 'uniTerm' },
   { label: 'Claude Code', value: 'claude-code/1.0' },
   { label: 'Cursor', value: 'Cursor/1.0' },
   { label: 'Cline', value: 'Cline/1.0' },
@@ -430,8 +430,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }
 export const TERMINAL_THEMES: TerminalThemeEntry[] = [
-  { label: 'ai-ops-terminal Dark', value: 'aiops-dark', type: 'dark' },
-  { label: 'ai-ops-terminal Light', value: 'aiops-light', type: 'light' },
+  { label: 'uniTerm Dark', value: 'aiops-dark', type: 'dark' },
+  { label: 'uniTerm Light', value: 'aiops-light', type: 'light' },
   { label: 'Solarized Dark', value: 'solarized-dark', type: 'dark' },
   { label: 'Solarized Light', value: 'solarized-light', type: 'light' },
   { label: 'Monokai', value: 'monokai', type: 'dark' },

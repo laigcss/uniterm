@@ -1,6 +1,6 @@
 # 华为系基础技术栈调研报告
 
-> 调研对象：ai-ops-terminal（原 uniTerm）跨平台终端管理桌面应用的信创国产化替代可行性
+> 调研对象：uniTerm（原 uniTerm）跨平台终端管理桌面应用的信创国产化替代可行性
 > 调研范围：仓颉语言、OpenHarmony+ArkUI+ArkTS、openEuler、国产芯片（鲲鹏/飞腾/龙芯/海光/兆芯）、编译器（毕昇/方舟）、MindSpore、昇腾/CANN、华为云
 > 调研时间：2026-10-12
 > 调研人：华为系基础技术调研员（task 39）
@@ -418,7 +418,7 @@ GitCode 昇腾组织（`gitcode.com/ascend`，1808 关注）README 原文："面
 
 ---
 
-## 10. 面向 ai-ops-terminal 的结论与建议
+## 10. 面向 uniTerm 的结论与建议
 
 ### 10.1 分层替代可行性排序（从易到难）
 

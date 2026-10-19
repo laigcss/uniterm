@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // FormatDBeaver imports DBeaver connections straight from a workspace's

@@ -9,7 +9,7 @@ import {
   ReadFileChunkBase64,
   OpenDirectoryDialog,
   OpenMultipleFilesDialog,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { useZmodemStore } from '../stores/zmodemStore'
 import { queuedSessionWrite } from './sessionWriter'

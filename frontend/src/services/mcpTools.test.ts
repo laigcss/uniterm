@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   ListMCPTools: async () => [
     {
       server: 'fs',
@@ -40,7 +40,7 @@ describe('mcpTools adapter', () => {
 
   it('degrades to an empty list when the binding errors', async () => {
     vi.resetModules()
-    vi.doMock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+    vi.doMock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
       ListMCPTools: async () => { throw new Error('offline') },
     }))
     const mod = await import('./mcpTools')

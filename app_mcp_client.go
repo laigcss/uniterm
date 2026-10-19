@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/mcpclient"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/mcpclient"
 )
 
 // MCP client wiring: uniTerm connects to external MCP servers and feeds their

@@ -1,6 +1,6 @@
 # Tabs and Workspace
 
-ai-ops-terminal manages multiple connections through tabs and displays multiple terminals side by side through workspaces.
+uniTerm manages multiple connections through tabs and displays multiple terminals side by side through workspaces.
 
 ![Workspace](/imgs/workspace_light.webp)
 

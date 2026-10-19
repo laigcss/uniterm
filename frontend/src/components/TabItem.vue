@@ -151,7 +151,7 @@ import {
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   RDPSetFullScreen,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'
 import { saveWorkspaceToConnections } from '../composables/savedWorkspace'

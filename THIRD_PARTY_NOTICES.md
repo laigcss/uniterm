@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-ai-ops-terminal bundles fonts and other software from the projects listed below. This file
+uniTerm bundles fonts and other software from the projects listed below. This file
 satisfies the attribution requirements of those upstream licenses.
 
 ## JetBrains Mono Variable

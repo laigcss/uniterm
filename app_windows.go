@@ -16,8 +16,8 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
-	"github.com/laigcss/ai-ops-terminal/backend/platform"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/platform"
+	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -361,7 +361,7 @@ func (a *App) findMainWindow() uintptr {
 		// Verify it has our window title so we don't pick up invisible helper windows.
 		buf := make([]uint16, 256)
 		procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 255)
-		if windows.UTF16ToString(buf) == "ai-ops-terminal" {
+		if windows.UTF16ToString(buf) == "uniTerm" {
 			result = uintptr(hwnd)
 			return 0 // stop
 		}

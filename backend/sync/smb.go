@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // smbFS adapts an SMB session to the sync engine's RemoteFS. The session

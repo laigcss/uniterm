@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -264,7 +264,7 @@ func main() {
 		// the StartupWMClass in the .desktop file matches it under X11/XWayland.
 		// NOTE: on native Wayland this does NOT control the taskbar association:
 		// the XDG app_id comes from the GtkApplication id, which Wails derives
-		// as "org.wails." + lowercase Options.Name → "org.wails.ai-ops-terminal". GNOME
+		// as "org.wails." + lowercase Options.Name → "org.wails.uniterm". GNOME
 		// matches Wayland windows to launchers by desktop-file filename, so the
 		// installed .desktop must be named org.wails.uniterm.desktop (see
 		// build/linux/Taskfile.yml generate:dotdesktop).

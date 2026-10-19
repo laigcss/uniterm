@@ -88,33 +88,33 @@ jobs:
           go build \
             -tags server,production \
             -ldflags "-s -w -X main.Version=${{ github.ref_name }}" \
-            -o ai-ops-terminal-harmonyos \
+            -o uniterm-harmonyos \
             .
           echo "==> 编译完成"
 
       - name: 验证产出
         run: |
           echo "==> 验证构建产物"
-          file ai-ops-terminal-harmonyos
+          file uniterm-harmonyos
           # 验证 ELF 格式
-          file ai-ops-terminal-harmonyos | grep -qi "ELF" \
+          file uniterm-harmonyos | grep -qi "ELF" \
             || { echo "ERROR: 产出不是 ELF 格式"; exit 1; }
           # 验证 ARM64/aarch64 架构
-          file ai-ops-terminal-harmonyos | grep -qiE "aarch64|ARM64" \
+          file uniterm-harmonyos | grep -qiE "aarch64|ARM64" \
             || { echo "ERROR: 产出不是 ARM64 架构"; exit 1; }
           # 验证静态链接
-          file ai-ops-terminal-harmonyos | grep -qi "statically linked" \
+          file uniterm-harmonyos | grep -qi "statically linked" \
             || { echo "ERROR: 产出不是静态链接"; exit 1; }
           echo "✓ 验证通过: ELF ARM64 静态链接二进制"
           # 输出文件大小和 SHA256
-          echo "文件大小: $(du -h ai-ops-terminal-harmonyos | cut -f1)"
-          echo "SHA256:   $(sha256sum ai-ops-terminal-harmonyos | cut -d' ' -f1)"
+          echo "文件大小: $(du -h uniterm-harmonyos | cut -f1)"
+          echo "SHA256:   $(sha256sum uniterm-harmonyos | cut -d' ' -f1)"
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: ai-ops-terminal-harmonyos-linux-arm64
-          path: ai-ops-terminal-harmonyos
+          name: uniterm-harmonyos-linux-arm64
+          path: uniterm-harmonyos
           retention-days: 30
 
       # 可选：tag push 时创建 Release 并上传产物
@@ -122,7 +122,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ai-ops-terminal-harmonyos
+          files: uniterm-harmonyos
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false

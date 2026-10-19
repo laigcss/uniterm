@@ -8,7 +8,7 @@ const sidebarZh = [
   {
     text: '软件介绍',
     items: [
-      { text: '关于 ai-ops-terminal', link: '/zh/introduction' },
+      { text: '关于 uniTerm', link: '/zh/introduction' },
       { text: '支持协议', link: '/zh/protocols' }
     ]
   },
@@ -58,7 +58,7 @@ const sidebarEn = [
   {
     text: 'Introduction',
     items: [
-      { text: 'About ai-ops-terminal', link: '/en/introduction' },
+      { text: 'About uniTerm', link: '/en/introduction' },
       { text: 'Supported Protocols', link: '/en/protocols' }
     ]
   },
@@ -105,8 +105,8 @@ const sidebarEn = [
 
 export default defineConfig({
   base: '/guide/',
-  title: 'ai-ops-terminal User Guide',
-  description: 'ai-ops-terminal — All-in-One Terminal User Manual',
+  title: 'uniTerm User Guide',
+  description: 'uniTerm — All-in-One Terminal User Manual',
   head: [
     ['link', { rel: 'icon', href: '/imgs/appicon.png' }],
     ['meta', { name: 'baidu-site-verification', content: 'codeva-xKnncJaXe8' }],
@@ -123,11 +123,11 @@ export default defineConfig({
       label: '简体中文',
       lang: 'zh-CN',
       link: '/zh/',
-      title: 'ai-ops-terminal 用户手册',
-      description: 'ai-ops-terminal 全能终端用户手册',
+      title: 'uniTerm 用户手册',
+      description: 'uniTerm 全能终端用户手册',
       themeConfig: {
         nav: [
-          { text: '← ai-ops-terminal 首页', link: 'https://github.com/laigcss/ai-ops-terminal' },
+          { text: '← uniTerm 首页', link: 'https://github.com/laigcss/uniTerm' },
           { text: '软件介绍', link: '/zh/introduction' },
           { text: '快速开始', link: '/zh/getting-started' },
           { text: '连接协议', link: '/zh/connections/remote-terminal' },
@@ -147,11 +147,11 @@ export default defineConfig({
       label: 'English',
       lang: 'en-US',
       link: '/en/',
-      title: 'ai-ops-terminal User Guide',
-      description: 'ai-ops-terminal All-in-One Terminal User Manual',
+      title: 'uniTerm User Guide',
+      description: 'uniTerm All-in-One Terminal User Manual',
       themeConfig: {
         nav: [
-          { text: '← ai-ops-terminal Home', link: 'https://github.com/laigcss/ai-ops-terminal' },
+          { text: '← uniTerm Home', link: 'https://github.com/laigcss/uniTerm' },
           { text: 'Introduction', link: '/en/introduction' },
           { text: 'Getting Started', link: '/en/getting-started' },
           { text: 'Connections', link: '/en/connections/remote-terminal' },

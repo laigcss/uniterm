@@ -17,7 +17,7 @@ import { Window } from '@wailsio/runtime'
 import { useSettingsStore } from './stores/settingsStore'
 import { setLocale } from './i18n'
 
-Window.SetTitle('ai-ops-terminal')
+Window.SetTitle('uniTerm')
 
 // Set ElDialog draggable by default
 if (ElDialog.props) {

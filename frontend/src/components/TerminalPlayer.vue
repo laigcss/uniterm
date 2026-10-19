@@ -59,7 +59,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useI18n } from '../i18n'
 
-import { RecorderGetContent } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { RecorderGetContent } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { parseCastContent, type CastEvent, type ParsedCastHeader } from '../services/terminalRecorder'
 import { getXtermTheme } from '../utils/xtermTheme'
 import { useSettingsStore } from '../stores/settingsStore'

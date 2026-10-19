@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

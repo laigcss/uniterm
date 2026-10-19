@@ -18,14 +18,14 @@ import (
 func withTempKnownHosts(t *testing.T) (string, func()) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".ai-ops-terminal"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".uniterm"), 0700); err != nil {
 		t.Fatalf("mkdir .uniterm: %v", err)
 	}
 	prevHome, hadHome := os.LookupEnv("HOME")
 	if err := os.Setenv("HOME", dir); err != nil {
 		t.Fatalf("setenv HOME: %v", err)
 	}
-	path := filepath.Join(dir, ".ai-ops-terminal", "known_hosts")
+	path := filepath.Join(dir, ".uniterm", "known_hosts")
 	return path, func() {
 		if hadHome {
 			_ = os.Setenv("HOME", prevHome)

@@ -1,4 +1,4 @@
-# ai-ops-terminal 鸿蒙适配测试计划
+# uniTerm 鸿蒙适配测试计划
 
 ## 1. 测试环境要求
 
@@ -33,19 +33,19 @@ cd frontend && npm run build
 | 编号 | 测试项 | 预期结果 | 命令 |
 |------|--------|----------|------|
 | T1.1 | 交叉编译成功 | 产出 ELF ARM64 静态链接二进制 | `scripts/build-harmonyos.sh --skip-frontend` |
-| T1.2 | 二进制格式验证 | `ELF 64-bit LSB executable, ARM aarch64, statically linked` | `file bin/ai-ops-terminal-harmonyos` |
-| T1.3 | 二进制大小合理 | 40-60 MB | `ls -lh bin/ai-ops-terminal-harmonyos` |
+| T1.2 | 二进制格式验证 | `ELF 64-bit LSB executable, ARM aarch64, statically linked` | `file bin/uniTerm-harmonyos` |
+| T1.3 | 二进制大小合理 | 40-60 MB | `ls -lh bin/uniTerm-harmonyos` |
 | T1.4 | Go 测试通过 | 全部 PASS | `go test ./backend/...` |
 
 ### 阶段 2：Server 模式功能验证（在 macOS/Linux 上模拟）
 | 编号 | 测试项 | 预期结果 | 命令 |
 |------|--------|----------|------|
-| T2.1 | Server 启动 | 监听 localhost:9245 | `AI_OPS_PORT=9245 ./ai-ops-terminal &` |
+| T2.1 | Server 启动 | 监听 localhost:9245 | `AI_OPS_PORT=9245 ./uniTerm &` |
 | T2.2 | 健康检查 | 返回 `{"status":"ok"}` | `curl http://localhost:9245/health` |
 | T2.3 | 首页服务 | 返回嵌入的 index.html（含 /assets/ 引用） | `curl http://localhost:9245/` |
 | T2.4 | 静态资源服务 | 返回 JS bundle | `curl http://localhost:9245/assets/index-*.js` |
 | T2.5 | Wails 运行时 | 返回 JS 代码 | `curl http://localhost:9245/wails/custom.js` |
-| T2.6 | 环境变量覆盖 | 监听指定端口 | `AI_OPS_PORT=9300 ./ai-ops-terminal & curl http://localhost:9300/health` |
+| T2.6 | 环境变量覆盖 | 监听指定端口 | `AI_OPS_PORT=9300 ./uniTerm & curl http://localhost:9300/health` |
 | T2.7 | 优雅关闭 | 进程正常退出 | `kill -TERM <pid>` |
 
 ### 阶段 3：WebSocket 连通性验证（在 macOS/Linux 上模拟）
@@ -68,7 +68,7 @@ cd frontend && npm run build
 |------|--------|----------|------|
 | T5.1 | 安装 HAP | 安装成功 | `hdc install entry-default-signed.hap` |
 | T5.2 | 启动应用 | 显示加载页 | `hdc shell aa start -a EntryAbility -b com.aiops.terminal` |
-| T5.3 | Go 子进程启动 | 进程列表中有 ai-ops-terminal | `hdc shell ps -ef \| grep ai-ops` |
+| T5.3 | Go 子进程启动 | 进程列表中有 uniTerm | `hdc shell ps -ef \| grep ai-ops` |
 | T5.4 | 健康检查通过 | 加载页消失，显示前端 UI | 观察 app 界面 |
 | T5.5 | 前端 UI 渲染 | 显示完整终端界面（侧边栏+主区域） | 观察 app 界面 |
 | T5.6 | WebSocket 事件 | 前端能收到后端事件 | 在 UI 中操作，观察响应 |

@@ -24,7 +24,7 @@ Examples of unacceptable behavior:
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team via [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team via [GitHub Issues](https://github.com/laigcss/uniterm/issues). All complaints will be reviewed and investigated promptly and fairly.
 
 Project maintainers are responsible for clarifying and enforcing our standards of acceptable behavior and may take appropriate and fair corrective action in response to any behavior that they deem inappropriate, threatening, offensive, or harmful.
 
@@ -60,7 +60,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## 执行
 
-如有滥用、骚扰或其他不可接受的行为，请通过 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 联系项目团队。所有投诉将得到及时、公正的审查和处理。
+如有滥用、骚扰或其他不可接受的行为，请通过 [GitHub Issues](https://github.com/laigcss/uniterm/issues) 联系项目团队。所有投诉将得到及时、公正的审查和处理。
 
 项目维护者有责任澄清和执行我们的行为标准，并可对任何被视为不当、威胁、冒犯或有害的行为采取适当、公正的纠正措施。
 

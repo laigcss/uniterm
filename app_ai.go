@@ -25,8 +25,8 @@ import (
 	_ "image/png"  // registered for image.DecodeConfig
 
 	"github.com/mattn/go-ieproxy"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // llmProxy is the Proxy function for the shared LLM transport. It resolves

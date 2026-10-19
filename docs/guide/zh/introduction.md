@@ -1,6 +1,6 @@
-# 关于 ai-ops-terminal
+# 关于 uniTerm
 
-ai-ops-terminal 是一款轻量级全能终端模拟器，支持 **30+** 种连接协议，覆盖远程终端、远程桌面、文件传输、数据库管理、容器和服务器监控。内置**自主 AI Agent**，可独立规划并执行多轮 Shell 命令。
+uniTerm 是一款轻量级全能终端模拟器，支持 **30+** 种连接协议，覆盖远程终端、远程桌面、文件传输、数据库管理、容器和服务器监控。内置**自主 AI Agent**，可独立规划并执行多轮 Shell 命令。
 
 支持的平台：**Windows / macOS / Linux / Android**。
 
@@ -58,7 +58,7 @@ ai-ops-terminal 是一款轻量级全能终端模拟器，支持 **30+** 种连�
 
 ### AI 助理
 
-ai-ops-terminal 内置自主 AI Agent，可在终端中独立规划并执行多轮 Shell 命令。
+uniTerm 内置自主 AI Agent，可在终端中独立规划并执行多轮 Shell 命令。
 
 - **自主多轮执行** — AI Agent 能够自主规划、执行、观察结果并迭代，在多轮 Shell 命令中无需人工干预即可完成复杂操作。
 - **大模型集成** — 侧边栏对话，兼容 Anthropic / OpenAI 协议，支持 Claude、GPT 及其他兼容模型。

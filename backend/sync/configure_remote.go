@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/laigcss/ai-ops-terminal/backend/utils"
+	"github.com/ys-ll/uniterm/backend/utils"
 )
 
 // ConfigureRepoRemote sets up (or adopts) a snapshot remote for any of the

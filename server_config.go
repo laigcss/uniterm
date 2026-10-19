@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // serverModeConfig applies server-mode-specific configuration before the

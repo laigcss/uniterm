@@ -1,6 +1,6 @@
 {
   "modelVersion": "26.0.0",
-  "description": "ai-ops-terminal 鸿蒙应用壳（路径 D: ArkWeb + Go 子进程）",
+  "description": "uniTerm 鸿蒙应用壳（路径 D: ArkWeb + Go 子进程）",
   "dependencies": {
   },
   "devDependencies": {

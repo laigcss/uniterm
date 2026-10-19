@@ -1,4 +1,4 @@
-import { SessionWrite } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 // Wails v3 dispatches every JS binding call in its own goroutine
 // (pkg/application/application.go: `event := <-windowMessageBuffer;

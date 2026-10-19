@@ -1,6 +1,6 @@
 # Start Page
 
-The start page is the default page displayed after ai-ops-terminal launches, providing quick access entries. It also opens automatically when all tabs are closed.
+The start page is the default page displayed after uniTerm launches, providing quick access entries. It also opens automatically when all tabs are closed.
 
 ![Start Page](/imgs/start_tab_light.webp)
 

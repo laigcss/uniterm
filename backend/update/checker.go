@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // release mirrors the GitHub/Gitee release payload subset. Both APIs expose
@@ -219,7 +219,7 @@ func sourceReleaseURL(source string) string {
 	if source == "gitee" {
 		return "https://gitee.com/ys-l/uniterm/releases/latest"
 	}
-	return "https://github.com/laigcss/ai-ops-terminal/releases/latest"
+	return "https://github.com/ys-ll/uniterm/releases/latest"
 }
 
 // fetchRelease fetches the latest release from a source, honouring the

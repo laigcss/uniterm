@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // parseParams parses "key1=val1&key2=val2" into a map.

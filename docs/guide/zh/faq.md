@@ -74,4 +74,4 @@ v1.9.4 起已修复快速输入丢字/重复、输入法回车上屏误触发应
 
 如果您的问题未在此列出，请通过以下渠道反馈：
 
-- [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues)
+- [GitHub Issues](https://github.com/laigcss/uniTerm/issues)

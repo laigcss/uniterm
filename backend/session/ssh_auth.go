@@ -3,8 +3,8 @@ package session
 import (
 	"os"
 
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
-	"github.com/laigcss/ai-ops-terminal/backend/utils"
+	"github.com/ys-ll/uniterm/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/utils"
 	"golang.org/x/crypto/ssh"
 )
 

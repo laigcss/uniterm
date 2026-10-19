@@ -71,8 +71,7 @@
         "PACKAGE_JSON": [],
         "MODULE_TYPE": "entry",
         "INCREMENTAL_TASKS": {
-          "BUILD_NATIVE_WITH_CMAKE": true,
-          "COMPILE_ARKTS": true
+          "BUILD_NATIVE_WITH_CMAKE": true
         },
         "IS_INCREMENTAL_MODULE": true
       }
@@ -93,23 +92,25 @@
     "OPTIMIZATION_STRATEGY": "memory",
     "TASK_TIME": {
       "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf": {
-        "CreateModuleInfo": 761208,
-        "ConfigureCmake": 21556833,
-        "PreCheckSyscap": 124500,
-        "GeneratePkgSdkInfo": 2160833,
-        "ProcessIntegratedHsp": 454834,
-        "BuildNativeWithCmake": 15131167,
-        "SyscapTransform": 2598000,
-        "ProcessStartupConfig": 880583,
-        "BuildJS": 480500,
-        "BuildNativeWithNinja": 125627125,
-        "CompileArkTS": 926417291,
-        "ProcessCompiledResources": 184833,
-        "PackageHap": 624788666,
-        "PackingCheck": 2545750,
-        "SignHap": 621250,
-        "CollectDebugSymbol": 239375,
-        "assembleHap": 87583
+        "CreateModuleInfo": 940458,
+        "ConfigureCmake": 301214208,
+        "PreCheckSyscap": 18193791,
+        "GeneratePkgSdkInfo": 4744541,
+        "ProcessIntegratedHsp": 16462750,
+        "BuildNativeWithCmake": 53600166,
+        "SyscapTransform": 19973042,
+        "ProcessStartupConfig": 2931584,
+        "BuildJS": 2660375,
+        "BuildNativeWithNinja": 2684779333,
+        "ProcessLibs": 102062250,
+        "DoNativeStrip": 959102709,
+        "CacheNativeLibs": 530521584,
+        "ProcessCompiledResources": 3257625,
+        "PackageHap": 1706179167,
+        "PackingCheck": 5330500,
+        "SignHap": 1805875,
+        "CollectDebugSymbol": 477375,
+        "assembleHap": 123541
       }
     },
     "CUSTOM_TASK_TIME": {},
@@ -122,8 +123,8 @@
       "ENABLE_CPP_FUNCTION_LEVEL_INCREMENTAL": false
     },
     "CONFIG_PROPERTIES": {},
-    "PID": 79895,
-    "TOTAL_TIME": 1799743750,
-    "BUILD_ID": "202610142031529890"
+    "BUILD_ID": "202610190753431410",
+    "PID": 72978,
+    "TOTAL_TIME": 9213839292
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "entry",
   "version": "1.0.0",
-  "description": "ai-ops-terminal entry 模块",
+  "description": "uniTerm entry 模块",
   "main": "",
   "author": "ai-ops-team",
   "license": "Apache-2.0",

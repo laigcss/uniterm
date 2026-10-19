@@ -178,7 +178,7 @@ import {
   SftpChangeRemoteDir, SftpChangeLocalDir,
   SftpOpenExternalEditor, OpenExternalEditorLocal, ListSessions,
   SftpOpenWithSystem, OpenWithSystemLocal,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 
 import FileList from './FileList.vue'
 import TransferPanel from './TransferPanel.vue'

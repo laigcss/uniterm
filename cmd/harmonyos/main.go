@@ -56,7 +56,7 @@ func IsServerReady() C.int {
 //export StartServer
 func StartServer(port C.int) C.int {
 	if serverStarted {
-		log.Println("[ai-ops-terminal] 服务器已启动，跳过重复启动")
+		log.Println("[uniTerm] 服务器已启动，跳过重复启动")
 		return 0
 	}
 
@@ -85,12 +85,12 @@ func StartServer(port C.int) C.int {
 	fileServer := http.FileServer(fs)
 	http.Handle("/", fileServer)
 
-	log.Printf("[ai-ops-terminal] HTTP 服务器启动在 %s", addr)
+	log.Printf("[uniTerm] HTTP 服务器启动在 %s", addr)
 
 	// 在 goroutine 中启动 HTTP 服务器
 	go func() {
 		if err := http.ListenAndServe(addr, nil); err != nil {
-			log.Printf("[ai-ops-terminal] 服务器错误: %v", err)
+			log.Printf("[uniTerm] 服务器错误: %v", err)
 		}
 	}()
 
@@ -103,7 +103,7 @@ func StartServer(port C.int) C.int {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
-		log.Println("[ai-ops-terminal] 服务器关闭")
+		log.Println("[uniTerm] 服务器关闭")
 		serverReady = false
 	}()
 
@@ -114,5 +114,5 @@ func main() {
 	// c-shared 模式：main.main 仅初始化 Go runtime，不启动服务器。
 	// 服务器由导出的 C 函数 StartServer(port) 启动，
 	// 该函数在 NAPI 模块设置环境变量后被调用。
-	log.Println("[ai-ops-terminal] Go runtime 已初始化（c-shared 模式）")
+	log.Println("[uniTerm] Go runtime 已初始化（c-shared 模式）")
 }

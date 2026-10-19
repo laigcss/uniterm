@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // EsIndexInfo holds cat/indices row fields used by the UI.

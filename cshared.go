@@ -31,9 +31,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
-	unisync "github.com/laigcss/ai-ops-terminal/backend/sync"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/store"
+	unisync "github.com/ys-ll/uniterm/backend/sync"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -125,7 +125,7 @@ func StartServer(port C.int) C.int {
 
 	// 创建 Wails 应用（server 模式，无 GUI）
 	w3app := application.New(application.Options{
-		Name:       "ai-ops-terminal",
+		Name:       "uniTerm",
 		Assets:     application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		OnShutdown: app.shutdown,
 		Server: application.ServerOptions{

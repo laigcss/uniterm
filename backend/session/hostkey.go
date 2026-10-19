@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -119,13 +119,13 @@ func GetDefaultHostKeyStrategy() HostKeyStrategy {
 	return defaultStrategy
 }
 
-// KnownHostsPath 返回 ~/.ai-ops-terminal/known_hosts 的绝对路径。导出以便测试与管理。
+// KnownHostsPath 返回 ~/.uniterm/known_hosts 的绝对路径。导出以便测试与管理。
 func KnownHostsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".ai-ops-terminal", "known_hosts"), nil
+	return filepath.Join(home, ".uniterm", "known_hosts"), nil
 }
 
 // knownHostsKey 构造 known_hosts 行的 host 列。OpenSSH 风格：非 22 端口用 [host]:port。

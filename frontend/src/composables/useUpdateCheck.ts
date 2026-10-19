@@ -1,7 +1,7 @@
 import { reactive, ref, watch, h } from 'vue'
 import { ElMessage } from 'element-plus'
 import { msg } from '../services/message'
-import { CheckForUpdate, GetAppInfo, DownloadUpdate, ApplyUpdate } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { CheckForUpdate, GetAppInfo, DownloadUpdate, ApplyUpdate } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useI18n, locale } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 import { isMobilePlatform } from '../utils/platform'

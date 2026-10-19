@@ -12,7 +12,7 @@
 
     <div class="start-content" :style="contentStyle">
       <!-- Branding -->
-      <div class="start-brand" v-show="!searchQuery.trim()">ai-ops-terminal</div>
+      <div class="start-brand" v-show="!searchQuery.trim()">uniTerm</div>
 
       <!-- Search row -->
     <div class="start-search-row">
@@ -360,7 +360,7 @@ import { useTabStore } from '../stores/tabStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import { isMobilePlatform } from '../utils/platform'
-import { GetRecentConnections } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { GetRecentConnections } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { formatConnSubtitle, formatTypeFilterLabel, matchTypeFilter } from '../utils/quickConnect'
 import { connectionTypeIcon as connTypeIcon, connectionTypeLabel as connTypeLabel } from '../utils/connectionTypes'
 import { getShellLabel as getShellLabelBase } from '../utils/shellLabel'

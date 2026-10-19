@@ -3,7 +3,7 @@ package importer
 import (
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // ensureGroupPath find-or-creates a nested group for `path` (ordered ancestor→leaf

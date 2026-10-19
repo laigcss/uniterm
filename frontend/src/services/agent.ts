@@ -8,7 +8,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSkillStore } from '../stores/skillStore'
 import { loadRemoteMCPTools, toAgentToolEntry, callRemoteMCPTool, isRemoteMCPTool } from './mcpTools'
-import { GetSkillFile, ListSkillFiles } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { GetSkillFile, ListSkillFiles } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { AIAttachment, AIMessage } from '../types/ai'
 import { Events } from '@wailsio/runtime'
 import {

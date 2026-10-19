@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "ai-ops-terminal 鸿蒙应用壳"
+      "value": "uniTerm 鸿蒙应用壳"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "ai-ops-terminal 入口"
+      "value": "uniTerm 入口"
     },
     {
       "name": "EntryAbility_label",
-      "value": "ai-ops-terminal"
+      "value": "uniTerm"
     },
     {
       "name": "reason_internet",
@@ -26,7 +26,7 @@
     },
     {
       "name": "loading_starting",
-      "value": "正在启动 ai-ops-terminal..."
+      "value": "正在启动 uniTerm..."
     },
     {
       "name": "loading_restarting",

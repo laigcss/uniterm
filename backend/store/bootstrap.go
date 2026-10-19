@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // AutoInitMode is set by the c-shared entry point to indicate that the
@@ -28,18 +28,18 @@ type bootstrap struct {
 	DataDir string `json:"dataDir,omitempty"`
 }
 
-// DefaultDataDir returns the OS user-config data dir (<UserConfigDir>/ai-ops-terminal).
+// DefaultDataDir returns the OS user-config data dir (<UserConfigDir>/uniterm).
 func DefaultDataDir() (string, error) {
 	// If DataDirRoot is set (c-shared mode), use it directly instead of
 	// os.UserConfigDir() which may fail if XDG_CONFIG_HOME is not visible to Go.
 	if DataDirRoot != "" {
-		return filepath.Join(DataDirRoot, "ai-ops-terminal"), nil
+		return filepath.Join(DataDirRoot, "uniterm"), nil
 	}
 	cfg, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cfg, "ai-ops-terminal"), nil
+	return filepath.Join(cfg, "uniterm"), nil
 }
 
 func exeDir() (string, error) {

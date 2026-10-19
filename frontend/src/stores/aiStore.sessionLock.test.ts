@@ -9,7 +9,7 @@ vi.mock('@wailsio/runtime', () => ({
   Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
 
-vi.mock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   LoadAISessions: vi.fn().mockResolvedValue({ sessions: [], currentSessionId: '' }),
   SaveAISessions: vi.fn().mockResolvedValue(undefined),
   DisableSessionOutputLog: vi.fn().mockResolvedValue(undefined),

@@ -5,7 +5,7 @@ package session
 import (
 	"os"
 
-	unitermkrb5 "github.com/laigcss/ai-ops-terminal/backend/krb5"
+	unitermkrb5 "github.com/ys-ll/uniterm/backend/krb5"
 	"golang.org/x/crypto/ssh"
 )
 

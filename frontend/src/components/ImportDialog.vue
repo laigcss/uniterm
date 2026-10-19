@@ -8,7 +8,7 @@
     <el-form label-width="6.25rem">
       <el-form-item :label="t('importExport.importType')">
         <el-select v-model="format" style="width:100%">
-          <el-option label="ai-ops-terminal (.utm)" value="uniterm" />
+          <el-option label="uniTerm (.utm)" value="uniterm" />
           <el-option label="MobaXterm (.mxtsessions)" value="mobaxterm" />
           <el-option label="mRemoteNG (confCons.xml)" value="mremoteng" />
           <el-option label="OpenSSH config (~/.ssh/config)" value="openssh" />
@@ -47,7 +47,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
-import { ParseImportFile, ApplyImport, OpenFileDialogFiltered, OpenDirectoryDialog } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { ParseImportFile, ApplyImport, OpenFileDialogFiltered, OpenDirectoryDialog } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done', count: number): void }>()
@@ -59,7 +59,7 @@ const password = ref('')
 const importing = ref(false)
 
 const FILTERS: Record<string, { display: string; pattern: string }> = {
-  uniterm: { display: 'ai-ops-terminal (*.utm)', pattern: '*.utm' },
+  uniterm: { display: 'uniTerm (*.utm)', pattern: '*.utm' },
   xshell: { display: 'Xshell (*.xts)', pattern: '*.xts' },
   mobaxterm: { display: 'MobaXterm (*.mxtsessions)', pattern: '*.mxtsessions' },
   mremoteng: { display: 'mRemoteNG (confCons.xml)', pattern: '*.xml' },

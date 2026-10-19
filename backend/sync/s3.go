@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // s3FS adapts an S3 session to the sync engine's RemoteFS. Object keys are

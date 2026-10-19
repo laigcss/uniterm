@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "ai-ops-terminal HarmonyOS shell"
+      "value": "uniTerm HarmonyOS shell"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "ai-ops-terminal entry"
+      "value": "uniTerm entry"
     },
     {
       "name": "EntryAbility_label",
-      "value": "ai-ops-terminal"
+      "value": "uniTerm"
     },
     {
       "name": "reason_internet",
@@ -26,7 +26,7 @@
     },
     {
       "name": "loading_starting",
-      "value": "Starting ai-ops-terminal..."
+      "value": "Starting uniTerm..."
     },
     {
       "name": "loading_restarting",

@@ -1,7 +1,7 @@
-# HarmonyOS 适配可行性评估报告（ai-ops-terminal / 原 uniTerm）
+# HarmonyOS 适配可行性评估报告（uniTerm / 原 uniTerm）
 
 > **文档性质**：HarmonyOS（鸿蒙）平台适配可行性评估
-> **评估对象**：ai-ops-terminal（原 uniTerm）跨平台 AI 运维终端管理桌面应用
+> **评估对象**：uniTerm（原 uniTerm）跨平台 AI 运维终端管理桌面应用
 > **编写日期**：2026-10-12
 > **数据来源**：HarmonyOS 官方开发者文档（developer.huawei.com，通过 harmony-doc-view 完整读取）、Go 官方工具链、项目源码分析
 > **严谨性声明**：所有结论附来源 URL；无法核实的明确标注「未能核实」；严格区分官方文档与推断；不凭空捏造技术、版本号、库名、URL。
@@ -12,7 +12,7 @@
 
 ### 1.1 一段话总结
 
-ai-ops-terminal 当前技术栈为 **Wails v3 + Go 后端 + Vue 3 前端 + xterm.js 终端**。评估鸿蒙适配后，核心矛盾在于：**Go 语言不支持鸿蒙目标平台（GOOS=ohos 不存在），且鸿蒙使用 musl libc（非 glibc），Go 二进制无法直接在鸿蒙上运行**。然而，鸿蒙提供了功能完整的 **ArkWeb 组件**（基于 V8 引擎，支持 W3C 标准、WebGL、JavaScript 双向通信），可以近乎零改动地内嵌现有 Vue 3 + xterm.js 前端。因此，**最可行的路径是「ArkWeb 内嵌现有前端 + Go 后端作为远程服务部署」**（路径A，中等成本），其次是「ArkWeb 内嵌前端 + C/C++ NDK 重写后端核心模块」**（路径B，高成本），**完全用 ArkTS/ArkUI 重写**（路径C）成本极高不推荐。鸿蒙已明确支持 PC/2in1 设备形态，具备多窗口/分屏/悬浮窗能力，桌面应用适配有系统级保障。
+uniTerm 当前技术栈为 **Wails v3 + Go 后端 + Vue 3 前端 + xterm.js 终端**。评估鸿蒙适配后，核心矛盾在于：**Go 语言不支持鸿蒙目标平台（GOOS=ohos 不存在），且鸿蒙使用 musl libc（非 glibc），Go 二进制无法直接在鸿蒙上运行**。然而，鸿蒙提供了功能完整的 **ArkWeb 组件**（基于 V8 引擎，支持 W3C 标准、WebGL、JavaScript 双向通信），可以近乎零改动地内嵌现有 Vue 3 + xterm.js 前端。因此，**最可行的路径是「ArkWeb 内嵌现有前端 + Go 后端作为远程服务部署」**（路径A，中等成本），其次是「ArkWeb 内嵌前端 + C/C++ NDK 重写后端核心模块」**（路径B，高成本），**完全用 ArkTS/ArkUI 重写**（路径C）成本极高不推荐。鸿蒙已明确支持 PC/2in1 设备形态，具备多窗口/分屏/悬浮窗能力，桌面应用适配有系统级保障。
 
 ### 1.2 三条路径速览
 
@@ -180,7 +180,7 @@ ArkWeb 是鸿蒙提供的 Web 组件，允许在应用中嵌入网页。HarmonyO
 | 横向悬浮窗 | `preferMultiWindowOrientation: "landscape"` |
 | PC 屏幕区域 | `display.getAvailableArea()` API |
 
-**关键结论**：鸿蒙 PC/2in1 支持完整的桌面应用窗口管理（全屏/分屏/悬浮窗），ai-ops-terminal 作为桌面终端管理工具，其多终端会话窗口的需求可以在鸿蒙 PC 上得到满足。
+**关键结论**：鸿蒙 PC/2in1 支持完整的桌面应用窗口管理（全屏/分屏/悬浮窗），uniTerm 作为桌面终端管理工具，其多终端会话窗口的需求可以在鸿蒙 PC 上得到满足。
 
 ### 3.5 网络通信能力
 

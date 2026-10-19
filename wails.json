@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "ai-ops-terminal",
-  "outputfilename": "ai-ops-terminal",
+  "name": "uniterm",
+  "outputfilename": "uniterm",
   "frontend": {
     "dir": "./frontend",
     "install": "npm install",

@@ -1,6 +1,6 @@
 # 个性化
 
-ai-ops-terminal 提供丰富的个性化选项，让终端符合您的使用习惯和审美偏好。
+uniTerm 提供丰富的个性化选项，让终端符合您的使用习惯和审美偏好。
 
 
 ## 应用配置
@@ -87,7 +87,7 @@ ai-ops-terminal 提供丰富的个性化选项，让终端符合您的使用习�
 
 ## 快捷键
 
-ai-ops-terminal 支持自定义快捷键。
+uniTerm 支持自定义快捷键。
 
 ![快捷键设置](/imgs/shortcuts_light.webp)
 

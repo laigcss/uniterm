@@ -1,6 +1,6 @@
 # AI Assistant
 
-ai-ops-terminal has a built-in autonomous AI Agent that can independently plan and execute multiple rounds of Shell commands in the terminal.
+uniTerm has a built-in autonomous AI Agent that can independently plan and execute multiple rounds of Shell commands in the terminal.
 
 ![AI Assistant](/imgs/ai_assistant_light.webp)
 
@@ -28,7 +28,7 @@ Supports Anthropic and OpenAI-compatible APIs. You can add multiple models and s
 | Name | Custom display name used to distinguish configurations in the model list |
 | Protocol | Choose **Anthropic** or **OpenAI** protocol, determining the request format |
 | Base URL | API endpoint address. OpenAI defaults to `https://api.openai.com/v1`, Anthropic defaults to `https://api.anthropic.com` |
-| User-Agent | Optional. Custom User-Agent header identifier. Presets include ai-ops-terminal, Claude Code, Cursor, and manual input is also supported |
+| User-Agent | Optional. Custom User-Agent header identifier. Presets include uniTerm, Claude Code, Cursor, and manual input is also supported |
 | API Key | API authentication key, stored as a password |
 | Model | Model name (e.g. `gpt-4o`, `claude-sonnet-4-20250514`). Use the "Fetch Models" button to pull available models from the API; the dropdown shows display names while the real model ID is saved |
 | Test Connection | After filling in the API Key and model, click "Test Connection" to verify the configuration |

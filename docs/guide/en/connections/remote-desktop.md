@@ -1,6 +1,6 @@
 # Remote Desktop
 
-ai-ops-terminal integrates four remote desktop protocols, providing a smooth graphical remote control experience.
+uniTerm integrates four remote desktop protocols, providing a smooth graphical remote control experience.
 
 ## RDP
 

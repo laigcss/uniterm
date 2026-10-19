@@ -122,8 +122,8 @@ func (g *GitRepo) StageAndCommitFiles(msg string, files []string) (bool, error) 
 
 	_, err = wt.Commit(msg, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "ai-ops-terminal",
-			Email: "ai-ops-terminal@local",
+			Name:  "uniTerm",
+			Email: "uniterm@local",
 			When:  time.Now(),
 		},
 	})

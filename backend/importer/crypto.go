@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/credentials"
 	"golang.org/x/crypto/pbkdf2"
 )
 

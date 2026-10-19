@@ -6,7 +6,7 @@ import { setActivePinia, createPinia } from 'pinia'
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: vi.fn(() => () => {}), Off: vi.fn() },
 }))
-vi.mock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   LoadIdentities: vi.fn(async () => ({ identities: [] })),
   SaveIdentities: vi.fn(async () => {}),
 }))

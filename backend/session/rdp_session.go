@@ -15,7 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/go-ole/go-ole"
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -478,7 +478,7 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	}()
 
 	if s.parentHwnd == 0 {
-		title, _ := windows.UTF16PtrFromString("ai-ops-terminal")
+		title, _ := windows.UTF16PtrFromString("uniTerm")
 		hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
 		if hwnd == 0 {
 			log.Writef("[RDP] ERROR: cannot find main window")
@@ -543,7 +543,7 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	// Create as a WS_CHILD of the main window. A child window:
 	//  - follows the parent automatically when it moves (owned top-level windows do not),
 	//  - is clipped to the parent's client area (so it can never cover the header/tabs),
-	//  - cannot become the foreground window (so cannot push ai-ops-terminal behind other
+	//  - cannot become the foreground window (so cannot push uniTerm behind other
 	//    windows during/after connect).
 	// The RDP overlay is driven purely by sibling z-order: HWND_TOP to show it above
 	// the webview, HWND_BOTTOM to tuck it under the webview while an HTML menu/dialog
@@ -726,7 +726,7 @@ func (s *RDPSession) Connect(config ConnectionConfig) error {
 	s.positionFromMainWindow(width, height)
 
 	// Keep WS_EX_NOACTIVATE permanently: the ActiveX control and its child
-	// windows can steal foreground during/after Connect, pushing ai-ops-terminal
+	// windows can steal foreground during/after Connect, pushing uniTerm
 	// behind other windows. The flag prevents this. (issue #385, #470)
 
 	s.setStatus(StatusConnected)

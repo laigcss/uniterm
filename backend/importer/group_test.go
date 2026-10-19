@@ -3,7 +3,7 @@ package importer
 import (
 	"testing"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 func TestEnsureGroupPathReusesSamePath(t *testing.T) {

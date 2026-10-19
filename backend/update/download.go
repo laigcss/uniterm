@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // downloadHTTPClient tolerates large assets: no overall timeout, but bounded

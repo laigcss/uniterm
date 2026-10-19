@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // sessionFS is the slice of the file-transfer sessions the remote shims

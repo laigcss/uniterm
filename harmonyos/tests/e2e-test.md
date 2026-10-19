@@ -1,4 +1,4 @@
-# ai-ops-terminal 鸿蒙端到端测试指南
+# uniTerm 鸿蒙端到端测试指南
 
 ## 前置条件
 
@@ -10,7 +10,7 @@
    ```
 4. **将 Go 二进制放入鸿蒙工程 rawfile**
    ```bash
-   cp bin/ai-ops-terminal-harmonyos harmonyos/entry/src/main/resources/rawfile/ai-ops-terminal
+   cp bin/uniTerm-harmonyos harmonyos/entry/src/main/resources/rawfile/uniTerm
    ```
 
 ## 测试步骤
@@ -41,17 +41,17 @@ hdc shell aa start -a EntryAbility -b com.aiops.terminal
 ```
 
 **预期结果**：
-- 应用启动，显示加载页"正在启动 ai-ops-terminal..."
+- 应用启动，显示加载页"正在启动 uniTerm..."
 - 5-10 秒后加载页消失，显示前端 UI
 
 ### 步骤 4：验证 Go 子进程
 
 ```bash
 # 检查 Go 子进程是否运行
-hdc shell ps -ef | grep ai-ops-terminal
+hdc shell ps -ef | grep uniTerm
 
 # 预期输出包含：
-# root  <pid>  ...  ai-ops-terminal
+# root  <pid>  ...  uniTerm
 ```
 
 ### 步骤 5：验证前端 UI
@@ -98,7 +98,7 @@ hdc shell ps -ef | grep ai-ops-terminal
 
 ```bash
 # 查找 Go 子进程 PID
-PID=$(hdc shell ps -ef | grep ai-ops-terminal | grep -v grep | awk '{print $2}' | head -1)
+PID=$(hdc shell ps -ef | grep uniTerm | grep -v grep | awk '{print $2}' | head -1)
 echo "Go PID: $PID"
 
 # 杀死 Go 子进程
@@ -117,7 +117,7 @@ hdc shell kill -9 $PID
 # 连续杀死 3 次
 for i in 1 2 3; do
     sleep 5
-    PID=$(hdc shell ps -ef | grep ai-ops-terminal | grep -v grep | awk '{print $2}' | head -1)
+    PID=$(hdc shell ps -ef | grep uniTerm | grep -v grep | awk '{print $2}' | head -1)
     if [ -n "$PID" ]; then
         hdc shell kill -9 $PID
         echo "第 $i 次杀死 PID=$PID"
@@ -136,7 +136,7 @@ done
 3. 检查 Go 子进程
 
 ```bash
-hdc shell ps -ef | grep ai-ops-terminal
+hdc shell ps -ef | grep uniTerm
 # 预期：无输出（Go 子进程已随应用退出）
 ```
 
@@ -154,7 +154,7 @@ hdc shell ps -ef | grep ai-ops-terminal
 
 ```bash
 # 后台时检查进程
-hdc shell ps -ef | grep ai-ops-terminal
+hdc shell ps -ef | grep uniTerm
 # 预期：Go 子进程仍在运行
 ```
 
@@ -189,7 +189,7 @@ hdc shell ps -ef | grep ai-ops-terminal
 - 检查端口是否被占用：`hdc shell netstat -tlnp | grep 9245`
 
 ### WebSocket 连接失败
-- 检查 Go 服务器日志：`hdc shell cat /data/storage/el2/base/files/ai-ops-terminal.log`
+- 检查 Go 服务器日志：`hdc shell cat /data/storage/el2/base/files/uniTerm.log`
 - 确认 WebSocketAllowAllOrigins 设置为 true
 
 ### JSBridge 不工作

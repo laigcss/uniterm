@@ -1,4 +1,4 @@
-import { ListMCPTools, CallMCPTool } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { ListMCPTools, CallMCPTool } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 /**
  * External MCP client tools.

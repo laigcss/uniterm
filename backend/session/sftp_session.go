@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	"github.com/laigcss/ai-ops-terminal/backend/utils"
+	"github.com/ys-ll/uniterm/backend/utils"
 	"golang.org/x/crypto/ssh"
 )
 

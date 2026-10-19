@@ -15,7 +15,7 @@ set -euo pipefail
 #   GITHUB_TOKEN    GitHub Token，用于后续 Release 步骤（可选）
 #
 # 产物:
-#   {OUTPUT_DIR}/ai-ops-terminal-harmonyos-{version}-linux-arm64
+#   {OUTPUT_DIR}/uniterm-harmonyos-{version}-linux-arm64
 #   {OUTPUT_DIR}/SHA256SUMS
 #
 # 示例:
@@ -37,7 +37,7 @@ TARGET_GOARCH="arm64"
 BUILD_TAGS="server,production"
 
 # 产物基础名（不含版本和架构后缀）
-PRODUCT_NAME="ai-ops-terminal-harmonyos"
+PRODUCT_NAME="uniterm-harmonyos"
 
 # -----------------------------------------------------------------------------
 # 辅助函数

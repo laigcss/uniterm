@@ -22,8 +22,8 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/platform"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/platform"
 )
 
 const cpUTF8 = 65001
@@ -45,12 +45,12 @@ var (
 // default ANSI/OEM code page (e.g. GBK/936 on zh-CN Windows); MSYS2 shells
 // like Git Bash write raw UTF-8 to their controlling console, which the
 // console then reinterprets under that legacy code page before ConPTY
-// re-serializes it as the VT stream ai-ops-terminal reads, producing mojibake that
+// re-serializes it as the VT stream uniTerm reads, producing mojibake that
 // does not occur in standalone Git Bash (which runs under mintty and never
 // goes through the Win32 console subsystem). Windows Terminal and VS Code's
-// integrated terminal apply the same fix. ai-ops-terminal's own process is a GUI
+// integrated terminal apply the same fix. uniTerm's own process is a GUI
 // subsystem app with no console of its own, so AttachConsole/FreeConsole
-// here only ever touches the child's console, never ai-ops-terminal's.
+// here only ever touches the child's console, never uniTerm's.
 func forceUTF8ConsoleCodePage(pid int) {
 	consoleAttachMu.Lock()
 	defer consoleAttachMu.Unlock()

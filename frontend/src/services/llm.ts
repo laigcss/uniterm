@@ -1,4 +1,4 @@
-import { ChatCompletion } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { ChatCompletion } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAIStore } from '../stores/aiStore'

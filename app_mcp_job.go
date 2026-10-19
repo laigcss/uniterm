@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/mcpjob"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/mcpjob"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // Unified async-job bridge: implements mcp.ForegroundJobs over the app's live

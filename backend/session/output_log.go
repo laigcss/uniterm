@@ -448,7 +448,7 @@ const logBufferSize = 64 * 1024
 // disk write; we only need to forward buffered bytes out of user-space.
 const logFlushInterval = 1 * time.Second
 
-const bannerHeader = "=== ai-ops-terminal session log ==="
+const bannerHeader = "=== uniTerm session log ==="
 
 // Enable opens the log file and writes the header banner. Returns the
 // final path. If dir is empty, defaultSessionLogDir() is used.

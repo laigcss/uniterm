@@ -29,7 +29,7 @@ If applicable, add screenshots to help explain your problem.
 
 ## Environment
 
-- ai-ops-terminal version: [e.g. 1.3.2]
+- uniTerm version: [e.g. 1.3.2]
 - OS: [e.g. Windows 10, macOS 14, Ubuntu 22.04]
 
 ## Additional Context
@@ -59,7 +59,7 @@ Add any other context about the problem here.
 
 ## 环境信息
 
-- ai-ops-terminal 版本：[如 1.3.2]
+- uniTerm 版本：[如 1.3.2]
 - 操作系统：[如 Windows 10、macOS 14、Ubuntu 22.04]
 
 ## 补充说明

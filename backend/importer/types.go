@@ -1,6 +1,6 @@
 package importer
 
-import "github.com/laigcss/ai-ops-terminal/backend/session"
+import "github.com/ys-ll/uniterm/backend/session"
 
 // Format names match the frontend import-type dropdown values verbatim.
 const (

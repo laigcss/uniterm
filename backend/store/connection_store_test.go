@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 func mustConnStore(t *testing.T) *ConnectionStore {

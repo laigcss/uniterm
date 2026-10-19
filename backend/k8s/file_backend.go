@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // FileBackend 实现 session.ContainerFileBackend 接口，把 Pod 容器内的文件

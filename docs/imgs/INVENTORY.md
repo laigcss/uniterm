@@ -1,4 +1,4 @@
-# ai-ops-terminal Screenshots Inventory
+# uniTerm Screenshots Inventory
 
 ## Naming convention
 

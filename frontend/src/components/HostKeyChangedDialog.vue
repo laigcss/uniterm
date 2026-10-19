@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from '../i18n'
-import { AcceptHostKeyChange } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { AcceptHostKeyChange } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 
 // Payload emitted by the backend on `session:hostkey-changed`. Mirrors the

@@ -169,7 +169,7 @@ import MenuItem from './MenuItem.vue'
 import MenuSubmenu from './MenuSubmenu.vue'
 import MenuDivider from './MenuDivider.vue'
 import { Application, Screens, System, Window } from '@wailsio/runtime'
-import { SaveWindowState } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { SaveWindowState } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const { t } = useI18n()
 const tabStore = useTabStore()

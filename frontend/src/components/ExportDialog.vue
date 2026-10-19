@@ -24,7 +24,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from '../i18n'
 import { msg } from '../services/message'
-import { ExportConnections, SaveFileDialogFiltered } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { ExportConnections, SaveFileDialogFiltered } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done'): void }>()
@@ -43,7 +43,7 @@ function onCancel() { emit('update:visible', false) }
 async function onExport() {
   if (!password.value) { msg.error(t('importExport.configPassword')); return }
   if (password.value !== confirmPassword.value) { msg.error(t('importExport.passwordMismatch')); return }
-  const dest = await SaveFileDialogFiltered(t('importExport.exportTitle'), 'ai-ops-terminal-connections.utm', 'ai-ops-terminal (*.utm)', '*.utm')
+  const dest = await SaveFileDialogFiltered(t('importExport.exportTitle'), 'uniTerm-connections.utm', 'uniTerm (*.utm)', '*.utm')
   if (!dest) return
   exporting.value = true
   try {

@@ -10,7 +10,7 @@
 package main
 
 import (
-	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

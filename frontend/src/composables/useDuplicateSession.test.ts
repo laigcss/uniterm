@@ -12,7 +12,7 @@ const { duplicateMock, sessionStartMock, createSessionMock } = vi.hoisted(() => 
   createSessionMock: vi.fn(),
 }))
 
-vi.mock('../../bindings/github.com/laigcss/ai-ops-terminal/app', () => ({
+vi.mock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
   DuplicateSSHChannel: duplicateMock,
   SessionStart: sessionStartMock,
   CreateSession: createSessionMock,

@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // "custom" is handled separately below — it is not a preset key.
@@ -53,7 +53,7 @@ func resolveDesktopCommand(cfg ConnectionConfig) (string, error) {
 // X11DesktopSession opens an SSH connection to a remote host with X11
 // forwarding enabled and runs the chosen desktop command. The remote X
 // clients are bridged to the local X server (VcXsrv/XQuartz/Xorg) over
-// SSH's x11 channel — the actual desktop is rendered outside ai-ops-terminal.
+// SSH's x11 channel — the actual desktop is rendered outside uniTerm.
 // The session represents the lifecycle of that desktop process:
 // Connected while the command is running, Disconnected when it exits.
 type X11DesktopSession struct {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/credentials"
 )
 
 // This file is the single source of truth for which JSON config files carry

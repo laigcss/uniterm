@@ -8,7 +8,7 @@ const TAG: string = 'EntryAbility';
 /**
  * 应用入口 Ability。
  *
- * ai-ops-terminal 鸿蒙应用壳的入口，负责创建应用窗口并加载主页面。
+ * uniTerm 鸿蒙应用壳的入口，负责创建应用窗口并加载主页面。
  * Go 后端子进程的启动/停止由 Index 页面管理，本 Ability 负责：
  *   - 窗口生命周期与沉浸式状态栏配置
  *   - 内存告警通知（通知 Go 子进程做 GC）
@@ -17,7 +17,7 @@ const TAG: string = 'EntryAbility';
  */
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    hilog.info(DOMAIN, TAG, 'onCreate: ai-ops-terminal 鸿蒙应用壳启动');
+    hilog.info(DOMAIN, TAG, 'onCreate: uniTerm 鸿蒙应用壳启动');
     // 应用全局状态初始化
   }
 

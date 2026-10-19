@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/update"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/update"
 )
 
 // autotestUpdate drives the full update pipeline (check → download → verify →
@@ -17,7 +17,7 @@ import (
 //	                    same env, then quit
 //	run 2 (new binary): check finds no newer version → log PASS → exit 0
 //
-// The verdict is observable in ~/.uniterm/ai-ops-terminal.log:
+// The verdict is observable in ~/.uniterm/uniterm.log:
 //
 //	[autotest] APPLIED vX → vY
 //	[autotest] PASS: running latest vY

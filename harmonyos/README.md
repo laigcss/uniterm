@@ -1,8 +1,8 @@
-# ai-ops-terminal 鸿蒙适配（路径 D）
+# uniTerm 鸿蒙适配（路径 D）
 
 ## 架构概述
 
-本目录是 ai-ops-terminal 的鸿蒙（HarmonyOS）应用壳骨架，采用 **路径 D** 适配方案：
+本目录是 uniTerm 的鸿蒙（HarmonyOS）应用壳骨架，采用 **路径 D** 适配方案：
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -74,14 +74,14 @@ ArkWeb 组件（基于 V8 引擎）加载该地址即可显示完整的前端 UI
 scripts/build-harmonyos.sh
 ```
 
-构建脚本会生成 `bin/ai-ops-terminal-harmonyos-arm64` 二进制文件。
+构建脚本会生成 `bin/uniTerm-harmonyos-arm64` 二进制文件。
 
 ### 步骤 2：复制二进制到鸿蒙工程
 
 ```bash
 # 将 Go 二进制复制到 rawfile 目录（打包进应用）
-cp bin/ai-ops-terminal-harmonyos-arm64 \
-   harmonyos/entry/src/main/resources/rawfile/ai-ops-terminal
+cp bin/uniTerm-harmonyos-arm64 \
+   harmonyos/entry/src/main/resources/rawfile/uniTerm
 ```
 
 ### 步骤 3：编译 NDK 原生库

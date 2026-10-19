@@ -133,7 +133,7 @@ import { isMobilePlatform } from '../utils/platform'
 import {
   SftpGetContent, SftpLocalGetContent, SftpPutContent, SftpLocalPutContent,
   SftpOpenExternalEditor, OpenExternalEditorLocal,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import SyntaxEditor from './SyntaxEditor.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'

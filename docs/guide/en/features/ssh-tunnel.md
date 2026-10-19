@@ -1,6 +1,6 @@
 # SSH Tunnel
 
-ai-ops-terminal has a built-in SSH Tunnel Manager that supports three forwarding modes. You can create, manage, and monitor multiple tunnel connections.
+uniTerm has a built-in SSH Tunnel Manager that supports three forwarding modes. You can create, manage, and monitor multiple tunnel connections.
 
 ![SSH Tunnel](/imgs/ssh_tunnel_light.webp)
 
@@ -57,7 +57,7 @@ Browser  →  SOCKS5 :1080  →  SSH Tunnel  →  All Services in Remote Network
 
 ## Auto-Start
 
-When auto-start is enabled, the tunnel will automatically connect when ai-ops-terminal starts. This is useful for tunnels that need to remain connected at all times, such as a SOCKS5 proxy for a development environment.
+When auto-start is enabled, the tunnel will automatically connect when uniTerm starts. This is useful for tunnels that need to remain connected at all times, such as a SOCKS5 proxy for a development environment.
 
 ## Auto-Reconnect
 

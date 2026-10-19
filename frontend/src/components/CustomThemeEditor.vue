@@ -17,7 +17,7 @@
 
       <div class="theme-preview" :style="previewStyle">
         <div class="theme-preview-line">
-          <span :style="{ color: draft.colors.green }">user@host</span><span :style="{ color: draft.colors.foreground }">:</span><span :style="{ color: draft.colors.blue }">~/ai-ops-terminal</span><span :style="{ color: draft.colors.foreground }">$ ls -la</span>
+          <span :style="{ color: draft.colors.green }">user@host</span><span :style="{ color: draft.colors.foreground }">:</span><span :style="{ color: draft.colors.blue }">~/uniTerm</span><span :style="{ color: draft.colors.foreground }">$ ls -la</span>
         </div>
         <div class="theme-preview-line">
           <span :style="{ color: draft.colors.brightBlack }">total 32</span>
@@ -100,7 +100,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { CustomTerminalTheme, TerminalThemeColors } from '../types/settings'
 import { parseItermColors, buildItermColors } from '../composables/itermcolorsParser'
-import { OpenFileDialogFiltered, SaveFileDialogFiltered, ReadFileBase64, WriteFileBase64 } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { OpenFileDialogFiltered, SaveFileDialogFiltered, ReadFileBase64, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
 
 const props = defineProps<{
   modelValue: boolean
