@@ -195,6 +195,23 @@ export function useKeybindings(deps: KeybindingDeps) {
       }
       duplicateSession(tab)
     },
+    openQuickCommands: () => {
+      sidebarVisible.value = true
+      nextTick(() => sidebarRef.value?.openQuickCommands())
+    },
+    maximizePanel: () => {
+      const tab = tabStore.activeTab
+      if (!tab || tab.type !== 'workspace' || !tab.activePanelId) return
+      const panelId = tab.activePanelId
+      tabStore.toggleWorkspacePanelMaximize(tab.id)
+      nextTick(() => focusPanelTerminal(panelId))
+    },
+    toggleFilePanel: () => {
+      companionStore.toggleFiles()
+    },
+    toggleMonitor: () => {
+      companionStore.toggleMonitor()
+    },
   }
 
   function applyKeybindings() {

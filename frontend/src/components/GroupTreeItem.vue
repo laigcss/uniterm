@@ -82,7 +82,7 @@
 <script setup lang="ts">
 import { inject, computed } from 'vue'
 import { ChevronDown, ChevronRight, MoreHorizontal, Star } from '@lucide/vue'
-import type { ConnectionConfig, ConnectionGroup } from '../types/session'
+import type { ConnectionConfig } from '../types/session'
 import type { GroupTreeNode } from '../stores/connectionStore'
 import { useFavoriteStore } from '../stores/favoriteStore'
 import { useSettingsStore } from '../stores/settingsStore'

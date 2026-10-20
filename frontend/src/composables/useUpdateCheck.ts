@@ -206,7 +206,7 @@ function initAutoCheck() {
   settingsWatchStop = null
 
   // Fetch current version immediately so About page shows it
-  GetAppInfo().then(info => {
+  GetAppInfo().then((info: { version: string }) => {
     if (!updateInfo.value) {
       updateInfo.value = { hasUpdate: false, current: info.version, latest: '', releaseUrl: '', changelog: '', assets: [] }
     }

@@ -238,7 +238,7 @@ function crSelfPathOverride(): ((obj: any) => string) | undefined {
 }
 // Pod 文件浏览：container-file 会话复用 container 的双栏文件管理（k8s 走
 // exec WebSocket 通道）。仅运行中的 Pod 可用。
-function openFiles(pod: any, ev?: MouseEvent) {
+function openFiles(pod: any, _ev?: MouseEvent) {
   if (pod.status?.phase !== 'Running') return
   void import('../composables/connectionLauncher').then(({ launchContainerFileBrowser }) => {
     void launchContainerFileBrowser({

@@ -20,7 +20,7 @@ import {
   isRemoteMCPTool,
   loadRemoteMCPTools,
   toAgentToolEntry,
-  callRemoteMCPTool,
+
 } from './mcpTools'
 
 describe('mcpTools adapter', () => {

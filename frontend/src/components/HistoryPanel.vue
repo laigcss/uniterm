@@ -44,10 +44,10 @@
 
     <!-- Context menu -->
     <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
-      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && runCommand(current)">{{ t('quickCommands.run') }}</MenuItem>
-      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && pasteCommand(current)">{{ t('quickCommands.paste') }}</MenuItem>
-      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && copyCommand(current); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
-      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && saveAsQuickCommand(current)">{{ t('quickCommands.saveAs') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && runCommand(current as HistoryEntry)">{{ t('quickCommands.run') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && pasteCommand(current as HistoryEntry)">{{ t('quickCommands.paste') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && copyCommand(current as HistoryEntry); ctxMenuVisible = false">{{ t('quickCommands.copy') }}</MenuItem>
+      <MenuItem :class="{ disabled: selectedIds.size > 1 }" @click="selectedIds.size <= 1 && saveAsQuickCommand(current as HistoryEntry)">{{ t('quickCommands.saveAs') }}</MenuItem>
       <MenuDivider />
       <MenuItem class="danger" @click="deleteSelected(); ctxMenuVisible = false">{{ t('sidebar.delete') }}</MenuItem>
     </Menu>

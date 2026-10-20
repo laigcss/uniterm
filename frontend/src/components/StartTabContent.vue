@@ -16,7 +16,7 @@
 
       <!-- Search row -->
     <div class="start-search-row">
-      <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
+      <span class="start-filter-btn" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget as HTMLElement)">
         <el-icon><Filter :size="'0.875rem'" /></el-icon>
         <span>{{ filterDisplay }}</span>
       </span>
@@ -46,7 +46,7 @@
           <el-icon><Laptop :size="'0.875rem'" /></el-icon>
           {{ t('conn.startLocalTerminal') }}
         </button>
-        <button class="start-action-btn-dropdown-arrow" @click.stop="shellMenuRef?.toggle($event.currentTarget)">
+        <button class="start-action-btn-dropdown-arrow" @click.stop="shellMenuRef?.toggle($event.currentTarget as HTMLElement)">
           <el-icon><ChevronDown :size="'0.75rem'" /></el-icon>
         </button>
         <Menu ref="shellMenuRef" v-model:visible="shellMenuVisible">
@@ -383,6 +383,7 @@ const emit = defineEmits<{
   'edit-connection': [config: ConnectionConfig]
   'change-group': [config: ConnectionConfig]
   'change-group-ids': [ids: string[]]
+  'change-group-parent': [groupId: string]
 }>()
 
 const { t } = useI18n()

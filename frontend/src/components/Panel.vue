@@ -163,7 +163,7 @@ import {
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
-import type { Panel } from '../types/workspace'
+import type { Panel, WorkspaceTab } from '../types/workspace'
 import { waitForTerminalSize } from '../services/terminalManager'
 import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { isMobilePlatform } from '../utils/platform'
@@ -222,7 +222,7 @@ const panelShortcut = computed(() => {
   return formatDigitShortcut(prefix, props.shortcutIndex, isMac)
 })
 const workspaceTab = computed(() =>
-  props.workspaceId ? tabStore.tabs.find(tab => tab.id === props.workspaceId && tab.type === 'workspace') : undefined
+  props.workspaceId ? tabStore.tabs.find((tab): tab is WorkspaceTab => tab.id === props.workspaceId && tab.type === 'workspace') : undefined
 )
 const isMaximized = computed(() => workspaceTab.value?.maximizedPanelId === props.panel.id)
 const maximizeTitle = computed(() => {
@@ -337,7 +337,7 @@ async function copyHostAddress() {
   // Wails clipboard, falling back to the browser API when the runtime is
   // absent (plain dev in a browser) or the call fails.
   let ok = false
-  try { ok = await Clipboard.SetText(host) } catch { ok = false }
+  try { await Clipboard.SetText(host); ok = true } catch { ok = false }
   if (!ok) {
     try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
   }

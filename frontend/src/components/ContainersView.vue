@@ -50,12 +50,12 @@
         border
         @row-click="openDetail"
       >
-        <el-table-column :label="t('container.colName')" :min-width="uiPx(180)" sortable :sort-method="(a, b) => a.name.localeCompare(b.name)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colName')" :min-width="uiPx(180)" sortable :sort-method="(a: ContainerInfo, b: ContainerInfo) => a.name.localeCompare(b.name)" show-overflow-tooltip>
           <template #default="{ row }">
             <span>{{ row.name }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('container.colImage')" :min-width="uiPx(220)" sortable :sort-method="(a, b) => a.image.localeCompare(b.image)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colImage')" :min-width="uiPx(220)" sortable :sort-method="(a: ContainerInfo, b: ContainerInfo) => a.image.localeCompare(b.image)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.image }}</template>
         </el-table-column>
         <el-table-column :label="t('container.colId')" :width="uiPx(120)">
@@ -65,18 +65,18 @@
           :label="t('container.colState')"
           :width="uiPx(110)"
           sortable
-          :sort-method="(a, b) => a.state.localeCompare(b.state)"
+          :sort-method="(a: ContainerInfo, b: ContainerInfo) => a.state.localeCompare(b.state)"
           :filters="stateFilters"
-          :filter-method="(val, row) => row.state === val"
+          :filter-method="(val: string, row: ContainerInfo) => row.state === val"
         >
           <template #default="{ row }">
             <span :data-state="row.state" class="container-state">{{ row.state }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('container.colPorts')" :min-width="uiPx(160)" sortable :sort-method="(a, b) => a.ports.localeCompare(b.ports)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colPorts')" :min-width="uiPx(160)" sortable :sort-method="(a: ContainerInfo, b: ContainerInfo) => a.ports.localeCompare(b.ports)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.ports }}</template>
         </el-table-column>
-        <el-table-column :label="t('container.colCreated')" :min-width="uiPx(130)" sortable :sort-method="(a, b) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colCreated')" :min-width="uiPx(130)" sortable :sort-method="(a: ContainerInfo, b: ContainerInfo) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.createdAt }}</template>
         </el-table-column>
         <el-table-column :label="t('container.colActions')" :width="uiPx(150)" fixed="right" class-name="k8s-action-cell">

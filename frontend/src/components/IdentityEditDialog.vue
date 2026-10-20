@@ -4,7 +4,7 @@
     :model-value="visible"
     :title="identity ? t('settings.editIdentity') : t('settings.addIdentity')"
     width="30rem"
-    @update:model-value="v => emit('update:visible', v)"
+    @update:model-value="(v: boolean) => emit('update:visible', v)"
   >
     <el-form label-width="5.625rem">
       <el-form-item :label="t('conn.name')">

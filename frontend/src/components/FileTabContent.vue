@@ -151,7 +151,7 @@
     <FileEditorDialog
       ref="fileEditorRef"
       v-model:visible="editorVisible"
-      :session-id="panel?.sessionId"
+      :session-id="panel?.sessionId ?? undefined"
       :mode="editorMode"
       @saved="onEditorSaved"
     />
@@ -187,6 +187,7 @@ import FileEditorDialog from './FileEditorDialog.vue'
 import FileGenericDialog from './FileGenericDialog.vue'
 import FileConflictDialog from './FileConflictDialog.vue'
 import type { FileItem } from './FileList.vue'
+import type { SessionInfo } from '../types/session'
 import {
   useFilePanel, useConflictDialog, useFileDialogs, useFileListing, useChmodDialog,
   useEditorBridge, useNativeFileDrop, remoteFileOps, localFileOps, createSendToOther,
@@ -272,7 +273,7 @@ const localListing = useFileListing({
     if (!sid || !/^[A-Za-z]:\\$/.test(dir)) return
     try {
       const drives = await SftpListLocalDrives(sid)
-      localDrives.value = drives.map(d => d.name)
+      localDrives.value = drives.map((d: FileItem) => d.name)
     } catch {}
   },
 })
@@ -302,7 +303,7 @@ async function onRemoteListError(err: string): Promise<boolean> {
   let connected = false
   try {
     const sessions = await ListSessions()
-    connected = sessions.find(s => s.id === panel.sessionId)?.status === 'connected'
+    connected = sessions.find((s: SessionInfo) => s.id === panel.sessionId)?.status === 'connected'
   } catch { /* status unknown — treat as disconnected */ }
   if (connected && !isConnectionLostError(err)) return false
   if (!isPanelReconnecting(props.panelId)) {
@@ -325,7 +326,7 @@ async function onRemoteListError(err: string): Promise<boolean> {
 }
 
 const remotePanel = useFilePanel({
-  sid: () => panel.value?.sessionId,
+  sid: () => panel.value?.sessionId ?? undefined,
   cwd: remoteListing.cwd,
   files: remoteListing.files,
   refresh: () => onRefreshRemote(),
@@ -342,7 +343,7 @@ const remotePanel = useFilePanel({
   localCwd: () => localListing.cwd.value,
 })
 const localPanel = useFilePanel({
-  sid: () => panel.value?.sessionId,
+  sid: () => panel.value?.sessionId ?? undefined,
   cwd: localListing.cwd,
   files: localListing.files,
   refresh: () => onRefreshLocal(),
@@ -484,7 +485,7 @@ async function probeConnectAndLoad() {
   if (!sid) return
   try {
     const sessions = await ListSessions()
-    const sess = sessions.find(s => s.id === sid)
+    const sess = sessions.find((s: SessionInfo) => s.id === sid)
     if (sess && sess.status === 'connected') {
       probeRan = true
       onRefreshLocal()
@@ -525,7 +526,7 @@ async function fetchLocalDrives() {
   if (!sid) return
   try {
     const drives = await SftpListLocalDrives(sid)
-    localDrives.value = drives.map(d => d.name)
+    localDrives.value = drives.map((d: FileItem) => d.name)
   } catch {}
 }
 

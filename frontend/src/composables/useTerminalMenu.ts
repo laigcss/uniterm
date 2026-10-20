@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { Clipboard } from '@wailsio/runtime'
+
 import { useSettingsStore } from '../stores/settingsStore'
 import { writeClipboard, readClipboardText } from './useClipboardWrite'
 export interface UseTerminalMenuOptions {

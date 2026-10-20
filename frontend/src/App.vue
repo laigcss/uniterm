@@ -124,7 +124,7 @@
       </div>
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
-    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
+    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig ?? undefined" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
 
     <CredentialPrompt
       v-model:visible="credentialVisible"
@@ -236,6 +236,7 @@ import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import { unregisterTransferRoute } from './services/transferTaskCenter'
 import type { ConnectionConfig } from './types/session'
+import type { PanelType } from './types/workspace'
 import { Application, Clipboard, Events } from '@wailsio/runtime'
 import { parseQuickConnect } from './utils/quickConnect'
 import { getShellLabel as getShellLabelBase, parseWslFromShell } from './utils/shellLabel'
@@ -1250,7 +1251,7 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
       if (panel) {
         duplicateSession(
           { type: 'terminal', panelId: pid, title: panel.title },
-          { workspaceId: tab.id, targetPanelId: pid },
+          { workspaceId: tab.id, targetPanelId: pid ?? undefined },
         )
       }
       return
@@ -1348,7 +1349,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
             h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
               h('span', t('tab.closeConnectedConfirm')),
               h(ElCheckbox, {
-                'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
+                'onUpdate:modelValue': (v: string | number | boolean) => { dontShowAgain.value = !!v }
               }, () => t('tab.dontShowAgain'))
             ]),
             t('tab.closeConfirmTitle'),
@@ -1486,7 +1487,7 @@ async function closeTabBatch(tabIds: string[]) {
         h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
           h('span', t('tab.closeConnectedBatchConfirm', { count: connectedCount })),
           h(ElCheckbox, {
-            'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
+            'onUpdate:modelValue': (v: string | number | boolean) => { dontShowAgain.value = !!v }
           }, () => t('tab.dontShowAgain'))
         ]),
         t('tab.closeConfirmTitle'),
@@ -1667,9 +1668,9 @@ async function connectTerminalSession(config: ConnectionConfig, persist: boolean
     return { status: 'failed' }
   }
 
-  const panel = panelStore.createPanel(config, config.type)
+  const panel = panelStore.createPanel(config, config.type as PanelType)
   const displayTitle = config.name || (config.type === 'local' || config.type === 'wsl'
-    ? getShellLabel(config.shellPath)
+    ? getShellLabel(config.shellPath || '')
     : config.type === 'serial'
     ? `${config.serialPort || 'Serial'} (${config.serialBaudRate || 115200})`
     : config.type === 'telnet'
@@ -1887,7 +1888,7 @@ function onTabDragStart(_e: DragEvent, _tabId: string) {
 
 async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
   const panel = panelStore.createPanel(null, 'local')
-  const shellName = getShellLabel(shellPath)
+  const shellName = getShellLabel(shellPath || '')
   panelStore.updateTitle(panel.id, shellName)
 
   try {

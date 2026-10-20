@@ -211,7 +211,7 @@ export const useCompanionStore = defineStore('companion', () => {
       // served by the container-file session over docker exec/cp.
       if (isContainerExecPanel(sshPanelId)) {
         config.type = 'container-file'
-        config.id = config.containerExecConnId
+        config.id = config.containerExecConnId!
         config.containerId = config.containerExecContainerId
         config.containerNamespace = config.containerExecNamespace
         const info = await CreateSession('container-file', config)

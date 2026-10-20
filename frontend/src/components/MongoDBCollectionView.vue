@@ -310,8 +310,10 @@ const v2Columns = computed(() => {
   // 操作列：编辑 / 删除按钮
   cols.push({
     key: '__actions',
+    dataKey: '__actions',
     title: '',
     width: 80,
+    flexGrow: 0,
     cellRenderer: ({ rowData }: { rowData: any }) => {
       return h('div', { class: 'v2-row-actions' }, [
         h('button', {

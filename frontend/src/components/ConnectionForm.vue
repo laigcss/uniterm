@@ -798,7 +798,7 @@ onMounted(() => {
 const isWindows = ref(/windows/i.test(navigator.userAgent) || /win32/i.test(navigator.platform))
 const isMac = ref(/mac/i.test(navigator.platform))
 const platform = ref<string>('')
-GetPlatform().then(p => {
+GetPlatform().then((p: string) => {
   platform.value = p
   isWindows.value = p === 'windows'
   isMac.value = p === 'darwin'
@@ -862,7 +862,7 @@ function selectType(st: SubTypeInfo) {
     form.type = 'container'
     form.containerRuntime = st.containerRuntime as 'docker' | 'podman' | 'nerdctl' | 'wslc'
   } else {
-    form.type = st.type
+    form.type = st.type as ConnectionConfig['type']
   }
 }
 
@@ -1641,7 +1641,7 @@ async function useDefaultKeyPath() {
   try {
     const paths = await GetDefaultSSHKeyPaths()
     if (!paths?.length) return
-    const current = form.keyPath.trim()
+    const current = (form.keyPath ?? '').trim()
     const idx = paths.indexOf(current)
     form.keyPath = idx >= 0 ? paths[(idx + 1) % paths.length] : paths[0]
   } catch (e) {

@@ -1622,7 +1622,7 @@ import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
 import { useI18n, locale } from '../i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, DEFAULT_SETTINGS, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS, SIDEBAR_TAB_ORDER, SIDEBAR_TAB_DEFAULTS } from '../types/settings'
+import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS, SIDEBAR_TAB_ORDER, SIDEBAR_TAB_DEFAULTS } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { backendErrorText } from '../utils/backendError'
 import { getShellLabel as getShellLabelBase } from '../utils/shellLabel'
@@ -2182,7 +2182,7 @@ onMounted(async () => {
   // this host; fall back to the curated presets if detection returns nothing.
   try {
     const editors = await ListExternalEditors()
-    detectedEditors.value = (editors || []).map(e => ({ label: e.label, value: e.value }))
+    detectedEditors.value = (editors || []).map((e: { label: string; value: string }) => ({ label: e.label, value: e.value }))
   } catch {
     detectedEditors.value = []
   }
@@ -2912,7 +2912,7 @@ async function fetchModelList() {
   modelSuggestions.value = []
   try {
     const models = await FetchModels(modelForm.apiKey, modelForm.baseURL, modelForm.protocol, modelForm.proxyId || '')
-    modelSuggestions.value = (models || []).map(m => ({
+    modelSuggestions.value = (models || []).map((m: { id: string; display_name: string }) => ({
       value: m.id,
       label: m.display_name || m.id
     }))

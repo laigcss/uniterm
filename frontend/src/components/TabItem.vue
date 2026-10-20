@@ -155,7 +155,7 @@ import {
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'
 import { saveWorkspaceToConnections } from '../composables/savedWorkspace'
-import type { TerminalTab, SettingsTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
+import type { Tab, TerminalTab, SFTPTab, RDPTab, WorkspaceTab } from '../types/workspace'
 import { connectFileMenuKey, fileTransferProto, canOpenSshTerminal, asSshTerminalConfig } from '../utils/fileTransferUtils'
 import { connectionTypeIconOfKind } from '../utils/connectionTypes'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
@@ -167,7 +167,7 @@ import { isMobilePlatform } from '../utils/platform'
 import { SquareTerminal, FolderUp, X, ArrowDownUp, Lock, Radio } from '@lucide/vue'
 
 const props = defineProps<{
-  tab: TerminalTab | SettingsTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
+  tab: Tab
   shortcutIndex?: number
   isActive: boolean
   hasNotification?: boolean
@@ -298,7 +298,7 @@ const showBroadcastIcon = computed(() =>
 
 
 const hasActiveTransfers = computed(() => {
-  if (props.tab.type === 'workspace') return false
+  if (props.tab.type === 'workspace' || props.tab.type === 'start') return false
   const keys = [props.tab.panelId]
   // Terminal tabs also surface their companion file panel's transfers.
   if (props.tab.type === 'terminal') {
@@ -556,7 +556,7 @@ async function copyHostAddress() {
   // Wails clipboard, falling back to the browser API when the runtime is
   // absent (plain dev in a browser) or the call fails.
   let ok = false
-  try { ok = await Clipboard.SetText(host) } catch { ok = false }
+  try { await Clipboard.SetText(host); ok = true } catch { ok = false }
   if (!ok) {
     try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
   }

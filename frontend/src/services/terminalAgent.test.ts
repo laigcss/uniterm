@@ -63,9 +63,9 @@ const mockGetManagedTerminal = vi.fn(() => ({
   lineOffset: 0,
 }))
 const mockIsTerminalActive = vi.fn(() => true)
-const mockGetMirrorPromptSnapshot = vi.fn(() => null)
-const mockReadMirrorScreenFromRow = vi.fn(() => null)
-const mockReadMirrorTail = vi.fn(() => null)
+const mockGetMirrorPromptSnapshot = vi.fn((): { promptLine: string; startRow: number } | null => null)
+const mockReadMirrorScreenFromRow = vi.fn((): string | null => null)
+const mockReadMirrorTail = vi.fn((): string | null => null)
 vi.mock('../services/terminalManager', () => ({
   getManagedTerminal: (...args: any[]) => mockGetManagedTerminal(...(args as [])),
   isTerminalActive: (...args: any[]) => mockIsTerminalActive(...(args as [])),
@@ -674,9 +674,9 @@ describe('background terminal fallback (frozen xterm buffer)', () => {
   })
 
   it('executeCommand rebuilds output from the raw stream instead of the frozen screen', async () => {
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
     // What actually flowed through the PTY while the panel was in background.
@@ -697,9 +697,9 @@ describe('background terminal fallback (frozen xterm buffer)', () => {
     // Indirect: exact-prompt completion only fires when the snapshot matches
     // the stream's final line. A frozen-buffer snapshot of a panel that was
     // backgrounded mid-command would not contain the prompt at all.
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
     const stream = `${PROMPT} sleep 1\r\ndone\r\n${PROMPT} `
@@ -751,9 +751,9 @@ describe('background terminal headless mirror', () => {
   })
 
   it('executeCommand prefers the mirror screen over raw reconstruction when inactive', async () => {
-    let capturedCallback: ((payload: { id: string; data: string }) => void) | null = null
+    let capturedCallback: ((ev: { data: { id: string; data: string } }) => void) | null = null
     vi.mocked(Events.On).mockImplementation((_eventName, callback) => {
-      capturedCallback = callback
+      capturedCallback = callback as unknown as typeof capturedCallback
       return () => { }
     })
     // The raw stream carries a prompt redraw glued onto the data row (ConPTY

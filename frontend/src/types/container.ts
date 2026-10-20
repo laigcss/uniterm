@@ -101,6 +101,8 @@ export interface RuntimeInfo {
   driver: string
   ncpu: string
   memTotal: string
+  cgroupDriver?: string
+  cgroupVersion?: string
 }
 
 export interface ContainerStats {

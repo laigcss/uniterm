@@ -7,7 +7,7 @@
         <button class="ai-action-btn" @click="onNewSession" :title="t('ai.newSession')">
           <el-icon><MessageSquarePlus :size="'0.875rem'" /></el-icon>
         </button>
-        <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget)" >
+        <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget as HTMLElement)" >
           <el-icon><History :size="'0.875rem'" /></el-icon>
         </button>
         <Menu ref="sessionMenuRef" v-model:visible="sessionMenuVisible">
@@ -134,7 +134,7 @@
               <button class="panel-tag-close" @click="onRemovePanelTag(pid)">&times;</button>
             </span>
           </template>
-          <button class="panel-tag-add-btn" :title="t('ai.addTerminal')" @click.stop="addTagMenuRef?.toggle($event.currentTarget)">+</button>
+          <button class="panel-tag-add-btn" :title="t('ai.addTerminal')" @click.stop="addTagMenuRef?.toggle($event.currentTarget as HTMLElement)">+</button>
             <Menu ref="addTagMenuRef" v-model:visible="addTagMenuVisible">
               <MenuItem
                 v-for="p in availableTerminalPanels"
@@ -256,7 +256,7 @@
               <span class="hash-btn-icon">/</span>
             </button>
             <template v-if="settingsStore.settings.ai.models.length > 0">
-              <button class="ghost-btn model-btn" :title="currentModelName" @click.stop="modelMenuRef?.toggle($event.currentTarget)">{{ currentModelName }}</button>
+              <button class="ghost-btn model-btn" :title="currentModelName" @click.stop="modelMenuRef?.toggle($event.currentTarget as HTMLElement)">{{ currentModelName }}</button>
               <Menu ref="modelMenuRef" v-model:visible="modelMenuVisible">
                 <MenuItem
                   v-for="m in settingsStore.settings.ai.models"
@@ -278,7 +278,7 @@
           </button>
           </div>
           <div class="input-actions-right">
-            <button class="ghost-btn mode-btn" :title="modeLabel" @click.stop="modeMenuRef?.toggle($event.currentTarget)">{{ modeLabel }}</button>
+            <button class="ghost-btn mode-btn" :title="modeLabel" @click.stop="modeMenuRef?.toggle($event.currentTarget as HTMLElement)">{{ modeLabel }}</button>
             <Menu ref="modeMenuRef" v-model:visible="modeMenuVisible">
               <MenuItem @click="onModeSelect('confirm_all')">
                 <span class="mode-option mode-confirm">{{ t('ai.confirmAll') }}</span>
@@ -909,7 +909,7 @@ async function onMsgCtxExport() {
   msgCtxMenuVisible.value = false
   const id = aiStore.currentSessionId
   const s = aiStore.sessions.find(x => x.id === id)
-  if (!s) return
+  if (!id || !s) return
   try {
     const md = aiStore.exportSessionMarkdown(id)
     const safe = s.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)
@@ -1417,8 +1417,8 @@ function onHashButtonClick() {
     const range = document.createRange()
     range.setStart(textNode, 1)
     range.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    sel?.removeAllRanges()
+    sel?.addRange(range)
   }
   syncInputText(); refreshHashDropdown()
 }
@@ -1444,8 +1444,8 @@ function onSlashButtonClick() {
     const range = document.createRange()
     range.setStart(textNode, 1)
     range.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    sel?.removeAllRanges()
+    sel?.addRange(range)
   }
   syncInputText(); refreshSkillDropdown()
 }
@@ -1751,7 +1751,7 @@ async function onSend() {
   clearAttachments()
   scrollToBottom()
   if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
-  await runAgent(cmd ? '' : final, skillName, skillBody, cmd ? final : undefined, pending)
+  await runAgent(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined, pending)
   scrollToBottom()
 }
 
@@ -1820,7 +1820,7 @@ function onResizeStart(e: MouseEvent) {
 
   function onMouseUp() {
     isResizing.value = false
-    sidebarWidth.value = el.offsetWidth
+    sidebarWidth.value = el?.offsetWidth ?? sidebarWidth.value
     // Skip while maximised — the CSS forces 100% width, so offsetWidth is
     // the full window width and must not overwrite the persisted value.
     if (!isMaximized.value) {

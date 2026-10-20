@@ -18,7 +18,7 @@
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('mongodb.refresh')" @click="refreshDatabases">
             <RefreshCw :size="'0.875rem'" />
           </button>
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
             <MoreHorizontal :size="'0.875rem'" />
           </button>
           <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
@@ -114,7 +114,7 @@
               v-if="tabShowMore"
               class="mongo-tab-more"
               :title="t('tab.more')"
-              @click.stop="moreTabsMenuRef?.toggle($event.currentTarget)"
+              @click.stop="moreTabsMenuRef?.toggle($event.currentTarget as HTMLElement)"
             >
               <MoreHorizontal :size="'0.875rem'" />
             </button>
@@ -207,19 +207,19 @@
 
     <!-- Context menu -->
     <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
-      <template v-if="current?.type === 'blank'">
+      <template v-if="(current as CtxMenuData)?.type === 'blank'">
         <MenuItem @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxRefresh">{{ t('mongodb.refresh') }}</MenuItem>
       </template>
-      <template v-else-if="current?.type === 'db'">
+      <template v-else-if="(current as CtxMenuData)?.type === 'db'">
         <MenuItem @click="onCtxNewCollection(current as CtxMenuData)">{{ t('mongodb.newCollection') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxRefresh">{{ t('mongodb.refresh') }}</MenuItem>
         <MenuDivider />
         <MenuItem class="danger" @click="onCtxDropDatabase(current as CtxMenuData)">{{ t('mongodb.dropDatabase') }}</MenuItem>
       </template>
-      <template v-else-if="current?.type === 'col'">
+      <template v-else-if="(current as CtxMenuData)?.type === 'col'">
         <MenuItem @click="onCtxOpenColQuery(current as CtxMenuData)">{{ t('mongodb.openQuery') }}</MenuItem>
         <MenuItem @click="onCtxViewIndexes(current as CtxMenuData)">{{ t('mongodb.indexesTab') }}</MenuItem>
         <MenuDivider />
@@ -600,7 +600,7 @@ async function loadCollectionsFor(db: string) {
   if (collections.value[db]) return
   try {
     const cols = await MongoListCollections(props.sessionId, db)
-    collections.value[db] = cols.filter(c => !c.startsWith('system.'))
+    collections.value[db] = cols.filter((c: string) => !c.startsWith('system.'))
     collections.value = { ...collections.value }
   } catch (e: any) {
     msg.error(e?.message || String(e))
@@ -627,7 +627,7 @@ async function refreshDatabases() {
   treeLoading.value = true
   try {
     const allDbs = await MongoListDatabases(props.sessionId)
-    databases.value = allDbs.filter(d => d !== 'config' && d !== 'local')
+    databases.value = allDbs.filter((d: string) => d !== 'config' && d !== 'local')
     await expandDefaultDbs(databases.value)
   } catch (e: any) {
     const err = e?.message || String(e)
@@ -635,7 +635,7 @@ async function refreshDatabases() {
       await new Promise(r => setTimeout(r, 300))
       try {
         const allDbs = await MongoListDatabases(props.sessionId)
-        databases.value = allDbs.filter(d => d !== 'config' && d !== 'local')
+        databases.value = allDbs.filter((d: string) => d !== 'config' && d !== 'local')
         await expandDefaultDbs(databases.value)
         treeLoading.value = false
         return
@@ -729,7 +729,7 @@ async function createCollection() {
     msg.success(t('mongodb.collectionCreated'))
     newColDialogVisible.value = false
     const cols = await MongoListCollections(props.sessionId, ctxNewColDb.value)
-    collections.value[ctxNewColDb.value] = cols.filter(c => !c.startsWith('system.'))
+    collections.value[ctxNewColDb.value] = cols.filter((c: string) => !c.startsWith('system.'))
     collections.value = { ...collections.value }
   } catch (e: any) {
     msg.error(e?.message || String(e))

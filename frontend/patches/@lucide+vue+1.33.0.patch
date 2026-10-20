@@ -1,0 +1,39 @@
+diff --git a/node_modules/@lucide/vue/dist/lucide-vue.d.ts b/node_modules/@lucide/vue/dist/lucide-vue.d.ts
+index 493fed5..4c5f1a4 100644
+--- a/node_modules/@lucide/vue/dist/lucide-vue.d.ts
++++ b/node_modules/@lucide/vue/dist/lucide-vue.d.ts
+@@ -1,7 +1,7 @@
+ import { FunctionalComponent, SVGAttributes } from 'vue';
+ 
+ interface LucideProps extends Partial<SVGAttributes> {
+-    size?: 24 | number;
++    size?: number | string;
+     strokeWidth?: number | string;
+     absoluteStrokeWidth?: boolean;
+     'absolute-stroke-width'?: boolean;
+diff --git a/node_modules/@lucide/vue/dist/lucide-vue.prefixed.d.ts b/node_modules/@lucide/vue/dist/lucide-vue.prefixed.d.ts
+index 5949c56..15f30cc 100644
+--- a/node_modules/@lucide/vue/dist/lucide-vue.prefixed.d.ts
++++ b/node_modules/@lucide/vue/dist/lucide-vue.prefixed.d.ts
+@@ -1,7 +1,7 @@
+ import { SVGAttributes, FunctionalComponent } from 'vue';
+ 
+ interface LucideProps extends Partial<SVGAttributes> {
+-    size?: 24 | number;
++    size?: number | string;
+     strokeWidth?: number | string;
+     absoluteStrokeWidth?: boolean;
+     'absolute-stroke-width'?: boolean;
+diff --git a/node_modules/@lucide/vue/dist/lucide-vue.suffixed.d.ts b/node_modules/@lucide/vue/dist/lucide-vue.suffixed.d.ts
+index cbc6d05..eb01749 100644
+--- a/node_modules/@lucide/vue/dist/lucide-vue.suffixed.d.ts
++++ b/node_modules/@lucide/vue/dist/lucide-vue.suffixed.d.ts
+@@ -1,7 +1,7 @@
+ import { FunctionalComponent, SVGAttributes } from 'vue';
+ 
+ interface LucideProps extends Partial<SVGAttributes> {
+-    size?: 24 | number;
++    size?: number | string;
+     strokeWidth?: number | string;
+     absoluteStrokeWidth?: boolean;
+     'absolute-stroke-width'?: boolean;

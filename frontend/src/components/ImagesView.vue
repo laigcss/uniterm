@@ -38,19 +38,19 @@
         border
         @row-click="openDetail"
       >
-        <el-table-column :label="t('container.colRepository')" :min-width="uiPx(200)" sortable :sort-method="(a, b) => a.repository.localeCompare(b.repository)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colRepository')" :min-width="uiPx(200)" sortable :sort-method="(a: ContainerImage, b: ContainerImage) => a.repository.localeCompare(b.repository)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.repository }}</template>
         </el-table-column>
-        <el-table-column :label="t('container.colTag')" :min-width="uiPx(120)" sortable :sort-method="(a, b) => a.tag.localeCompare(b.tag)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colTag')" :min-width="uiPx(120)" sortable :sort-method="(a: ContainerImage, b: ContainerImage) => a.tag.localeCompare(b.tag)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.tag }}</template>
         </el-table-column>
         <el-table-column :label="t('container.colId')" :width="uiPx(120)">
           <template #default="{ row }">{{ shortId(row.id) }}</template>
         </el-table-column>
-        <el-table-column :label="t('container.colSize')" :width="uiPx(100)" sortable :sort-method="(a, b) => a.size.localeCompare(b.size)">
+        <el-table-column :label="t('container.colSize')" :width="uiPx(100)" sortable :sort-method="(a: ContainerImage, b: ContainerImage) => a.size.localeCompare(b.size)">
           <template #default="{ row }">{{ row.size }}</template>
         </el-table-column>
-        <el-table-column :label="t('container.colCreated')" :min-width="uiPx(120)" sortable :sort-method="(a, b) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
+        <el-table-column :label="t('container.colCreated')" :min-width="uiPx(120)" sortable :sort-method="(a: ContainerImage, b: ContainerImage) => a.createdAt.localeCompare(b.createdAt)" show-overflow-tooltip>
           <template #default="{ row }">{{ row.createdAt }}</template>
         </el-table-column>
         <el-table-column :label="t('container.colRelated')" :width="uiPx(90)" align="center">

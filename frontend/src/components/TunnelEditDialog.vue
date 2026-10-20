@@ -241,7 +241,7 @@ function formPayload() {
     mode: form.mode,
     sshConnId: form.sshConnId,
     listenHost: form.listenHost.trim() || '127.0.0.1',
-    listenPort: form.listenPort,
+    listenPort: form.listenPort!,
     targetHost: form.mode === 'dynamic' ? undefined : form.targetHost.trim(),
     targetPort: form.mode === 'dynamic' ? undefined : form.targetPort,
     autoStart: form.autoStart,
@@ -280,8 +280,7 @@ function handleSave() {
   if (!form.name.trim()) { errorMsg.value = t('tunnels.errName'); return }
   const invalid = validate()
   if (invalid) { errorMsg.value = invalid; return }
-  const payload = formPayload()
-  delete payload.id
+  const { id: _id, ...payload } = formPayload()
   if (props.editingId) {
     store.updateTunnel(props.editingId, payload)
   } else {

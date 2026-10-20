@@ -140,7 +140,7 @@
     <FileEditorDialog
       ref="fileEditorRef"
       v-model:visible="editorVisible"
-      :session-id="sessionId"
+      :session-id="sessionId ?? undefined"
       mode="remote"
       @saved="onRefresh"
     />
@@ -175,6 +175,7 @@ import { Events } from '@wailsio/runtime'
 import { watchNewTransferTasks } from '../composables/useTransferTasks'
 import { registerTransferRoute } from '../services/transferTaskCenter'
 import { queuedSessionWrite } from '../services/sessionWriter'
+import type { SessionInfo } from '../types/session'
 
 const { t } = useI18n()
 bindExtEditUploadedToast()
@@ -530,7 +531,7 @@ watch(sessionId, async (sid) => {
   bindListeners()
   try {
     const sessions = await ListSessions()
-    const sess = sessions.find(s => s.id === sid)
+    const sess = sessions.find((s: SessionInfo) => s.id === sid)
     if (sess?.status === 'connected') await onRefresh()
     else scheduleRefreshRetry()
   } catch {

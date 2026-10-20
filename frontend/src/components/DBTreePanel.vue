@@ -11,7 +11,7 @@
       <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.refreshDatabases')" @click="refreshAll">
         <RefreshCw :size="'0.875rem'" />
       </button>
-      <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
+      <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
         <MoreHorizontal :size="'0.875rem'" />
       </button>
       <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
@@ -65,7 +65,7 @@
       v-model:visible="ctxMenuVisible"
       v-slot="{ current }"
     >
-      <template v-if="current && current.type === 'db'">
+      <template v-if="current && (current as DbMenuCtx).type === 'db'">
         <MenuItem @click="onCtxListDatabase">{{ t('db.tableList') }}</MenuItem>
         <MenuItem @click="onCtxNewQuery">{{ t('db.newQuery') }}</MenuItem>
         <MenuItem @click="onCtxRunSqlFile">{{ t('db.runSqlFile') }}</MenuItem>
@@ -76,18 +76,18 @@
         <MenuDivider />
         <MenuItem @click="onCtxRefresh">{{ t('db.refreshTables') }}</MenuItem>
       </template>
-      <template v-else-if="current && current.type === 'table'">
+      <template v-else-if="current && (current as DbMenuCtx).type === 'table'">
         <MenuItem @click="onCtxViewData">{{ t('db.openData') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxCopyName">{{ t('db.copyName') }}</MenuItem>
         <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxCopyTable">{{ t('db.copyTable') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxExportStructure">{{ t('db.exportStructure') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxExportData">{{ t('db.exportData') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxExportData">{{ t('db.exportData') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</MenuItem>
         <MenuDivider />
-        <template v-if="current.tableType === 'view'">
+        <template v-if="(current as DbMenuCtx).tableType === 'view'">
           <MenuItem class="danger" @click="onCtxDropView">{{ t('db.dropView') }}</MenuItem>
         </template>
         <template v-else>
@@ -95,7 +95,7 @@
           <MenuItem class="danger" @click="onCtxDropTable">{{ t('db.dropTable') }}</MenuItem>
         </template>
       </template>
-      <template v-else-if="current && current.type === 'blank'">
+      <template v-else-if="current && (current as DbMenuCtx).type === 'blank'">
         <MenuItem @click="onCtxNewQueryBlank">{{ t('db.newQuery') }}</MenuItem>
         <MenuItem v-if="canCreateDatabase" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
         <MenuItem @click="onCtxRefreshDatabases">{{ t('db.refreshDatabases') }}</MenuItem>
@@ -248,10 +248,10 @@ async function loadTree() {
       const tables = await GetTables(props.sessionId, props.defaultDbName)
       // 默认库置顶并展开（已加载表），其余可访问的数据库折叠显示，
       // 点击展开时再懒加载表（见 ensureDbExpanded）。
-      const otherDbs = dbs.filter(d => d !== props.defaultDbName)
+      const otherDbs = dbs.filter((d: string) => d !== props.defaultDbName)
       databases.value = [
         { name: props.defaultDbName, tables, loaded: true },
-        ...otherDbs.map(d => ({ name: d, tables: [] as TableInfo[], loaded: false }))
+        ...otherDbs.map((d: string) => ({ name: d, tables: [] as TableInfo[], loaded: false }))
       ]
       expandedDbs.value = new Set([props.defaultDbName])
       autoOpen = props.defaultDbName
@@ -376,7 +376,7 @@ watch(searchQuery, (q) => {
     const all = new Set(databases.value.map(d => d.name))
     for (const db of databases.value) {
       if (!db.loaded) {
-        GetTables(props.sessionId, db.name).then(tables => {
+        GetTables(props.sessionId, db.name).then((tables: TableInfo[]) => {
           db.tables = tables
           db.loaded = true
         }).catch(() => {})

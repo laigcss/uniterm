@@ -75,7 +75,7 @@
               v-if="docTabsShowMore"
               class="doc-tab-more"
               :title="t('tab.more')"
-              @click.stop="docMoreMenuRef?.toggle($event.currentTarget)"
+              @click.stop="docMoreMenuRef?.toggle($event.currentTarget as HTMLElement)"
             >
               <MoreHorizontal :size="'0.875rem'" />
             </button>
@@ -92,10 +92,10 @@
 
           <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
             <template v-if="current">
-              <MenuItem @click="onCtxClose(current)">{{ t('tab.close') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseOthersOf(current) }" @click="onCtxCloseOthers(current)">{{ t('tab.closeOther') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseLeftOf(current) }" @click="onCtxCloseLeft(current)">{{ t('tab.closeLeft') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseRightOf(current) }" @click="onCtxCloseRight(current)">{{ t('tab.closeRight') }}</MenuItem>
+              <MenuItem @click="onCtxClose(current as string)">{{ t('tab.close') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseOthersOf() }" @click="onCtxCloseOthers(current as string)">{{ t('tab.closeOther') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseLeftOf(current as string) }" @click="onCtxCloseLeft(current as string)">{{ t('tab.closeLeft') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseRightOf(current as string) }" @click="onCtxCloseRight(current as string)">{{ t('tab.closeRight') }}</MenuItem>
               <MenuDivider />
               <MenuItem @click="onCtxCloseAll">{{ t('tab.closeAll') }}</MenuItem>
             </template>
@@ -461,7 +461,7 @@ async function loadSchema(doc: DocTab) {
   try {
     const schema = await GetTableSchema(props.sessionId, doc.dbName, doc.tableName)
     doc.tableColumns = schema.columns
-    doc.primaryKeys = schema.columns.filter(c => c.isPrimary).map(c => c.name)
+    doc.primaryKeys = schema.columns.filter((c: ColumnInfo) => c.isPrimary).map((c: ColumnInfo) => c.name)
   } catch { /* ignore */ }
 }
 

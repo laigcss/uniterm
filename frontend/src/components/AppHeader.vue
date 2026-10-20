@@ -109,7 +109,7 @@
 
         <!-- AI模型 / MCP / 密钥库 / 代理 -->
         <MenuItem @click="openCategory('ai')">{{ t('settings.ai') }}</MenuItem>
-        <MenuItem v-if="!isMobilePlatform(platform.value)" @click="openCategory('mcp')">{{ t('settings.mcp') }}</MenuItem>
+        <MenuItem v-if="!isMobilePlatform(platform)" @click="openCategory('mcp')">{{ t('settings.mcp') }}</MenuItem>
         <MenuItem @click="openCategory('identities')">{{ t('settings.identities') }}</MenuItem>
         <MenuItem @click="openCategory('proxies')">{{ t('settings.proxies') }}</MenuItem>
         <MenuItem @click="openCategory('tunnels')">{{ t('settings.tunnels') }}</MenuItem>
@@ -127,7 +127,7 @@
         <MenuItem @click="openCategory('sync')">{{ t('settings.sync') }}</MenuItem>
         <MenuItem @click="openCategory('about')">{{ t('settings.about') }}</MenuItem>
         <!-- In-app update download is desktop-only -->
-        <MenuItem v-if="!isMobilePlatform(platform.value)" @click="checkUpdate">{{ t('settings.checkUpdate') }}</MenuItem>
+        <MenuItem v-if="!isMobilePlatform(platform)" @click="checkUpdate">{{ t('settings.checkUpdate') }}</MenuItem>
       </Menu>
 
       <ImportDialog v-model:visible="showImportDialog" />
@@ -353,7 +353,7 @@ async function linuxMaximise() {
     // Before native maximise, set max size to current screen dimensions
     // to prevent GTK from clamping to the wrong monitor's size.
     try {
-      const screens = (await Screens.GetAll()) as unknown as { isCurrent: boolean; width: number; height: number }[]
+      const screens = (await Screens.GetAll()) as unknown as { isCurrent: boolean; Size: { Width: number; Height: number } }[]
       const current = screens.find(s => s.isCurrent) || screens[0]
       if (current) {
         Window.SetMaxSize(current.Size.Width, current.Size.Height)

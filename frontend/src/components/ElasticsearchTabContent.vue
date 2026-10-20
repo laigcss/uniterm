@@ -14,7 +14,7 @@
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('es.refresh')" @click="loadIndices">
             <RefreshCw :size="'0.875rem'" />
           </button>
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget)">
+          <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
             <MoreHorizontal :size="'0.875rem'" />
           </button>
           <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
@@ -99,7 +99,7 @@
             v-if="tabShowMore"
             class="es-tab-more"
             :title="t('tab.more')"
-            @click.stop="moreTabsMenuRef?.toggle($event.currentTarget)"
+            @click.stop="moreTabsMenuRef?.toggle($event.currentTarget as HTMLElement)"
           >
             <MoreHorizontal :size="'0.875rem'" />
           </button>
