@@ -105,3 +105,6 @@ libaiops_android.h
 # CMake build cache
 harmonyos/entry/.cxx/
 harmonyos/screenshot.jpeg
+
+# Go vendor directory — use 'go mod vendor' to restore locally
+vendor/
