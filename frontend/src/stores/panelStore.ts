@@ -42,6 +42,9 @@ export interface SPICECache {
 }
 
 // shallowReactive: vncCaches/spiceCaches 持有 RFB/DOM 实例，深层 reactive 代理会破坏实例方法且浪费性能。
+// panels Map is individually wrapped with shallowReactive so that
+// Map.get/set/delete have reactive tracking (shallowReactive on the
+// outer object does NOT proxy Map internals — the Map is returned as-is).
 const panelState = shallowReactive<{
   panels: Map<string, Panel>
   transferTasks: Map<string, TransferTaskUI[]>
@@ -49,7 +52,7 @@ const panelState = shallowReactive<{
   vncCaches: Map<string, VNCCache>
   spiceCaches: Map<string, SPICECache>
 }>({
-  panels: new Map(),
+  panels: shallowReactive(new Map()),
   transferTasks: new Map(),
   proxyAddrs: new Map(),
   vncCaches: new Map(),
