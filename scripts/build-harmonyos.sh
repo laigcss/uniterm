@@ -107,7 +107,7 @@ GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
   CC="$CC" \
   CGO_LDFLAGS="-L/tmp" \
   go build -mod=vendor -buildmode=c-shared -tags server,cshared \
-  -trimpath -ldflags="-w -s" \
+  -trimpath -ldflags="-w -s -X main.Version=v1.10.1-harmonyos" \
   -o "$GO_LIB_DIR/$GO_LIB_NAME" .
 
 if [[ ! -f "$GO_LIB_DIR/$GO_LIB_NAME" ]]; then

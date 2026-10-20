@@ -5,6 +5,7 @@ import { CheckForUpdate, GetAppInfo, DownloadUpdate, ApplyUpdate } from '../../b
 import { useI18n, locale } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 import { isMobilePlatform } from '../utils/platform'
+import { isHarmonyOS } from '../utils/harmonyos-bridge'
 import { Events } from '@wailsio/runtime'
 import type { UpdateInfo } from '../types/settings'
 
@@ -213,7 +214,8 @@ function initAutoCheck() {
   }).catch(() => {})
   // Mobile updates by installing a new APK; the in-app update check would
   // only fetch desktop assets. Skip auto-check scheduling entirely.
-  if (isMobilePlatform()) return
+  // HarmonyOS has no self-update mechanism; skip to avoid false positives.
+  if (isMobilePlatform() || isHarmonyOS()) return
   // Wait for persisted settings before scheduling network requests. Reading
   // the temporary default here would ignore a stored `false`.
   const settings = useSettingsStore()
