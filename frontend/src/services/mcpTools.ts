@@ -75,7 +75,20 @@ export function toAgentToolEntry(t: RemoteMCPTool): AgentToolEntry {
 }
 
 export async function callRemoteMCPTool(qualifiedName: string, args: Record<string, unknown>): Promise<string> {
-  return CallMCPTool(qualifiedName, args ?? {})
+  try {
+    return await CallMCPTool(qualifiedName, args ?? {})
+  } catch (e: unknown) {
+    // 后端在 SSE / streamable-http 断连后会自动尝试重连一次；若重连也失败，
+    // 错误信息中会包含 "reconnect failed"。这里将其转换为更友好的提示，
+    // 让用户知道是 MCP 服务器连接断了，而非工具本身出错。
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('reconnect failed')) {
+      throw new Error(
+        `MCP 服务器连接已断开，自动重连失败，请检查服务器状态或在设置中手动重连 (${qualifiedName})`,
+      )
+    }
+    throw e
+  }
 }
 
 // Namespace prefix used by both sides (Go: mcpclient.QualifiedName).

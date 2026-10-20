@@ -1356,6 +1356,7 @@
             <div class="model-actions">
               <el-switch v-model="c.enabled" @change="saveMcpClient(c)" />
               <el-button link @click="testMcpClient(c)">{{ t('settings.mcpClientTest') }}</el-button>
+              <el-button link :loading="reconnectingClient === c.name" @click="reconnectMcpClient(c)">{{ t('settings.mcpClientReconnect') }}</el-button>
               <el-button link type="danger" @click="removeMcpClient(c.name)">
                 <el-icon><Trash2 :size="'0.875rem'" /></el-icon>
               </el-button>
@@ -1614,7 +1615,7 @@
 import { ref, reactive, watch, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft, ChevronLeft, ChevronRight, Plug } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors, GenerateMCPToken, RevokeMCPToken, ListMCPTokens, GetMCPStatus, ListMCPClients, SaveMCPClient, RemoveMCPClient, TestMCPClient, MCPClientStatuses } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors, GenerateMCPToken, RevokeMCPToken, ListMCPTokens, GetMCPStatus, ListMCPClients, SaveMCPClient, RemoveMCPClient, TestMCPClient, MCPClientStatuses, MCPReconnectClient } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSyncStore, SYNC_FILE_ITEMS } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
@@ -2134,6 +2135,26 @@ async function testMcpClient(c: any) {
     refreshMcpClients()
   } catch (e: any) {
     msg.error(backendErrorText(e))
+  }
+}
+
+// reconnectingClient 记录正在重连的服务器名称，用于按钮 loading 状态。
+const reconnectingClient = ref<string | null>(null)
+
+// reconnectMcpClient 手动重连指定的 MCP 客户端服务器。当 SSE / streamable-http
+// 长连接断开后，用户可点击"重连"按钮主动恢复连接，无需等待下一次工具调用
+// 才触发自动重连。重连成功后刷新健康状态。
+async function reconnectMcpClient(c: any) {
+  reconnectingClient.value = c.name
+  try {
+    await MCPReconnectClient(c.name)
+    await refreshMcpClients()
+    const status = mcpClientStatus(c.name)
+    msg.success(t('settings.mcpClientReconnectOk', { name: c.name, tools: status?.tools ?? 0 }))
+  } catch (e: any) {
+    msg.error(`${t('settings.mcpClientReconnectFailed')}: ${backendErrorText(e)}`)
+  } finally {
+    reconnectingClient.value = null
   }
 }
 

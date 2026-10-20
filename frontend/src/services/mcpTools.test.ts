@@ -20,6 +20,7 @@ import {
   isRemoteMCPTool,
   loadRemoteMCPTools,
   toAgentToolEntry,
+  callRemoteMCPTool,
 } from './mcpTools'
 
 describe('mcpTools adapter', () => {
@@ -46,5 +47,33 @@ describe('mcpTools adapter', () => {
     const mod = await import('./mcpTools')
     const list = await mod.loadRemoteMCPTools()
     expect(list).toEqual([])
+  })
+
+  it('translates reconnect-failed errors into a friendly message', async () => {
+    vi.resetModules()
+    vi.doMock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
+      ListMCPTools: async () => [],
+      CallMCPTool: async () => {
+        throw new Error('mcp server "fs" reconnect failed: dial failed (original error: EOF)')
+      },
+    }))
+    const mod = await import('./mcpTools')
+    await expect(mod.callRemoteMCPTool('mcp__fs__read_file', {})).rejects.toThrow(
+      /自动重连失败/,
+    )
+  })
+
+  it('passes through non-reconnect errors unchanged', async () => {
+    vi.resetModules()
+    vi.doMock('../../bindings/github.com/ys-ll/uniterm/app', () => ({
+      ListMCPTools: async () => [],
+      CallMCPTool: async () => {
+        throw new Error('tool not found')
+      },
+    }))
+    const mod = await import('./mcpTools')
+    await expect(mod.callRemoteMCPTool('mcp__fs__read_file', {})).rejects.toThrow(
+      'tool not found',
+    )
   })
 })

@@ -116,6 +116,15 @@ func (a *App) CallMCPTool(qualified string, args map[string]any) (string, error)
 	return a.ensureMCPClient().CallTool(ctx, qualified, args)
 }
 
+// MCPReconnectClient 手动重连指定的外部 MCP 服务器。供前端"重连"按钮调用：
+// 当 SSE / streamable-http 长连接断开后，用户可在设置界面手动触发重连，
+// 无需等待下一次工具调用才自动重连。重连超时 20 秒。
+func (a *App) MCPReconnectClient(serverName string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return a.ensureMCPClient().Reconnect(ctx, serverName)
+}
+
 // MCPClientStatuses reports per-server health for the settings UI.
 func (a *App) MCPClientStatuses() []mcpclient.ConnStatus {
 	if a.dataDir == "" {

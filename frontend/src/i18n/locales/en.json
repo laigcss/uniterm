@@ -1933,5 +1933,8 @@
   "settings.mcpClientHeadersDesc": "Static request headers, e.g. {\"Authorization\":\"Bearer ...\"} for HTTP transports.",
   "settings.mcpClientHeadersInvalid": "Headers must be a valid JSON object",
   "settings.mcpClientRemove": "Remove server",
-  "settings.mcpClientRemoveConfirm": "Remove MCP server \"{name}\"? Its tools will no longer be available to the AI."
+  "settings.mcpClientRemoveConfirm": "Remove MCP server \"{name}\"? Its tools will no longer be available to the AI.",
+  "settings.mcpClientReconnect": "Reconnect",
+  "settings.mcpClientReconnectOk": "Reconnected · {tools} tools available from {name}",
+  "settings.mcpClientReconnectFailed": "Reconnect failed"
 }

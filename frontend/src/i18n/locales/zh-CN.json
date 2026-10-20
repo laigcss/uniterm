@@ -1933,5 +1933,8 @@
   "settings.mcpClientHeadersDesc": "HTTP 传输的静态请求头，例如 {\"Authorization\":\"Bearer ...\"}。",
   "settings.mcpClientHeadersInvalid": "请求头必须是合法的 JSON 对象",
   "settings.mcpClientRemove": "删除服务器",
-  "settings.mcpClientRemoveConfirm": "删除 MCP 服务器「{name}」？其工具将不再对 AI 可用。"
+  "settings.mcpClientRemoveConfirm": "删除 MCP 服务器「{name}」？其工具将不再对 AI 可用。",
+  "settings.mcpClientReconnect": "重连",
+  "settings.mcpClientReconnectOk": "重连成功 · {name} 提供 {tools} 个工具",
+  "settings.mcpClientReconnectFailed": "重连失败"
 }
