@@ -356,7 +356,7 @@ struct Index {
         this.jsBridge,
         JS_BRIDGE_NAME,
         ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp'],
-        []
+        ['invoke']
       );
       // 刷新页面使 JavaScript 代理生效
       this.controller.refresh();
