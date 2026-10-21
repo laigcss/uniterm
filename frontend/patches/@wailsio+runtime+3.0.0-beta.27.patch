@@ -1,0 +1,27 @@
+diff --git a/node_modules/@wailsio/runtime/dist/clipboard.js b/node_modules/@wailsio/runtime/dist/clipboard.js
+index d579d4b..13aad9b 100644
+--- a/node_modules/@wailsio/runtime/dist/clipboard.js
++++ b/node_modules/@wailsio/runtime/dist/clipboard.js
+@@ -18,6 +18,11 @@ const ClipboardText = 1;
+  * @return A Promise that resolves when the operation is successful.
+  */
+ export function SetText(text) {
++    // HarmonyOS: route through JSBridge (Go subprocess cannot access system clipboard)
++    if (typeof window !== 'undefined' && window.harmonyBridge) {
++        return window.harmonyBridge.invoke('clipboard.writeText', JSON.stringify({ text }))
++            .then(resp => { const r = JSON.parse(resp); if (!r.success) throw new Error(r.error?.message || 'write failed'); return r.data; });
++    }
+     return call(ClipboardSetText, { text });
+ }
+ /**
+@@ -26,5 +31,10 @@ export function SetText(text) {
+  * @returns A promise that resolves with the text from the Clipboard.
+  */
+ export function Text() {
++    // HarmonyOS: route through JSBridge
++    if (typeof window !== 'undefined' && window.harmonyBridge) {
++        return window.harmonyBridge.invoke('clipboard.readText', '{}')
++            .then(resp => { const r = JSON.parse(resp); if (!r.success) throw new Error(r.error?.message || 'read failed'); return r.data || ''; });
++    }
+     return call(ClipboardText);
+ }

@@ -1,4 +1,5 @@
 import { Clipboard } from '@wailsio/runtime'
+import { isHarmonyOS, unifiedClipboard } from '../utils/harmonyos-bridge'
 
 // Write/read the OS clipboard with layered fallbacks.
 //
@@ -54,9 +55,12 @@ const wailsWriter: ClipboardWriter = async (text) => {
 const isApplePlatform = () => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
 const isAndroidPlatform = () => /Android/.test(navigator.userAgent)
 
-export const writeClipboard: ClipboardWriter = typeof Clipboard.SetText !== 'function'
+export const writeClipboard: ClipboardWriter = typeof Clipboard.SetText !== 'function' && !isHarmonyOS()
   ? browserWriter // standalone path when Wails is absent (dev outside the runtime)
   : async (text) => {
+      // HarmonyOS: use JSBridge clipboard (ArkWeb navigator.clipboard is
+      // unavailable, and the Go subprocess cannot access the system clipboard).
+      if (isHarmonyOS()) return unifiedClipboard.setText(text)
       // Wails must go first on macOS (#827, see above) and on Android: the
       // WebView's navigator.clipboard.writeText resolves successfully there but
       // only writes the renderer-internal clipboard — the system ClipboardManager
@@ -73,6 +77,8 @@ export const writeClipboard: ClipboardWriter = typeof Clipboard.SetText !== 'fun
 const READ_RETRY_DELAY_MS = 120
 
 export async function readClipboardText(): Promise<string> {
+  // HarmonyOS: use JSBridge clipboard (Go subprocess cannot access system clipboard).
+  if (isHarmonyOS()) return unifiedClipboard.text()
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) await new Promise(resolve => setTimeout(resolve, READ_RETRY_DELAY_MS))
     let text = ''
