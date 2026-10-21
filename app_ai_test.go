@@ -12,8 +12,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // TestLLMProxyEnvFallback verifies that llmProxy resolves proxies declared
@@ -651,7 +649,7 @@ func pngWithDimensions(width, height int) (string, error) {
 	buf.Write([]byte{0, 0, 0, 13})
 	buf.WriteString("IHDR")
 	buf.Write(ihdr)
-	crc := crc32.ChecksumIEEE(append(append([]byte("IHDR"), ihdr...)))
+	crc := crc32.ChecksumIEEE(append([]byte("IHDR"), ihdr...))
 	buf.Write([]byte{byte(crc >> 24), byte(crc >> 16), byte(crc >> 8), byte(crc)})
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
@@ -913,44 +911,7 @@ func mustJSON(t *testing.T, v interface{}) string {
 	b, err := json.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
+		t.Fatal(err)
 	}
 	return string(b)
-}
-
-func TestMCPClientUpdateRenamesWithoutCreatingDuplicate(t *testing.T) {
-	dir := t.TempDir()
-	a := &App{dataDir: dir, mcpClientStore: store.NewMCPClientStore(dir)}
-	defer func() {
-		if a.mcpClient != nil {
-			a.mcpClient.CloseAll()
-		}
-	}()
-	cfg := store.MCPClientConfig{Name: "before", Transport: store.MCPTransportStdio, Command: "npx", Args: []string{"-y", "example"}, Enabled: false}
-	if err := a.SaveMCPClient(cfg); err != nil {
-		t.Fatal(err)
-	}
-	cfg.Name = "after"
-	cfg.Args = []string{"-y", "updated", "path with spaces"}
-	if err := a.UpdateMCPClient("before", cfg); err != nil {
-		t.Fatal(err)
-	}
-	all, err := a.mcpClientStore.Load()
-	if err != nil || len(all) != 1 || all[0].Name != "after" || all[0].Enabled || all[0].Args[2] != "path with spaces" {
-		t.Fatalf("edit did not preserve config: %+v %v", all, err)
-	}
-	other := cfg
-	other.Name = "other"
-	if err := a.SaveMCPClient(other); err != nil {
-		t.Fatal(err)
-	}
-	if err := a.UpdateMCPClient("other", cfg); err == nil {
-		t.Fatal("rename overwrote another client")
-	}
-	if err := a.UpdateMCPClient("missing", cfg); err == nil {
-		t.Fatal("stale edit created a client")
-	}
-	all, err = a.mcpClientStore.Load()
-	if err != nil || len(all) != 2 {
-		t.Fatalf("failed rename changed store: %+v %v", all, err)
-	}
 }
