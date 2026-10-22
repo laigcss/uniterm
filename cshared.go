@@ -99,6 +99,11 @@ func StartServer(port C.int) C.int {
 	store.AutoInitMode = true
 	os.Setenv("AI_OPS_AUTO_INIT", "1")
 
+	// 标记运行在 HarmonyOS 环境 — ArkWeb 终端的 stty -echo 时序问题会导致
+	// shell 集成代码（OSC-7 cwd hook）在启动注入时被回显显示。session 包
+	// 检测此标志并将 CwdHookMode 强制为 "follow"，跳过启动注入。
+	os.Setenv("UNITERM_HARMONYOS", "1")
+
 	log.Writef("[cshared] AutoInitMode=true, XDG_CONFIG_HOME=%s, HOME=%s", os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
 
 	// 应用 server 模式配置（桥接 AI_OPS_HOST/PORT 到 WAILS_SERVER_HOST/PORT）

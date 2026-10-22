@@ -49,17 +49,17 @@ type SSHSession struct {
 	// outputRouteMu makes the binary/text routing decision atomic with
 	// EndZmodem. Without it, readLoop could observe binary mode, get paused,
 	// then emit post-transfer shell output as binary after EndZmodem returned.
-	outputRouteMu       sync.Mutex
-	client              *ssh.Client
-	session             *ssh.Session
-	stdin               io.WriteCloser
-	stdout              io.Reader
-	stderr              io.Reader
-	quit                chan struct{}
-	quitOnce            sync.Once
-	authAnswerCh        chan []byte
-	expectOutput        *postLoginOutputBuffer
-	x11Forwarder        *x11Forwarder
+	outputRouteMu sync.Mutex
+	client        *ssh.Client
+	session       *ssh.Session
+	stdin         io.WriteCloser
+	stdout        io.Reader
+	stderr        io.Reader
+	quit          chan struct{}
+	quitOnce      sync.Once
+	authAnswerCh  chan []byte
+	expectOutput  *postLoginOutputBuffer
+	x11Forwarder  *x11Forwarder
 
 	// osc7 extracts OSC-7 cwd reports emitted by the remote shell or tools.
 	// Only used from the readLoop goroutine.
@@ -410,7 +410,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	//       implement only pty-req + shell and tear down the transport on exec.
 	// The probe result is an optional enhancement: any failure degrades to no
 	// injection, exactly like the old unsupported-shell skip.
-	s.cwdHookFollow = config.CwdHookMode == CwdHookModeFollow
+	s.cwdHookFollow = effectiveCwdHookMode(config.CwdHookMode) == CwdHookModeFollow
 	probeCh := make(chan string, 1)
 	if !s.cwdHookFollow {
 		go func() { probeCh <- probeCwdShellSeparately(config) }()
@@ -481,7 +481,7 @@ func (s *SSHSession) attach(client *ssh.Client, config ConnectionConfig) error {
 	// on exec, killing the login. CwdHookMode "follow"
 	// skips the startup injection entirely: InjectCwdHook re-detects on
 	// demand.
-	s.cwdHookFollow = config.CwdHookMode == CwdHookModeFollow
+	s.cwdHookFollow = effectiveCwdHookMode(config.CwdHookMode) == CwdHookModeFollow
 	injectHook, injectShell := "", ""
 	if s.cwdHookFollow {
 		log.Writef("ssh: cwd hook deferred to directory-follow toggle")
