@@ -1,6 +1,6 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/connectionLauncher-DolTrSzb.js","assets/connectionLauncher-BU_iGcXY.js","assets/rolldown-runtime-DC62tzP2.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/connectionLauncher-DqyBZ9Pe.js","assets/connectionLauncher-Ch61ISds.js","assets/rolldown-runtime-DC62tzP2.js"])))=>i.map(i=>d[i]);
 import { n as __exportAll, r as __toESM, t as __commonJSMin } from "./rolldown-runtime-DC62tzP2.js";
-import { $ as ContainerStartPull, $a as DEFAULT_KEYBOARD, $c as vModelRadio, $i as SftpListRemote, $l as readonly, $n as LoadSettings, $o as useEmptyValues, $r as RedisSetString, $s as memoize, $t as GetDBCapabilities, A as ChangeMasterPassword, Aa as SyncTestConnection, Ac as useIntersectionObserver, Ai as SessionStartZmodem, Al as onDeactivated, An as K8sListContexts, Ao as circle_check_default, Ar as RDPSetPosition, As as isNumber, At as EsDeleteIndex, B as ContainerImageHistory, Ba as X11DesktopConnect, Bc as tryOnScopeDispose, Bi as SetSkillEnabled, Bl as resolveDynamicComponent, Bn as ListMCPTokens, Bo as plus_default, Br as RedisGetListRange, Bs as _getTag_default, Bt as ExecuteSQLScript, C as AddColumn, Ca as SyncConfigureRemote, Cc as root, Ci as SaveWindowState, Cl as isVNode, Cn as GetTableSchema, Co as iconPropType, Cr as OpenPrivateKeyFile, Cs as focusElement, Ct as DuplicateSSHChannel, Cu as toHandlerKey, D as ApplyUpdate, Da as SyncNow, Dc as useDocumentVisibility, Di as SessionInjectCwdHook, Dl as onBeforeMount, Dn as K8sConnect, Do as arrow_up_default, Dr as RDPHide, Ds as isBoolean, Dt as EsClusterInfo, E as ApplyImport, Ea as SyncGetConfig, Ec as unrefElement, Ei as SessionEndZmodemWithTrailing, El as onActivated, En as ImportSkillFromZip, Eo as arrow_right_default, Er as QuitApp, Es as obtainAllFocusableElements$1, Et as EsClusterHealth, F as ContainerAction, Fa as TestMCPClient, Fc as computedEager, Fi as SetCommandLocked, Fl as provide, Fn as K8sStopWatch, Fo as full_screen_default, Fr as ReadLocalAttachmentFile, Fs as isNil, Ft as EsOpenIndex, G as ContainerList, Ga as Environment, Gc as EVENT_CODE, Gi as SftpChangeRemoteDir, Gl as watchEffect, Gn as ListSkills, Go as sort_down_default, Gr as RedisHashSet, Gs as Stack$1, Gt as FrontendLog, H as ContainerImagePrune, Ha as thisWindow, Hc as useThrottleFn, Hi as SetupCredentials, Hl as useAttrs$1, Hn as ListSerialPorts, Ho as refresh_left_default, Hr as RedisGetSortedSetRange, Hs as baseGetAllKeys, Ht as ExportConnections, I as ContainerConnect, Ia as TestTunnel, Ic as isClient, Ii as SetDataDir, Il as renderList, In as KillProcess, Io as hide_default, Ir as RecordRecentConnection, Is as isEqual$1, It as EsRest, J as ContainerRemoveImage, Ja as locale, Jc as Transition, Ji as SftpDismissTransfer, Jl as effectScope, Jn as LoadAISessions, Jo as warning_filled_default, Jr as RedisListPush, Js as arrayPush, Jt as GetAppInfo, K as ContainerNamespaces, Ka as newRuntimeCaller, Kc as createPinia, Ki as SftpChmod, Kl as withCtx, Kn as ListTunnelStates, Ko as sort_up_default, Kr as RedisKeyspaceInfo, Ks as isPlainObject$1, Kt as GenerateMCPToken, L as ContainerCreate, La as TruncateTable, Lc as isIOS, Li as SetDefaultSessionLogDir, Ll as renderSlot, Ln as ListCommands, Lo as loading_default, Lr as RedisDeleteKey, Ls as fromPairs, Lt as EsSearch, M as CheckForUpdate, Ma as SyncUpdateRemotePassword, Mc as useResizeObserver, Mi as SessionWriteBinary, Ml as onUnmounted, Mn as K8sStartLogStream, Mo as close_default, Mr as RDPSnapshot, Ms as isUndefined$1, Mt as EsGetSettings, N as ClearBackgroundImage, Na as SyncVerifyPassword, Nc as useWindowFocus, Ni as SetBackgroundImage, Nl as onUpdated, Nn as K8sStartWatch, No as d_arrow_left_default, Nr as ReadFileBase64, Ns as isWindow, Nt as EsIndexDoc, O as CallMCPTool, Oa as SyncResolveConflict, Oc as useElementSize, Oi as SessionResize, Ol as onBeforeUnmount, On as K8sDisconnect, Oo as caret_right_default, Or as RDPInvalidate, Os as isElement, Ot as EsCreateIndex, P as CloseSession, Pa as TestConnection, Pc as clamp$1, Pi as SetCommandEnabled, Pl as openBlock, Pn as K8sStopLogStream, Po as d_arrow_right_default, Pr as ReadFileChunkBase64, Ps as baseSet, Pt as EsListIndices, Q as ContainerStartLogs, Qa as CURSOR_STYLES, Qc as vModelCheckbox, Qi as SftpListLocalDrives, Ql as reactive, Qn as LoadQuickCommands, Qo as withNoopInstall, Qr as RedisSetRemove, Qs as castPath, Qt as GetCredentialStatus, R as ContainerDisconnect, Ra as UnlockCredentials, Rc as reactiveComputed, Ri as SetMonitorActiveTab, Rl as resolveComponent, Rn as ListExternalEditors, Ro as minus_default, Rr as RedisGetHashAll, Rs as baseIsEqual, Rt as EsUpdateDoc, S as usePanelStore, Sa as SyncChangePassword, Sc as Symbol$1, Si as SaveTunnels, Sl as inject, Sn as GetSupportedSSHAlgorithms, So as ValidateComponentsMap, Sr as OpenPathInExplorer, Ss as getEventKey, St as DumpTable, Su as toDisplayString, T as AppendFileBase64, Ta as SyncDeleteRepo, Tc as onClickOutside, Ti as SessionEndZmodem, Tl as nextTick, Tn as ImportSkillFromDir, To as arrow_left_default, Tr as ParseImportFile, Ts as isShadowRoot, Tt as EsCloseIndex, U as ContainerImages, Ua as Off, Uc as useTimeoutFn, Ui as SftpCancelTransfer, Ul as useSlots, Un as ListSessions, Uo as refresh_right_default, Ur as RedisGetString, Us as getSymbols, Ut as FetchModels, V as ContainerImageInspect, Va as SyncConfig, Vc as useDebounceFn, Vi as SetSkillLocked, Vl as toHandlers, Vn as ListMCPTools, Vo as refresh_default, Vr as RedisGetSetAll, Vs as getAllKeys, Vt as ExecuteStatement, W as ContainerInspect, Wa as On, Wc as componentSizes, Wi as SftpChangeLocalDir, Wl as watch, Wn as ListSkillFiles, Wo as scale_to_original_default, Wr as RedisHashDel, Ws as stubArray, Wt as FileSize, X as ContainerRuntimeInfo, Xa as t$1, Xc as createApp, Xi as SftpGetContent, Xl as markRaw, Xn as LoadLocalState, Xo as zoom_out_default, Xr as RedisSetAdd, Xs as baseGet, Xt as GetBackgroundImage, Y as ContainerRename, Ya as setLocale, Yc as TransitionGroup, Yi as SftpGet, Yl as isRef, Yn as LoadIdentities, Yo as zoom_in_default, Yr as RedisScanKeys, Ys as get, Yt as GetAvailableShells, Z as ContainerSetNamespace, Za as useI18n, Zc as render, Zi as SftpListLocal, Zl as onScopeDispose, Zn as LoadProxies, Zo as withInstall, Zr as RedisSetKeyTTL, Zs as toKey, Zt as GetCommandBody, _ as msg, _a as SftpRetryTransfer, _c as isObject, _i as SaveProxies, _l as createVNode, _n as GetServiceLogs, _o as mutable, _r as OpenExternalEditorLocal, _s as definePropType, _t as DropColumn, _u as isPromise, a as launchMonitor, aa as SftpLocalRemove, ac as baseUnary, ai as ResetCredentials, al as Fragment, an as GetDisks, ao as SHORTCUT_LABELS, ar as MongoCreateIndex, as as useNamespace, at as CreateDatabase, au as toRefs, b as useZmodemStore, ba as StopTunnel, bc as isSymbol, bi as SaveSkill, bl as guardReactiveProps, bn as GetSkillBody, bo as TypeComponents, br as OpenKubeconfigFile, bs as composeEventHandlers, bt as DropTable, bu as normalizeProps, c as getShellLabel, ca as SftpMove, cc as isPrototype, ci as SaveAIModels, cl as Text$3, cn as GetHardwareLan, co as START_PAGE_BLOCK_LABEL_KEYS, cr as MongoDropDatabase, cs as addClass, ct as CreateTable, cu as unref, d as canOpenSshTerminal, da as SftpPauseTransfer, dc as assignValue, di as SaveFavoriteConnections, dl as createBaseVNode, dn as GetNetworkCards, do as USER_AGENT_PRESETS, dr as MongoInsertOne, ds as hasClass, dt as DBInsertRow, du as hasOwn, ea as SftpLocalCopy, ec as isKey, ei as RedisSwitchDB, el as vModelText, en as GetDataDirInfo, eo as DEFAULT_SETTINGS, er as LoadTerminalHistory, es as useEmptyValuesProps, et as ContainerStartPush, eu as ref, f as connectFileMenuKey, fa as SftpPut, fc as eq, fi as SaveFileDialog, fl as createBlock, fn as GetPlatform, fo as normalizeKeyBindings, fr as MongoListCollections, fs as removeClass, ft as DBUpdateRow, fu as hyphenate, g as useConnectionStore, ga as SftpResumeTransfer, gc as isFunction, gi as SaveMCPClient, gl as createTextVNode, gn as GetServiceDetail, go as useGlobalConfig, gr as OpenDirectoryDialog, gs as buildProps, gt as DownloadUpdate, gu as isPlainObject$2, h as supportsRemoteSymlink, ha as SftpRename, hc as defineProperty, hi as SaveLocalState, hl as createSlots, hn as GetRecentConnections, ho as useGlobalComponentSettings, hr as MongoUpdateOne, hs as buildProp, ht as DisableSessionOutputLog, hu as isObject$1, i as launchFileBrowser, ia as SftpLocalPutContent, ic as nodeUtil, ii as RemoveMCPClient, il as Comment, in as GetDevices, io as LANGUAGE_OPTIONS, ir as MongoCreateCollection, is as useGetDerivedNamespace, it as CreateCommand, iu as toRef, j as ChatCompletion, ja as SyncTestRemote, jc as useMutationObserver, ji as SessionWrite, jl as onMounted, jn as K8sRequest, jo as circle_close_default, jr as RDPShow, js as isPropAbsent, jt as EsGetMapping, k as CancelChatStream, ka as SyncSaveConfig, kc as useEventListener, ki as SessionStart, kl as onBeforeUpdate, kn as K8sExecSession, ko as check_default, kr as RDPSetFullScreen, ks as isEmpty, kt as EsDeleteDoc, l as parseWslFromShell, la as SftpOpenExternalEditor, lc as isArrayLike, li as SaveAISessions, ll as cloneVNode, ln as GetHardwareSensors, lo as TERMINAL_THEMES, lr as MongoDropIndex, ls as addUnit, lt as DBDefaultTableQuery, lu as NOOP, m as isConnectionLostError, ma as SftpRemove, mc as isIndex, mi as SaveIdentities, ml as createElementBlock, mn as GetProcessDetail, mo as ConfigProvider, mr as MongoListIndexes, ms as throwError$2, mt as DeleteSkill, mu as isFunction$1, n as launchConnection, na as SftpLocalMkdir, nc as arrayLikeKeys, ni as RedisZSetRemove, nl as withKeys, nn as GetDefaultSSHKeyPaths, no as FONT_OPTIONS, nr as MCPClientStatuses, ns as useSizeProp, nt as ContainerTagImage, nu as shallowRef, o as launchWslFileBrowser, oa as SftpLocalRename, oc as isBuffer, oi as ResolveMCPApproval, ol as KeepAlive, on as GetFavoriteConnections, oo as SIDEBAR_TAB_DEFAULTS, or as MongoDeleteOne, os as useLocale, ot as CreateSession, ou as toValue, p as fileTransferProto, pa as SftpPutContent, pc as baseAssignValue, pi as SaveFileDialogFiltered, pl as createCommentVNode, pn as GetPorts, po as ElMessage, pr as MongoListDatabases, ps as debugWarn, pt as DeleteCommand, pu as isArray$1, q as ContainerRegistryLogin, qa as objectNames, qc as defineStore, qi as SftpCopy, ql as withDirectives, qn as LoadAIModels, qo as view_default, qr as RedisListPop, qs as getPrototype, qt as GetAllFonts, r as launchContainerFileBrowser, ra as SftpLocalMove, rc as isTypedArray, ri as RelaunchApp, rl as withModifiers, rn as GetDefaultSessionLogDir, ro as FONT_WEIGHT_OPTIONS, rr as ModifyColumn, rs as useZIndex, rt as CopyTable, ru as toRaw, s as persistConnection, sa as SftpMakeDir, sc as isArguments, si as RevokeMCPToken, sl as Teleport, sn as GetHardwareFru, so as SIDEBAR_TAB_ORDER, sr as MongoDropCollection, ss as en_default, st as CreateSkill, su as triggerRef, t as configureLauncher, ta as SftpLocalGetContent, tc as keys, ti as RedisZSetAdd, tl as vShow, tn as GetDatabases, to as FOLLOW_APP_THEME, tr as LoadTunnels, ts as useGlobalSize, tt as ContainerStopStream, tu as shallowReactive, u as asSshTerminalConfig, ua as SftpOpenWithSystem, uc as isLength, ui as SaveCommand, ul as computed, un as GetMCPStatus, uo as TIMESTAMP_FORMATS, ur as MongoFind, us as getStyle, ut as DBDeleteRow, uu as capitalize$1, v as disposeSessionStore, va as SftpSymlink, vc as isArray, vi as SaveQuickCommands, vl as defineComponent, vn as GetServices, vo as ElIcon, vr as OpenFileDialog, vs as getProp, vt as DropDatabase, vu as isString, w as AddIndex, wa as SyncConfigureRepo, wc as isFirefox, wi as ServiceAction, wl as mergeProps, wn as GetTables, wo as arrow_down_default, wr as OpenWithSystemLocal, ws as isFocusable, wt as EnableSessionOutputLog, x as useTabStore, xa as SwitchCredentialMode, xc as isObjectLike, xi as SaveTerminalHistory, xl as h$3, xn as GetSkillFile, xo as TypeComponentsMap, xr as OpenMultipleFilesDialog, xs as getEventCode, xt as DropView, xu as normalizeStyle, y as useSessionStore, ya as StartTunnel, yc as arrayMap, yi as SaveSettings, yl as getCurrentInstance, yn as GetSessionOutputLogInfo, yo as CloseComponents, yr as OpenFileDialogFiltered, ys as keysOf, yt as DropIndexOp, yu as normalizeClass, z as ContainerExecSession, za as WriteFileBase64, zc as refDebounced, zi as SetMonitorPaused, zl as resolveDirective, zn as ListMCPClients, zo as more_filled_default, zr as RedisGetKeyInfo, zs as Uint8Array$1, zt as ExecuteQuery } from "./connectionLauncher-BU_iGcXY.js";
+import { $ as ContainerStartPull, $a as CURSOR_STYLES, $c as vModelCheckbox, $i as SftpListLocalDrives, $l as reactive, $n as LoadSettings, $o as withNoopInstall, $r as RedisSetRemove, $s as castPath, $t as GetDBCapabilities, A as ChangeMasterPassword, Aa as SyncSaveConfig, Ac as useEventListener, Ai as SessionStart, Al as onBeforeUpdate, An as K8sListContexts, Ao as check_default, Ar as RDPSetFullScreen, As as isEmpty, At as EsDeleteIndex, B as ContainerImageHistory, Ba as WriteFileBase64, Bc as refDebounced, Bi as SetMonitorPaused, Bl as resolveDirective, Bn as ListMCPTokens, Bo as more_filled_default, Br as RedisGetKeyInfo, Bs as Uint8Array$1, Bt as ExecuteSQLScript, C as AddColumn, Ca as SyncChangePassword, Cc as Symbol$1, Ci as SaveTunnels, Cl as inject, Cn as GetTableSchema, Co as ValidateComponentsMap, Cr as OpenPathInExplorer, Cs as getEventKey, Ct as DuplicateSSHChannel, Cu as toDisplayString, D as ApplyUpdate, Da as SyncGetConfig, Dc as unrefElement, Di as SessionEndZmodemWithTrailing, Dl as onActivated, Dn as K8sConnect, Do as arrow_right_default, Dr as QuitApp, Ds as obtainAllFocusableElements$1, Dt as EsClusterInfo, E as ApplyImport, Ea as SyncDeleteRepo, Ec as onClickOutside, Ei as SessionEndZmodem, El as nextTick, En as ImportSkillFromZip, Eo as arrow_left_default, Er as ParseImportFile, Es as isShadowRoot, Et as EsClusterHealth, F as ContainerAction, Fa as TestConnection, Fc as clamp$1, Fi as SetCommandEnabled, Fl as openBlock, Fn as K8sStopWatch, Fo as d_arrow_right_default, Fr as ReadFileChunkBase64, Fs as baseSet, Ft as EsOpenIndex, G as ContainerList, Ga as On, Gc as componentSizes, Gi as SftpChangeLocalDir, Gl as watch, Gn as ListSkills, Go as scale_to_original_default, Gr as RedisHashDel, Gs as stubArray, Gt as FrontendLog, H as ContainerImagePrune, Ha as SyncConfig, Hc as useDebounceFn, Hi as SetSkillLocked, Hl as toHandlers, Hn as ListSerialPorts, Ho as refresh_default, Hr as RedisGetSetAll, Hs as getAllKeys, Ht as ExportConnections, I as ContainerConnect, Ia as TestMCPClient, Ic as computedEager, Ii as SetCommandLocked, Il as provide, In as KillProcess, Io as full_screen_default, Ir as ReadLocalAttachmentFile, Is as isNil, It as EsRest, J as ContainerRemoveImage, Ja as objectNames, Jc as defineStore, Ji as SftpCopy, Jl as withDirectives, Jn as LoadAISessions, Jo as view_default, Jr as RedisListPop, Js as getPrototype, Jt as GetAppInfo, K as ContainerNamespaces, Ka as Environment, Kc as EVENT_CODE, Ki as SftpChangeRemoteDir, Kl as watchEffect, Kn as ListTunnelStates, Ko as sort_down_default, Kr as RedisHashSet, Ks as Stack$1, Kt as GenerateMCPToken, L as ContainerCreate, La as TestTunnel, Lc as isClient, Li as SetDataDir, Ll as renderList, Ln as ListCommands, Lo as hide_default, Lr as RecordRecentConnection, Ls as isEqual$1, Lt as EsSearch, M as CheckForUpdate, Ma as SyncTestRemote, Mc as useMutationObserver, Mi as SessionWrite, Ml as onMounted, Mn as K8sStartLogStream, Mo as circle_close_default, Mr as RDPShow, Ms as isPropAbsent, Mt as EsGetSettings, N as ClearBackgroundImage, Na as SyncUpdateRemotePassword, Nc as useResizeObserver, Ni as SessionWriteBinary, Nl as onUnmounted, Nn as K8sStartWatch, No as close_default, Nr as RDPSnapshot, Ns as isUndefined$1, Nt as EsIndexDoc, O as CallMCPTool, Oa as SyncNow, Oc as useDocumentVisibility, Oi as SessionInjectCwdHook, Ol as onBeforeMount, On as K8sDisconnect, Oo as arrow_up_default, Or as RDPHide, Os as isBoolean, Ot as EsCreateIndex, P as CloseSession, Pa as SyncVerifyPassword, Pc as useWindowFocus, Pi as SetBackgroundImage, Pl as onUpdated, Pn as K8sStopLogStream, Po as d_arrow_left_default, Pr as ReadFileBase64, Ps as isWindow, Pt as EsListIndices, Q as ContainerStartLogs, Qa as useI18n, Qc as render, Qi as SftpListLocal, Ql as onScopeDispose, Qn as LoadQuickCommands, Qo as withInstall, Qr as RedisSetKeyTTL, Qs as toKey, Qt as GetCredentialStatus, R as ContainerDisconnect, Ra as TruncateTable, Rc as isIOS, Ri as SetDefaultSessionLogDir, Rl as renderSlot, Rn as ListExternalEditors, Ro as loading_default, Rr as RedisDeleteKey, Rs as fromPairs, Rt as EsUpdateDoc, S as usePanelStore, Sa as SwitchCredentialMode, Sc as isObjectLike, Si as SaveTerminalHistory, Sl as h$3, Sn as GetSupportedSSHAlgorithms, So as TypeComponentsMap, Sr as OpenMultipleFilesDialog, Ss as getEventCode, St as DumpTable, Su as normalizeStyle, T as AppendFileBase64, Ta as SyncConfigureRepo, Tc as isFirefox, Ti as ServiceAction, Tl as mergeProps, Tn as ImportSkillFromDir, To as arrow_down_default, Tr as OpenWithSystemLocal, Ts as isFocusable, Tt as EsCloseIndex, U as ContainerImages, Ua as thisWindow, Uc as useThrottleFn, Ui as SetupCredentials, Ul as useAttrs$1, Un as ListSessions, Uo as refresh_left_default, Ur as RedisGetSortedSetRange, Us as baseGetAllKeys, Ut as FetchModels, V as ContainerImageInspect, Va as X11DesktopConnect, Vc as tryOnScopeDispose, Vi as SetSkillEnabled, Vl as resolveDynamicComponent, Vn as ListMCPTools, Vo as plus_default, Vr as RedisGetListRange, Vs as _getTag_default, Vt as ExecuteStatement, W as ContainerInspect, Wa as Off, Wc as useTimeoutFn, Wi as SftpCancelTransfer, Wl as useSlots, Wn as ListSkillFiles, Wo as refresh_right_default, Wr as RedisGetString, Ws as getSymbols, Wt as FileSize, X as ContainerRuntimeInfo, Xa as setLocale, Xc as TransitionGroup, Xi as SftpGet, Xl as isRef, Xn as LoadLocalState, Xo as zoom_in_default, Xr as RedisScanKeys, Xs as get, Xt as GetBackgroundImage, Y as ContainerRename, Ya as locale, Yc as Transition, Yi as SftpDismissTransfer, Yl as effectScope, Yn as LoadIdentities, Yo as warning_filled_default, Yr as RedisListPush, Ys as arrayPush, Yt as GetAvailableShells, Z as ContainerSetNamespace, Za as t$1, Zc as createApp, Zi as SftpGetContent, Zl as markRaw, Zn as LoadProxies, Zo as zoom_out_default, Zr as RedisSetAdd, Zs as baseGet, Zt as GetCommandBody, _ as msg, _a as SftpResumeTransfer, _c as isFunction, _i as SaveMCPClient, _l as createTextVNode, _n as GetServiceLogs, _o as useGlobalConfig, _r as OpenDirectoryDialog, _s as buildProps, _t as DropColumn, _u as isPlainObject$2, a as launchMonitor, aa as SftpLocalPutContent, ac as nodeUtil, ai as RemoveMCPClient, al as Comment, an as GetDisks, ao as LANGUAGE_OPTIONS, ar as MongoCreateCollection, as as useGetDerivedNamespace, at as CreateDatabase, au as toRef, b as useZmodemStore, ba as StartTunnel, bc as arrayMap, bi as SaveSettings, bl as getCurrentInstance, bn as GetSkillBody, bo as CloseComponents, br as OpenFileDialogFiltered, bs as keysOf, bt as DropTable, bu as normalizeClass, c as getShellLabel, ca as SftpMakeDir, cc as isArguments, ci as RevokeMCPToken, cl as Teleport, cn as GetHardwareLan, co as SIDEBAR_TAB_ORDER, cr as MongoDropCollection, cs as en_default, ct as CreateTable, cu as triggerRef, d as canOpenSshTerminal, da as SftpOpenWithSystem, dc as isLength, di as SaveCommand, dl as computed, dn as GetNetworkCards, do as TIMESTAMP_FORMATS, dr as MongoFind, ds as getStyle, dt as DBInsertRow, du as capitalize$1, ea as SftpListRemote, ec as memoize, ei as RedisSetString, el as vModelRadio, en as GetDataDirInfo, eo as DEFAULT_KEYBOARD, er as LoadTerminalHistory, es as useEmptyValues, et as ContainerStartPush, eu as readonly, f as connectFileMenuKey, fa as SftpPauseTransfer, fc as assignValue, fi as SaveFavoriteConnections, fl as createBaseVNode, fn as GetPlatform, fo as USER_AGENT_PRESETS, fr as MongoInsertOne, fs as hasClass, ft as DBUpdateRow, fu as hasOwn, g as useConnectionStore, ga as SftpRename, gc as defineProperty, gi as SaveLocalState, gl as createSlots, gn as GetServiceDetail, go as useGlobalComponentSettings, gr as MongoUpdateOne, gs as buildProp, gt as DownloadUpdate, gu as isObject$1, h as supportsRemoteSymlink, ha as SftpRemove, hc as isIndex, hi as SaveIdentities, hl as createElementBlock, hn as GetRecentConnections, ho as ConfigProvider, hr as MongoListIndexes, hs as throwError$2, ht as DisableSessionOutputLog, hu as isFunction$1, i as launchFileBrowser, ia as SftpLocalMove, ic as isTypedArray, ii as RelaunchApp, il as withModifiers, in as GetDevices, io as FONT_WEIGHT_OPTIONS, ir as ModifyColumn, is as useZIndex, it as CreateCommand, iu as toRaw, j as ChatCompletion, ja as SyncTestConnection, jc as useIntersectionObserver, ji as SessionStartZmodem, jl as onDeactivated, jn as K8sRequest, jo as circle_check_default, jr as RDPSetPosition, js as isNumber, jt as EsGetMapping, k as CancelChatStream, ka as SyncResolveConflict, kc as useElementSize, ki as SessionResize, kl as onBeforeUnmount, kn as K8sExecSession, ko as caret_right_default, kr as RDPInvalidate, ks as isElement, kt as EsDeleteDoc, l as parseWslFromShell, la as SftpMove, lc as isPrototype, li as SaveAIModels, ll as Text$3, ln as GetHardwareSensors, lo as START_PAGE_BLOCK_LABEL_KEYS, lr as MongoDropDatabase, ls as addClass, lt as DBDefaultTableQuery, lu as unref, m as isConnectionLostError, ma as SftpPutContent, mc as baseAssignValue, mi as SaveFileDialogFiltered, ml as createCommentVNode, mn as GetProcessDetail, mo as ElMessage, mr as MongoListDatabases, ms as debugWarn, mt as DeleteSkill, mu as isArray$1, n as launchConnection, na as SftpLocalGetContent, nc as keys, ni as RedisZSetAdd, nl as vShow, nn as GetDefaultSSHKeyPaths, no as FOLLOW_APP_THEME, nr as MCPClientStatuses, ns as useGlobalSize, nt as ContainerTagImage, nu as shallowReactive, o as launchWslFileBrowser, oa as SftpLocalRemove, oc as baseUnary, oi as ResetCredentials, ol as Fragment, on as GetFavoriteConnections, oo as SHORTCUT_LABELS, or as MongoCreateIndex, os as useNamespace, ot as CreateSession, ou as toRefs, p as fileTransferProto, pa as SftpPut, pc as eq, pi as SaveFileDialog, pl as createBlock, pn as GetPorts, po as normalizeKeyBindings, pr as MongoListCollections, ps as removeClass, pt as DeleteCommand, pu as hyphenate, q as ContainerRegistryLogin, qa as newRuntimeCaller, qc as createPinia, qi as SftpChmod, ql as withCtx, qn as LoadAIModels, qo as sort_up_default, qr as RedisKeyspaceInfo, qs as isPlainObject$1, qt as GetAllFonts, r as launchContainerFileBrowser, ra as SftpLocalMkdir, rc as arrayLikeKeys, ri as RedisZSetRemove, rl as withKeys, rn as GetDefaultSessionLogDir, ro as FONT_OPTIONS, rr as MCPReconnectClient, rs as useSizeProp, rt as CopyTable, ru as shallowRef, s as persistConnection, sa as SftpLocalRename, sc as isBuffer, si as ResolveMCPApproval, sl as KeepAlive, sn as GetHardwareFru, so as SIDEBAR_TAB_DEFAULTS, sr as MongoDeleteOne, ss as useLocale, st as CreateSkill, su as toValue, t as configureLauncher, ta as SftpLocalCopy, tc as isKey, ti as RedisSwitchDB, tl as vModelText, tn as GetDatabases, to as DEFAULT_SETTINGS, tr as LoadTunnels, ts as useEmptyValuesProps, tt as ContainerStopStream, tu as ref, u as asSshTerminalConfig, ua as SftpOpenExternalEditor, uc as isArrayLike, ui as SaveAISessions, ul as cloneVNode, un as GetMCPStatus, uo as TERMINAL_THEMES, ur as MongoDropIndex, us as addUnit, ut as DBDeleteRow, uu as NOOP, v as disposeSessionStore, va as SftpRetryTransfer, vc as isObject, vi as SaveProxies, vl as createVNode, vn as GetServices, vo as mutable, vr as OpenExternalEditorLocal, vs as definePropType, vt as DropDatabase, vu as isPromise, w as AddIndex, wa as SyncConfigureRemote, wc as root, wi as SaveWindowState, wl as isVNode, wn as GetTables, wo as iconPropType, wr as OpenPrivateKeyFile, ws as focusElement, wt as EnableSessionOutputLog, wu as toHandlerKey, x as useTabStore, xa as StopTunnel, xc as isSymbol, xi as SaveSkill, xl as guardReactiveProps, xn as GetSkillFile, xo as TypeComponents, xr as OpenKubeconfigFile, xs as composeEventHandlers, xt as DropView, xu as normalizeProps, y as useSessionStore, ya as SftpSymlink, yc as isArray, yi as SaveQuickCommands, yl as defineComponent, yn as GetSessionOutputLogInfo, yo as ElIcon, yr as OpenFileDialog, ys as getProp, yt as DropIndexOp, yu as isString, z as ContainerExecSession, za as UnlockCredentials, zc as reactiveComputed, zi as SetMonitorActiveTab, zl as resolveComponent, zn as ListMCPClients, zo as minus_default, zr as RedisGetHashAll, zs as baseIsEqual, zt as ExecuteQuery } from "./connectionLauncher-Ch61ISds.js";
 //#region \0vite/modulepreload-polyfill.js
 (function polyfill() {
 	const relList = document.createElement("link").relList;
@@ -17508,7 +17508,7 @@ var _hoisted_3$80 = ["stop-color"];
 var _hoisted_4$74 = ["stop-color"];
 var _hoisted_5$69 = ["id"];
 var _hoisted_6$64 = ["stop-color"];
-var _hoisted_7$60 = ["stop-color"];
+var _hoisted_7$59 = ["stop-color"];
 var _hoisted_8$54 = ["id"];
 var _hoisted_9$48 = {
 	stroke: "none",
@@ -17565,7 +17565,7 @@ var img_empty_default = /* @__PURE__ */ defineComponent({
 				}, null, 8, _hoisted_6$64), createBaseVNode("stop", {
 					"stop-color": `var(${unref(ns).cssVarBlockName("fill-color-6")})`,
 					offset: "100%"
-				}, null, 8, _hoisted_7$60)], 8, _hoisted_5$69),
+				}, null, 8, _hoisted_7$59)], 8, _hoisted_5$69),
 				createBaseVNode("rect", {
 					id: `path-3-${unref(id)}`,
 					x: "0",
@@ -37553,6 +37553,11 @@ var ClipboardText = 1;
 * @return A Promise that resolves when the operation is successful.
 */
 function SetText(text) {
+	if (typeof window !== "undefined" && window.harmonyBridge) return (window.__unitermBridgeInvoke || ((m, p) => window.harmonyBridge.invoke(m, p)))("clipboard.writeText", JSON.stringify({ text })).then((resp) => {
+		const r = JSON.parse(resp);
+		if (!r.success) throw new Error(r.error?.message || "write failed");
+		return r.data;
+	});
 	return call$1(ClipboardSetText, { text });
 }
 /**
@@ -37561,6 +37566,11 @@ function SetText(text) {
 * @returns A promise that resolves with the text from the Clipboard.
 */
 function Text$2() {
+	if (typeof window !== "undefined" && window.harmonyBridge) return (window.__unitermBridgeInvoke || ((m, p) => window.harmonyBridge.invoke(m, p)))("clipboard.readText", "{}").then((resp) => {
+		const r = JSON.parse(resp);
+		if (!r.success) throw new Error(r.error?.message || "read failed");
+		return r.data || "";
+	});
 	return call$1(ClipboardText);
 }
 //#endregion
@@ -38262,6 +38272,256 @@ if (narrowMq) narrowMq.addEventListener("change", () => {
 	isNarrowScreen.value = narrowMq.matches;
 });
 //#endregion
+//#region src/utils/harmonyos-bridge.ts
+/**
+* HarmonyOS JSBridge frontend adapter.
+*
+* When the app runs inside a HarmonyOS ArkWeb container, the ArkTS side
+* injects `window.harmonyBridge` via registerJavaScriptProxy. This module
+* provides a unified, type-safe API that mirrors @wailsio/runtime so
+* existing frontend code can migrate with minimal changes:
+*   - isHarmonyOS() — detect the HarmonyOS environment
+*   - HarmonyOSBridge — HarmonyOS-only bridge API (file dialog, clipboard, notification)
+*   - unifiedClipboard / unifiedNotification — auto-routing helpers that fall
+*     back to @wailsio/runtime (or browser APIs) on non-HarmonyOS platforms
+*
+* JSBridge protocol:
+*   call: window.harmonyBridge.invoke(method, paramsJson) → Promise<resultJson>
+*   success: { success: true, data: T }
+*   failure: { success: false, error: { code: number, message: string } }
+*
+* Method naming convention: `module.action`, e.g. `fileDialog.open`,
+* `clipboard.readText`, `notification.show`.
+*/
+/** Error thrown when a JSBridge call fails. */
+var HarmonyBridgeError = class extends Error {
+	code;
+	constructor(code, message) {
+		super(message);
+		this.name = "HarmonyBridgeError";
+		this.code = code;
+	}
+};
+/** Cached HarmonyOS environment detection result. */
+var harmonyEnvCache = null;
+/**
+* Detect whether the app is running inside a HarmonyOS ArkWeb container.
+*
+* Checks for the presence of `window.harmonyBridge`. The result is cached
+* to avoid repeated lookups.
+*
+* @returns true when running in HarmonyOS
+*/
+function isHarmonyOS() {
+	if (harmonyEnvCache !== null) return harmonyEnvCache;
+	const w = window;
+	harmonyEnvCache = typeof w.harmonyBridge !== "undefined" && w.harmonyBridge !== null;
+	return harmonyEnvCache;
+}
+/**
+* Retrieve the harmonyBridge proxy from the window object.
+*
+* @returns the bridge proxy, or null when not in HarmonyOS
+*/
+function getBridge() {
+	return window.harmonyBridge ?? null;
+}
+/** Bridge calls awaiting the ArkTS-side result, keyed by callId. */
+var pendingBridgeCalls = /* @__PURE__ */ new Map();
+/** Callback entry invoked by ArkTS via runJavaScript. */
+function onBridgeResult(callId, resultJson) {
+	const resolve = pendingBridgeCalls.get(callId);
+	if (resolve) {
+		pendingBridgeCalls.delete(callId);
+		resolve(resultJson);
+	}
+}
+function ensureBridgeGlobals() {
+	const w = window;
+	if (!w.__unitermBridgeResolve) w.__unitermBridgeResolve = onBridgeResult;
+	if (!w.__unitermBridgeInvoke) w.__unitermBridgeInvoke = (method, params) => invokeViaCallback(method, params);
+}
+/** Default timeout for a single callback-mode bridge call. */
+var BRIDGE_CALL_TIMEOUT_MS = 8e3;
+/** Sequential call id counter (unique per page load). */
+var bridgeCallSeq = 0;
+/**
+* Invoke an ArkTS-side bridge method via the callback protocol.
+*
+* Rejects with HarmonyBridgeError when the proxy or its invokeCallback entry
+* is unavailable, the synchronous dispatch throws, or no result arrives
+* within BRIDGE_CALL_TIMEOUT_MS.
+*/
+function invokeViaCallback(method, params) {
+	ensureBridgeGlobals();
+	const bridge = getBridge();
+	if (!bridge) return Promise.reject(new HarmonyBridgeError(-1, `harmonyBridge unavailable, cannot invoke ${method}`));
+	if (typeof bridge.invokeCallback !== "function") return Promise.reject(new HarmonyBridgeError(-1, `invokeCallback unavailable, cannot invoke ${method}`));
+	const callId = `bc-${Date.now()}-${++bridgeCallSeq}`;
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => {
+			if (pendingBridgeCalls.has(callId)) {
+				pendingBridgeCalls.delete(callId);
+				reject(new HarmonyBridgeError(-1, `JSBridge timeout: ${method}`));
+			}
+		}, BRIDGE_CALL_TIMEOUT_MS);
+		pendingBridgeCalls.set(callId, (resultJson) => {
+			clearTimeout(timer);
+			resolve(resultJson);
+		});
+		try {
+			bridge.invokeCallback(method, params, callId);
+		} catch (err) {
+			clearTimeout(timer);
+			pendingBridgeCalls.delete(callId);
+			reject(new HarmonyBridgeError(-1, `JSBridge dispatch error: ${method}: ${err instanceof Error ? err.message : String(err)}`));
+		}
+	});
+}
+if (typeof window !== "undefined") ensureBridgeGlobals();
+/**
+* Invoke an ArkTS-side JSBridge method.
+*
+* Serializes params to JSON, dispatches via the callback protocol (see
+* invokeViaCallback — ArkWeb's asyncMethodList cannot deliver Promise
+* results), parses the response, and returns the `data` field. Throws
+* HarmonyBridgeError on any failure (bridge missing, invocation exception,
+* response parse error, timeout, or a success=false response).
+*
+* @param method  method name, e.g. 'fileDialog.open'
+* @param params  parameter object (optional)
+* @returns the `data` value from the bridge response
+*/
+async function invokeBridge(method, params) {
+	if (getBridge() === null) throw new HarmonyBridgeError(-1, `harmonyBridge unavailable, cannot invoke ${method}`);
+	const paramsJson = params !== void 0 ? JSON.stringify(params) : "{}";
+	let raw;
+	raw = await invokeViaCallback(method, paramsJson);
+	let response;
+	try {
+		response = JSON.parse(raw);
+	} catch (err) {
+		throw new HarmonyBridgeError(-1, `JSBridge response parse error: ${method}: ${err instanceof Error ? err.message : String(err)}`);
+	}
+	if (!response.success) throw new HarmonyBridgeError(response.error.code, response.error.message);
+	return response.data;
+}
+/**
+* HarmonyOS JSBridge wrapper.
+*
+* Provides typed access to the file dialog, clipboard, and notification
+* bridge methods. Only callable when isHarmonyOS() returns true; callers
+* should check the environment first or handle HarmonyBridgeError.
+*
+* The interface mirrors @wailsio/runtime naming where possible to ease
+* migration.
+*/
+var HarmonyOSBridge = class {
+	/** File dialog operations. */
+	static fileDialog = {
+		/**
+		* Open the file selection dialog.
+		* @returns array of selected file URIs
+		*/
+		open(options) {
+			return invokeBridge("fileDialog.open", options);
+		},
+		/**
+		* Open the file save dialog.
+		* @returns the save target URI
+		*/
+		save(options) {
+			return invokeBridge("fileDialog.save", options);
+		},
+		/**
+		* Open the directory selection dialog.
+		* @returns the selected directory URI
+		*/
+		directory(options) {
+			return invokeBridge("fileDialog.directory", options);
+		}
+	};
+	/** Clipboard operations. */
+	static clipboard = {
+		/** Read plain text from the clipboard. */
+		readText() {
+			return invokeBridge("clipboard.readText");
+		},
+		/** Write plain text to the clipboard. */
+		writeText(text) {
+			return invokeBridge("clipboard.writeText", { text });
+		},
+		/** Read clipboard content supporting multiple MIME types. */
+		read() {
+			return invokeBridge("clipboard.read");
+		},
+		/** Write clipboard content supporting multiple MIME types. */
+		write(data) {
+			return invokeBridge("clipboard.write", data);
+		},
+		/** Clear the clipboard. */
+		clear() {
+			return invokeBridge("clipboard.clear");
+		}
+	};
+	/** Notification operations. */
+	static notification = {
+		/** Show a system notification; returns the notification id. */
+		show(options) {
+			return invokeBridge("notification.show", options);
+		},
+		/** Request notification permission; returns true if granted. */
+		requestPermission() {
+			return invokeBridge("notification.requestPermission");
+		},
+		/** Cancel a previously shown notification by id. */
+		cancel(id) {
+			return invokeBridge("notification.cancel", { id });
+		}
+	};
+};
+/**
+* Unified clipboard API.
+*
+* Routes to the HarmonyOS bridge when isHarmonyOS() is true, otherwise falls
+* back to @wailsio/runtime Clipboard, and finally to the browser
+* navigator.clipboard API when Wails is unavailable (e.g. dev server).
+*/
+var unifiedClipboard = {
+	/**
+	* Write text to the clipboard.
+	* @returns true on success
+	*/
+	async setText(text) {
+		if (isHarmonyOS()) return HarmonyOSBridge.clipboard.writeText(text);
+		if (typeof SetText === "function") try {
+			await SetText(text);
+			return true;
+		} catch {}
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			return false;
+		}
+	},
+	/**
+	* Read text from the clipboard.
+	* @returns the clipboard text, or empty string on failure
+	*/
+	async text() {
+		if (isHarmonyOS()) return HarmonyOSBridge.clipboard.readText();
+		if (typeof Text$2 === "function") try {
+			return await Text$2();
+		} catch {}
+		try {
+			return await navigator.clipboard.readText();
+		} catch {
+			return "";
+		}
+	}
+};
+//#endregion
 //#region src/composables/useUpdateCheck.ts
 var CHECK_TIMEOUT = 15e3;
 var updateInfo = ref(null);
@@ -38434,7 +38694,7 @@ function initAutoCheck() {
 			assets: []
 		};
 	}).catch(() => {});
-	if (isMobilePlatform()) return;
+	if (isMobilePlatform() || isHarmonyOS()) return;
 	const settings = useSettingsStore();
 	let initialized = false;
 	settingsWatchStop = watch([() => settings.loaded, () => settings.settings.autoCheckUpdate], ([loaded, persisted]) => {
@@ -38644,7 +38904,7 @@ var _hoisted_5$65 = {
 	class: "window-controls"
 };
 var _hoisted_6$63 = ["aria-label"];
-var _hoisted_7$59 = ["aria-label"];
+var _hoisted_7$58 = ["aria-label"];
 var _hoisted_8$53 = ["aria-label"];
 //#endregion
 //#region src/components/WindowControls.vue
@@ -38691,7 +38951,7 @@ var WindowControls_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 					class: "wc-btn win maximise",
 					onClick: _cache[4] || (_cache[4] = ($event) => _ctx.$emit("maximise")),
 					"aria-label": unref(t)("window.maximize")
-				}, [__props.isMaximised ? (openBlock(), createBlock(WinRestore_default, { key: 0 })) : (openBlock(), createBlock(WinMaximise_default, { key: 1 }))], 8, _hoisted_7$59),
+				}, [__props.isMaximised ? (openBlock(), createBlock(WinRestore_default, { key: 0 })) : (openBlock(), createBlock(WinMaximise_default, { key: 1 }))], 8, _hoisted_7$58),
 				createBaseVNode("button", {
 					class: "wc-btn win close",
 					onClick: _cache[5] || (_cache[5] = ($event) => _ctx.$emit("close")),
@@ -42797,7 +43057,7 @@ var useContainerStore = defineStore("container", {
 		},
 		async openContainerFiles(tab, c) {
 			const { launchContainerFileBrowser } = await __vitePreload(async () => {
-				const { launchContainerFileBrowser } = await import("./connectionLauncher-DolTrSzb.js");
+				const { launchContainerFileBrowser } = await import("./connectionLauncher-DqyBZ9Pe.js");
 				return { launchContainerFileBrowser };
 			}, __vite__mapDeps([0,1,2]));
 			await launchContainerFileBrowser({
@@ -59494,12 +59754,14 @@ var wailsWriter = async (text) => {
 };
 var isApplePlatform = () => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 var isAndroidPlatform = () => /Android/.test(navigator.userAgent);
-var writeClipboard = typeof SetText !== "function" ? browserWriter : async (text) => {
+var writeClipboard = typeof SetText !== "function" && !isHarmonyOS() ? browserWriter : async (text) => {
+	if (isHarmonyOS()) return unifiedClipboard.setText(text);
 	if (isApplePlatform() || isAndroidPlatform()) return wailsWriter(text);
 	return await browserWriter(text) || wailsWriter(text);
 };
 var READ_RETRY_DELAY_MS = 120;
 async function readClipboardText() {
+	if (isHarmonyOS()) return unifiedClipboard.text();
 	for (let attempt = 0; attempt < 2; attempt++) {
 		if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, READ_RETRY_DELAY_MS));
 		let text = "";
@@ -61508,7 +61770,7 @@ var _hoisted_4$68 = {
 };
 var _hoisted_5$64 = ["title"];
 var _hoisted_6$62 = { class: "tab-name-text" };
-var _hoisted_7$58 = {
+var _hoisted_7$57 = {
 	key: 4,
 	class: "tab-shortcut"
 };
@@ -61595,7 +61857,7 @@ var TabItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 		const isBroadcastTarget = computed(() => tabStore.isTabBroadcastTarget(props.tab.id));
 		const showBroadcastIcon = computed(() => canBroadcast.value && isBroadcastTarget.value && !(tabCloseRight.value && (hovered.value || isTouch) && !props.tab.locked));
 		const hasActiveTransfers = computed(() => {
-			if (props.tab.type === "workspace") return false;
+			if (props.tab.type === "workspace" || props.tab.type === "start") return false;
 			const keys = [props.tab.panelId];
 			if (props.tab.type === "terminal") {
 				const companionKey = companionStore.sftpTransferKeyOf(props.tab.panelId);
@@ -61784,7 +62046,8 @@ var TabItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 			if (!host) return;
 			let ok = false;
 			try {
-				ok = await SetText(host);
+				await SetText(host);
+				ok = true;
 			} catch {
 				ok = false;
 			}
@@ -61974,7 +62237,7 @@ var TabItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 					onBlur: confirmEdit,
 					onClick: _cache[2] || (_cache[2] = withModifiers(() => {}, ["stop"]))
 				}, null, 544)), [[vModelText, editName.value]]),
-				tabShortcut.value && unref(settingsStore).settings.showTabShortcutHints ? (openBlock(), createElementBlock("span", _hoisted_7$58, toDisplayString(tabShortcut.value), 1)) : createCommentVNode("", true),
+				tabShortcut.value && unref(settingsStore).settings.showTabShortcutHints ? (openBlock(), createElementBlock("span", _hoisted_7$57, toDisplayString(tabShortcut.value), 1)) : createCommentVNode("", true),
 				activeProgress.value ? (openBlock(), createElementBlock("span", {
 					key: 5,
 					class: normalizeClass(["tab-progress", `tab-progress-${activeProgress.value.state}`]),
@@ -62182,7 +62445,7 @@ var TabItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 			], 42, _hoisted_1$90);
 		};
 	}
-}), [["__scopeId", "data-v-6afc537f"]]);
+}), [["__scopeId", "data-v-20b76005"]]);
 //#endregion
 //#region src/components/TabsList.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$89 = {
@@ -62203,7 +62466,7 @@ var _hoisted_5$63 = {
 	class: "tab-more"
 };
 var _hoisted_6$61 = ["title"];
-var _hoisted_7$57 = ["title"];
+var _hoisted_7$56 = ["title"];
 //#endregion
 //#region src/components/TabsList.vue
 var TabsList_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ */ defineComponent({
@@ -62476,11 +62739,11 @@ var TabsList_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PUR
 					class: "tab-add-btn",
 					title: addBtnTitle.value + shortcutSuffix("newConnection"),
 					onClick: onAddStartTab
-				}, [createVNode(unref(Plus$1), { size: "0.875rem" })], 8, _hoisted_7$57)
+				}, [createVNode(unref(Plus$1), { size: "0.875rem" })], 8, _hoisted_7$56)
 			])) : createCommentVNode("", true)], 64);
 		};
 	}
-}), [["__scopeId", "data-v-d4de6878"]]);
+}), [["__scopeId", "data-v-f38b954c"]]);
 //#endregion
 //#region src/components/ImportDialog.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$88 = { style: {
@@ -63258,7 +63521,7 @@ var AppHeader_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 								default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("settings.ai")), 1)]),
 								_: 1
 							}),
-							!unref(isMobilePlatform)(platform.value.value) ? (openBlock(), createBlock(MenuItem_default, {
+							!unref(isMobilePlatform)(platform.value) ? (openBlock(), createBlock(MenuItem_default, {
 								key: 0,
 								onClick: _cache[11] || (_cache[11] = ($event) => openCategory("mcp"))
 							}, {
@@ -63302,7 +63565,7 @@ var AppHeader_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 								default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("settings.about")), 1)]),
 								_: 1
 							}),
-							!unref(isMobilePlatform)(platform.value.value) ? (openBlock(), createBlock(MenuItem_default, {
+							!unref(isMobilePlatform)(platform.value) ? (openBlock(), createBlock(MenuItem_default, {
 								key: 1,
 								onClick: checkUpdate
 							}, {
@@ -63331,7 +63594,7 @@ var AppHeader_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 			], 34);
 		};
 	}
-}), [["__scopeId", "data-v-8b9eaedd"]]);
+}), [["__scopeId", "data-v-3267dce5"]]);
 //#endregion
 //#region src/stores/favoriteStore.ts
 var unsubFavoritesChanged = null;
@@ -96645,7 +96908,7 @@ var _hoisted_3$70 = ["title"];
 var _hoisted_4$65 = ["title"];
 var _hoisted_5$61 = ["disabled", "title"];
 var _hoisted_6$60 = ["disabled", "title"];
-var _hoisted_7$56 = ["title"];
+var _hoisted_7$55 = ["title"];
 var _hoisted_8$52 = {
 	key: 0,
 	class: "search-row"
@@ -97297,7 +97560,7 @@ var SyntaxEditor_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				}, [createVNode(_component_el_icon, null, {
 					default: withCtx(() => [createVNode(unref(ChevronsDownUp), { size: "0.875rem" })]),
 					_: 1
-				})], 10, _hoisted_7$56),
+				})], 10, _hoisted_7$55),
 				createBaseVNode("button", {
 					class: "search-icon-btn",
 					title: "Esc",
@@ -97620,7 +97883,7 @@ var IdentityEditDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 			}, 8, ["model-value", "title"]);
 		};
 	}
-}), [["__scopeId", "data-v-613d7912"]]);
+}), [["__scopeId", "data-v-da4ee4cf"]]);
 //#endregion
 //#region src/components/ProxyEditDialog.vue
 var ProxyEditDialog_default = /* @__PURE__ */ defineComponent({
@@ -97782,7 +98045,7 @@ var _hoisted_3$68 = {
 var _hoisted_4$63 = { class: "algo-list" };
 var _hoisted_5$60 = { class: "algo-index" };
 var _hoisted_6$59 = { class: "algo-id" };
-var _hoisted_7$55 = { class: "algo-actions" };
+var _hoisted_7$54 = { class: "algo-actions" };
 var _hoisted_8$51 = { class: "algo-add" };
 var _hoisted_9$46 = { class: "algo-option" };
 //#endregion
@@ -97979,7 +98242,7 @@ var SSHAlgorithmsDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_defaul
 											default: withCtx(() => [createTextVNode(toDisplayString(unref(t)(levelLabel(levelOf(dim.key, id)))), 1)]),
 											_: 2
 										}, 1032, ["type"]),
-										createBaseVNode("span", _hoisted_7$55, [
+										createBaseVNode("span", _hoisted_7$54, [
 											createVNode(_component_el_button, {
 												size: "small",
 												text: "",
@@ -98190,7 +98453,7 @@ var _hoisted_3$67 = ["onClick"];
 var _hoisted_4$62 = { class: "conn-main" };
 var _hoisted_5$59 = { class: "subtype-grid" };
 var _hoisted_6$58 = ["onClick"];
-var _hoisted_7$54 = { class: "conn-fields" };
+var _hoisted_7$53 = { class: "conn-fields" };
 var _hoisted_8$50 = { class: "name-group-row" };
 var _hoisted_9$45 = { class: "host-port-row" };
 var _hoisted_10$41 = { class: "host-port-row" };
@@ -98214,14 +98477,14 @@ var _hoisted_23$24 = { style: { "margin-left": "0.25rem" } };
 var _hoisted_24$23 = { class: "key-content-actions" };
 var _hoisted_25$21 = { style: { "margin-left": "0.25rem" } };
 var _hoisted_26$21 = { style: { "margin-left": "0.25rem" } };
-var _hoisted_27$20 = { style: {
+var _hoisted_27$19 = { style: {
 	"display": "flex",
 	"align-items": "center",
 	"gap": "0.5rem",
 	"width": "100%"
 } };
-var _hoisted_28$20 = { class: "field-hint" };
-var _hoisted_29$18 = { class: "field-hint" };
+var _hoisted_28$18 = { class: "field-hint" };
+var _hoisted_29$17 = { class: "field-hint" };
 var _hoisted_30$16 = { class: "rdp-custom-resolution" };
 var _hoisted_31$14 = { class: "field-hint" };
 var _hoisted_32$13 = {
@@ -99016,7 +99279,7 @@ var ConnectionForm_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			try {
 				const paths = await GetDefaultSSHKeyPaths();
 				if (!paths?.length) return;
-				const current = form.keyPath.trim();
+				const current = (form.keyPath ?? "").trim();
 				const idx = paths.indexOf(current);
 				form.keyPath = idx >= 0 ? paths[(idx + 1) % paths.length] : paths[0];
 			} catch (e) {
@@ -99300,7 +99563,7 @@ var ConnectionForm_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 							class: normalizeClass(["subtype-btn", { active: isSubTypeActive(st) }]),
 							onClick: ($event) => selectType(st)
 						}, [(openBlock(), createBlock(resolveDynamicComponent(st.icon), { size: "1.125rem" })), createBaseVNode("span", null, toDisplayString(st.label), 1)], 10, _hoisted_6$58);
-					}), 128))]), createBaseVNode("div", _hoisted_7$54, [createVNode(_component_el_form, {
+					}), 128))]), createBaseVNode("div", _hoisted_7$53, [createVNode(_component_el_form, {
 						model: form,
 						"label-width": "6.5rem",
 						onSubmit: withModifiers(onSave, ["prevent"])
@@ -100012,7 +100275,7 @@ var ConnectionForm_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 									_: 1
 								}, 8, ["label"])),
 								createVNode(_component_el_form_item, { label: unref(t)("conn.k8sContext") }, {
-									default: withCtx(() => [createBaseVNode("div", _hoisted_27$20, [createVNode(_component_el_select, {
+									default: withCtx(() => [createBaseVNode("div", _hoisted_27$19, [createVNode(_component_el_select, {
 										modelValue: form.k8sContext,
 										"onUpdate:modelValue": _cache[42] || (_cache[42] = ($event) => form.k8sContext = $event),
 										filterable: "",
@@ -100105,11 +100368,11 @@ var ConnectionForm_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 											}, null, 8, ["label", "value"]);
 										}), 128))]),
 										_: 1
-									}, 8, ["modelValue", "placeholder"]), createBaseVNode("div", _hoisted_28$20, toDisplayString(sshConnections.value.length ? unref(t)("conn.containerSSHRefHint") : unref(t)("conn.containerNoSSH")), 1)]),
+									}, 8, ["modelValue", "placeholder"]), createBaseVNode("div", _hoisted_28$18, toDisplayString(sshConnections.value.length ? unref(t)("conn.containerSSHRefHint") : unref(t)("conn.containerNoSSH")), 1)]),
 									_: 1
 								}, 8, ["label"])) : createCommentVNode("", true),
 								form.containerTransport === "local" ? (openBlock(), createBlock(_component_el_form_item, { key: 1 }, {
-									default: withCtx(() => [createBaseVNode("div", _hoisted_29$18, toDisplayString(unref(t)("conn.containerLocalHint")), 1)]),
+									default: withCtx(() => [createBaseVNode("div", _hoisted_29$17, toDisplayString(unref(t)("conn.containerLocalHint")), 1)]),
 									_: 1
 								})) : createCommentVNode("", true)
 							], 64)) : createCommentVNode("", true),
@@ -100877,7 +101140,7 @@ var ConnectionForm_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			], 64);
 		};
 	}
-}), [["__scopeId", "data-v-d0b4f26d"]]);
+}), [["__scopeId", "data-v-83efdee6"]]);
 //#endregion
 //#region src/stores/quickCommandStore.ts
 var idCounter$1 = 0;
@@ -101320,7 +101583,7 @@ var _hoisted_4$61 = [
 ];
 var _hoisted_5$58 = { class: "qc-group-arrow" };
 var _hoisted_6$57 = { class: "qc-group-name" };
-var _hoisted_7$53 = [
+var _hoisted_7$52 = [
 	"onDragstart",
 	"onClick",
 	"onDblclick",
@@ -101376,9 +101639,9 @@ var _hoisted_26$20 = {
 	key: 0,
 	class: "qc-item-actions"
 };
-var _hoisted_27$19 = ["onClick", "title"];
-var _hoisted_28$19 = ["onClick", "title"];
-var _hoisted_29$17 = ["onClick", "title"];
+var _hoisted_27$18 = ["onClick", "title"];
+var _hoisted_28$17 = ["onClick", "title"];
+var _hoisted_29$16 = ["onClick", "title"];
 var _hoisted_30$15 = {
 	key: 2,
 	class: "qc-empty"
@@ -101738,7 +102001,7 @@ var QuickCommandsPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 									onClick: withModifiers(($event) => copyCommand(cmd), ["stop"]),
 									title: unref(t)("quickCommands.copy")
 								}, [createVNode(unref(Copy), { size: "1rem" })], 8, _hoisted_13$31)
-							])) : createCommentVNode("", true)], 42, _hoisted_7$53);
+							])) : createCommentVNode("", true)], 42, _hoisted_7$52);
 						}), 128)) : createCommentVNode("", true)], 64);
 					}), 128)),
 					unref(store).groups.length === 0 ? (openBlock(true), createElementBlock(Fragment, { key: 0 }, renderList(unref(store).getCommandsByGroup(void 0).filter(matchesSearch), (cmd) => {
@@ -101798,17 +102061,17 @@ var QuickCommandsPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 								class: "btn btn-ghost btn-icon qc-action-btn run",
 								onClick: withModifiers(($event) => runCommand(cmd), ["stop"]),
 								title: unref(t)("quickCommands.run")
-							}, [createVNode(unref(Play), { size: "1rem" })], 8, _hoisted_27$19),
+							}, [createVNode(unref(Play), { size: "1rem" })], 8, _hoisted_27$18),
 							createBaseVNode("button", {
 								class: "btn btn-ghost btn-icon qc-action-btn paste",
 								onClick: withModifiers(($event) => pasteCommand(cmd), ["stop"]),
 								title: unref(t)("quickCommands.paste")
-							}, [createVNode(unref(Clipboard), { size: "1rem" })], 8, _hoisted_28$19),
+							}, [createVNode(unref(Clipboard), { size: "1rem" })], 8, _hoisted_28$17),
 							createBaseVNode("button", {
 								class: "btn btn-ghost btn-icon qc-action-btn",
 								onClick: withModifiers(($event) => copyCommand(cmd), ["stop"]),
 								title: unref(t)("quickCommands.copy")
-							}, [createVNode(unref(Copy), { size: "1rem" })], 8, _hoisted_29$17)
+							}, [createVNode(unref(Copy), { size: "1rem" })], 8, _hoisted_29$16)
 						])) : createCommentVNode("", true)], 42, _hoisted_23$23);
 					}), 128)) : createCommentVNode("", true)], 64)) : createCommentVNode("", true),
 					unref(store).commands.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_30$15, toDisplayString(unref(t)("quickCommands.empty")), 1)) : createCommentVNode("", true)
@@ -101939,7 +102202,7 @@ var QuickCommandsPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-5796ec50"]]);
+}), [["__scopeId", "data-v-1b9ef7d7"]]);
 //#endregion
 //#region src/stores/tunnelStore.ts
 var unsubTunnelState = null;
@@ -102277,7 +102540,7 @@ var _hoisted_3$65 = ["onClick"];
 var _hoisted_4$60 = { class: "mode-desc" };
 var _hoisted_5$57 = { class: "hostport" };
 var _hoisted_6$56 = { class: "hostport" };
-var _hoisted_7$52 = { class: "hostport" };
+var _hoisted_7$51 = { class: "hostport" };
 var _hoisted_8$48 = { class: "hostport" };
 var _hoisted_9$43 = { class: "hostport" };
 var _hoisted_10$39 = { class: "inline-hint" };
@@ -102431,8 +102694,7 @@ var TunnelEditDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 				errorMsg.value = invalid;
 				return;
 			}
-			const payload = formPayload();
-			delete payload.id;
+			const { id: _id, ...payload } = formPayload();
 			if (props.editingId) store.updateTunnel(props.editingId, payload);
 			else store.addTunnel(payload);
 			visible.value = false;
@@ -102599,7 +102861,7 @@ var TunnelEditDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 								label: unref(t)("tunnels.listenRemote"),
 								required: ""
 							}, {
-								default: withCtx(() => [createBaseVNode("div", _hoisted_7$52, [
+								default: withCtx(() => [createBaseVNode("div", _hoisted_7$51, [
 									createVNode(_component_el_input, {
 										modelValue: form.listenHost,
 										"onUpdate:modelValue": _cache[6] || (_cache[6] = ($event) => form.listenHost = $event),
@@ -102724,7 +102986,7 @@ var TunnelEditDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 			}, 8, ["modelValue", "title"]);
 		};
 	}
-}), [["__scopeId", "data-v-a3c40b9e"]]);
+}), [["__scopeId", "data-v-ed82c515"]]);
 //#endregion
 //#region src/components/TunnelsPanel.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$79 = { class: "tunnels-panel" };
@@ -102733,7 +102995,7 @@ var _hoisted_3$64 = ["title"];
 var _hoisted_4$59 = { class: "tn-list" };
 var _hoisted_5$56 = ["onDblclick", "onContextmenu"];
 var _hoisted_6$55 = ["title"];
-var _hoisted_7$51 = { class: "tn-item-content" };
+var _hoisted_7$50 = { class: "tn-item-content" };
 var _hoisted_8$47 = { class: "tn-item-name" };
 var _hoisted_9$42 = { class: "tn-item-meta" };
 var _hoisted_10$38 = { class: "tn-port" };
@@ -102826,7 +103088,7 @@ var TunnelsPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 							class: "tn-status",
 							title: unref(store).statusTitle(tn.id)
 						}, null, 8, _hoisted_6$55),
-						createBaseVNode("div", _hoisted_7$51, [
+						createBaseVNode("div", _hoisted_7$50, [
 							createBaseVNode("div", _hoisted_8$47, toDisplayString(tn.name), 1),
 							createBaseVNode("div", _hoisted_9$42, [createBaseVNode("span", { class: normalizeClass(["tn-badge", tn.mode]) }, toDisplayString(unref(t)(`tunnels.mode.${tn.mode}`)), 3), createBaseVNode("span", _hoisted_10$38, ":" + toDisplayString(effPort(tn)), 1)]),
 							statusOf(tn) === "connecting" || statusOf(tn) === "reconnecting" ? (openBlock(), createElementBlock("div", {
@@ -104642,7 +104904,7 @@ var _hoisted_5$55 = {
 	class: "qc-item-actions"
 };
 var _hoisted_6$54 = ["onClick", "title"];
-var _hoisted_7$50 = ["onClick", "title"];
+var _hoisted_7$49 = ["onClick", "title"];
 var _hoisted_8$46 = ["onClick", "title"];
 var _hoisted_9$41 = {
 	key: 0,
@@ -104861,7 +105123,7 @@ var HistoryPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 							class: "btn btn-ghost btn-icon btn-sm paste",
 							onClick: withModifiers(($event) => pasteCommand(entry), ["stop"]),
 							title: unref(t)("quickCommands.paste")
-						}, [createVNode(unref(Clipboard), { size: "0.875rem" })], 8, _hoisted_7$50),
+						}, [createVNode(unref(Clipboard), { size: "0.875rem" })], 8, _hoisted_7$49),
 						createBaseVNode("button", {
 							class: "btn btn-ghost btn-icon btn-sm",
 							onClick: withModifiers(($event) => copyCommand(entry), ["stop"]),
@@ -104933,7 +105195,7 @@ var HistoryPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-a6f9617f"]]);
+}), [["__scopeId", "data-v-3056a62b"]]);
 //#endregion
 //#region src/composables/useTransferTasks.ts
 /**
@@ -106093,7 +106355,7 @@ var _hoisted_5$53 = {
 	class: "toolbar-divider"
 };
 var _hoisted_6$52 = ["title"];
-var _hoisted_7$49 = ["title"];
+var _hoisted_7$48 = ["title"];
 var _hoisted_8$45 = {
 	key: 5,
 	class: "toolbar-divider"
@@ -106125,9 +106387,9 @@ var _hoisted_23$22 = { class: "cell-secondary" };
 var _hoisted_24$21 = { class: "cell-secondary" };
 var _hoisted_25$19 = { class: "cell-secondary" };
 var _hoisted_26$19 = { class: "cell-secondary" };
-var _hoisted_27$18 = { class: "cell-secondary" };
-var _hoisted_28$18 = { class: "selection-bar" };
-var _hoisted_29$16 = { class: "selection-info" };
+var _hoisted_27$17 = { class: "cell-secondary" };
+var _hoisted_28$16 = { class: "selection-bar" };
+var _hoisted_29$15 = { class: "selection-info" };
 var _hoisted_30$14 = { key: 0 };
 var PAGE_SIZE$1 = 200;
 var INITIAL_PAGES = 1;
@@ -106834,7 +107096,7 @@ var FileList_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PUR
 					}, [createVNode(_component_el_icon, null, {
 						default: withCtx(() => [createVNode(unref(Eye), { size: "0.875rem" })]),
 						_: 1
-					})], 10, _hoisted_7$49)) : createCommentVNode("", true),
+					})], 10, _hoisted_7$48)) : createCommentVNode("", true),
 					flatToolbar.value && __props.mode === "remote" ? (openBlock(), createElementBlock("span", _hoisted_8$45)) : createCommentVNode("", true),
 					__props.mode === "remote" ? (openBlock(), createElementBlock("button", {
 						key: 6,
@@ -107030,7 +107292,7 @@ var FileList_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PUR
 								width: unref(uiPx)(80),
 								"show-overflow-tooltip": ""
 							}, {
-								default: withCtx(({ row }) => [createBaseVNode("span", _hoisted_27$18, toDisplayString(row.group || "-"), 1)]),
+								default: withCtx(({ row }) => [createBaseVNode("span", _hoisted_27$17, toDisplayString(row.group || "-"), 1)]),
 								_: 1
 							}, 8, ["label", "width"])) : createCommentVNode("", true)
 						]),
@@ -107047,7 +107309,7 @@ var FileList_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PUR
 						})
 					}, null, 4)) : createCommentVNode("", true)
 				], 32),
-				createBaseVNode("div", _hoisted_28$18, [createBaseVNode("span", _hoisted_29$16, toDisplayString(itemCountText.value), 1), selectionStats.value.count > 0 && selectionStats.value.size > 0 ? (openBlock(), createElementBlock("span", _hoisted_30$14, toDisplayString(formatSize(selectionStats.value.size)), 1)) : createCommentVNode("", true)]),
+				createBaseVNode("div", _hoisted_28$16, [createBaseVNode("span", _hoisted_29$15, toDisplayString(itemCountText.value), 1), selectionStats.value.count > 0 && selectionStats.value.size > 0 ? (openBlock(), createElementBlock("span", _hoisted_30$14, toDisplayString(formatSize(selectionStats.value.size)), 1)) : createCommentVNode("", true)]),
 				createVNode(Menu_default, {
 					ref_key: "ctxMenuRef",
 					ref: ctxMenuRef,
@@ -107479,7 +107741,7 @@ var _hoisted_4$55 = {
 };
 var _hoisted_5$52 = { class: "transfer-panel-actions" };
 var _hoisted_6$51 = ["disabled", "title"];
-var _hoisted_7$48 = {
+var _hoisted_7$47 = {
 	key: 1,
 	class: "transfer-empty"
 };
@@ -107610,7 +107872,7 @@ var TransferPanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 					})], 8, _hoisted_6$51),
 					renderSlot(_ctx.$slots, "actions-end", {}, void 0, true)
 				])]),
-				!__props.collapsed && !__props.tasks.length ? (openBlock(), createElementBlock("div", _hoisted_7$48, toDisplayString(unref(t)("companion.noTransfers")), 1)) : !__props.collapsed ? (openBlock(), createElementBlock("div", _hoisted_8$44, [(openBlock(true), createElementBlock(Fragment, null, renderList(__props.tasks, (task) => {
+				!__props.collapsed && !__props.tasks.length ? (openBlock(), createElementBlock("div", _hoisted_7$47, toDisplayString(unref(t)("companion.noTransfers")), 1)) : !__props.collapsed ? (openBlock(), createElementBlock("div", _hoisted_8$44, [(openBlock(true), createElementBlock(Fragment, null, renderList(__props.tasks, (task) => {
 					return openBlock(), createElementBlock("div", {
 						key: task.id,
 						class: "transfer-task-wrap"
@@ -107913,7 +108175,7 @@ var _hoisted_3$58 = ["title"];
 var _hoisted_4$54 = ["title"];
 var _hoisted_5$51 = ["title"];
 var _hoisted_6$50 = ["title"];
-var _hoisted_7$47 = ["title"];
+var _hoisted_7$46 = ["title"];
 var _hoisted_8$43 = { class: "font-size-label" };
 var _hoisted_9$38 = ["title"];
 var _hoisted_10$35 = ["title"];
@@ -108517,7 +108779,7 @@ var FileEditorDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 					}, [createVNode(_component_el_icon, null, {
 						default: withCtx(() => [createVNode(unref(ZoomOut), { size: "0.875rem" })]),
 						_: 1
-					})], 8, _hoisted_7$47),
+					})], 8, _hoisted_7$46),
 					createBaseVNode("span", _hoisted_8$43, toDisplayString(fontSize.value) + "px", 1),
 					createBaseVNode("button", {
 						class: "toolbar-icon-btn",
@@ -108726,7 +108988,7 @@ var _hoisted_6$49 = {
 	key: 0,
 	class: "drop-overlay"
 };
-var _hoisted_7$46 = ["disabled", "title"];
+var _hoisted_7$45 = ["disabled", "title"];
 var _hoisted_8$42 = ["disabled", "title"];
 var FILE_DROP_ID = "file-sidebar-drop";
 var LIST_TIMEOUT_MS = 2e4;
@@ -109137,7 +109399,7 @@ var FileSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 					}, [createVNode(_component_el_icon, null, {
 						default: withCtx(() => [createVNode(unref(FolderSync), { size: "0.875rem" })]),
 						_: 1
-					})], 10, _hoisted_7$46)]),
+					})], 10, _hoisted_7$45)]),
 					"actions-end": withCtx(() => [createBaseVNode("button", {
 						class: "filter-icon-btn",
 						disabled: !sessionId.value,
@@ -109215,7 +109477,7 @@ var FileSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 					ref: fileEditorRef,
 					visible: unref(editorVisible),
 					"onUpdate:visible": _cache[10] || (_cache[10] = ($event) => isRef(editorVisible) ? editorVisible.value = $event : null),
-					"session-id": sessionId.value,
+					"session-id": sessionId.value ?? void 0,
 					mode: "remote",
 					onSaved: unref(onRefresh)
 				}, null, 8, [
@@ -109226,7 +109488,7 @@ var FileSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-b68e49f5"]]);
+}), [["__scopeId", "data-v-3b1a5d9b"]]);
 //#endregion
 //#region src/components/MonitorOverviewSidebar.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$69 = { class: "companion-sidebar monitor-sidebar" };
@@ -109241,7 +109503,7 @@ var _hoisted_6$48 = {
 	key: 1,
 	class: "monitor-body"
 };
-var _hoisted_7$45 = { class: "card" };
+var _hoisted_7$44 = { class: "card" };
 var _hoisted_8$41 = { class: "sys-row" };
 var _hoisted_9$37 = { class: "sys-label" };
 var _hoisted_10$34 = ["title"];
@@ -109261,9 +109523,9 @@ var _hoisted_23$20 = { class: "mem-val cpu" };
 var _hoisted_24$19 = { class: "mem-bar" };
 var _hoisted_25$17 = { class: "load-row" };
 var _hoisted_26$17 = { class: "load-val" };
-var _hoisted_27$17 = { class: "load-val" };
-var _hoisted_28$17 = { class: "load-val" };
-var _hoisted_29$15 = {
+var _hoisted_27$16 = { class: "load-val" };
+var _hoisted_28$15 = { class: "load-val" };
+var _hoisted_29$14 = {
 	key: 0,
 	class: "detail-list"
 };
@@ -109685,7 +109947,7 @@ var MonitorOverviewSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 		});
 		return (_ctx, _cache) => {
 			return openBlock(), createElementBlock("div", _hoisted_1$69, [!sessionId.value ? (openBlock(), createElementBlock("div", _hoisted_2$62, [connecting.value ? (openBlock(), createElementBlock("span", _hoisted_3$56, toDisplayString(unref(t)("companion.connecting")), 1)) : connectError.value ? (openBlock(), createElementBlock("span", _hoisted_4$52, toDisplayString(connectError.value), 1)) : (openBlock(), createElementBlock("span", _hoisted_5$49, toDisplayString(unref(t)("companion.needSsh")), 1))])) : (openBlock(), createElementBlock("div", _hoisted_6$48, [
-				createBaseVNode("div", _hoisted_7$45, [
+				createBaseVNode("div", _hoisted_7$44, [
 					createBaseVNode("div", _hoisted_8$41, [createBaseVNode("span", _hoisted_9$37, toDisplayString(unref(t)("companion.host")), 1), createBaseVNode("span", {
 						class: "sys-value",
 						title: hostText.value
@@ -109709,9 +109971,9 @@ var MonitorOverviewSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 						_cache[2] || (_cache[2] = createBaseVNode("span", { class: "load-label" }, "1m", -1)),
 						createBaseVNode("span", _hoisted_26$17, toDisplayString(cpu.value.load1), 1),
 						_cache[3] || (_cache[3] = createBaseVNode("span", { class: "load-label" }, "5m", -1)),
-						createBaseVNode("span", _hoisted_27$17, toDisplayString(cpu.value.load5), 1),
+						createBaseVNode("span", _hoisted_27$16, toDisplayString(cpu.value.load5), 1),
 						_cache[4] || (_cache[4] = createBaseVNode("span", { class: "load-label" }, "15m", -1)),
-						createBaseVNode("span", _hoisted_28$17, toDisplayString(cpu.value.load15), 1)
+						createBaseVNode("span", _hoisted_28$15, toDisplayString(cpu.value.load15), 1)
 					]),
 					createBaseVNode("div", {
 						class: "expand-toggle",
@@ -109720,7 +109982,7 @@ var MonitorOverviewSidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 						size: "0.75rem",
 						class: normalizeClass(["chev", { open: showCores.value }])
 					}, null, 8, ["class"]), createBaseVNode("span", null, toDisplayString(unref(t)("monitor.allCores")) + " (" + toDisplayString(cpus.value.length) + ")", 1)]),
-					showCores.value ? (openBlock(), createElementBlock("div", _hoisted_29$15, [(openBlock(true), createElementBlock(Fragment, null, renderList(cpus.value, (c) => {
+					showCores.value ? (openBlock(), createElementBlock("div", _hoisted_29$14, [(openBlock(true), createElementBlock(Fragment, null, renderList(cpus.value, (c) => {
 						return openBlock(), createElementBlock("div", {
 							key: c.core,
 							class: "detail-row"
@@ -109918,7 +110180,7 @@ var _hoisted_3$55 = ["title"];
 var _hoisted_4$51 = ["title"];
 var _hoisted_5$48 = { class: "theme-preview-line" };
 var _hoisted_6$47 = { class: "theme-preview-line" };
-var _hoisted_7$44 = { class: "theme-preview-line" };
+var _hoisted_7$43 = { class: "theme-preview-line" };
 var _hoisted_8$40 = { class: "theme-preview-line" };
 var _hoisted_9$36 = { class: "theme-preview-line" };
 var _hoisted_10$33 = { class: "theme-preview-swatches" };
@@ -110182,7 +110444,7 @@ var CustomThemeEditor_default = /*#__PURE__*/ _plugin_vue_export_helper_default(
 							createBaseVNode("span", { style: normalizeStyle({ color: draft.value.colors.foreground }) }, "$ ls -la", 4)
 						]),
 						createBaseVNode("div", _hoisted_6$47, [createBaseVNode("span", { style: normalizeStyle({ color: draft.value.colors.brightBlack }) }, "total 32", 4)]),
-						createBaseVNode("div", _hoisted_7$44, [
+						createBaseVNode("div", _hoisted_7$43, [
 							createBaseVNode("span", { style: normalizeStyle({ color: draft.value.colors.blue }) }, "drwxr-xr-x", 4),
 							createBaseVNode("span", { style: normalizeStyle({ color: draft.value.colors.foreground }) }, " 5 user staff 160 Jul 3 12:00 ", 4),
 							createBaseVNode("span", { style: normalizeStyle({ color: draft.value.colors.cyan }) }, ".", 4)
@@ -110283,7 +110545,7 @@ var _hoisted_4$50 = [
 ];
 var _hoisted_5$47 = { class: "conn-icon" };
 var _hoisted_6$46 = { class: "conn-details" };
-var _hoisted_7$43 = { class: "name" };
+var _hoisted_7$42 = { class: "name" };
 var _hoisted_8$39 = { class: "conn-meta" };
 var _hoisted_9$35 = { class: "host" };
 var _hoisted_10$32 = ["title", "onClick"];
@@ -110416,7 +110678,7 @@ var GroupTreeItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 					onContextmenu: withModifiers(($event) => onConnCtxMenu($event, conn), ["prevent"])
 				}, [
 					createBaseVNode("span", _hoisted_5$47, [(openBlock(), createBlock(resolveDynamicComponent(unref(connIcon)(conn)), { size: "0.875rem" }))]),
-					createBaseVNode("div", _hoisted_6$46, [createBaseVNode("span", _hoisted_7$43, toDisplayString(conn.name), 1), createBaseVNode("span", _hoisted_8$39, [createBaseVNode("span", _hoisted_9$35, toDisplayString(unref(getSubtitle)(conn)), 1)])]),
+					createBaseVNode("div", _hoisted_6$46, [createBaseVNode("span", _hoisted_7$42, toDisplayString(conn.name), 1), createBaseVNode("span", _hoisted_8$39, [createBaseVNode("span", _hoisted_9$35, toDisplayString(unref(getSubtitle)(conn)), 1)])]),
 					showHostRowButtons.value ? (openBlock(), createElementBlock("button", {
 						key: 0,
 						class: normalizeClass(["conn-fav-btn", { on: unref(favoriteStore).isFavorite(conn.id) }]),
@@ -110433,7 +110695,7 @@ var GroupTreeItem_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 			}), 128))], 64)) : createCommentVNode("", true)], 64);
 		};
 	}
-}), [["__scopeId", "data-v-d2053be0"]]);
+}), [["__scopeId", "data-v-22e6ccfe"]]);
 //#endregion
 //#region src/composables/createWorkspace.ts
 var WORKSPACE_HOST_TYPES = /* @__PURE__ */ new Set([
@@ -111203,7 +111465,7 @@ var _hoisted_3$53 = ["title"];
 var _hoisted_4$49 = ["title"];
 var _hoisted_5$46 = ["title"];
 var _hoisted_6$45 = ["title"];
-var _hoisted_7$42 = ["title"];
+var _hoisted_7$41 = ["title"];
 var _hoisted_8$38 = ["title"];
 var _hoisted_9$34 = { class: "search-box" };
 var _hoisted_10$31 = ["title"];
@@ -111242,9 +111504,9 @@ var _hoisted_25$16 = [
 	"onContextmenu"
 ];
 var _hoisted_26$16 = { class: "conn-icon" };
-var _hoisted_27$16 = { class: "conn-details" };
-var _hoisted_28$16 = { class: "name" };
-var _hoisted_29$14 = { class: "conn-meta" };
+var _hoisted_27$15 = { class: "conn-details" };
+var _hoisted_28$14 = { class: "name" };
+var _hoisted_29$13 = { class: "conn-meta" };
 var _hoisted_30$12 = { class: "host" };
 var _hoisted_31$11 = ["title", "onClick"];
 var _hoisted_32$11 = ["onClick", "title"];
@@ -112264,7 +112526,7 @@ var Sidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 					}, [createVNode(_component_el_icon, null, {
 						default: withCtx(() => [createVNode(unref(Palette), { size: "0.875rem" })]),
 						_: 1
-					})], 10, _hoisted_7$42)) : createCommentVNode("", true),
+					})], 10, _hoisted_7$41)) : createCommentVNode("", true),
 					createBaseVNode("button", {
 						class: "icon-btn",
 						onClick: _cache[5] || (_cache[5] = ($event) => emit("toggle")),
@@ -112435,7 +112697,7 @@ var Sidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 							onContextmenu: withModifiers(($event) => onContextMenu($event, conn), ["prevent"])
 						}, [
 							createBaseVNode("span", _hoisted_26$16, [(openBlock(), createBlock(resolveDynamicComponent(connIcon(conn)), { size: "0.875rem" }))]),
-							createBaseVNode("div", _hoisted_27$16, [createBaseVNode("span", _hoisted_28$16, toDisplayString(conn.name), 1), createBaseVNode("span", _hoisted_29$14, [createBaseVNode("span", _hoisted_30$12, toDisplayString(getSubtitle(conn)), 1)])]),
+							createBaseVNode("div", _hoisted_27$15, [createBaseVNode("span", _hoisted_28$14, toDisplayString(conn.name), 1), createBaseVNode("span", _hoisted_29$13, [createBaseVNode("span", _hoisted_30$12, toDisplayString(getSubtitle(conn)), 1)])]),
 							showHostRowButtons.value ? (openBlock(), createElementBlock("button", {
 								key: 0,
 								class: normalizeClass(["conn-fav-btn", { on: unref(favoriteStore).isFavorite(conn.id) }]),
@@ -112818,7 +113080,7 @@ var Sidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE
 			], 6);
 		};
 	}
-}), [["__scopeId", "data-v-6227cd32"]]);
+}), [["__scopeId", "data-v-3ed025f1"]]);
 //#endregion
 //#region src/utils/mobileCtrlKey.ts
 var mobileCtrlArmed = ref(false);
@@ -113855,7 +114117,7 @@ var _hoisted_6$44 = {
 	key: 1,
 	class: "suggestion-label"
 };
-var _hoisted_7$41 = ["onClick"];
+var _hoisted_7$40 = ["onClick"];
 var _hoisted_8$37 = { class: "suggestion-desc" };
 var _hoisted_9$33 = { class: "suggestion-label" };
 //#endregion
@@ -114037,7 +114299,7 @@ var TerminalSuggestion_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 					createBaseVNode("button", {
 						class: normalizeClass(["delete-btn", { visible: item.type === "history" }]),
 						onClick: withModifiers(($event) => onRemove(item.id), ["stop"])
-					}, [createVNode(unref(Trash2), { size: "0.75rem" })], 10, _hoisted_7$41)
+					}, [createVNode(unref(Trash2), { size: "0.75rem" })], 10, _hoisted_7$40)
 				], 42, _hoisted_1$65);
 			}), 128))], 512), aiItemWithIndex.value ? (openBlock(), createElementBlock("div", {
 				key: 0,
@@ -114054,7 +114316,7 @@ var TerminalSuggestion_default = /*#__PURE__*/ _plugin_vue_export_helper_default
 			})]), createBaseVNode("span", _hoisted_9$33, toDisplayString(aiItemWithIndex.value.item.label), 1)], 34)) : createCommentVNode("", true)], 4)), [[vShow, __props.visible]]);
 		};
 	}
-}), [["__scopeId", "data-v-6bd339c7"]]);
+}), [["__scopeId", "data-v-69feff9c"]]);
 //#endregion
 //#region src/utils/terminalGutter.ts
 /**
@@ -117692,7 +117954,7 @@ var _hoisted_6$43 = {
 	key: 1,
 	class: "transfer-status error"
 };
-var _hoisted_7$40 = {
+var _hoisted_7$39 = {
 	key: 2,
 	class: "transfer-status cancelled"
 };
@@ -117762,7 +118024,7 @@ var ZmodemTransfer_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 							size: "0.875rem"
 						}))]),
 						createBaseVNode("span", _hoisted_4$47, toDisplayString(t.filename), 1),
-						t.status === "completed" ? (openBlock(), createElementBlock("span", _hoisted_5$44, [createVNode(unref(Check), { size: "0.875rem" })])) : t.status === "error" ? (openBlock(), createElementBlock("span", _hoisted_6$43, [createVNode(unref(X$3), { size: "0.875rem" })])) : t.status === "cancelled" ? (openBlock(), createElementBlock("span", _hoisted_7$40, [createVNode(unref(CircleOff), { size: "0.875rem" })])) : createCommentVNode("", true)
+						t.status === "completed" ? (openBlock(), createElementBlock("span", _hoisted_5$44, [createVNode(unref(Check), { size: "0.875rem" })])) : t.status === "error" ? (openBlock(), createElementBlock("span", _hoisted_6$43, [createVNode(unref(X$3), { size: "0.875rem" })])) : t.status === "cancelled" ? (openBlock(), createElementBlock("span", _hoisted_7$39, [createVNode(unref(CircleOff), { size: "0.875rem" })])) : createCommentVNode("", true)
 					]),
 					t.status === "transferring" || t.status === "pending" ? (openBlock(), createElementBlock("div", _hoisted_8$36, [createBaseVNode("div", _hoisted_9$32, [createBaseVNode("div", {
 						class: "progress-fill",
@@ -118356,7 +118618,7 @@ var _hoisted_3$50 = ["title"];
 var _hoisted_4$46 = ["title"];
 var _hoisted_5$43 = ["title"];
 var _hoisted_6$42 = ["placeholder", "onKeydown"];
-var _hoisted_7$39 = {
+var _hoisted_7$38 = {
 	key: 0,
 	class: "search-count"
 };
@@ -118464,7 +118726,7 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 		}
 		function resetIMEComposition() {
 			if (!resetIMEState()) return;
-			if (terminal.textarea) {
+			if (terminal?.textarea) {
 				terminal.textarea.value = "";
 				terminal.textarea.blur();
 			}
@@ -118488,12 +118750,7 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 		const dcsReassembler = new DcsReassembler();
 		function renderTerminalData(rawData, countChunk = true) {
 			if (!terminal) return;
-			let data = stripCursorBlink(rawData, settingsStore.settings.terminal.cursorBlink ?? true).replace(/\x1b\[3J/g, "");
-			if (data.includes("\x1B[2J") && terminal.buffer.active.type !== "alternate") {
-				const scrollClear = "\n".repeat(terminal.rows) + "\x1B[H";
-				data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear);
-				data = data.replace(/\x1b\[2J/g, scrollClear);
-			}
+			let data = stripCursorBlink(rawData, settingsStore.settings.terminal.cursorBlink ?? true);
 			data = sanitizeLiveTerminalOutput(data);
 			if (props.mode === "sftp") {
 				const cleaned = data.replace(/\x1b\]633;S[^\x07]*\x07/g, "");
@@ -118879,6 +119136,23 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				terminal?.input("\x1B[3~");
 				return false;
 			}
+			if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === "v" || e.key === "V") && e.type === "keydown") {
+				e.preventDefault();
+				if (props.mode === "ssh" || props.mode === "local") readClipboardText().then((text) => {
+					if (text) pasteToSession(text);
+				});
+				return false;
+			}
+			if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === "c" || e.key === "C") && e.type === "keydown") {
+				const sel = terminal?.getSelection();
+				if (sel) {
+					e.preventDefault();
+					writeClipboard(sel);
+					terminal?.clearSelection();
+					return false;
+				}
+				return true;
+			}
 			if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "v" || e.key === "V") && e.type === "keydown") {
 				e.preventDefault();
 				if (props.mode === "ssh" || props.mode === "local") readClipboardText().then((text) => {
@@ -119116,7 +119390,8 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				keyHandlerDispose = null;
 				const sidNow = props.sessionId;
 				const gen = sidNow ? bumpOnDataGeneration(sidNow) : 0;
-				keyHandlerDispose = terminal.attachCustomKeyEventHandler(handleTerminalKey);
+				terminal.attachCustomKeyEventHandler(handleTerminalKey);
+				keyHandlerDispose = null;
 				onDataDispose = terminal.onData((data) => {
 					const curGen = sidNow ? getManagedTerminal(sidNow)?.onDataGeneration ?? gen : gen;
 					if (gen !== curGen) return;
@@ -119194,7 +119469,10 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 						} else if (terminalInput?.isInAlternateScreen()) suggestions.close();
 						const sid = props.sessionId;
 						const inAlt = terminalInput?.isInAlternateScreen() ?? false;
-						if (sid) writeTerminalInput(data, inAlt);
+						if (sid) {
+							if (!inAlt && terminalInput && data === "" && terminalInput.cursorIndex.value === 0) return;
+							writeTerminalInput(data, inAlt);
+						}
 					} else for (let i = 0; i < data.length; i++) {
 						const char = data[i];
 						const code = data.charCodeAt(i);
@@ -119878,7 +120156,7 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 						onKeydown: [withKeys(withModifiers(onSearchEnter, ["prevent"]), ["enter"]), withKeys(closeSearch, ["escape"])],
 						onBlur: _cache[4] || (_cache[4] = ($event) => getSearchAddon()?.clearActiveDecoration())
 					}, null, 40, _hoisted_6$42), [[vModelText, searchText.value]]),
-					searchText.value ? (openBlock(), createElementBlock("span", _hoisted_7$39, toDisplayString(searchResultIndex.value + 1) + "/" + toDisplayString(searchResultCount.value || 0), 1)) : createCommentVNode("", true),
+					searchText.value ? (openBlock(), createElementBlock("span", _hoisted_7$38, toDisplayString(searchResultIndex.value + 1) + "/" + toDisplayString(searchResultCount.value || 0), 1)) : createCommentVNode("", true),
 					createBaseVNode("button", {
 						class: "search-btn",
 						onClick: onSearchPrev,
@@ -120066,7 +120344,7 @@ var BaseTerminal_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 			], 32);
 		};
 	}
-}), [["__scopeId", "data-v-f3e0407b"]]);
+}), [["__scopeId", "data-v-a1141791"]]);
 //#endregion
 //#region src/components/Panel.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$61 = ["data-panel-id"];
@@ -120078,7 +120356,7 @@ var _hoisted_5$42 = {
 	class: "panel-shortcut"
 };
 var _hoisted_6$41 = { class: "panel-header-actions" };
-var _hoisted_7$38 = ["title"];
+var _hoisted_7$37 = ["title"];
 var _hoisted_8$34 = ["title"];
 var _hoisted_9$30 = ["title"];
 var _hoisted_10$28 = { class: "panel-more-wrapper" };
@@ -120193,7 +120471,8 @@ var Panel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__
 			if (!host) return;
 			let ok = false;
 			try {
-				ok = await SetText(host);
+				await SetText(host);
+				ok = true;
 			} catch {
 				ok = false;
 			}
@@ -120539,7 +120818,7 @@ var Panel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__
 				})) : (openBlock(), createBlock(unref(Maximize2), {
 					key: 1,
 					size: "0.875rem"
-				}))], 8, _hoisted_7$38)) : createCommentVNode("", true),
+				}))], 8, _hoisted_7$37)) : createCommentVNode("", true),
 				(__props.panel.type === "ssh" || __props.panel.type === "local" || __props.panel.type === "wsl") && __props.workspaceId ? (openBlock(), createElementBlock("button", {
 					key: 1,
 					class: normalizeClass(["panel-broadcast", { active: panelBroadcastActive.value }]),
@@ -120738,7 +121017,7 @@ var Panel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__
 			])], 42, _hoisted_1$61);
 		};
 	}
-}), [["__scopeId", "data-v-aaaf3b52"]]);
+}), [["__scopeId", "data-v-8a8cf5f6"]]);
 //#endregion
 //#region src/components/TerminalTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$60 = {
@@ -121388,7 +121667,7 @@ var _hoisted_5$41 = {
 	class: "parse-fail"
 };
 var _hoisted_6$40 = { class: "import-actions" };
-var _hoisted_7$37 = { class: "import-hint" };
+var _hoisted_7$36 = { class: "import-hint" };
 var _hoisted_8$33 = { class: "security-tip" };
 var SKILL_TEMPLATE = `## Purpose
 Investigate high disk usage on a Linux host and identify the largest space consumers.
@@ -121603,7 +121882,7 @@ var SkillCreateDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(
 							default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("settings.skillsImportDir")), 1)]),
 							_: 1
 						}),
-						createBaseVNode("span", _hoisted_7$37, toDisplayString(unref(t)("settings.skillsImportFolderHint")), 1)
+						createBaseVNode("span", _hoisted_7$36, toDisplayString(unref(t)("settings.skillsImportFolderHint")), 1)
 					]),
 					createVNode(_component_el_form, {
 						"label-position": "right",
@@ -121669,7 +121948,7 @@ var _hoisted_3$46 = {
 var _hoisted_4$43 = ["onClick"];
 var _hoisted_5$40 = { class: "skill-card-info" };
 var _hoisted_6$39 = { class: "skill-card-title" };
-var _hoisted_7$36 = { class: "skill-card-name" };
+var _hoisted_7$35 = { class: "skill-card-name" };
 var _hoisted_8$32 = { class: "skill-card-desc" };
 var _hoisted_9$29 = ["onClick", "title"];
 var _hoisted_10$27 = { class: "skill-card-path-text" };
@@ -121791,7 +122070,7 @@ var SkillsManager_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 							class: "skill-card-icon"
 						}),
 						createBaseVNode("div", _hoisted_5$40, [
-							createBaseVNode("div", _hoisted_6$39, [createBaseVNode("span", _hoisted_7$36, toDisplayString(skill.name), 1)]),
+							createBaseVNode("div", _hoisted_6$39, [createBaseVNode("span", _hoisted_7$35, toDisplayString(skill.name), 1)]),
 							createBaseVNode("div", _hoisted_8$32, toDisplayString(skill.description), 1),
 							skill.path ? (openBlock(), createElementBlock("div", {
 								key: 0,
@@ -122149,7 +122428,7 @@ var _hoisted_3$45 = {
 var _hoisted_4$42 = ["onClick"];
 var _hoisted_5$39 = { class: "command-card-info" };
 var _hoisted_6$38 = { class: "command-card-title" };
-var _hoisted_7$35 = { class: "command-card-name" };
+var _hoisted_7$34 = { class: "command-card-name" };
 var _hoisted_8$31 = { class: "command-card-desc" };
 var _hoisted_9$28 = ["onClick", "title"];
 var _hoisted_10$26 = { class: "command-card-path-text" };
@@ -122274,7 +122553,7 @@ var CommandsManager_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 							class: "command-card-icon"
 						}),
 						createBaseVNode("div", _hoisted_5$39, [
-							createBaseVNode("div", _hoisted_6$38, [createBaseVNode("span", _hoisted_7$35, toDisplayString(cmd.name), 1)]),
+							createBaseVNode("div", _hoisted_6$38, [createBaseVNode("span", _hoisted_7$34, toDisplayString(cmd.name), 1)]),
 							createBaseVNode("div", _hoisted_8$31, toDisplayString(cmd.description), 1),
 							cmd.path ? (openBlock(), createElementBlock("div", {
 								key: 0,
@@ -123061,7 +123340,7 @@ var _hoisted_3$42 = { class: "form-hint" };
 var _hoisted_4$39 = { class: "locked-field" };
 var _hoisted_5$37 = { class: "locked-value" };
 var _hoisted_6$36 = { class: "form-hint" };
-var _hoisted_7$34 = { class: "locked-field" };
+var _hoisted_7$33 = { class: "locked-field" };
 var _hoisted_8$30 = { class: "locked-value" };
 var _hoisted_9$27 = { class: "form-hint" };
 var _hoisted_10$25 = { class: "locked-field" };
@@ -123081,9 +123360,9 @@ var _hoisted_23$17 = { class: "locked-field" };
 var _hoisted_24$16 = { class: "locked-value" };
 var _hoisted_25$15 = { class: "locked-field" };
 var _hoisted_26$15 = { class: "locked-value" };
-var _hoisted_27$15 = { class: "form-hint" };
-var _hoisted_28$15 = { class: "form-hint" };
-var _hoisted_29$13 = {
+var _hoisted_27$14 = { class: "form-hint" };
+var _hoisted_28$13 = { class: "form-hint" };
+var _hoisted_29$12 = {
 	key: 0,
 	class: "form-error"
 };
@@ -123224,7 +123503,7 @@ var EditRepoDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 								_: 1
 							}, 8, ["label"]),
 							createVNode(_component_el_form_item, { label: unref(t)("editRepo.username") }, {
-								default: withCtx(() => [createBaseVNode("div", _hoisted_7$34, [createBaseVNode("span", _hoisted_8$30, toDisplayString(unref(syncStore).config.username), 1), createVNode(_component_el_icon, { class: "lock-icon" }, {
+								default: withCtx(() => [createBaseVNode("div", _hoisted_7$33, [createBaseVNode("span", _hoisted_8$30, toDisplayString(unref(syncStore).config.username), 1), createVNode(_component_el_icon, { class: "lock-icon" }, {
 									default: withCtx(() => [createVNode(unref(Lock), { size: "0.875rem" })]),
 									_: 1
 								})])]),
@@ -123304,7 +123583,7 @@ var EditRepoDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 									"onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => webdavPassword.value = $event),
 									type: "password",
 									"show-password": ""
-								}, null, 8, ["modelValue"]), createBaseVNode("div", _hoisted_27$15, toDisplayString(unref(t)("editRepo.webdavPasswordHint")), 1)]),
+								}, null, 8, ["modelValue"]), createBaseVNode("div", _hoisted_27$14, toDisplayString(unref(t)("editRepo.webdavPasswordHint")), 1)]),
 								_: 1
 							}, 8, ["label"])
 						], 64)),
@@ -123315,12 +123594,12 @@ var EditRepoDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 								type: "password",
 								"show-password": "",
 								placeholder: unref(t)("editRepo.currentPasswordPlaceholder")
-							}, null, 8, ["modelValue", "placeholder"]), createBaseVNode("div", _hoisted_28$15, toDisplayString(isSnapshot.value ? unref(t)("addRepo.masterPasswordHint") : unref(t)("editRepo.currentPasswordHint")), 1)]),
+							}, null, 8, ["modelValue", "placeholder"]), createBaseVNode("div", _hoisted_28$13, toDisplayString(isSnapshot.value ? unref(t)("addRepo.masterPasswordHint") : unref(t)("editRepo.currentPasswordHint")), 1)]),
 							_: 1
 						}, 8, ["label"])
 					]),
 					_: 1
-				}), errorMsg.value ? (openBlock(), createElementBlock("div", _hoisted_29$13, toDisplayString(errorMsg.value), 1)) : createCommentVNode("", true)]),
+				}), errorMsg.value ? (openBlock(), createElementBlock("div", _hoisted_29$12, toDisplayString(errorMsg.value), 1)) : createCommentVNode("", true)]),
 				_: 1
 			}, 8, ["modelValue", "title"]);
 		};
@@ -123786,7 +124065,7 @@ var _hoisted_5$36 = {
 	class: "settings-section"
 };
 var _hoisted_6$35 = { class: "section-title" };
-var _hoisted_7$33 = { class: "settings-group" };
+var _hoisted_7$32 = { class: "settings-group" };
 var _hoisted_8$29 = { class: "setting-card" };
 var _hoisted_9$26 = { class: "setting-info" };
 var _hoisted_10$24 = { class: "setting-title" };
@@ -123809,9 +124088,9 @@ var _hoisted_23$16 = {
 var _hoisted_24$15 = { class: "setting-info" };
 var _hoisted_25$14 = { class: "setting-title" };
 var _hoisted_26$14 = { class: "setting-desc" };
-var _hoisted_27$14 = { class: "setting-control" };
-var _hoisted_28$14 = { class: "setting-card" };
-var _hoisted_29$12 = { class: "setting-info" };
+var _hoisted_27$13 = { class: "setting-control" };
+var _hoisted_28$12 = { class: "setting-card" };
+var _hoisted_29$11 = { class: "setting-info" };
 var _hoisted_30$11 = { class: "setting-title" };
 var _hoisted_31$10 = { class: "setting-desc" };
 var _hoisted_32$10 = { class: "setting-control" };
@@ -124776,6 +125055,23 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				msg.error(backendErrorText(e));
 			}
 		}
+		const reconnectingClient = ref(null);
+		async function reconnectMcpClient(c) {
+			reconnectingClient.value = c.name;
+			try {
+				await MCPReconnectClient(c.name);
+				await refreshMcpClients();
+				const status = mcpClientStatus(c.name);
+				msg.success(t("settings.mcpClientReconnectOk", {
+					name: c.name,
+					tools: status?.tools ?? 0
+				}));
+			} catch (e) {
+				msg.error(`${t("settings.mcpClientReconnectFailed")}: ${backendErrorText(e)}`);
+			} finally {
+				reconnectingClient.value = null;
+			}
+		}
 		async function removeMcpClient(name) {
 			try {
 				await ElMessageBox.confirm(t("settings.mcpClientRemoveConfirm", { name }), t("settings.mcpClientRemove"));
@@ -124892,6 +125188,8 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 					"toggleSidebar",
 					"openQuickCommands",
 					"focusAI",
+					"toggleFilePanel",
+					"toggleMonitor",
 					"openSettings"
 				]
 			},
@@ -125362,9 +125660,100 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 			userAgent: "uniTerm",
 			proxyId: ""
 		});
+		const MODEL_PRESETS = {
+			deepseek: {
+				name: "DeepSeek",
+				protocol: "openai",
+				baseURL: "https://api.deepseek.com/v1",
+				model: "deepseek-chat"
+			},
+			qwen: {
+				name: "通义千问",
+				protocol: "openai",
+				baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+				model: "qwen-plus"
+			},
+			zhipu: {
+				name: "智谱GLM",
+				protocol: "openai",
+				baseURL: "https://open.bigmodel.cn/api/paas/v4",
+				model: "glm-4-plus"
+			},
+			wenxin: {
+				name: "文心一言",
+				protocol: "openai",
+				baseURL: "https://qianfan.baidubce.com/v2",
+				model: "ernie-4.0-8k"
+			},
+			moonshot: {
+				name: "Moonshot",
+				protocol: "openai",
+				baseURL: "https://api.moonshot.cn/v1",
+				model: "moonshot-v1-8k"
+			},
+			minimax: {
+				name: "MiniMax",
+				protocol: "openai",
+				baseURL: "https://api.minimax.chat/v1",
+				model: "abab6.5-chat"
+			},
+			lingyi: {
+				name: "零一万物",
+				protocol: "openai",
+				baseURL: "https://api.lingyiwanwu.com/v1",
+				model: "yi-large"
+			},
+			openai: {
+				name: "OpenAI GPT",
+				protocol: "openai",
+				baseURL: "https://api.openai.com/v1",
+				model: "gpt-4o"
+			},
+			claude: {
+				name: "Anthropic Claude",
+				protocol: "anthropic",
+				baseURL: "https://api.anthropic.com",
+				model: "claude-sonnet-4-20250514"
+			},
+			gemini: {
+				name: "Google Gemini",
+				protocol: "openai",
+				baseURL: "https://generativelanguage.googleapis.com/v1beta",
+				model: "gemini-2.0-flash"
+			},
+			ollama: {
+				name: "Ollama (本地)",
+				protocol: "openai",
+				baseURL: "http://localhost:11434/v1",
+				model: "llama3"
+			},
+			vllm: {
+				name: "vLLM (本地)",
+				protocol: "openai",
+				baseURL: "http://localhost:8000/v1",
+				model: ""
+			},
+			lmstudio: {
+				name: "LM Studio (本地)",
+				protocol: "openai",
+				baseURL: "http://localhost:1234/v1",
+				model: ""
+			}
+		};
+		const selectedPreset = ref("");
+		function applyPreset(key) {
+			const preset = MODEL_PRESETS[key];
+			if (!preset) return;
+			modelForm.name = preset.name;
+			modelForm.protocol = preset.protocol;
+			modelForm.baseURL = preset.baseURL;
+			modelForm.model = preset.model;
+			modelSuggestions.value = [];
+		}
 		function openNewModelForm() {
 			editingModel.value = null;
 			resetModelForm();
+			selectedPreset.value = "";
 			testResult.value = null;
 			testError.value = "";
 			showModelForm.value = true;
@@ -125372,6 +125761,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 		function editModel(model) {
 			editingModel.value = model;
 			modelSuggestions.value = [];
+			selectedPreset.value = "";
 			testResult.value = null;
 			testError.value = "";
 			Object.assign(modelForm, { ...model });
@@ -125546,7 +125936,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				createBaseVNode("div", _hoisted_4$38, [
 					unref(settingsStore).activeCategory === "basic" ? (openBlock(), createElementBlock("div", _hoisted_5$36, [
 						createBaseVNode("h2", _hoisted_6$35, toDisplayString(unref(t)("settings.appearance")), 1),
-						createBaseVNode("div", _hoisted_7$33, [
+						createBaseVNode("div", _hoisted_7$32, [
 							createBaseVNode("div", _hoisted_8$29, [createBaseVNode("div", _hoisted_9$26, [createBaseVNode("div", _hoisted_10$24, toDisplayString(unref(t)("settings.theme")), 1), createBaseVNode("div", _hoisted_11$20, toDisplayString(unref(t)("settings.themeDesc")), 1)]), createBaseVNode("div", _hoisted_12$20, [createVNode(_component_el_select, {
 								modelValue: unref(settingsStore).settings.theme,
 								"onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => unref(settingsStore).settings.theme = $event),
@@ -125597,11 +125987,11 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 								"controls-position": "right",
 								onChange: _cache[4] || (_cache[4] = ($event) => unref(settingsStore).save())
 							}, null, 8, ["modelValue"])])]),
-							!unref(isMobile) ? (openBlock(), createElementBlock("div", _hoisted_23$16, [createBaseVNode("div", _hoisted_24$15, [createBaseVNode("div", _hoisted_25$14, toDisplayString(unref(t)("settings.systemTitleBar")), 1), createBaseVNode("div", _hoisted_26$14, toDisplayString(unref(t)("settings.systemTitleBarDesc")), 1)]), createBaseVNode("div", _hoisted_27$14, [createVNode(_component_el_switch, {
+							!unref(isMobile) ? (openBlock(), createElementBlock("div", _hoisted_23$16, [createBaseVNode("div", _hoisted_24$15, [createBaseVNode("div", _hoisted_25$14, toDisplayString(unref(t)("settings.systemTitleBar")), 1), createBaseVNode("div", _hoisted_26$14, toDisplayString(unref(t)("settings.systemTitleBarDesc")), 1)]), createBaseVNode("div", _hoisted_27$13, [createVNode(_component_el_switch, {
 								"model-value": unref(localStateStore).state.systemTitleBar,
 								"onUpdate:modelValue": _cache[5] || (_cache[5] = (v) => onToggleSystemTitleBar(v))
 							}, null, 8, ["model-value"])])])) : createCommentVNode("", true),
-							createBaseVNode("div", _hoisted_28$14, [createBaseVNode("div", _hoisted_29$12, [createBaseVNode("div", _hoisted_30$11, toDisplayString(unref(t)("settings.bgEnable")), 1), createBaseVNode("div", _hoisted_31$10, toDisplayString(unref(t)("settings.bgEnableDesc")), 1)]), createBaseVNode("div", _hoisted_32$10, [createVNode(_component_el_switch, {
+							createBaseVNode("div", _hoisted_28$12, [createBaseVNode("div", _hoisted_29$11, [createBaseVNode("div", _hoisted_30$11, toDisplayString(unref(t)("settings.bgEnable")), 1), createBaseVNode("div", _hoisted_31$10, toDisplayString(unref(t)("settings.bgEnableDesc")), 1)]), createBaseVNode("div", _hoisted_32$10, [createVNode(_component_el_switch, {
 								"model-value": unref(localStateStore).state.backgroundEnabled,
 								"onUpdate:modelValue": _cache[6] || (_cache[6] = (v) => unref(localStateStore).update({ backgroundEnabled: v }))
 							}, null, 8, ["model-value"])])]),
@@ -126476,7 +126866,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 						}, null, 8, ["modelValue", "editing-id"])
 					])) : createCommentVNode("", true),
 					unref(settingsStore).activeCategory === "about" ? (openBlock(), createElementBlock("div", _hoisted_308, [createBaseVNode("h2", _hoisted_309, toDisplayString(unref(t)("settings.about")), 1), createBaseVNode("div", _hoisted_310, [
-						_cache[151] || (_cache[151] = createBaseVNode("div", { class: "about-appname" }, "uniTerm", -1)),
+						_cache[152] || (_cache[152] = createBaseVNode("div", { class: "about-appname" }, "uniTerm", -1)),
 						createBaseVNode("p", _hoisted_311, toDisplayString(unref(t)("settings.aboutDesc")), 1),
 						createBaseVNode("div", _hoisted_312, toDisplayString(unref(t)("settings.version")) + ": " + toDisplayString(unref(updateCheck).updateInfo?.current || "..."), 1),
 						createBaseVNode("div", _hoisted_313, [
@@ -126500,12 +126890,12 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 								href: "#",
 								class: "about-link",
 								onClick: _cache[91] || (_cache[91] = withModifiers(($event) => unref(browser_exports).OpenURL("https://github.com/ys-ll/uniterm"), ["prevent"]))
-							}, [createVNode(GitHubLogo_default, { class: "about-link-icon" }), _cache[149] || (_cache[149] = createTextVNode(" GitHub ", -1))]),
+							}, [createVNode(GitHubLogo_default, { class: "about-link-icon" }), _cache[150] || (_cache[150] = createTextVNode(" GitHub ", -1))]),
 							createBaseVNode("a", {
 								href: "#",
 								class: "about-link",
 								onClick: _cache[92] || (_cache[92] = withModifiers(($event) => unref(browser_exports).OpenURL("https://gitee.com/ys-l/uniterm"), ["prevent"]))
-							}, [createVNode(GiteeLogo_default, { class: "about-link-icon" }), _cache[150] || (_cache[150] = createTextVNode(" Gitee ", -1))])
+							}, [createVNode(GiteeLogo_default, { class: "about-link-icon" }), _cache[151] || (_cache[151] = createTextVNode(" Gitee ", -1))])
 						]),
 						!unref(isMobile) ? (openBlock(), createElementBlock("div", _hoisted_314, [createVNode(_component_el_button, {
 							loading: unref(updateCheck).checking,
@@ -126864,6 +127254,14 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 								}, 8, ["onClick"]),
 								createVNode(_component_el_button, {
 									link: "",
+									loading: reconnectingClient.value === c.name,
+									onClick: ($event) => reconnectMcpClient(c)
+								}, {
+									default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("settings.mcpClientReconnect")), 1)]),
+									_: 1
+								}, 8, ["loading", "onClick"]),
+								createVNode(_component_el_button, {
+									link: "",
 									type: "danger",
 									onClick: ($event) => removeMcpClient(c.name)
 								}, {
@@ -126920,7 +127318,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 								rows: 2,
 								placeholder: "{ \"Authorization\": \"Bearer ...\" }"
 							}, null, 8, ["modelValue"])])]),
-							createBaseVNode("div", _hoisted_412, [_cache[152] || (_cache[152] = createBaseVNode("div", { class: "setting-info" }, null, -1)), createBaseVNode("div", _hoisted_413, [createVNode(_component_el_button, {
+							createBaseVNode("div", _hoisted_412, [_cache[153] || (_cache[153] = createBaseVNode("div", { class: "setting-info" }, null, -1)), createBaseVNode("div", _hoisted_413, [createVNode(_component_el_button, {
 								type: "primary",
 								onClick: addMcpClient
 							}, {
@@ -126944,11 +127342,11 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				createVNode(_component_el_dialog, {
 					"append-to-body": "",
 					modelValue: showModelForm.value,
-					"onUpdate:modelValue": _cache[133] || (_cache[133] = ($event) => showModelForm.value = $event),
+					"onUpdate:modelValue": _cache[134] || (_cache[134] = ($event) => showModelForm.value = $event),
 					title: editingModel.value ? unref(t)("settings.editModel") : unref(t)("settings.newModel"),
 					width: "25rem"
 				}, {
-					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[132] || (_cache[132] = ($event) => showModelForm.value = false) }, {
+					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[133] || (_cache[133] = ($event) => showModelForm.value = false) }, {
 						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("settings.cancel")), 1)]),
 						_: 1
 					}), createVNode(_component_el_button, {
@@ -126960,17 +127358,99 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 					})]),
 					default: withCtx(() => [createVNode(_component_el_form, { "label-width": "5rem" }, {
 						default: withCtx(() => [
+							createVNode(_component_el_form_item, { label: "预设" }, {
+								default: withCtx(() => [createVNode(_component_el_select, {
+									modelValue: selectedPreset.value,
+									"onUpdate:modelValue": _cache[124] || (_cache[124] = ($event) => selectedPreset.value = $event),
+									style: { "width": "100%" },
+									filterable: "",
+									placeholder: unref(t)("settings.modelPresetPlaceholder"),
+									onChange: applyPreset
+								}, {
+									default: withCtx(() => [
+										createVNode(_component_el_option_group, { label: "国内主流" }, {
+											default: withCtx(() => [
+												createVNode(_component_el_option, {
+													label: "DeepSeek (深度求索)",
+													value: "deepseek"
+												}),
+												createVNode(_component_el_option, {
+													label: "通义千问 (阿里)",
+													value: "qwen"
+												}),
+												createVNode(_component_el_option, {
+													label: "智谱 GLM",
+													value: "zhipu"
+												}),
+												createVNode(_component_el_option, {
+													label: "文心一言 (百度)",
+													value: "wenxin"
+												}),
+												createVNode(_component_el_option, {
+													label: "Moonshot (月之暗面)",
+													value: "moonshot"
+												}),
+												createVNode(_component_el_option, {
+													label: "MiniMax",
+													value: "minimax"
+												}),
+												createVNode(_component_el_option, {
+													label: "零一万物 (Yi)",
+													value: "lingyi"
+												})
+											]),
+											_: 1
+										}),
+										createVNode(_component_el_option_group, { label: "国际主流" }, {
+											default: withCtx(() => [
+												createVNode(_component_el_option, {
+													label: "OpenAI GPT",
+													value: "openai"
+												}),
+												createVNode(_component_el_option, {
+													label: "Anthropic Claude",
+													value: "claude"
+												}),
+												createVNode(_component_el_option, {
+													label: "Google Gemini",
+													value: "gemini"
+												})
+											]),
+											_: 1
+										}),
+										createVNode(_component_el_option_group, { label: "本地部署" }, {
+											default: withCtx(() => [
+												createVNode(_component_el_option, {
+													label: "Ollama (本地)",
+													value: "ollama"
+												}),
+												createVNode(_component_el_option, {
+													label: "vLLM (本地)",
+													value: "vllm"
+												}),
+												createVNode(_component_el_option, {
+													label: "LM Studio (本地)",
+													value: "lmstudio"
+												})
+											]),
+											_: 1
+										})
+									]),
+									_: 1
+								}, 8, ["modelValue", "placeholder"])]),
+								_: 1
+							}),
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelName") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: modelForm.name,
-									"onUpdate:modelValue": _cache[124] || (_cache[124] = ($event) => modelForm.name = $event)
+									"onUpdate:modelValue": _cache[125] || (_cache[125] = ($event) => modelForm.name = $event)
 								}, null, 8, ["modelValue"])]),
 								_: 1
 							}, 8, ["label"]),
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelProtocol") }, {
 								default: withCtx(() => [createVNode(_component_el_select, {
 									modelValue: modelForm.protocol,
-									"onUpdate:modelValue": _cache[125] || (_cache[125] = ($event) => modelForm.protocol = $event),
+									"onUpdate:modelValue": _cache[126] || (_cache[126] = ($event) => modelForm.protocol = $event),
 									style: { "width": "100%" }
 								}, {
 									default: withCtx(() => [
@@ -126994,7 +127474,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelBaseURL") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: modelForm.baseURL,
-									"onUpdate:modelValue": _cache[126] || (_cache[126] = ($event) => modelForm.baseURL = $event),
+									"onUpdate:modelValue": _cache[127] || (_cache[127] = ($event) => modelForm.baseURL = $event),
 									placeholder: modelForm.protocol === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"
 								}, null, 8, ["modelValue", "placeholder"])]),
 								_: 1
@@ -127002,7 +127482,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelUserAgent") }, {
 								default: withCtx(() => [createVNode(_component_el_select, {
 									modelValue: modelForm.userAgent,
-									"onUpdate:modelValue": _cache[127] || (_cache[127] = ($event) => modelForm.userAgent = $event),
+									"onUpdate:modelValue": _cache[128] || (_cache[128] = ($event) => modelForm.userAgent = $event),
 									style: { "width": "100%" },
 									filterable: "",
 									"allow-create": ""
@@ -127021,7 +127501,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelApiKey") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: modelForm.apiKey,
-									"onUpdate:modelValue": _cache[128] || (_cache[128] = ($event) => modelForm.apiKey = $event),
+									"onUpdate:modelValue": _cache[129] || (_cache[129] = ($event) => modelForm.apiKey = $event),
 									type: "password",
 									"show-password": ""
 								}, null, 8, ["modelValue"])]),
@@ -127030,7 +127510,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("conn.proxy") }, {
 								default: withCtx(() => [createBaseVNode("div", _hoisted_414, [createVNode(_component_el_select, {
 									modelValue: modelForm.proxyId,
-									"onUpdate:modelValue": _cache[129] || (_cache[129] = ($event) => modelForm.proxyId = $event),
+									"onUpdate:modelValue": _cache[130] || (_cache[130] = ($event) => modelForm.proxyId = $event),
 									clearable: "",
 									filterable: "",
 									style: {
@@ -127058,7 +127538,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 								}, 8, ["modelValue", "placeholder"]), createVNode(_component_el_button, {
 									class: "inline-add-btn",
 									title: unref(t)("conn.newProxy"),
-									onClick: _cache[130] || (_cache[130] = ($event) => modelProxyDialogVisible.value = true)
+									onClick: _cache[131] || (_cache[131] = ($event) => modelProxyDialogVisible.value = true)
 								}, {
 									default: withCtx(() => [createVNode(unref(Plus$1), { size: "0.875rem" })]),
 									_: 1
@@ -127068,7 +127548,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("settings.modelModel") }, {
 								default: withCtx(() => [createBaseVNode("div", _hoisted_415, [createVNode(_component_el_select, {
 									modelValue: modelForm.model,
-									"onUpdate:modelValue": _cache[131] || (_cache[131] = ($event) => modelForm.model = $event),
+									"onUpdate:modelValue": _cache[132] || (_cache[132] = ($event) => modelForm.model = $event),
 									class: "model-autocomplete",
 									filterable: "",
 									"allow-create": "",
@@ -127121,7 +127601,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				}, 8, ["modelValue", "title"]),
 				createVNode(ProxyEditDialog_default, {
 					visible: modelProxyDialogVisible.value,
-					"onUpdate:visible": _cache[134] || (_cache[134] = ($event) => modelProxyDialogVisible.value = $event),
+					"onUpdate:visible": _cache[135] || (_cache[135] = ($event) => modelProxyDialogVisible.value = $event),
 					proxy: null,
 					onSaved: onModelProxySaved
 				}, null, 8, ["visible"]),
@@ -127131,23 +127611,23 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				createVNode(DeleteRepoDialog_default),
 				createVNode(CustomThemeEditor_default, {
 					modelValue: themeEditorVisible.value,
-					"onUpdate:modelValue": _cache[135] || (_cache[135] = ($event) => themeEditorVisible.value = $event),
+					"onUpdate:modelValue": _cache[136] || (_cache[136] = ($event) => themeEditorVisible.value = $event),
 					"source-theme-id": themeEditorSourceId.value
 				}, null, 8, ["modelValue", "source-theme-id"]),
 				createVNode(DataDirDialog_default, {
 					visible: dataDirVisible.value,
-					"onUpdate:visible": _cache[136] || (_cache[136] = ($event) => dataDirVisible.value = $event),
+					"onUpdate:visible": _cache[137] || (_cache[137] = ($event) => dataDirVisible.value = $event),
 					"first-run": false,
 					onDone: onDataDirChange
 				}, null, 8, ["visible"]),
 				createVNode(_component_el_dialog, {
 					"append-to-body": "",
 					modelValue: showSetupMaster.value,
-					"onUpdate:modelValue": _cache[140] || (_cache[140] = ($event) => showSetupMaster.value = $event),
+					"onUpdate:modelValue": _cache[141] || (_cache[141] = ($event) => showSetupMaster.value = $event),
 					title: unref(t)("config.setupMasterTitle"),
 					width: "27.5rem"
 				}, {
-					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[139] || (_cache[139] = ($event) => showSetupMaster.value = false) }, {
+					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[140] || (_cache[140] = ($event) => showSetupMaster.value = false) }, {
 						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("common.cancel")), 1)]),
 						_: 1
 					}), createVNode(_component_el_button, {
@@ -127166,7 +127646,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 						default: withCtx(() => [createVNode(_component_el_form_item, { label: unref(t)("encrypt.password") }, {
 							default: withCtx(() => [createVNode(_component_el_input, {
 								modelValue: setupPw.value,
-								"onUpdate:modelValue": _cache[137] || (_cache[137] = ($event) => setupPw.value = $event),
+								"onUpdate:modelValue": _cache[138] || (_cache[138] = ($event) => setupPw.value = $event),
 								type: "password",
 								"show-password": ""
 							}, null, 8, ["modelValue"])]),
@@ -127174,7 +127654,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 						}, 8, ["label"]), createVNode(_component_el_form_item, { label: unref(t)("encrypt.confirm") }, {
 							default: withCtx(() => [createVNode(_component_el_input, {
 								modelValue: setupPw2.value,
-								"onUpdate:modelValue": _cache[138] || (_cache[138] = ($event) => setupPw2.value = $event),
+								"onUpdate:modelValue": _cache[139] || (_cache[139] = ($event) => setupPw2.value = $event),
 								type: "password",
 								"show-password": ""
 							}, null, 8, ["modelValue"])]),
@@ -127187,11 +127667,11 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				createVNode(_component_el_dialog, {
 					"append-to-body": "",
 					modelValue: showVerifyMaster.value,
-					"onUpdate:modelValue": _cache[143] || (_cache[143] = ($event) => showVerifyMaster.value = $event),
+					"onUpdate:modelValue": _cache[144] || (_cache[144] = ($event) => showVerifyMaster.value = $event),
 					title: unref(t)("config.verifyMasterTitle"),
 					width: "27.5rem"
 				}, {
-					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[142] || (_cache[142] = ($event) => showVerifyMaster.value = false) }, {
+					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[143] || (_cache[143] = ($event) => showVerifyMaster.value = false) }, {
 						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("common.cancel")), 1)]),
 						_: 1
 					}), createVNode(_component_el_button, {
@@ -127210,7 +127690,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 						default: withCtx(() => [createVNode(_component_el_form_item, { label: unref(t)("config.verifyCurrentPassword") }, {
 							default: withCtx(() => [createBaseVNode("div", _hoisted_418, [createVNode(_component_el_input, {
 								modelValue: verifyPw.value,
-								"onUpdate:modelValue": _cache[141] || (_cache[141] = ($event) => verifyPw.value = $event),
+								"onUpdate:modelValue": _cache[142] || (_cache[142] = ($event) => verifyPw.value = $event),
 								type: "password",
 								"show-password": ""
 							}, null, 8, ["modelValue"]), createBaseVNode("div", _hoisted_419, toDisplayString(unref(t)("config.verifyCurrentHint")), 1)])]),
@@ -127223,11 +127703,11 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				createVNode(_component_el_dialog, {
 					"append-to-body": "",
 					modelValue: showChangePassword.value,
-					"onUpdate:modelValue": _cache[148] || (_cache[148] = ($event) => showChangePassword.value = $event),
+					"onUpdate:modelValue": _cache[149] || (_cache[149] = ($event) => showChangePassword.value = $event),
 					title: unref(t)("config.changePassword"),
 					width: "27.5rem"
 				}, {
-					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[147] || (_cache[147] = ($event) => showChangePassword.value = false) }, {
+					footer: withCtx(() => [createVNode(_component_el_button, { onClick: _cache[148] || (_cache[148] = ($event) => showChangePassword.value = false) }, {
 						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("common.cancel")), 1)]),
 						_: 1
 					}), createVNode(_component_el_button, {
@@ -127247,7 +127727,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("config.oldPassword") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: oldPw.value,
-									"onUpdate:modelValue": _cache[144] || (_cache[144] = ($event) => oldPw.value = $event),
+									"onUpdate:modelValue": _cache[145] || (_cache[145] = ($event) => oldPw.value = $event),
 									type: "password",
 									"show-password": ""
 								}, null, 8, ["modelValue"])]),
@@ -127256,7 +127736,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("config.newPassword") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: newPw.value,
-									"onUpdate:modelValue": _cache[145] || (_cache[145] = ($event) => newPw.value = $event),
+									"onUpdate:modelValue": _cache[146] || (_cache[146] = ($event) => newPw.value = $event),
 									type: "password",
 									"show-password": ""
 								}, null, 8, ["modelValue"])]),
@@ -127265,7 +127745,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							createVNode(_component_el_form_item, { label: unref(t)("encrypt.confirm") }, {
 								default: withCtx(() => [createVNode(_component_el_input, {
 									modelValue: newPw2.value,
-									"onUpdate:modelValue": _cache[146] || (_cache[146] = ($event) => newPw2.value = $event),
+									"onUpdate:modelValue": _cache[147] || (_cache[147] = ($event) => newPw2.value = $event),
 									type: "password",
 									"show-password": ""
 								}, null, 8, ["modelValue"])]),
@@ -127279,7 +127759,7 @@ var SettingsTab_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 			], 2);
 		};
 	}
-}), [["__scopeId", "data-v-7ef7e46d"]]);
+}), [["__scopeId", "data-v-7b98dd53"]]);
 //#endregion
 //#region src/components/SettingsTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$45 = { class: "settings-tab-content" };
@@ -127960,7 +128440,7 @@ var FileTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			return true;
 		}
 		const remotePanel = useFilePanel({
-			sid: () => panel.value?.sessionId,
+			sid: () => panel.value?.sessionId ?? void 0,
 			cwd: remoteListing.cwd,
 			files: remoteListing.files,
 			refresh: () => onRefreshRemote(),
@@ -127975,7 +128455,7 @@ var FileTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			localCwd: () => localListing.cwd.value
 		});
 		const localPanel = useFilePanel({
-			sid: () => panel.value?.sessionId,
+			sid: () => panel.value?.sessionId ?? void 0,
 			cwd: localListing.cwd,
 			files: localListing.files,
 			refresh: () => onRefreshLocal(),
@@ -128442,7 +128922,7 @@ var FileTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 					ref: fileEditorRef,
 					visible: unref(editorVisible),
 					"onUpdate:visible": _cache[11] || (_cache[11] = ($event) => isRef(editorVisible) ? editorVisible.value = $event : null),
-					"session-id": panel.value?.sessionId,
+					"session-id": panel.value?.sessionId ?? void 0,
 					mode: unref(editorMode),
 					onSaved: unref(onEditorSaved)
 				}, null, 8, [
@@ -128464,7 +128944,7 @@ var FileTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-74622333"]]);
+}), [["__scopeId", "data-v-c8bf9359"]]);
 //#endregion
 //#region src/components/RDPTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$40 = { class: "rdp-tab-content" };
@@ -128485,7 +128965,7 @@ var _hoisted_6$34 = {
 	key: 2,
 	class: "rdp-overlay"
 };
-var _hoisted_7$32 = { class: "rdp-area" };
+var _hoisted_7$31 = { class: "rdp-area" };
 var _hoisted_8$28 = {
 	key: 3,
 	class: "rdp-statusbar"
@@ -128638,7 +129118,7 @@ var RDPTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 					default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("rdp.reconnect")), 1)]),
 					_: 1
 				})])) : createCommentVNode("", true),
-				withDirectives(createBaseVNode("div", _hoisted_7$32, null, 512), [[vShow, status.value === "connected"]]),
+				withDirectives(createBaseVNode("div", _hoisted_7$31, null, 512), [[vShow, status.value === "connected"]]),
 				status.value === "connected" ? (openBlock(), createElementBlock("div", _hoisted_8$28, [
 					_cache[0] || (_cache[0] = createBaseVNode("span", { class: "rdp-status-dot" }, null, -1)),
 					createBaseVNode("span", null, toDisplayString(unref(t)("rdp.connected")), 1),
@@ -128676,7 +129156,7 @@ var _hoisted_6$33 = {
 	key: 2,
 	class: "vnc-overlay"
 };
-var _hoisted_7$31 = { class: "vnc-statusbar" };
+var _hoisted_7$30 = { class: "vnc-statusbar" };
 var _hoisted_8$27 = { class: "vnc-status-label" };
 var _hoisted_9$25 = { class: "vnc-status-label" };
 var _hoisted_10$23 = { class: "vnc-status-label" };
@@ -128947,7 +129427,7 @@ var VNCTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 					tabindex: "0",
 					onPaste
 				}, null, 544), [[vShow, status.value === "connected"]]),
-				withDirectives(createBaseVNode("div", _hoisted_7$31, [
+				withDirectives(createBaseVNode("div", _hoisted_7$30, [
 					_cache[3] || (_cache[3] = createBaseVNode("span", { class: "vnc-status-dot" }, null, -1)),
 					createBaseVNode("span", null, toDisplayString(unref(t)("vnc.connected")), 1),
 					_cache[4] || (_cache[4] = createBaseVNode("span", { class: "vnc-status-sep" }, "|", -1)),
@@ -129025,7 +129505,7 @@ var _hoisted_5$32 = {
 	class: "spice-overlay"
 };
 var _hoisted_6$32 = ["id"];
-var _hoisted_7$30 = { class: "spice-statusbar" };
+var _hoisted_7$29 = { class: "spice-statusbar" };
 var _hoisted_8$26 = { class: "spice-scale-label" };
 //#endregion
 //#region src/components/SPICETabContent.vue
@@ -129276,7 +129756,7 @@ var SPICETabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 					tabindex: "0",
 					onPaste
 				}, null, 40, _hoisted_6$32), [[vShow, status.value === "connected"]]),
-				withDirectives(createBaseVNode("div", _hoisted_7$30, [
+				withDirectives(createBaseVNode("div", _hoisted_7$29, [
 					_cache[1] || (_cache[1] = createBaseVNode("span", { class: "spice-status-dot" }, null, -1)),
 					createBaseVNode("span", null, toDisplayString(unref(t)("spice.connected")), 1),
 					_cache[2] || (_cache[2] = createBaseVNode("span", { class: "spice-status-sep" }, "|", -1)),
@@ -129310,7 +129790,7 @@ var _hoisted_3$35 = {
 var _hoisted_4$33 = { class: "x11-rows" };
 var _hoisted_5$31 = { class: "x11-row" };
 var _hoisted_6$31 = { class: "x11-row-label" };
-var _hoisted_7$29 = { class: "x11-row" };
+var _hoisted_7$28 = { class: "x11-row" };
 var _hoisted_8$25 = { class: "x11-row-label" };
 var _hoisted_9$24 = { class: "x11-row" };
 var _hoisted_10$22 = { class: "x11-hint" };
@@ -129459,7 +129939,7 @@ var X11DesktopTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_defau
 			}), createBaseVNode("p", null, toDisplayString(unref(t)("x11.tab.connecting")), 1)])) : status.value === "connected" ? (openBlock(), createElementBlock("div", _hoisted_3$35, [
 				createBaseVNode("div", _hoisted_4$33, [
 					createBaseVNode("div", _hoisted_5$31, [createBaseVNode("span", _hoisted_6$31, toDisplayString(unref(t)("conn.host")), 1), createBaseVNode("span", null, toDisplayString(hostDisplay.value), 1)]),
-					createBaseVNode("div", _hoisted_7$29, [createBaseVNode("span", _hoisted_8$25, toDisplayString(unref(t)("x11.tab.desktopEnv")), 1), createBaseVNode("span", null, toDisplayString(desktopEnvDisplay.value), 1)]),
+					createBaseVNode("div", _hoisted_7$28, [createBaseVNode("span", _hoisted_8$25, toDisplayString(unref(t)("x11.tab.desktopEnv")), 1), createBaseVNode("span", null, toDisplayString(desktopEnvDisplay.value), 1)]),
 					createBaseVNode("div", _hoisted_9$24, [_cache[0] || (_cache[0] = createBaseVNode("span", { class: "x11-row-label" }, "X Server", -1)), createBaseVNode("span", null, toDisplayString(localXServerName.value), 1)])
 				]),
 				createBaseVNode("p", _hoisted_10$22, toDisplayString(unref(t)("x11.tab.localXHint")), 1),
@@ -129501,7 +129981,7 @@ var _hoisted_6$30 = {
 	key: 0,
 	class: "tree-loading"
 };
-var _hoisted_7$28 = [
+var _hoisted_7$27 = [
 	"data-db-row",
 	"onClick",
 	"onDblclick",
@@ -129571,11 +130051,16 @@ var DBTreePanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 				let autoOpen = "";
 				if (props.defaultDbName && dbs.includes(props.defaultDbName)) {
 					const tables = await GetTables(props.sessionId, props.defaultDbName);
+					const otherDbs = dbs.filter((d) => d !== props.defaultDbName);
 					databases.value = [{
 						name: props.defaultDbName,
 						tables,
 						loaded: true
-					}];
+					}, ...otherDbs.map((d) => ({
+						name: d,
+						tables: [],
+						loaded: false
+					}))];
 					expandedDbs.value = /* @__PURE__ */ new Set([props.defaultDbName]);
 					autoOpen = props.defaultDbName;
 				} else if (dbs.length === 1) {
@@ -130091,7 +130576,7 @@ var DBTreePanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 							size: "0.875rem"
 						}),
 						createBaseVNode("span", _hoisted_9$23, toDisplayString(db.name), 1)
-					], 42, _hoisted_7$28), expandedDbs.value.has(db.name) ? (openBlock(), createElementBlock(Fragment, { key: 0 }, [(openBlock(true), createElementBlock(Fragment, null, renderList(db.tables, (t) => {
+					], 42, _hoisted_7$27), expandedDbs.value.has(db.name) ? (openBlock(), createElementBlock(Fragment, { key: 0 }, [(openBlock(true), createElementBlock(Fragment, null, renderList(db.tables, (t) => {
 						return openBlock(), createElementBlock("div", {
 							key: t.name,
 							class: normalizeClass(["table-item", { selected: selectedTable.value === t.name && selectedDb.value === db.name }]),
@@ -130379,7 +130864,7 @@ var DBTreePanel_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-84e1866b"]]);
+}), [["__scopeId", "data-v-4c452d04"]]);
 //#endregion
 //#region src/components/DBTableStructure.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$35 = { class: "db-table-structure" };
@@ -130394,7 +130879,7 @@ var _hoisted_3$33 = {
 var _hoisted_4$31 = { class: "loading-box" };
 var _hoisted_5$29 = { class: "loading-text" };
 var _hoisted_6$29 = { class: "section" };
-var _hoisted_7$27 = { class: "section-header" };
+var _hoisted_7$26 = { class: "section-header" };
 var _hoisted_8$23 = { class: "section-title" };
 var _hoisted_9$22 = { key: 0 };
 var _hoisted_10$20 = { key: 0 };
@@ -130709,7 +131194,7 @@ var DBTableStructure_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 						onClick: onCancelLoad
 					}, toDisplayString(unref(t)("common.cancel")), 1)
 				])])) : createCommentVNode("", true),
-				createBaseVNode("div", _hoisted_6$29, [createBaseVNode("div", _hoisted_7$27, [createBaseVNode("div", _hoisted_8$23, toDisplayString(unref(t)("db.columns")), 1), createBaseVNode("button", {
+				createBaseVNode("div", _hoisted_6$29, [createBaseVNode("div", _hoisted_7$26, [createBaseVNode("div", _hoisted_8$23, toDisplayString(unref(t)("db.columns")), 1), createBaseVNode("button", {
 					class: "btn btn-default btn-sm",
 					onClick: startAddColumn
 				}, [createVNode(unref(Plus$1), { size: "0.875rem" }), createTextVNode(" " + toDisplayString(unref(t)("db.addColumn")), 1)])]), createVNode(_component_el_table, {
@@ -131135,21 +131620,17 @@ var DBTableStructure_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/
 //#endregion
 //#region src/components/DBResultGrid.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$34 = {
-	class: "db-result-grid",
-	tabindex: "0"
-};
-var _hoisted_2$33 = {
 	key: 1,
 	class: "db-empty"
 };
-var _hoisted_3$32 = ["placeholder", "onKeydown"];
+var _hoisted_2$33 = ["placeholder", "onKeydown"];
+var _hoisted_3$32 = ["title", "onClick"];
 var _hoisted_4$30 = ["title", "onClick"];
-var _hoisted_5$28 = ["title", "onClick"];
-var _hoisted_6$28 = {
+var _hoisted_5$28 = {
 	key: 0,
 	class: "more-bar"
 };
-var _hoisted_7$26 = { class: "more-info" };
+var _hoisted_6$28 = { class: "more-info" };
 var INITIAL_ROWS = 1e3;
 var ROW_STEP = 1e3;
 //#endregion
@@ -131196,6 +131677,76 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 			};
 		});
 		const tableKey = computed(() => `edit-${props.canEdit ? 1 : 0}-cols-${props.columns.map((c) => c.name).join("|")}`);
+		const gridRootEl = ref(null);
+		const selectedCell = ref(null);
+		function selectCell(row, field) {
+			selectedCell.value = {
+				row,
+				field
+			};
+			if (!editingRow.value) gridRootEl.value?.focus({ preventScroll: true });
+		}
+		function isCellSelected(row, field) {
+			const sel = selectedCell.value;
+			return !!sel && sel.row === row && sel.field === field;
+		}
+		/** el-table（编辑模式）单元格点击/右键：选中该格。 */
+		function onCellClick(row, column) {
+			const field = column?.property;
+			if (!field || !props.columns.some((c) => c.name === field)) return;
+			selectCell(row, field);
+		}
+		/** el-table 单元格右键：选中并打开菜单（element-plus 传参 row/column/cell/event）。 */
+		function onCellContextMenu(row, column, _cell, event) {
+			const field = column?.property;
+			if (!field || !props.columns.some((c) => c.name === field)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			selectCell(row, field);
+			openCellMenu(event.clientX, event.clientY);
+		}
+		const cellMenuRef = ref(null);
+		const cellMenuVisible = ref(false);
+		function openCellMenu(x, y) {
+			cellMenuVisible.value = true;
+			cellMenuRef.value?.openAt(x, y);
+		}
+		/** 编辑模式 el-table 的选中高亮（v2 只读模式在 cellRenderer 里判断）。 */
+		function cellClassName({ row, columnIndex }) {
+			const col = props.columns[columnIndex];
+			if (col && isCellSelected(row, col.name)) return "db-cell-selected";
+			return "";
+		}
+		function copySelectedCell() {
+			const sel = selectedCell.value;
+			if (sel) writeClipboard(formatCell(sel.row[sel.field]));
+			cellMenuVisible.value = false;
+		}
+		/** 整行复制为 TSV（Tab 分隔），可直接粘贴进 Excel/Numbers 分列。 */
+		function copySelectedRow() {
+			const sel = selectedCell.value;
+			if (sel) writeClipboard(props.columns.map((c) => formatCell(sel.row[c.name])).join("	"));
+			cellMenuVisible.value = false;
+		}
+		function copySelectedColumnName() {
+			const sel = selectedCell.value;
+			if (sel) writeClipboard(sel.field);
+			cellMenuVisible.value = false;
+		}
+		/**
+		* 网格容器 keydown：Ctrl/Cmd+C 复制选中单元格。用户用鼠标拖选了真实文本时
+		* 放行默认复制（尊重手动选区），与终端"有选区才复制"的语义一致。
+		*/
+		function onGridKeydown(e) {
+			if (e.type !== "keydown" || e.key !== "c" && e.key !== "C") return;
+			if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+			if (editingRow.value) return;
+			if (window.getSelection()?.toString() ?? "") return;
+			const sel = selectedCell.value;
+			if (!sel) return;
+			e.preventDefault();
+			writeClipboard(formatCell(sel.row[sel.field]));
+		}
 		const v2Columns = computed(() => {
 			return props.columns.map((col) => ({
 				key: col.name,
@@ -131204,9 +131755,18 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				width: 150,
 				flexGrow: 1,
 				sortable: true,
-				cellRenderer: ({ cellData }) => {
-					if (cellData === null) return h$3("span", { class: "cell-null" }, t("db.null"));
-					return h$3("span", { class: "cell-value" }, formatCell(cellData));
+				cellRenderer: ({ cellData, rowData }) => {
+					const content = cellData === null ? h$3("span", { class: "cell-null" }, t("db.null")) : h$3("span", { class: "cell-value" }, formatCell(cellData));
+					return h$3("div", {
+						class: ["db-cell", { "db-cell-selected": isCellSelected(rowData, col.name) }],
+						onClick: () => selectCell(rowData, col.name),
+						onContextmenu: (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							selectCell(rowData, col.name);
+							openCellMenu(e.clientX, e.clientY);
+						}
+					}, [content]);
 				}
 			}));
 		});
@@ -131404,6 +131964,7 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				pending.clear();
 				bumpPending();
 			}
+			selectedCell.value = null;
 			visibleCount.value = INITIAL_ROWS;
 		});
 		__expose({
@@ -131419,7 +131980,13 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 			const _component_el_auto_resizer = ElAutoResizer;
 			const _component_el_table_column = ElTableColumn;
 			const _component_el_table = ElTable;
-			return openBlock(), createElementBlock("div", _hoisted_1$34, [!__props.canEdit && __props.rows.length > 0 ? (openBlock(), createBlock(_component_el_auto_resizer, { key: 0 }, {
+			return openBlock(), createElementBlock("div", {
+				ref_key: "gridRootEl",
+				ref: gridRootEl,
+				class: "db-result-grid",
+				tabindex: "0",
+				onKeydown: onGridKeydown
+			}, [!__props.canEdit && __props.rows.length > 0 ? (openBlock(), createBlock(_component_el_auto_resizer, { key: 0 }, {
 				default: withCtx(({ height, width }) => [createVNode(_component_el_table_v2, {
 					columns: v2Columns.value,
 					data: __props.rows,
@@ -131435,7 +132002,7 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 					"height"
 				])]),
 				_: 1
-			})) : !__props.canEdit ? (openBlock(), createElementBlock("div", _hoisted_2$33, toDisplayString(__props.emptyText || unref(t)("db.noData")), 1)) : (openBlock(), createElementBlock(Fragment, { key: 2 }, [(openBlock(), createBlock(_component_el_table, {
+			})) : !__props.canEdit ? (openBlock(), createElementBlock("div", _hoisted_1$34, toDisplayString(__props.emptyText || unref(t)("db.noData")), 1)) : (openBlock(), createElementBlock(Fragment, { key: 2 }, [(openBlock(), createBlock(_component_el_table, {
 				key: tableKey.value,
 				ref_key: "tableRef",
 				ref: tableRef,
@@ -131446,8 +132013,11 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 				style: { "width": "100%" },
 				class: "db-result-table",
 				"empty-text": __props.emptyText,
+				"cell-class-name": cellClassName,
 				onSortChange,
-				onCellDblclick: onCellDblClick
+				onCellDblclick: onCellDblClick,
+				onCellClick,
+				onCellContextmenu: onCellContextMenu
 			}, {
 				default: withCtx(() => [(openBlock(true), createElementBlock(Fragment, null, renderList(__props.columns, (col) => {
 					return openBlock(), createBlock(_component_el_table_column, {
@@ -131472,7 +132042,7 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 							onInput: onDraftInput,
 							onKeydown: [withKeys(withModifiers(onCellEditConfirm, ["prevent"]), ["enter"]), withKeys(withModifiers(onCellEditCancel, ["prevent"]), ["escape"])],
 							onBlur: onCellEditConfirm
-						}, null, 40, _hoisted_3$32), [[vModelText, draftValue.value]]), isNullable(col.name) ? (openBlock(), createElementBlock("button", {
+						}, null, 40, _hoisted_2$33), [[vModelText, draftValue.value]]), isNullable(col.name) ? (openBlock(), createElementBlock("button", {
 							key: 0,
 							type: "button",
 							class: "null-btn",
@@ -131509,17 +132079,17 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 						class: "btn btn-ghost btn-icon btn-sm",
 						title: __props.editLabel,
 						onClick: withModifiers(($event) => emit("edit-row", row), ["stop", "prevent"])
-					}, [createVNode(unref(Pencil), { size: "0.875rem" })], 8, _hoisted_4$30), createBaseVNode("button", {
+					}, [createVNode(unref(Pencil), { size: "0.875rem" })], 8, _hoisted_3$32), createBaseVNode("button", {
 						type: "button",
 						class: "btn btn-ghost btn-icon btn-sm danger",
 						title: __props.deleteLabel,
 						onClick: withModifiers(($event) => emit("delete-row", row), ["stop", "prevent"])
-					}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_5$28)], 32)]),
+					}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_4$30)], 32)]),
 					_: 1
 				}, 8, ["label", "width"])) : createCommentVNode("", true)]),
 				_: 1
-			}, 8, ["data", "empty-text"])), __props.rows.length > visibleCount.value ? (openBlock(), createElementBlock("div", _hoisted_6$28, [
-				createBaseVNode("span", _hoisted_7$26, toDisplayString(moreText.value.showing), 1),
+			}, 8, ["data", "empty-text"])), __props.rows.length > visibleCount.value ? (openBlock(), createElementBlock("div", _hoisted_5$28, [
+				createBaseVNode("span", _hoisted_6$28, toDisplayString(moreText.value.showing), 1),
 				createBaseVNode("button", {
 					class: "btn btn-ghost btn-sm",
 					onClick: showMore
@@ -131528,10 +132098,40 @@ var DBResultGrid_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 					class: "btn btn-ghost btn-sm",
 					onClick: showAll
 				}, toDisplayString(moreText.value.all), 1)
-			])) : createCommentVNode("", true)], 64))]);
+			])) : createCommentVNode("", true)], 64)), createVNode(Menu_default, {
+				ref_key: "cellMenuRef",
+				ref: cellMenuRef,
+				visible: cellMenuVisible.value,
+				"onUpdate:visible": _cache[5] || (_cache[5] = ($event) => cellMenuVisible.value = $event)
+			}, {
+				default: withCtx(() => [
+					createVNode(MenuItem_default, {
+						class: normalizeClass({ disabled: !selectedCell.value }),
+						onClick: copySelectedCell
+					}, {
+						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("db.copyCell")), 1)]),
+						_: 1
+					}, 8, ["class"]),
+					createVNode(MenuItem_default, {
+						class: normalizeClass({ disabled: !selectedCell.value }),
+						onClick: copySelectedRow
+					}, {
+						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("db.copyRow")), 1)]),
+						_: 1
+					}, 8, ["class"]),
+					createVNode(MenuItem_default, {
+						class: normalizeClass({ disabled: !selectedCell.value }),
+						onClick: copySelectedColumnName
+					}, {
+						default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("db.copyColumnName")), 1)]),
+						_: 1
+					}, 8, ["class"])
+				]),
+				_: 1
+			}, 8, ["visible"])], 544);
 		};
 	}
-}), [["__scopeId", "data-v-adead544"]]);
+}), [["__scopeId", "data-v-dd154a9f"]]);
 //#endregion
 //#region src/composables/useDbSqlHistory.ts
 var MAX = 50;
@@ -131613,9 +132213,9 @@ var _hoisted_26$13 = {
 	key: 3,
 	class: "result-toolbar"
 };
-var _hoisted_27$13 = ["placeholder"];
-var _hoisted_28$13 = { class: "result-toolbar-right" };
-var _hoisted_29$11 = ["title"];
+var _hoisted_27$12 = ["placeholder"];
+var _hoisted_28$11 = { class: "result-toolbar-right" };
+var _hoisted_29$10 = ["title"];
 var _hoisted_30$10 = {
 	key: 4,
 	class: "result-grid"
@@ -132401,7 +133001,7 @@ Request: ${input}`
 						"onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => resultFilter.value = $event),
 						class: "result-filter",
 						placeholder: unref(t)("db.filterResults")
-					}, null, 8, _hoisted_27$13), [[vModelText, resultFilter.value]]), createBaseVNode("div", _hoisted_28$13, [
+					}, null, 8, _hoisted_27$12), [[vModelText, resultFilter.value]]), createBaseVNode("div", _hoisted_28$11, [
 						__props.tableName && !__props.isView ? (openBlock(), createElementBlock("button", {
 							key: 0,
 							class: "btn btn-default btn-sm",
@@ -132412,7 +133012,7 @@ Request: ${input}`
 							class: "btn btn-ghost btn-icon btn-sm",
 							title: unref(t)("db.exportResults"),
 							onClick: _cache[5] || (_cache[5] = withModifiers(($event) => exportMenuRef.value?.toggle($event.currentTarget), ["stop"]))
-						}, [createVNode(unref(Download), { size: "0.875rem" })], 8, _hoisted_29$11),
+						}, [createVNode(unref(Download), { size: "0.875rem" })], 8, _hoisted_29$10),
 						createVNode(Menu_default, {
 							ref_key: "exportMenuRef",
 							ref: exportMenuRef,
@@ -132903,8 +133503,8 @@ var _hoisted_23$13 = { class: "db-right-top-content" };
 var _hoisted_24$13 = { class: "db-subtabs db-subtabs-actions" };
 var _hoisted_25$12 = { class: "db-subtabs-label" };
 var _hoisted_26$12 = { class: "db-subtabs-right" };
-var _hoisted_27$12 = ["onClick"];
-var _hoisted_28$12 = { class: "db-right-top-content" };
+var _hoisted_27$11 = ["onClick"];
+var _hoisted_28$10 = { class: "db-right-top-content" };
 //#endregion
 //#region src/components/DBTabContent.vue
 var DBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ */ defineComponent({
@@ -133349,7 +133949,7 @@ var DBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 								_: 1
 							}, 8, ["onClick"]),
 							createVNode(MenuItem_default, {
-								class: normalizeClass({ disabled: !canCloseOthersOf(current) }),
+								class: normalizeClass({ disabled: !canCloseOthersOf() }),
 								onClick: ($event) => onCtxCloseOthers(current)
 							}, {
 								default: withCtx(() => [createTextVNode(toDisplayString(unref(t)("tab.closeOther")), 1)]),
@@ -133436,7 +134036,7 @@ var DBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 						])])], 64)) : doc.kind === "db-objects" ? (openBlock(), createElementBlock(Fragment, { key: 2 }, [createBaseVNode("div", _hoisted_24$13, [createBaseVNode("span", _hoisted_25$12, toDisplayString(doc.dbName) + " · " + toDisplayString(unref(t)("db.tableList")), 1), createBaseVNode("div", _hoisted_26$12, [createBaseVNode("button", {
 							class: "btn btn-ghost btn-sm",
 							onClick: ($event) => onOpenDatabase(doc.dbName, "query")
-						}, toDisplayString(unref(t)("db.dataQuery")), 9, _hoisted_27$12)])]), createBaseVNode("div", _hoisted_28$12, [createVNode(DBObjectList_default, {
+						}, toDisplayString(unref(t)("db.dataQuery")), 9, _hoisted_27$11)])]), createBaseVNode("div", _hoisted_28$10, [createVNode(DBObjectList_default, {
 							"session-id": __props.sessionId,
 							"db-name": doc.dbName,
 							onOpen: onSelectTable,
@@ -133448,7 +134048,7 @@ var DBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @_
 			], 2)]);
 		};
 	}
-}), [["__scopeId", "data-v-cf3c58f5"]]);
+}), [["__scopeId", "data-v-3b11c82d"]]);
 //#endregion
 //#region src/components/RedisTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$30 = { class: "redis-tab-content" };
@@ -133480,9 +134080,9 @@ var _hoisted_23$12 = { class: "meta-row" };
 var _hoisted_24$12 = { class: "meta-label" };
 var _hoisted_25$11 = { class: "meta-value" };
 var _hoisted_26$11 = { class: "meta-row" };
-var _hoisted_27$11 = { class: "meta-label" };
-var _hoisted_28$11 = { class: "meta-value" };
-var _hoisted_29$10 = { class: "meta-row" };
+var _hoisted_27$10 = { class: "meta-label" };
+var _hoisted_28$9 = { class: "meta-value" };
+var _hoisted_29$9 = { class: "meta-row" };
 var _hoisted_30$9 = { class: "meta-label" };
 var _hoisted_31$8 = { class: "meta-value ttl-row" };
 var _hoisted_32$8 = { style: {
@@ -133609,6 +134209,7 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			const walk = (nodes, depth) => {
 				for (const n of nodes) {
 					rows.push({
+						id: n.id,
 						node: n,
 						depth
 					});
@@ -133618,6 +134219,8 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			walk(keyTree.value, 0);
 			return rows;
 		});
+		const listItems = computed(() => treeMode.value ? visibleTreeRows.value : keys.value);
+		const listKeyField = computed(() => treeMode.value ? "id" : "name");
 		function typeIcon(type) {
 			switch (type) {
 				case "hash": return TableProperties;
@@ -133832,8 +134435,7 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			saving.value = true;
 			try {
 				const key = selectedKey.value;
-				const t = selectedKeyInfo.value?.type;
-				switch (t) {
+				switch (selectedKeyInfo.value?.type) {
 					case "string":
 						await RedisSetString(props.sessionId, key, stringValue.value);
 						break;
@@ -134008,6 +134610,7 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			const _component_el_option = ElOption;
 			const _component_el_select = ElSelect;
 			const _component_el_input = ElInput;
+			const _component_RecycleScroller = resolveComponent("RecycleScroller");
 			const _component_el_input_number = ElInputNumber;
 			const _component_el_button = ElButton;
 			const _component_el_table_column = ElTableColumn;
@@ -134087,49 +134690,54 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 							style: { "flex-shrink": "0" }
 						}, [createVNode(unref(Plus$1), { size: "0.875rem" })], 8, _hoisted_5$24)
 					]),
-					withDirectives((openBlock(), createElementBlock("div", _hoisted_6$24, [keys.value.length === 0 && !loading.value ? (openBlock(), createElementBlock("div", _hoisted_7$22, toDisplayString(unref(t)("redis.noKeys")), 1)) : treeMode.value ? (openBlock(true), createElementBlock(Fragment, { key: 1 }, renderList(visibleTreeRows.value, (row) => {
-						return openBlock(), createElementBlock(Fragment, { key: row.node.id }, [row.node.children.length > 0 ? (openBlock(), createElementBlock("div", {
+					withDirectives((openBlock(), createElementBlock("div", _hoisted_6$24, [keys.value.length === 0 && !loading.value ? (openBlock(), createElementBlock("div", _hoisted_7$22, toDisplayString(unref(t)("redis.noKeys")), 1)) : (openBlock(), createBlock(_component_RecycleScroller, {
+						key: 1,
+						items: listItems.value,
+						"item-size": 28,
+						"key-field": listKeyField.value,
+						class: "redis-scroller"
+					}, {
+						default: withCtx(({ item }) => [treeMode.value ? (openBlock(), createElementBlock(Fragment, { key: 0 }, [item.node.children.length > 0 ? (openBlock(), createElementBlock("div", {
 							key: 0,
 							class: "db-header",
-							style: normalizeStyle({ paddingLeft: 8 + row.depth * 18 + "px" }),
-							onClick: ($event) => onToggleFolder(row.node.id)
+							style: normalizeStyle({ paddingLeft: 8 + item.depth * 18 + "px" }),
+							onClick: ($event) => onToggleFolder(item.node.id)
 						}, [
 							createBaseVNode("span", {
 								class: "db-arrow",
-								onClick: withModifiers(($event) => onToggleFolder(row.node.id), ["stop"])
-							}, [(openBlock(), createBlock(resolveDynamicComponent(expandedFolders.value.has(row.node.id) ? unref(ChevronDown) : unref(ChevronRight)), { size: "0.75rem" }))], 8, _hoisted_9$18),
+								onClick: withModifiers(($event) => onToggleFolder(item.node.id), ["stop"])
+							}, [(openBlock(), createBlock(resolveDynamicComponent(expandedFolders.value.has(item.node.id) ? unref(ChevronDown) : unref(ChevronRight)), { size: "0.75rem" }))], 8, _hoisted_9$18),
 							createVNode(unref(Folder), {
 								class: "db-icon",
 								size: "0.875rem"
 							}),
-							createBaseVNode("span", _hoisted_10$16, toDisplayString(row.node.label), 1)
+							createBaseVNode("span", _hoisted_10$16, toDisplayString(item.node.label), 1)
 						], 12, _hoisted_8$19)) : (openBlock(), createElementBlock("div", {
 							key: 1,
-							class: normalizeClass(["table-item", { selected: selectedKey.value === row.node.keyName }]),
-							style: normalizeStyle({ paddingLeft: 8 + row.depth * 18 + "px" }),
-							onClick: ($event) => onSelectTreeKey(row.node)
+							class: normalizeClass(["table-item", { selected: selectedKey.value === item.node.keyName }]),
+							style: normalizeStyle({ paddingLeft: 8 + item.depth * 18 + "px" }),
+							onClick: ($event) => onSelectTreeKey(item.node)
 						}, [
 							_cache[22] || (_cache[22] = createBaseVNode("span", { class: "table-icon-spacer" }, null, -1)),
-							(openBlock(), createBlock(resolveDynamicComponent(typeIcon(row.node.keyType)), {
+							(openBlock(), createBlock(resolveDynamicComponent(typeIcon(item.node.keyType)), {
 								class: "table-icon",
 								size: "0.875rem"
 							})),
-							createBaseVNode("span", _hoisted_12$14, toDisplayString(row.node.label), 1)
-						], 14, _hoisted_11$14))], 64);
-					}), 128)) : (openBlock(true), createElementBlock(Fragment, { key: 2 }, renderList(keys.value, (keyInfo) => {
-						return openBlock(), createElementBlock("div", {
-							key: keyInfo.name,
-							class: normalizeClass(["table-item", { selected: selectedKey.value === keyInfo.name }]),
-							onClick: ($event) => onSelectKey(keyInfo)
+							createBaseVNode("span", _hoisted_12$14, toDisplayString(item.node.label), 1)
+						], 14, _hoisted_11$14))], 64)) : (openBlock(), createElementBlock("div", {
+							key: 1,
+							class: normalizeClass(["table-item", { selected: selectedKey.value === item.name }]),
+							onClick: ($event) => onSelectKey(item)
 						}, [
 							_cache[23] || (_cache[23] = createBaseVNode("span", { class: "table-icon-spacer" }, null, -1)),
-							(openBlock(), createBlock(resolveDynamicComponent(typeIcon(keyInfo.type)), {
+							(openBlock(), createBlock(resolveDynamicComponent(typeIcon(item.type)), {
 								class: "table-icon",
 								size: "0.875rem"
 							})),
-							createBaseVNode("span", _hoisted_14$14, toDisplayString(keyInfo.name), 1)
-						], 10, _hoisted_13$14);
-					}), 128))])), [[_directive_loading, loading.value]]),
+							createBaseVNode("span", _hoisted_14$14, toDisplayString(item.name), 1)
+						], 10, _hoisted_13$14))]),
+						_: 1
+					}, 8, ["items", "key-field"]))])), [[_directive_loading, loading.value]]),
 					createBaseVNode("div", _hoisted_15$14, [
 						createBaseVNode("span", _hoisted_16$14, toDisplayString(unref(t)("redis.scanCount", { n: keys.value.length })), 1),
 						_cache[24] || (_cache[24] = createBaseVNode("span", { style: { "flex": "1" } }, null, -1)),
@@ -134174,8 +134782,8 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 						onClick: _cache[5] || (_cache[5] = ($event) => treeOpen.value = !treeOpen.value)
 					}, [createVNode(unref(PanelLeft), { size: "0.875rem" })], 8, _hoisted_22$12),
 					createBaseVNode("div", _hoisted_23$12, [createBaseVNode("span", _hoisted_24$12, toDisplayString(unref(t)("redis.keyName")), 1), createBaseVNode("span", _hoisted_25$11, toDisplayString(selectedKey.value), 1)]),
-					createBaseVNode("div", _hoisted_26$11, [createBaseVNode("span", _hoisted_27$11, toDisplayString(unref(t)("redis.type")), 1), createBaseVNode("span", _hoisted_28$11, toDisplayString(selectedKeyInfo.value?.type || "-"), 1)]),
-					createBaseVNode("div", _hoisted_29$10, [createBaseVNode("span", _hoisted_30$9, toDisplayString(unref(t)("redis.ttl")), 1), createBaseVNode("span", _hoisted_31$8, [
+					createBaseVNode("div", _hoisted_26$11, [createBaseVNode("span", _hoisted_27$10, toDisplayString(unref(t)("redis.type")), 1), createBaseVNode("span", _hoisted_28$9, toDisplayString(selectedKeyInfo.value?.type || "-"), 1)]),
+					createBaseVNode("div", _hoisted_29$9, [createBaseVNode("span", _hoisted_30$9, toDisplayString(unref(t)("redis.ttl")), 1), createBaseVNode("span", _hoisted_31$8, [
 						createVNode(_component_el_input_number, {
 							modelValue: editTTL.value,
 							"onUpdate:modelValue": _cache[6] || (_cache[6] = ($event) => editTTL.value = $event),
@@ -134752,7 +135360,7 @@ var RedisTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			}, 8, ["modelValue", "title"])]);
 		};
 	}
-}), [["__scopeId", "data-v-27ec85a9"]]);
+}), [["__scopeId", "data-v-4ca2c055"]]);
 //#endregion
 //#region src/components/MongoDBCollectionView.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$29 = { class: "mongo-collection-view" };
@@ -134787,31 +135395,29 @@ var _hoisted_16$13 = {
 	class: "result-grid"
 };
 var _hoisted_17$13 = { class: "result-table-wrap" };
-var _hoisted_18$12 = ["onClick"];
-var _hoisted_19$11 = ["onClick"];
-var _hoisted_20$11 = { class: "result-footer" };
-var _hoisted_21$11 = { class: "result-count" };
-var _hoisted_22$11 = {
+var _hoisted_18$12 = { class: "result-footer" };
+var _hoisted_19$11 = { class: "result-count" };
+var _hoisted_20$11 = {
 	key: 4,
 	class: "db-placeholder"
 };
-var _hoisted_23$11 = {
+var _hoisted_21$11 = {
 	key: 1,
 	class: "indexes-section"
 };
-var _hoisted_24$11 = {
+var _hoisted_22$11 = {
 	key: 0,
 	class: "loading-overlay"
 };
-var _hoisted_25$10 = { class: "loading-box" };
-var _hoisted_26$10 = { class: "loading-text" };
-var _hoisted_27$10 = { style: {
+var _hoisted_23$11 = { class: "loading-box" };
+var _hoisted_24$11 = { class: "loading-text" };
+var _hoisted_25$10 = { style: {
 	"margin-bottom": "0.5rem",
 	"display": "flex",
 	"justify-content": "flex-end"
 } };
-var _hoisted_28$10 = ["onClick"];
-var _hoisted_29$9 = {
+var _hoisted_26$10 = ["onClick"];
+var _hoisted_27$9 = {
 	key: 0,
 	class: "error-msg",
 	style: { "margin-top": "0.5rem" }
@@ -134887,6 +135493,47 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 				cols.splice(idIdx, 1);
 				cols.unshift("_id");
 			}
+			return cols;
+		});
+		const v2Columns = computed(() => {
+			const cols = columns.value.map((col) => ({
+				key: col,
+				dataKey: col,
+				title: col,
+				width: 150,
+				flexGrow: 1,
+				cellRenderer: ({ cellData, rowData }) => {
+					return h$3("span", {
+						class: {
+							"cell-value": true,
+							"cell-null": cellData === null || cellData === void 0
+						},
+						onDblclick: () => onRowDblClick(rowData)
+					}, formatCellValue(cellData));
+				}
+			}));
+			cols.push({
+				key: "__actions",
+				dataKey: "__actions",
+				title: "",
+				width: 80,
+				flexGrow: 0,
+				cellRenderer: ({ rowData }) => {
+					return h$3("div", { class: "v2-row-actions" }, [h$3("button", {
+						class: "btn btn-ghost btn-icon btn-sm",
+						onClick: (e) => {
+							e.stopPropagation();
+							onRowDblClick(rowData);
+						}
+					}, h$3(Pencil, { size: "0.875rem" })), h$3("button", {
+						class: "btn btn-ghost btn-icon btn-sm danger",
+						onClick: (e) => {
+							e.stopPropagation();
+							deleteDocument(rowData);
+						}
+					}, h$3(Trash2, { size: "0.875rem" }))]);
+				}
+			});
 			return cols;
 		});
 		const indexes = ref([]);
@@ -135078,9 +135725,11 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 			nextTick(() => executeQuery());
 		});
 		return (_ctx, _cache) => {
+			const _component_el_table_v2 = ElTableV2;
+			const _component_el_auto_resizer = ElAutoResizer;
+			const _component_el_pagination = ElPagination;
 			const _component_el_table_column = ElTableColumn;
 			const _component_el_table = ElTable;
-			const _component_el_pagination = ElPagination;
 			const _component_el_input = ElInput;
 			const _component_el_form_item = ElFormItem;
 			const _component_el_switch = ElSwitch;
@@ -135162,45 +135811,22 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 							class: "btn btn-default btn-sm result-toolbar-add",
 							onClick: openNewDocument
 						}, [createVNode(unref(Plus$1), { size: "0.875rem" }), createTextVNode(" " + toDisplayString(unref(t)("mongodb.newDocument")), 1)])])) : createCommentVNode("", true),
-						filteredTableData.value.length > 0 ? (openBlock(), createElementBlock("div", _hoisted_16$13, [createBaseVNode("div", _hoisted_17$13, [createVNode(_component_el_table, {
-							data: filteredTableData.value,
-							border: "",
-							size: "small",
-							style: { "width": "100%" },
-							class: "db-result-table",
-							"empty-text": unref(t)("db.noData"),
-							onRowDblclick: onRowDblClick
-						}, {
-							default: withCtx(() => [(openBlock(true), createElementBlock(Fragment, null, renderList(columns.value, (col) => {
-								return openBlock(), createBlock(_component_el_table_column, {
-									key: col,
-									prop: col,
-									label: col,
-									"min-width": unref(uiPx)(120),
-									"show-overflow-tooltip": ""
-								}, {
-									default: withCtx(({ row }) => [createBaseVNode("span", { class: normalizeClass(["cell-value", { "cell-null": row[col] === null || row[col] === void 0 }]) }, toDisplayString(formatCellValue(row[col])), 3)]),
-									_: 2
-								}, 1032, [
-									"prop",
-									"label",
-									"min-width"
-								]);
-							}), 128)), createVNode(_component_el_table_column, {
-								width: unref(uiPx)(80),
-								fixed: "right"
-							}, {
-								default: withCtx(({ row }) => [createBaseVNode("button", {
-									class: "btn btn-ghost btn-icon btn-sm",
-									onClick: withModifiers(($event) => onRowDblClick(row), ["stop"])
-								}, [createVNode(unref(Pencil), { size: "0.875rem" })], 8, _hoisted_18$12), createBaseVNode("button", {
-									class: "btn btn-ghost btn-icon btn-sm danger",
-									onClick: withModifiers(($event) => deleteDocument(row), ["stop"])
-								}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_19$11)]),
-								_: 1
-							}, 8, ["width"])]),
+						filteredTableData.value.length > 0 ? (openBlock(), createElementBlock("div", _hoisted_16$13, [createBaseVNode("div", _hoisted_17$13, [createVNode(_component_el_auto_resizer, null, {
+							default: withCtx(({ height, width }) => [createVNode(_component_el_table_v2, {
+								columns: v2Columns.value,
+								data: filteredTableData.value,
+								width,
+								height,
+								"row-height": 28,
+								fixed: ""
+							}, null, 8, [
+								"columns",
+								"data",
+								"width",
+								"height"
+							])]),
 							_: 1
-						}, 8, ["data", "empty-text"])]), createBaseVNode("div", _hoisted_20$11, [createBaseVNode("span", _hoisted_21$11, toDisplayString(filteredTableData.value.length) + toDisplayString(resultFilter.value ? ` / ${tableData.value.length}` : "") + " " + toDisplayString(unref(t)("db.rows")), 1), createVNode(_component_el_pagination, {
+						})]), createBaseVNode("div", _hoisted_18$12, [createBaseVNode("span", _hoisted_19$11, toDisplayString(filteredTableData.value.length) + toDisplayString(resultFilter.value ? ` / ${tableData.value.length}` : "") + " " + toDisplayString(unref(t)("db.rows")), 1), createVNode(_component_el_pagination, {
 							background: "",
 							layout: "sizes, prev, pager, next",
 							"page-sizes": [
@@ -135220,12 +135846,12 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 							"page-size",
 							"total",
 							"current-page"
-						])])])) : !queryLoading.value ? (openBlock(), createElementBlock("div", _hoisted_22$11, [createBaseVNode("span", null, toDisplayString(unref(t)("db.noData")), 1)])) : createCommentVNode("", true)
+						])])])) : !queryLoading.value ? (openBlock(), createElementBlock("div", _hoisted_20$11, [createBaseVNode("span", null, toDisplayString(unref(t)("db.noData")), 1)])) : createCommentVNode("", true)
 					])
 				])) : createCommentVNode("", true),
-				activeSubTab.value === "indexes" ? (openBlock(), createElementBlock("div", _hoisted_23$11, [
-					indexLoading.value ? (openBlock(), createElementBlock("div", _hoisted_24$11, [createBaseVNode("div", _hoisted_25$10, [_cache[15] || (_cache[15] = createBaseVNode("div", { class: "spinner" }, null, -1)), createBaseVNode("span", _hoisted_26$10, toDisplayString(unref(t)("db.loading")), 1)])])) : createCommentVNode("", true),
-					createBaseVNode("div", _hoisted_27$10, [createBaseVNode("button", {
+				activeSubTab.value === "indexes" ? (openBlock(), createElementBlock("div", _hoisted_21$11, [
+					indexLoading.value ? (openBlock(), createElementBlock("div", _hoisted_22$11, [createBaseVNode("div", _hoisted_23$11, [_cache[15] || (_cache[15] = createBaseVNode("div", { class: "spinner" }, null, -1)), createBaseVNode("span", _hoisted_24$11, toDisplayString(unref(t)("db.loading")), 1)])])) : createCommentVNode("", true),
+					createBaseVNode("div", _hoisted_25$10, [createBaseVNode("button", {
 						class: "btn btn-default btn-sm",
 						onClick: openNewIndexDialog
 					}, [createVNode(unref(Plus$1), { size: "0.875rem" }), createTextVNode(" " + toDisplayString(unref(t)("db.addIndex")), 1)])]),
@@ -135264,7 +135890,7 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 									class: "btn btn-ghost btn-icon btn-sm",
 									style: { "color": "var(--error)" },
 									onClick: ($event) => dropIndex(row.name)
-								}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_28$10)) : createCommentVNode("", true)]),
+								}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_26$10)) : createCommentVNode("", true)]),
 								_: 1
 							}, 8, ["width"])
 						]),
@@ -135342,13 +135968,13 @@ var MongoDBCollectionView_default = /*#__PURE__*/ _plugin_vue_export_helper_defa
 						"onUpdate:modelValue": _cache[11] || (_cache[11] = ($event) => docEditorText.value = $event),
 						lang: "json",
 						class: "doc-editor"
-					}, null, 8, ["modelValue"]), docEditorError.value ? (openBlock(), createElementBlock("div", _hoisted_29$9, toDisplayString(docEditorError.value), 1)) : createCommentVNode("", true)]),
+					}, null, 8, ["modelValue"]), docEditorError.value ? (openBlock(), createElementBlock("div", _hoisted_27$9, toDisplayString(docEditorError.value), 1)) : createCommentVNode("", true)]),
 					_: 1
 				}, 8, ["modelValue", "title"])
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-02c5425a"]]);
+}), [["__scopeId", "data-v-7081284e"]]);
 //#endregion
 //#region src/components/MongoDBTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$28 = { class: "mongodb-tab-content" };
@@ -135406,8 +136032,8 @@ var _hoisted_24$10 = {
 };
 var _hoisted_25$9 = { class: "mongo-objects-header" };
 var _hoisted_26$9 = { class: "mongo-objects-title" };
-var _hoisted_27$9 = { class: "object-toolbar" };
-var _hoisted_28$9 = ["placeholder"];
+var _hoisted_27$8 = { class: "object-toolbar" };
+var _hoisted_28$8 = ["placeholder"];
 var _hoisted_29$8 = ["onClick"];
 var _hoisted_30$8 = ["onClick"];
 var _hoisted_31$7 = ["title", "onClick"];
@@ -136008,11 +136634,11 @@ var MongoDBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(
 							"collection-name"
 						])) : tab.kind === "objects" ? (openBlock(), createElementBlock("div", _hoisted_24$10, [
 							createBaseVNode("div", _hoisted_25$9, [createBaseVNode("span", _hoisted_26$9, toDisplayString(tab.dbName) + " · " + toDisplayString(unref(t)("mongodb.collectionList")), 1)]),
-							createBaseVNode("div", _hoisted_27$9, [withDirectives(createBaseVNode("input", {
+							createBaseVNode("div", _hoisted_27$8, [withDirectives(createBaseVNode("input", {
 								"onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => objectsSearch.value = $event),
 								class: "object-search",
 								placeholder: unref(t)("db.searchTables")
-							}, null, 8, _hoisted_28$9), [[vModelText, objectsSearch.value]]), createBaseVNode("button", {
+							}, null, 8, _hoisted_28$8), [[vModelText, objectsSearch.value]]), createBaseVNode("button", {
 								class: "btn btn-default btn-sm",
 								onClick: ($event) => onObjectsNewCollection(tab.dbName)
 							}, [createVNode(unref(Plus$1), { size: "0.875rem" }), createTextVNode(" " + toDisplayString(unref(t)("mongodb.newCollection")), 1)], 8, _hoisted_29$8)]),
@@ -136248,7 +136874,7 @@ var MongoDBTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-d7258b78"]]);
+}), [["__scopeId", "data-v-134084c6"]]);
 //#endregion
 //#region src/components/ElasticsearchIndexView.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$27 = { class: "es-index-view" };
@@ -136289,38 +136915,36 @@ var _hoisted_16$11 = {
 	class: "result-grid"
 };
 var _hoisted_17$11 = { class: "result-table-wrap" };
-var _hoisted_18$10 = ["onClick"];
-var _hoisted_19$9 = ["onClick"];
-var _hoisted_20$9 = { class: "result-footer" };
-var _hoisted_21$9 = {
+var _hoisted_18$10 = { class: "result-footer" };
+var _hoisted_19$9 = {
 	key: 0,
 	class: "result-count"
 };
-var _hoisted_22$9 = {
+var _hoisted_20$9 = {
 	key: 4,
 	class: "select-hint"
 };
-var _hoisted_23$9 = {
+var _hoisted_21$9 = {
 	key: 1,
 	class: "json-pane"
 };
-var _hoisted_24$9 = {
+var _hoisted_22$9 = {
 	key: 0,
 	class: "tree-loading"
 };
-var _hoisted_25$8 = {
+var _hoisted_23$9 = {
 	key: 1,
 	class: "json-pre"
 };
-var _hoisted_26$8 = {
+var _hoisted_24$9 = {
 	key: 2,
 	class: "json-pane"
 };
-var _hoisted_27$8 = {
+var _hoisted_25$8 = {
 	key: 0,
 	class: "tree-loading"
 };
-var _hoisted_28$8 = {
+var _hoisted_26$8 = {
 	key: 1,
 	class: "json-pre"
 };
@@ -136378,6 +137002,48 @@ var ElasticsearchIndexView_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 			cols.add("_id");
 			for (const row of tableData.value) for (const k of Object.keys(row)) if (k !== "_index" && k !== "_score") cols.add(k);
 			return ["_id", ...[...cols].filter((c) => c !== "_id").sort()].slice(0, 40);
+		});
+		const v2Columns = computed(() => {
+			const cols = columns.value.map((col) => ({
+				key: col,
+				dataKey: col,
+				title: col,
+				width: 150,
+				flexGrow: 1,
+				cellRenderer: ({ cellData, rowData }) => {
+					return h$3("span", {
+						class: {
+							"cell-value": true,
+							"cell-null": cellData === null || cellData === void 0
+						},
+						onClick: () => onRowClick(rowData),
+						onDblclick: () => onRowDblClick(rowData)
+					}, formatCellValue(cellData));
+				}
+			}));
+			cols.push({
+				key: "__actions",
+				dataKey: "__actions",
+				title: "",
+				width: 80,
+				flexGrow: 0,
+				cellRenderer: ({ rowData }) => {
+					return h$3("div", { class: "v2-row-actions" }, [h$3("button", {
+						class: "btn btn-ghost btn-icon btn-sm",
+						onClick: (e) => {
+							e.stopPropagation();
+							onRowDblClick(rowData);
+						}
+					}, h$3(Pencil, { size: "0.875rem" })), h$3("button", {
+						class: "btn btn-ghost btn-icon btn-sm danger",
+						onClick: (e) => {
+							e.stopPropagation();
+							deleteDocument(rowData);
+						}
+					}, h$3(Trash2, { size: "0.875rem" }))]);
+				}
+			});
+			return cols;
 		});
 		const currentPage = computed(() => Math.floor(pageFrom.value / pageSize.value) + 1);
 		onMounted(() => {
@@ -136532,8 +137198,8 @@ var ElasticsearchIndexView_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 		return (_ctx, _cache) => {
 			const _component_el_radio_button = ElRadioButton;
 			const _component_el_radio_group = ElRadioGroup;
-			const _component_el_table_column = ElTableColumn;
-			const _component_el_table = ElTable;
+			const _component_el_table_v2 = ElTableV2;
+			const _component_el_auto_resizer = ElAutoResizer;
 			const _component_el_pagination = ElPagination;
 			const _component_el_input = ElInput;
 			const _component_el_form_item = ElFormItem;
@@ -136617,46 +137283,22 @@ var ElasticsearchIndexView_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 							class: "btn btn-default btn-sm result-toolbar-add",
 							onClick: openNewDocument
 						}, [createVNode(unref(Plus$1), { size: "0.875rem" }), createTextVNode(" " + toDisplayString(unref(t)("es.newDocument")), 1)])])) : createCommentVNode("", true),
-						columns.value.length > 0 ? (openBlock(), createElementBlock("div", _hoisted_16$11, [createBaseVNode("div", _hoisted_17$11, [createVNode(_component_el_table, {
-							data: filteredTableData.value,
-							border: "",
-							size: "small",
-							style: { "width": "100%" },
-							class: "db-result-table",
-							"empty-text": unref(t)("db.noData"),
-							onRowClick,
-							onRowDblclick: onRowDblClick
-						}, {
-							default: withCtx(() => [(openBlock(true), createElementBlock(Fragment, null, renderList(columns.value, (col) => {
-								return openBlock(), createBlock(_component_el_table_column, {
-									key: col,
-									prop: col,
-									label: col,
-									"min-width": unref(uiPx)(120),
-									"show-overflow-tooltip": ""
-								}, {
-									default: withCtx(({ row }) => [createBaseVNode("span", { class: normalizeClass(["cell-value", { "cell-null": row[col] === null || row[col] === void 0 }]) }, toDisplayString(formatCellValue(row[col])), 3)]),
-									_: 2
-								}, 1032, [
-									"prop",
-									"label",
-									"min-width"
-								]);
-							}), 128)), createVNode(_component_el_table_column, {
-								width: unref(uiPx)(80),
-								fixed: "right"
-							}, {
-								default: withCtx(({ row }) => [createBaseVNode("button", {
-									class: "btn btn-ghost btn-icon btn-sm",
-									onClick: withModifiers(($event) => onRowDblClick(row), ["stop"])
-								}, [createVNode(unref(Pencil), { size: "0.875rem" })], 8, _hoisted_18$10), createBaseVNode("button", {
-									class: "btn btn-ghost btn-icon btn-sm danger",
-									onClick: withModifiers(($event) => deleteDocument(row), ["stop"])
-								}, [createVNode(unref(Trash2), { size: "0.875rem" })], 8, _hoisted_19$9)]),
-								_: 1
-							}, 8, ["width"])]),
+						columns.value.length > 0 ? (openBlock(), createElementBlock("div", _hoisted_16$11, [createBaseVNode("div", _hoisted_17$11, [createVNode(_component_el_auto_resizer, null, {
+							default: withCtx(({ height, width }) => [createVNode(_component_el_table_v2, {
+								columns: v2Columns.value,
+								data: filteredTableData.value,
+								width,
+								height,
+								"row-height": 28,
+								fixed: ""
+							}, null, 8, [
+								"columns",
+								"data",
+								"width",
+								"height"
+							])]),
 							_: 1
-						}, 8, ["data", "empty-text"])]), createBaseVNode("div", _hoisted_20$9, [searchResult.value ? (openBlock(), createElementBlock("span", _hoisted_21$9, toDisplayString(filteredTableData.value.length) + toDisplayString(resultFilter.value ? ` / ${tableData.value.length}` : "") + " hits · " + toDisplayString(searchResult.value.took) + "ms ", 1)) : createCommentVNode("", true), createVNode(_component_el_pagination, {
+						})]), createBaseVNode("div", _hoisted_18$10, [searchResult.value ? (openBlock(), createElementBlock("span", _hoisted_19$9, toDisplayString(filteredTableData.value.length) + toDisplayString(resultFilter.value ? ` / ${tableData.value.length}` : "") + " hits · " + toDisplayString(searchResult.value.took) + "ms ", 1)) : createCommentVNode("", true), createVNode(_component_el_pagination, {
 							background: "",
 							layout: "sizes, prev, pager, next",
 							"page-sizes": [
@@ -136676,9 +137318,9 @@ var ElasticsearchIndexView_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 							"page-size",
 							"total",
 							"current-page"
-						])])])) : !queryLoading.value && !queryError.value ? (openBlock(), createElementBlock("div", _hoisted_22$9, toDisplayString(unref(t)("es.selectHint")), 1)) : createCommentVNode("", true)
+						])])])) : !queryLoading.value && !queryError.value ? (openBlock(), createElementBlock("div", _hoisted_20$9, toDisplayString(unref(t)("es.selectHint")), 1)) : createCommentVNode("", true)
 					])
-				])) : activeSubTab.value === "mapping" ? (openBlock(), createElementBlock("div", _hoisted_23$9, [mappingLoading.value ? (openBlock(), createElementBlock("div", _hoisted_24$9, toDisplayString(unref(t)("db.loading")), 1)) : (openBlock(), createElementBlock("pre", _hoisted_25$8, toDisplayString(mappingText.value || unref(t)("es.noData")), 1))])) : activeSubTab.value === "settings" ? (openBlock(), createElementBlock("div", _hoisted_26$8, [settingsLoading.value ? (openBlock(), createElementBlock("div", _hoisted_27$8, toDisplayString(unref(t)("db.loading")), 1)) : (openBlock(), createElementBlock("pre", _hoisted_28$8, toDisplayString(settingsText.value || unref(t)("es.noData")), 1))])) : createCommentVNode("", true),
+				])) : activeSubTab.value === "mapping" ? (openBlock(), createElementBlock("div", _hoisted_21$9, [mappingLoading.value ? (openBlock(), createElementBlock("div", _hoisted_22$9, toDisplayString(unref(t)("db.loading")), 1)) : (openBlock(), createElementBlock("pre", _hoisted_23$9, toDisplayString(mappingText.value || unref(t)("es.noData")), 1))])) : activeSubTab.value === "settings" ? (openBlock(), createElementBlock("div", _hoisted_24$9, [settingsLoading.value ? (openBlock(), createElementBlock("div", _hoisted_25$8, toDisplayString(unref(t)("db.loading")), 1)) : (openBlock(), createElementBlock("pre", _hoisted_26$8, toDisplayString(settingsText.value || unref(t)("es.noData")), 1))])) : createCommentVNode("", true),
 				createVNode(_component_el_dialog, {
 					modelValue: docDialogVisible.value,
 					"onUpdate:modelValue": _cache[9] || (_cache[9] = ($event) => docDialogVisible.value = $event),
@@ -136724,7 +137366,7 @@ var ElasticsearchIndexView_default = /*#__PURE__*/ _plugin_vue_export_helper_def
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-938fea7c"]]);
+}), [["__scopeId", "data-v-2a9abc30"]]);
 //#endregion
 //#region src/components/ElasticsearchTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$26 = { class: "es-tab-content" };
@@ -137642,7 +138284,7 @@ var ElasticsearchTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_de
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-60d1acf2"]]);
+}), [["__scopeId", "data-v-c5dadfd3"]]);
 //#endregion
 //#region src/components/MonitorTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$25 = { class: "monitor-tab" };
@@ -145268,10 +145910,10 @@ var K8sTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 				return crdListPath(crd, ns).split("?")[0] + "/" + encodeURIComponent(obj.metadata?.name);
 			};
 		}
-		function openFiles(pod, ev) {
+		function openFiles(pod, _ev) {
 			if (pod.status?.phase !== "Running") return;
 			__vitePreload(async () => {
-				const { launchContainerFileBrowser } = await import("./connectionLauncher-DolTrSzb.js");
+				const { launchContainerFileBrowser } = await import("./connectionLauncher-DqyBZ9Pe.js");
 				return { launchContainerFileBrowser };
 			}, __vite__mapDeps([0,1,2])).then(({ launchContainerFileBrowser }) => {
 				launchContainerFileBrowser({
@@ -145521,7 +146163,7 @@ var K8sTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-d90a5286"]]);
+}), [["__scopeId", "data-v-344efa6c"]]);
 //#endregion
 //#region src/components/ContainerTree.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$17 = { class: "db-tree-panel" };
@@ -146884,7 +147526,7 @@ var ContainersView_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* 
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-2ce76274"]]);
+}), [["__scopeId", "data-v-595a5452"]]);
 //#endregion
 //#region src/components/ImageDetailDrawer.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$12 = { class: "detail-drawer-header" };
@@ -148123,7 +148765,7 @@ var ImagesView_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__P
 			]);
 		};
 	}
-}), [["__scopeId", "data-v-bfefd8df"]]);
+}), [["__scopeId", "data-v-2df6e3b5"]]);
 //#endregion
 //#region src/components/ContainerTabContent.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$10 = { class: "container-tab" };
@@ -148455,7 +149097,8 @@ var StartTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 		"close-self",
 		"edit-connection",
 		"change-group",
-		"change-group-ids"
+		"change-group-ids",
+		"change-group-parent"
 	],
 	setup(__props, { emit: __emit }) {
 		const props = __props;
@@ -149405,7 +150048,7 @@ var StartTabContent_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/*
 			], 2);
 		};
 	}
-}), [["__scopeId", "data-v-fa5a3f5b"]]);
+}), [["__scopeId", "data-v-3e40fc74"]]);
 //#endregion
 //#region src/services/terminalAgent.ts
 var panelTitleIndex = /* @__PURE__ */ new Map();
@@ -149840,7 +150483,12 @@ function toAgentToolEntry(t) {
 	};
 }
 async function callRemoteMCPTool(qualifiedName, args) {
-	return CallMCPTool(qualifiedName, args ?? {});
+	try {
+		return await CallMCPTool(qualifiedName, args ?? {});
+	} catch (e) {
+		if ((e instanceof Error ? e.message : String(e)).includes("reconnect failed")) throw new Error(`MCP 服务器连接已断开，自动重连失败，请检查服务器状态或在设置中手动重连 (${qualifiedName})`);
+		throw e;
+	}
 }
 var REMOTE_TOOL_PREFIX = "mcp__";
 function isRemoteMCPTool(name) {
@@ -152213,7 +152861,7 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 			msgCtxMenuVisible.value = false;
 			const id = aiStore.currentSessionId;
 			const s = aiStore.sessions.find((x) => x.id === id);
-			if (!s) return;
+			if (!id || !s) return;
 			try {
 				const md = aiStore.exportSessionMarkdown(id);
 				const safe = s.name.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
@@ -152616,8 +153264,8 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 				const range = document.createRange();
 				range.setStart(textNode, 1);
 				range.collapse(true);
-				sel.removeAllRanges();
-				sel.addRange(range);
+				sel?.removeAllRanges();
+				sel?.addRange(range);
 			}
 			syncInputText();
 			refreshHashDropdown();
@@ -152642,8 +153290,8 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 				const range = document.createRange();
 				range.setStart(textNode, 1);
 				range.collapse(true);
-				sel.removeAllRanges();
-				sel.addRange(range);
+				sel?.removeAllRanges();
+				sel?.addRange(range);
 			}
 			syncInputText();
 			refreshSkillDropdown();
@@ -152898,7 +153546,7 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 			clearAttachments();
 			scrollToBottom();
 			if (cmd) aiStore.addCommandCard(cmd.name, cmd.args);
-			await runAgent(cmd ? "" : final, skillName, skillBody, cmd ? final : void 0, pending);
+			await runAgent(cmd ? "" : final, skillName || void 0, skillBody || void 0, cmd ? final : void 0, pending);
 			scrollToBottom();
 		}
 		function onStop() {
@@ -152957,7 +153605,7 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 			}
 			function onMouseUp() {
 				isResizing.value = false;
-				sidebarWidth.value = el.offsetWidth;
+				sidebarWidth.value = el?.offsetWidth ?? sidebarWidth.value;
 				if (!isMaximized.value) useLocalStateStore().update({ aiSidebarWidth: sidebarWidth.value });
 				document.removeEventListener("mousemove", onMouseMove);
 				document.removeEventListener("mouseup", onMouseUp);
@@ -153458,7 +154106,7 @@ var AISidebar_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PU
 			], 6);
 		};
 	}
-}), [["__scopeId", "data-v-0362d284"]]);
+}), [["__scopeId", "data-v-580e5445"]]);
 //#endregion
 //#region src/components/SyncConflictDialog.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$6 = { class: "conflict-body" };
@@ -153837,7 +154485,7 @@ var EncryptionModeDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_defau
 		async function autoKeychainSetup() {
 			submitting.value = true;
 			try {
-				await cred.setup("keychain");
+				await cred.setup("keychain", "");
 				emit("done");
 				emit("update:visible", false);
 			} catch (e) {
@@ -153973,7 +154621,7 @@ var EncryptionModeDialog_default = /*#__PURE__*/ _plugin_vue_export_helper_defau
 			}, 8, ["model-value", "title"]);
 		};
 	}
-}), [["__scopeId", "data-v-32c63b78"]]);
+}), [["__scopeId", "data-v-2e855392"]]);
 //#endregion
 //#region src/components/CredentialUnlockDialog.vue?vue&type=script&setup=true&lang.ts
 var _hoisted_1$3 = {
@@ -155191,6 +155839,12 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 					nextTick(() => sidebarRef.value?.focusSearch());
 				}
 			},
+			toggleFilePanel: () => {
+				companionStore.toggleFiles();
+			},
+			toggleMonitor: () => {
+				companionStore.toggleMonitor();
+			},
 			openQuickCommands: () => {
 				sidebarVisible.value = true;
 				nextTick(() => sidebarRef.value?.openQuickCommands());
@@ -155281,7 +155935,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 						title: panel.title
 					}, {
 						workspaceId: tab.id,
-						targetPanelId: pid
+						targetPanelId: pid ?? void 0
 					});
 					return;
 				}
@@ -155353,7 +156007,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 						RDPHideForOverlay();
 						try {
 							await ElMessageBox.confirm(h$3("div", { style: "display:flex;flex-direction:column;gap:0.625rem" }, [h$3("span", t("tab.closeConnectedConfirm")), h$3(ElCheckbox, { "onUpdate:modelValue": (v) => {
-								dontShowAgain.value = v;
+								dontShowAgain.value = !!v;
 							} }, () => t("tab.dontShowAgain"))]), t("tab.closeConfirmTitle"), {
 								confirmButtonText: t("tab.close"),
 								cancelButtonText: t("conn.cancel"),
@@ -155458,7 +156112,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 				const dontShowAgain = ref(false);
 				try {
 					await ElMessageBox.confirm(h$3("div", { style: "display:flex;flex-direction:column;gap:0.625rem" }, [h$3("span", t("tab.closeConnectedBatchConfirm", { count: connectedCount })), h$3(ElCheckbox, { "onUpdate:modelValue": (v) => {
-						dontShowAgain.value = v;
+						dontShowAgain.value = !!v;
 					} }, () => t("tab.dontShowAgain"))]), t("tab.closeConfirmTitle"), {
 						confirmButtonText: t("tab.close"),
 						cancelButtonText: t("conn.cancel"),
@@ -155581,7 +156235,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 				return { status: "failed" };
 			}
 			const panel = panelStore.createPanel(config, config.type);
-			const displayTitle = config.name || (config.type === "local" || config.type === "wsl" ? getShellLabel$1(config.shellPath) : config.type === "serial" ? `${config.serialPort || "Serial"} (${config.serialBaudRate || 115200})` : config.type === "telnet" ? `${config.host}:${config.port}` : `${config.user}@${config.host}`);
+			const displayTitle = config.name || (config.type === "local" || config.type === "wsl" ? getShellLabel$1(config.shellPath || "") : config.type === "serial" ? `${config.serialPort || "Serial"} (${config.serialBaudRate || 115200})` : config.type === "telnet" ? `${config.host}:${config.port}` : `${config.user}@${config.host}`);
 			panelStore.updateTitle(panel.id, displayTitle);
 			panelStore.bindSession(panel.id, sessionId);
 			sessionStore.initSession(sessionId);
@@ -155720,7 +156374,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 		function onTabDragStart(_e, _tabId) {}
 		async function createLocalTerminal(shellPath, keepOpen) {
 			const panel = panelStore.createPanel(null, "local");
-			const shellName = getShellLabel$1(shellPath);
+			const shellName = getShellLabel$1(shellPath || "");
 			panelStore.updateTitle(panel.id, shellName);
 			try {
 				const config = {
@@ -155968,7 +156622,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 					createVNode(ConnectionForm_default, {
 						modelValue: showConnectionForm.value,
 						"onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => showConnectionForm.value = $event),
-						"edit-config": editConfig.value,
+						"edit-config": editConfig.value ?? void 0,
 						"default-group-id": pendingGroupId.value,
 						onSave: onSaveOnly,
 						onConnect: _cache[8] || (_cache[8] = (c, ko) => {
@@ -156068,7 +156722,7 @@ var App_default = /*#__PURE__*/ _plugin_vue_export_helper_default(/* @__PURE__ *
 			}, 8, ["locale"]);
 		};
 	}
-}), [["__scopeId", "data-v-cea6bf79"]]);
+}), [["__scopeId", "data-v-d1bcc00d"]]);
 //#endregion
 //#region src/main.ts
 thisWindow.SetTitle("uniTerm");

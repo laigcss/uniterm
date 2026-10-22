@@ -67,10 +67,11 @@ build CMakeFiles/aiops_native.dir/native_process.c.o: C_COMPILER__aiops_native_u
 #############################################
 # Link the shared library /Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so
 
-build /Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so: C_SHARED_LIBRARY_LINKER__aiops_native_Debug CMakeFiles/aiops_native.dir/native_process.c.o
+build /Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so: C_SHARED_LIBRARY_LINKER__aiops_native_Debug CMakeFiles/aiops_native.dir/native_process.c.o | /Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp/../../../libs/arm64-v8a/libaiops.so
   LANGUAGE_COMPILE_FLAGS = -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security  -D__MUSL__ -fPIC -fvisibility=hidden -Wall -O0 -g -DDEBUG -O0 -g -fno-limit-debug-info
   LINK_FLAGS = --rtlib=compiler-rt -fuse-ld=lld -Wl,--build-id=sha1 -Wl,--warn-shared-textrel -Wl,--fatal-warnings -lunwind -Wl,--no-undefined -Qunused-arguments -Wl,-z,noexecstack
-  LINK_LIBRARIES = -lace_napi.z  -lhilog_ndk.z  -lm
+  LINK_LIBRARIES = -Wl,-rpath,/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp/../../../libs/arm64-v8a  -lace_napi.z  -lhilog_ndk.z  -laiops  -lm
+  LINK_PATH = -L/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/src/main/cpp/../../../libs/arm64-v8a
   OBJECT_DIR = CMakeFiles/aiops_native.dir
   POST_BUILD = :
   PRE_LINK = :

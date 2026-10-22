@@ -81,7 +81,11 @@ if ! $SKIP_FRONTEND; then
   # --- Step 2: Sync to rawfile ---
   log "Step 2: Syncing frontend dist → harmonyos rawfile..."
   mkdir -p "$RAWFILE_DIR"
-  cp -r "$PROJECT_ROOT/frontend/dist/"* "$RAWFILE_DIR/"
+  # Mirror sync: remove stale hashed assets from older builds so the rawfile
+  # tree always matches dist exactly (hashed filenames change every build;
+  # a plain cp -r accumulates every historical version in git).
+  rm -rf "$RAWFILE_DIR"
+  cp -r "$PROJECT_ROOT/frontend/dist" "$RAWFILE_DIR"
   ok "Rawfile synced → $RAWFILE_DIR"
 else
   warn "Skipping frontend build (--skip-frontend)"

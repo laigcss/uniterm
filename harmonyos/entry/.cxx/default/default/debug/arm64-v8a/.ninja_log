@@ -2,8 +2,11 @@
 2	7	1792143726790372360	clean	c45e042cf0c9e5f5
 1	98	1791971185611265704	CMakeFiles/native_process.dir/native_process.c.o	ca60761d8792c3ab
 99	143	1791971185709794104	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libnative_process.so	1376b0bebf56cb00
-2	81	1792143731927666982	build.ninja	35e556c6620730f6
-2	532	1792143462095485752	CMakeFiles/aiops_native.dir/native_process.c.o	7596d12eb4cfa2ec
-533	700	1792143462626720505	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	1685460937c31843
-1	134	1792143731962320906	CMakeFiles/aiops_native.dir/native_process.c.o	7596d12eb4cfa2ec
-134	179	1792143732095158418	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	1685460937c31843
+2	81	1792544520507121398	build.ninja	35e556c6620730f6
+1	122	1792506777104451511	CMakeFiles/aiops_native.dir/native_process.c.o	7596d12eb4cfa2ec
+2	374	1792507350035232964	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	4eee603e302a4a7f
+1	157	1792544520549609744	CMakeFiles/aiops_native.dir/native_process.c.o	7596d12eb4cfa2ec
+157	241	1792544520705449622	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	4eee603e302a4a7f
+14	373	1792551404651955147	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	4eee603e302a4a7f
+2	335	1792565567046785390	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	4eee603e302a4a7f
+2	346	1792568193559324617	/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/libs/arm64-v8a/libaiops_native.so	4eee603e302a4a7f
