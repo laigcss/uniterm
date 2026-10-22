@@ -4,6 +4,8 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { resourceManager } from '@kit.LocalizationKit';
 import fs from '@ohos.file.fs';
 import { NativeProcess } from '../utils/NativeProcess';
+import { JSBridge, BridgeErrorCode } from '../utils/JSBridge';
+import { ClipboardHandler } from '../utils/Clipboard';
 
 const DOMAIN: number = 0x9205;
 const TAG: string = 'IndexPage';
@@ -35,21 +37,43 @@ const APP_VERSION: string = '1.0.0';
 /**
  * JSBridge 通信对象。
  *
- * 通过 controller.registerJavaScriptProxy() 注册到前端 window 上，
- * 前端可通过 window.harmonyBridge.xxx() 调用 ArkTS 方法，
- * 实现原生与前端的双向通信。
+ * 继承 JSBridge 基类获得 handler 路由能力，同时保留同步便捷方法
+ * （getAppVersion 等）。ClipboardHandler 在构造时注册 clipboard.* 系列方法。
+ *
+ * 关键设计：ArkWeb (OpenHarmony 7.0) 的 asyncMethodList 异步方法的
+ * Promise 返回值无法传回前端（实测 resolve('pong') 到达 JS 侧变成数字 0）。
+ * 因此跨端调用统一走「同步入口 + runJavaScript 回调」模式：
+ *   前端 window.harmonyBridge.invokeCallback(method, params, callId)
+ *     → ArkTS 同步接收，异步执行 handler
+ *     → 完成后 controller.runJavaScript(
+ *         "window.__unitermBridgeResolve(callId, resultJson)")
+ *     → 前端 Promise resolve
+ * invokeCallback 返回值本身无意义（同步占位 0）。
  */
-class JsBridge {
+class JsBridge extends JSBridge {
   private port: number;
   private version: string;
   private onRestartCallback: () => void;
   private onExitCallback: () => void;
+  private onPushResultCallback: (callId: string, resultJson: string) => void;
 
-  constructor(port: number, version: string, onRestart: () => void, onExit: () => void) {
+  constructor(
+    port: number,
+    version: string,
+    onRestart: () => void,
+    onExit: () => void,
+    onPushResult: (callId: string, resultJson: string) => void,
+  ) {
+    super();
     this.port = port;
     this.version = version;
     this.onRestartCallback = onRestart;
     this.onExitCallback = onExit;
+    this.onPushResultCallback = onPushResult;
+
+    // 注册剪贴板 handler — 前端通过 invokeCallback('clipboard.writeText', ...) 调用
+    const clipboard: ClipboardHandler = new ClipboardHandler();
+    clipboard.register(this);
   }
 
   /** 获取应用版本号 */
@@ -83,6 +107,26 @@ class JsBridge {
     hilog.info(DOMAIN, 'JsBridge', '前端请求退出应用');
     this.onExitCallback();
   }
+
+  /**
+   * 跨端调用同步入口（注册在 methodList）。
+   *
+   * 异步执行父类的 handler 路由，完成后通过 runJavaScript 回调推送结果，
+   * 绕开 asyncMethodList Promise 返回值序列化失败的平台缺陷。
+   */
+  invokeCallback(method: string, params: string, callId: string): number {
+    hilog.info(DOMAIN, 'JsBridge', `invokeCallback: method=${method}, callId=${callId}`);
+    super.invoke(method, params)
+      .then((resultJson: string) => {
+        this.onPushResultCallback(callId, resultJson);
+      })
+      .catch((err: Error) => {
+        const errMsg: string = err instanceof Error ? err.message : String(err);
+        this.onPushResultCallback(callId, JSBridge.fail(BridgeErrorCode.UNKNOWN, errMsg));
+      });
+    return 0;
+  }
+
 }
 
 /**
@@ -133,6 +177,7 @@ struct Index {
           })
           .onPageEnd(() => {
             hilog.info(DOMAIN, TAG, '页面加载完成');
+
           })
           .onErrorReceive((event) => {
             const errCode: number = event.error?.getErrorCode() ?? -1;
@@ -224,14 +269,19 @@ struct Index {
   }
 
   /**
-   * 请求应用所需权限（网络访问等）。
+   * 请求应用所需权限（网络访问、剪贴板读取等）。
+   *
+   * READ_PASTEBOARD 是 user_grant 级别权限，必须在运行时动态申请，
+   * 仅在 module.json5 静态声明不够 — 未授权时 pasteboard.getData() 返回
+   * 空 PasteData，getPrimaryText() 得到 undefined，粘贴功能静默失败。
    */
   private async requestPermissions(): Promise<void> {
     try {
       const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
       const permissions: Array<Permissions> = [
         'ohos.permission.INTERNET',
-        'ohos.permission.GET_NETWORK_INFO'
+        'ohos.permission.GET_NETWORK_INFO',
+        'ohos.permission.READ_PASTEBOARD'
       ];
       await atManager.requestPermissionsFromUser(this.context, permissions);
       hilog.info(DOMAIN, TAG, '权限请求完成');
@@ -350,13 +400,14 @@ struct Index {
         this.port,
         APP_VERSION,
         (): void => { this.restartBackend(); },
-        (): void => { this.exitApp(); }
+        (): void => { this.exitApp(); },
+        (callId: string, resultJson: string): void => { this.pushBridgeResult(callId, resultJson); }
       );
       this.controller.registerJavaScriptProxy(
         this.jsBridge,
         JS_BRIDGE_NAME,
-        ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp'],
-        ['invoke']
+        ['getAppVersion', 'getBackendPort', 'getBackendUrl', 'log', 'restartBackend', 'exitApp', 'invokeCallback'],
+        []
       );
       // 刷新页面使 JavaScript 代理生效
       this.controller.refresh();
@@ -367,6 +418,24 @@ struct Index {
   }
 
   /**
+   * 将 invokeCallback 的执行结果推送回前端页面。
+   *
+   * 通过 runJavaScript 调用前端注册的 window.__unitermBridgeResolve(callId, resultJson)。
+   * 两个参数均经 JSON.stringify 转义，保证任意剪贴板内容（引号/换行/反斜杠）
+   * 都能安全嵌入脚本字符串。
+   */
+  private pushBridgeResult(callId: string, resultJson: string): void {
+    try {
+      const script = `window.__unitermBridgeResolve && window.__unitermBridgeResolve(${JSON.stringify(callId)}, ${JSON.stringify(resultJson)});`;
+      this.controller.runJavaScript(script);
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, `推送桥接结果失败: ${JSON.stringify(err)}`);
+    }
+  }
+
+  /**
+
+
    * 启动进程存活监控定时器。
    *
    * 每 5 秒检查 Go 子进程是否存活，若崩溃则尝试自动重启。

@@ -25,6 +25,10 @@
       "value": "需要后台运行权限以保持 Go 子进程持续运行"
     },
     {
+      "name": "reason_pasteboard",
+      "value": "需要读取剪贴板以支持复制粘贴功能"
+    },
+    {
       "name": "loading_starting",
       "value": "正在启动 uniTerm..."
     },

@@ -25,6 +25,10 @@
       "value": "Background running permission required to keep Go subprocess alive"
     },
     {
+      "name": "reason_pasteboard",
+      "value": "Pasteboard read permission required for copy/paste functionality"
+    },
+    {
       "name": "loading_starting",
       "value": "Starting uniTerm..."
     },

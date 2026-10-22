@@ -26,7 +26,8 @@ import { Clipboard as WailsClipboard } from '@wailsio/runtime'
 
 /** ArkTS-injected harmonyBridge proxy interface. */
 interface HarmonyBridgeProxy {
-  invoke(method: string, params: string): Promise<string>
+  invokeCallback(method: string, params: string, callId: string): number
+  invoke?(method: string, params: string): Promise<string>
 }
 
 /** JSBridge success response. */
@@ -134,16 +135,111 @@ function getBridge(): HarmonyBridgeProxy | null {
 }
 
 // ---------------------------------------------------------------------------
+// Callback-mode invoke — ArkWeb asyncMethodList workaround
+// ---------------------------------------------------------------------------
+//
+// ArkWeb (OpenHarmony 7.0) cannot deliver asyncMethodList Promise results to
+// the JS side (resolve('pong') arrives as the number 0), so cross-boundary
+// calls use a synchronous entry + runJavaScript callback push instead:
+//   JS:  harmonyBridge.invokeCallback(method, params, callId)   (sync, void)
+//   ArkTS: runs the handler async, then runJavaScript(
+//            "window.__unitermBridgeResolve(callId, resultJson)")
+//   JS:  the pending Promise stored under callId resolves with resultJson.
+
+/** Bridge calls awaiting the ArkTS-side result, keyed by callId. */
+const pendingBridgeCalls = new Map<string, (resultJson: string) => void>()
+
+/** Callback entry invoked by ArkTS via runJavaScript. */
+function onBridgeResult(callId: string, resultJson: string): void {
+  const resolve = pendingBridgeCalls.get(callId)
+  if (resolve) {
+    pendingBridgeCalls.delete(callId)
+    resolve(resultJson)
+  }
+}
+
+// Register the global entry points eagerly (module load) so any consumer —
+// including the @wailsio/runtime clipboard.js patch, which calls
+// window.__unitermBridgeInvoke directly — finds them regardless of import
+// order. The proxy itself is looked up lazily inside each call.
+function ensureBridgeGlobals(): void {
+  const w = window as unknown as {
+    __unitermBridgeResolve?: (callId: string, resultJson: string) => void
+    __unitermBridgeInvoke?: (method: string, params: string) => Promise<string>
+  }
+  if (!w.__unitermBridgeResolve) {
+    w.__unitermBridgeResolve = onBridgeResult
+  }
+  if (!w.__unitermBridgeInvoke) {
+    w.__unitermBridgeInvoke = (method: string, params: string): Promise<string> =>
+      invokeViaCallback(method, params)
+  }
+}
+
+/** Default timeout for a single callback-mode bridge call. */
+const BRIDGE_CALL_TIMEOUT_MS = 8000
+
+/** Sequential call id counter (unique per page load). */
+let bridgeCallSeq = 0
+
+/**
+ * Invoke an ArkTS-side bridge method via the callback protocol.
+ *
+ * Rejects with HarmonyBridgeError when the proxy or its invokeCallback entry
+ * is unavailable, the synchronous dispatch throws, or no result arrives
+ * within BRIDGE_CALL_TIMEOUT_MS.
+ */
+function invokeViaCallback(method: string, params: string): Promise<string> {
+  ensureBridgeGlobals()
+  const bridge = getBridge()
+  if (!bridge) {
+    return Promise.reject(new HarmonyBridgeError(-1, `harmonyBridge unavailable, cannot invoke ${method}`))
+  }
+  if (typeof bridge.invokeCallback !== 'function') {
+    return Promise.reject(new HarmonyBridgeError(-1, `invokeCallback unavailable, cannot invoke ${method}`))
+  }
+  const callId = `bc-${Date.now()}-${++bridgeCallSeq}`
+  return new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (pendingBridgeCalls.has(callId)) {
+        pendingBridgeCalls.delete(callId)
+        reject(new HarmonyBridgeError(-1, `JSBridge timeout: ${method}`))
+      }
+    }, BRIDGE_CALL_TIMEOUT_MS)
+    pendingBridgeCalls.set(callId, (resultJson) => {
+      clearTimeout(timer)
+      resolve(resultJson)
+    })
+    try {
+      bridge.invokeCallback(method, params, callId)
+    } catch (err) {
+      clearTimeout(timer)
+      pendingBridgeCalls.delete(callId)
+      const msg = err instanceof Error ? err.message : String(err)
+      reject(new HarmonyBridgeError(-1, `JSBridge dispatch error: ${method}: ${msg}`))
+    }
+  })
+}
+
+// Register the global entry points at module load (browser only) so the
+// @wailsio/runtime clipboard patch — which calls window.__unitermBridgeInvoke
+// directly, possibly before any adapter function runs — always finds them.
+if (typeof window !== 'undefined') {
+  ensureBridgeGlobals()
+}
+
+// ---------------------------------------------------------------------------
 // Core invoke
 // ---------------------------------------------------------------------------
 
 /**
  * Invoke an ArkTS-side JSBridge method.
  *
- * Serializes params to JSON, calls window.harmonyBridge.invoke, parses the
- * response, and returns the `data` field. Throws HarmonyBridgeError on any
- * failure (bridge missing, invocation exception, response parse error, or
- * a success=false response).
+ * Serializes params to JSON, dispatches via the callback protocol (see
+ * invokeViaCallback — ArkWeb's asyncMethodList cannot deliver Promise
+ * results), parses the response, and returns the `data` field. Throws
+ * HarmonyBridgeError on any failure (bridge missing, invocation exception,
+ * response parse error, timeout, or a success=false response).
  *
  * @param method  method name, e.g. 'fileDialog.open'
  * @param params  parameter object (optional)
@@ -157,12 +253,7 @@ async function invokeBridge<T>(method: string, params?: object): Promise<T> {
 
   const paramsJson = params !== undefined ? JSON.stringify(params) : '{}'
   let raw: string
-  try {
-    raw = await bridge.invoke(method, paramsJson)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new HarmonyBridgeError(-1, `JSBridge invocation error: ${method}: ${msg}`)
-  }
+  raw = await invokeViaCallback(method, paramsJson)
 
   let response: BridgeResponse<T>
   try {

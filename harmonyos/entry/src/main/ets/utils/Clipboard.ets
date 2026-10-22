@@ -71,7 +71,9 @@ export class ClipboardHandler {
   async readText(): Promise<string> {
     try {
       const data: pasteboard.PasteData = await this.systemPasteboard.getData();
-      const text: string = data.getPrimaryText();
+      // getPrimaryText() 在剪贴板无文本（空板 / 非文本类型 / 权限未授权）
+      // 时返回 undefined，?? '' 让读取优雅降级为空字符串而非抛 TypeError。
+      const text: string = data.getPrimaryText() ?? '';
       hilog.info(DOMAIN, TAG, `readText: length=${text.length}`);
       return JSON.stringify(text);
     } catch (err) {
@@ -115,16 +117,16 @@ export class ClipboardHandler {
       const data: pasteboard.PasteData = await this.systemPasteboard.getData();
       const result: ClipboardReadResult = { text: '', html: '', image: '' };
 
-      // 尝试读取纯文本
+      // 尝试读取纯文本（无文本内容时 getPrimaryText 返回 undefined，降级为空字符串）
       try {
-        result.text = data.getPrimaryText();
+        result.text = data.getPrimaryText() ?? '';
       } catch (e) {
         // 无文本内容，保持空字符串
       }
 
-      // 尝试读取 HTML
+      // 尝试读取 HTML（同理，无 HTML 内容时降级为空字符串）
       try {
-        result.html = data.getPrimaryHtml();
+        result.html = data.getPrimaryHtml() ?? '';
       } catch (e) {
         // 无 HTML 内容，保持空字符串
       }
