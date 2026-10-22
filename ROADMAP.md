@@ -1,6 +1,6 @@
 # Roadmap
 
-This document tracks the protocols and core features ai-ops-terminal already ships, and what we plan to build next. For per-release details, see [CHANGELOG.md](CHANGELOG.md).
+This document tracks the protocols and core features uniTerm already ships, and what we plan to build next. For per-release details, see [CHANGELOG.md](CHANGELOG.md).
 
 Legend: ✅ Shipped, 🚧 Planned
 
@@ -28,6 +28,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | SMB | ✅ | v1.2.2 | Windows shared folders and NAS |  |
 | WebDAV | ✅ | v1.2.2 | WebDAV file management |  |
 | S3 | ✅ | v1.2.2 | Amazon S3 compatible object storage |  |
+| SCP | ✅ | v1.9.3 | Fallback for legacy SSH servers without SFTP support |  |
 
 ### Remote Desktop
 
@@ -51,6 +52,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Redis | ✅ | v1.2.1 | Key-value store with visual browser |  |
 | MongoDB | ✅ | v1.4.1 | Document database |  |
 | Elasticsearch | ✅ | v1.9.0 | Distributed search and analytics engine | [@iCarrear](https://github.com/iCarrear) |
+| SQLite | ✅ | v1.10.1 | Embedded local database (open by file path) |  |
 
 ### Container
 
@@ -75,10 +77,10 @@ Legend: ✅ Shipped, 🚧 Planned
 | Multi-Panel AI Lock | ✅ | v1.5.0 | Control multiple terminals simultaneously |  |
 | Skill Support | ✅ | v1.6.0 | Packaged, reusable workflows the agent can invoke | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
 | Prompt Library | ✅ | v1.6.0 | Manage and trigger reusable AI prompts | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
-| Interaction Modes | ✅ | v2.0.0 | Chat / read-only / agent modes to constrain AI actions |  |
-| MCP Server | 🚧 | — | Expose ai-ops-terminal as an MCP server for external AI agents |  |
-| MCP Client | ✅ | v2.0.0 | Connect external MCP servers to extend ai-ops-terminal's AI |  |
-| File Attachments | 🚧 | — | Attach files to AI prompts for the agent to read |  |
+| Interaction Modes | 🚧 | — | Chat / read-only / agent modes to constrain AI actions |  |
+| MCP Server | ✅ | v1.10.0 | Expose uniTerm as an MCP server for external AI agents | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
+| MCP Client | 🚧 | — | Connect external MCP servers to extend uniTerm's AI |  |
+| File Attachments | ✅ | v1.10.1 | Attach files to AI prompts for the agent to read | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
 
 ### Personalization
 
@@ -106,9 +108,7 @@ Legend: ✅ Shipped, 🚧 Planned
 | Session Logging | ✅ | v1.4.0 | Log terminal output to file | [@wangxufeng](https://github.com/wangxufeng) |
 | SSH Tunnel Manager | ✅ | v1.4.1 | Local, remote, and dynamic port forwarding | [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu) |
 | Connection Import / Export | ✅ | v1.8.0 | Import and export connection configurations |  |
-| Batch Multi-Host Execution | ✅ | v2.0.0 | Run a command / script across multiple hosts concurrently with aggregated results |  |
-| Terminal Recording & Replay | ✅ | v2.0.0 | Record sessions to asciinema cast files and replay with pause / speed / scrubbing |  |
 
 ## Contributing
 
-Have a feature to propose or a planned item you'd like to pick up? Open an issue or PR on [GitHub](https://github.com/laigcss/ai-ops-terminal/issues) — we discuss roadmap items there.
+Have a feature to propose or a planned item you'd like to pick up? Open an issue or PR on [GitHub](https://github.com/ys-ll/uniterm/issues) — we discuss roadmap items there.

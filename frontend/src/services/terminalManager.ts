@@ -1,14 +1,23 @@
 import { Terminal } from '@xterm/xterm'
+import { Events } from '@wailsio/runtime'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { SearchAddon } from '@xterm/addon-search'
-import { Events } from '@wailsio/runtime'
+import { ImageAddon } from '@xterm/addon-image'
+import { ClipboardAddon, Base64 } from '@xterm/addon-clipboard'
+import { ProgressAddon, type IProgressState } from '@xterm/addon-progress'
 import { getXtermTheme } from '../utils/xtermTheme'
 import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLocalStateStore } from '../stores/localStateStore'
+import { useTabStore } from '../stores/tabStore'
+import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
+import { useZmodemStore } from '../stores/zmodemStore'
+import { queuedSessionWrite } from './sessionWriter'
 import type { CustomTerminalTheme } from '../types/settings'
 import { formatFontFamily } from '../utils/formatFontFamily'
+import { installImeCompatibilityPatch } from '../utils/xtermImeCompatibility'
 import {
   bufferRowSource,
   createLineRegistry,
@@ -32,8 +41,15 @@ export interface ManagedTerminal {
   fitAddon: FitAddon
   searchAddon: SearchAddon
   unicodeAddon: Unicode11Addon
+  progressAddon: ProgressAddon
   container: HTMLElement | null
   refs: Set<string>
+  /** Component instances (terminalInstanceRef keys) currently mounted AND
+   * visible. A terminal with no active refs is KeepAlive-deactivated: its
+   * xterm buffer is frozen (BaseTerminal gates live session:data writes on
+   * component activity and replays on reactivation), so screen-buffer reads
+   * are only valid while this is non-empty. */
+  activeRefs: Set<string>
   options: TerminalOptions
   disposeTimer: ReturnType<typeof setTimeout> | null
   /** Whether this terminal was newly created (not reused via timer cancellation). */
@@ -58,9 +74,206 @@ export interface ManagedTerminal {
   /** Subscription to terminal.onResize — reflows the buffer, so the registry
    * must be re-keyed to the rows lines now start at. */
   resizeDispose: { dispose(): void } | null
+  /** Subscription to ProgressAddon.onChange — routes OSC 9;4 progress
+   * state into the tab store for the tab-bar indicator. */
+  progressDispose: { dispose(): void } | null
+  /** IME compatibility patch installed on this terminal (macOS only). */
+  imeDispose: { dispose(): void } | null
 }
 
 const terminals = new Map<string, ManagedTerminal>()
+
+// ---------------------------------------------------------------------------
+// Headless mirror terminal (AI output path)
+// ---------------------------------------------------------------------------
+// While a panel is deactivated, its visible terminal's buffer freezes (live
+// session:data writes are gated on component activity and replayed on
+// reactivation). The AI executor still needs emulator-faithful output:
+// raw-stream text reconstruction cannot resolve ConPTY cursor-positioning
+// redraws (the issue-624 class), which glues prompt redraws onto output rows
+// and silently drops them. A second, never-rendered Terminal instance per
+// session parses the same stream continuously, so its buffer always matches
+// what the screen would show. Cost: one extra headless parse per session —
+// no DOM, no renderer.
+const MIRROR_SCROLLBACK_CAP = 2000
+
+interface TerminalMirror {
+  terminal: Terminal
+  lineOffset: number
+  trimDispose: { dispose(): void } | null
+  resizeDispose: { dispose(): void } | null
+  /** Inactive-window device-query responder (responder handoff). */
+  replyDispose: { dispose(): void } | null
+  unsub: () => void
+}
+
+const mirrors = new Map<string, TerminalMirror>()
+
+function createMirror(sessionId: string, options: TerminalOptions, source: Terminal): TerminalMirror {
+  // RESPONDER HANDOFF (refined single-responder rule): exactly one parser may
+  // answer device queries (DA, CPR/ESC[6n, DSR…). While the visible panel is
+  // ACTIVE, that is the visible terminal — this mirror must stay silent, or a
+  // second reply corrupts remote apps. While the panel is INACTIVE its buffer
+  // freezes and its onData handlers are unbound, so a query would never be
+  // answered: the remote's read times out, and the stale reply the visible
+  // terminal emits during the reactivation gap replay leaks into the shell —
+  // the "0R" artifact after switching back to a background-opened SSH tab.
+  // During that window the mirror is the stream's only parser, so it takes
+  // over answering (queuedSessionWrite feeds the reply straight to the PTY);
+  // the visible terminal suppresses its own stale replies during the replay.
+  const terminal = new Terminal({
+    // Unicode11Addon needs the proposed API (unicode.activeVersion), same as
+    // the visible terminal's constructor.
+    allowProposedApi: true,
+    // Bound mirror memory independently of the user's scrollback setting;
+    // absolute rows stay self-consistent within the mirror.
+    scrollback: Math.min(options.scrollback ?? 2500, MIRROR_SCROLLBACK_CAP),
+  })
+  // Match the visible terminal's CJK width behavior (see acquireTerminal):
+  // the addon must be loaded before switching unicode.activeVersion, or xterm
+  // throws "Unicode 11 addon not loaded".
+  terminal.loadAddon(new Unicode11Addon())
+  terminal.unicode.activeVersion = '11'
+  const mirror: TerminalMirror = {
+    terminal,
+    lineOffset: 0,
+    trimDispose: null,
+    resizeDispose: null,
+    replyDispose: null,
+    unsub: () => {},
+  }
+  // Mirror grid must match the PTY size the visible terminal negotiated:
+  // ConPTY streams are size-dependent (cursor positioning, wrapping), so a
+  // default 80x24 mirror scrambles the layout — the cursor ends up on a blank
+  // row and prompt snapshots come back empty. Follow the source from now on.
+  mirror.resizeDispose = source.onResize(({ cols, rows }) => {
+    terminal.resize(cols, rows)
+  })
+  terminal.resize(source.cols, source.rows)
+  // Track scrollback trimming so absolute rows stay stable — same internal
+  // API and guard as the visible terminal's lineOffset bookkeeping.
+  try {
+    const core = (terminal as any)._core
+    const lines = core?._bufferService?.buffers?.normal?.lines
+    if (typeof lines?.onTrim === 'function') {
+      const m = mirror
+      m.trimDispose = lines.onTrim((amount: number) => {
+        m.lineOffset += amount
+      })
+    }
+  } catch { /* noop */ }
+  mirror.unsub = Events.On('session:data', (ev: any) => {
+    const payload = ev?.data
+    if (!payload || payload.id !== sessionId || typeof payload.data !== 'string') return
+    // Same zmodem cancel-window swallow as sessionStore: residual binary
+    // garbage from an aborted transfer must not reach the mirror buffer.
+    try {
+      if (Date.now() < useZmodemStore().getCancelUntil(payload.id)) return
+    } catch { /* pinia not installed yet */ }
+    mirror.terminal.write(payload.data)
+  })
+  // Inactive-window responder (see the handoff comment above): the activity
+  // check runs at reply-generation time, so a query answered just as the
+  // panel reactivates falls back to the visible terminal — worst case the
+  // remote's read falls back on its own timeout, same as before the handoff.
+  mirror.replyDispose = terminal.onData((data) => {
+    if (isTerminalActive(sessionId)) return
+    if (data) queuedSessionWrite(sessionId, data)
+  })
+  return mirror
+}
+
+function disposeMirror(sessionId: string): void {
+  const mirror = mirrors.get(sessionId)
+  if (!mirror) return
+  mirrors.delete(sessionId)
+  mirror.unsub()
+  mirror.trimDispose?.dispose()
+  mirror.resizeDispose?.dispose()
+  mirror.replyDispose?.dispose()
+  mirror.terminal.dispose()
+}
+
+// Cursor line + absolute row on the mirror buffer — prompt snapshot source
+// for inactive terminals.
+export function getMirrorPromptSnapshot(sessionId: string): { promptLine: string; startRow: number } | null {
+  const mirror = mirrors.get(sessionId)
+  if (!mirror) return null
+  const buf = mirror.terminal.buffer.active
+  const line = buf.getLine(buf.baseY + buf.cursorY)
+  const promptLine = line ? line.translateToString(true).trimEnd() : ''
+  return { promptLine, startRow: mirror.lineOffset + buf.baseY + buf.cursorY }
+}
+
+// Screen text from the mirror buffer starting at an absolute row — the
+// inactive-terminal counterpart of reading the visible terminal's screen.
+// Returns null when no mirror exists for the session.
+export function readMirrorScreenFromRow(sessionId: string, absStartRow: number): string | null {
+  const mirror = mirrors.get(sessionId)
+  if (!mirror || absStartRow < 0) return null
+  const buf = mirror.terminal.buffer.active
+  let first: number
+  let last: number
+  if (buf.type === 'alternate') {
+    first = buf.baseY
+    last = buf.length - 1
+  } else {
+    first = Math.max(0, absStartRow - mirror.lineOffset)
+    last = buf.length - 1
+    while (last >= first && mirrorRowBlank(buf, last)) last--
+    if (last < first) return ''
+  }
+  const lines: string[] = []
+  for (let i = first; i <= last; i++) {
+    const line = buf.getLine(i)
+    if (line) lines.push(line.translateToString(true))
+  }
+  return lines.join('\n')
+}
+
+// Last tailLines non-blank-terminated lines from the mirror buffer — the
+// inactive-terminal counterpart of captureTerminal. Returns null when no
+// mirror exists for the session.
+export function readMirrorTail(sessionId: string, tailLines: number): string | null {
+  const mirror = mirrors.get(sessionId)
+  if (!mirror) return null
+  const buf = mirror.terminal.buffer.active
+  if (buf.length === 0) return ''
+  let last = buf.length - 1
+  while (last >= 0 && mirrorRowBlank(buf, last)) last--
+  if (last < 0) return ''
+  const first = Math.max(0, last - tailLines + 1)
+  const lines: string[] = []
+  for (let i = first; i <= last; i++) {
+    const line = buf.getLine(i)
+    if (line) lines.push(line.translateToString())
+  }
+  return lines.join('\n')
+}
+
+function mirrorRowBlank(
+  buf: { getLine(n: number): { translateToString(): string } | undefined },
+  row: number
+): boolean {
+  const line = buf.getLine(row)
+  return !line || line.translateToString().trim() === ''
+}
+
+// Route a progress state from a session's terminal to the tab that displays
+// it (session → panel → tab, same resolution the notification dots use).
+function setTabProgressForSession(sessionId: string, state: IProgressState | null): void {
+  const panelStore = usePanelStore()
+  const tabStore = useTabStore()
+  for (const [panelId, panel] of panelStore.panels) {
+    if (panel.sessionId !== sessionId) continue
+    const tab = tabStore.tabs.find(t =>
+      (t.type === 'terminal' && t.panelId === panelId) ||
+      (t.type === 'workspace' && t.panelIds.includes(panelId))
+    )
+    if (tab) tabStore.setTabProgress(tab.id, state)
+    return
+  }
+}
 
 // F-027: scrollback limit applied while the terminal sits in the hidden
 // holding container (between detach and re-attach). Restored on re-attach
@@ -153,10 +366,35 @@ export function acquireTerminal(
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
     const unicodeAddon = new Unicode11Addon()
+    // Terminal image support (sixel + iTerm2 OSC 1337). The addon parses the
+    // sequences itself and draws them on its own canvas layer, so it works
+    // with the default DOM renderer. DCS sixel sequences are reassembled
+    // chunk-wise in BaseTerminal's render path (dcsReassembler) BEFORE they
+    // reach xterm, so the parser only ever sees complete sequences.
+    const imageAddon = new ImageAddon()
+    // OSC 52 clipboard: remote programs (vim "+ register, tmux, ssh through
+    // chains) can WRITE to the local clipboard. Reads are deliberately
+    // answered with an empty report instead of a rejection — the addon does
+    // not catch provider promise rejections (verified in its source), so a
+    // rejected read would surface as an unhandled rejection, and refusing to
+    // read also keeps remote processes from exfiltrating local clipboard
+    // contents. Writes swallow failures (window unfocused etc.) for the
+    // same unhandled-rejection reason.
+    const clipboardAddon = new ClipboardAddon(new Base64(), {
+      readText: () => '',
+      writeText: (_selection, text) => {
+        navigator.clipboard.writeText(text).catch(() => { /* non-critical */ })
+      },
+    })
+    // ConEmu-style OSC 9;4 progress, surfaced as a tab-bar indicator.
+    const progressAddon = new ProgressAddon()
 
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(searchAddon)
     terminal.loadAddon(unicodeAddon)
+    terminal.loadAddon(imageAddon)
+    terminal.loadAddon(clipboardAddon)
+    terminal.loadAddon(progressAddon)
     // F-035: charSizeCompat / ITheme.codeBlockBackground do not exist in
     // xterm.js v5.5. The Unicode 11 activeVersion below is the available
     // WC-width alignment — the backend PTY uses the same Unicode 11
@@ -165,15 +403,25 @@ export function acquireTerminal(
     //
     // Activate Unicode 11 widths (default v6 miscounts CJK cells). Must come
     // AFTER loadAddon — the unicode property is provided by the addon.
+    // Issue #902: CJK characters were truncated at the right boundary because
+    // the default Unicode 6 width table miscounts full-width cells. Loading
+    // Unicode 11 and setting activeVersion='11' ensures both the visible
+    // terminal and the headless mirror (createMirror above) use the same
+    // WCWidth as the backend PTY, so autowap fires at the correct column.
     terminal.unicode.activeVersion = '11'
 
+    // IME compatibility (macOS) is installed in attachTerminal, after
+    // terminal.open() — the patch needs textarea/_compositionHelper, which
+    // xterm only creates there.
     managed = {
       terminal,
       fitAddon,
       searchAddon,
       unicodeAddon,
+      progressAddon,
       container: null,
       refs: new Set(),
+      activeRefs: new Set(),
       options,
       disposeTimer: null,
       isNew: true,
@@ -182,6 +430,17 @@ export function acquireTerminal(
       lineOffset: 0,
       trimDispose: null,
       resizeDispose: null,
+      progressDispose: null,
+      imeDispose: null,
+    }
+    // Headless mirror starts parsing the session stream immediately so its
+    // buffer is always current when the panel goes to the background. Never
+    // let a mirror failure break terminal creation — the AI path degrades to
+    // the raw-stream fallback when no mirror exists.
+    try {
+      mirrors.set(sessionId, createMirror(sessionId, options, terminal))
+    } catch (e) {
+      console.warn('[terminalManager] headless mirror creation failed', e)
     }
 
     // Track scrollback trimming so line-numbers / timestamps stay continuous
@@ -219,6 +478,13 @@ export function acquireTerminal(
       })
     })
 
+    // OSC 9;4 progress → tab-bar indicator. One subscription per terminal
+    // (at creation) so KeepAlive re-mounts never stack listeners; state 0
+    // clears the indicator.
+    m.progressDispose = progressAddon.onChange(state => {
+      setTabProgressForSession(sessionId, state.state === 0 ? null : state)
+    })
+
     terminals.set(sessionId, m)
   }
 
@@ -236,10 +502,16 @@ export function releaseTerminal(sessionId: string, ref: string): void {
     // Delay disposal to survive drag-and-drop lifecycle race.
     // If acquireTerminal is called within 500ms, the timer is cancelled.
     managed.disposeTimer = setTimeout(() => {
+      disposeMirror(sessionId)
       managed.trimDispose?.dispose()
       managed.trimDispose = null
       managed.resizeDispose?.dispose()
       managed.resizeDispose = null
+      managed.progressDispose?.dispose()
+      managed.progressDispose = null
+      setTabProgressForSession(sessionId, null)
+      managed.imeDispose?.dispose()
+      managed.imeDispose = null
       managed.terminal.dispose()
       terminals.delete(sessionId)
     }, 500)
@@ -252,10 +524,16 @@ export function disposeTerminal(sessionId: string): void {
   if (managed.disposeTimer) {
     clearTimeout(managed.disposeTimer)
   }
+  disposeMirror(sessionId)
   managed.trimDispose?.dispose()
   managed.trimDispose = null
   managed.resizeDispose?.dispose()
   managed.resizeDispose = null
+  managed.progressDispose?.dispose()
+  managed.progressDispose = null
+  setTabProgressForSession(sessionId, null)
+  managed.imeDispose?.dispose()
+  managed.imeDispose = null
   managed.terminal.dispose()
   terminals.delete(sessionId)
 }
@@ -265,8 +543,31 @@ export function disposeTerminal(sessionId: string): void {
 export function transferTerminal(oldSessionId: string, newSessionId: string): boolean {
   const managed = terminals.get(oldSessionId)
   if (!managed) return false
+  // Migrate the mirror: its event subscription filters by sessionId and the
+  // new session's history lives in the sessionStore — rebuild for the new id,
+  // seeded with everything buffered so far.
+  disposeMirror(oldSessionId)
   terminals.delete(oldSessionId)
   terminals.set(newSessionId, managed)
+  // Re-target the progress subscription: its closure captured oldSessionId,
+  // and events for the old id would resolve to no panel and strand a stale
+  // indicator on the previous tab.
+  managed.progressDispose?.dispose()
+  managed.progressDispose = managed.progressAddon.onChange(state => {
+    setTabProgressForSession(newSessionId, state.state === 0 ? null : state)
+  })
+  setTabProgressForSession(oldSessionId, null)
+  try {
+    const mirror = createMirror(newSessionId, managed.options, managed.terminal)
+    mirrors.set(newSessionId, mirror)
+    // Seed with the new session's buffered history (reconnect replay reaches
+    // the visible terminal directly, not through session:data events).
+    const sessionStore = useSessionStore()
+    const total = sessionStore.getChunkCount(newSessionId)
+    if (total > 0) mirror.terminal.write(sessionStore.getDataFromChunk(newSessionId, 0))
+  } catch (e) {
+    console.warn('[terminalManager] headless mirror re-creation failed', e)
+  }
   return true
 }
 
@@ -291,6 +592,16 @@ export function attachTerminal(sessionId: string, container: HTMLElement): void 
     managed.terminal.open(container)
   } else {
     container.appendChild(managed.terminal.element)
+  }
+
+  // IME compatibility (macOS): deliver single-char input directly when an
+  // IME marks keystrokes with the phantom keyCode 229, instead of relying on
+  // xterm's racy deferred textarea diff that drops chars under fast typing.
+  // Must run after open() — that is where xterm creates the textarea and the
+  // composition helper the patch hooks into; installing at construction time
+  // silently no-ops.
+  if (!managed.imeDispose) {
+    managed.imeDispose = installImeCompatibilityPatch(managed.terminal)
   }
 
   // terminal.element only exists after open(), so the padding-ring color is
@@ -340,6 +651,25 @@ export function getTerminal(sessionId: string): Terminal | undefined {
   return terminals.get(sessionId)?.terminal
 }
 
+// Mark a component instance as actively displaying the terminal (mounted and
+// KeepAlive-active). Called by BaseTerminal on mount/activate with its unique
+// terminalInstanceRef, and with active=false on deactivate/unmount.
+export function markTerminalActive(sessionId: string, ref: string, active: boolean): void {
+  const managed = terminals.get(sessionId)
+  if (!managed) return
+  if (active) managed.activeRefs.add(ref)
+  else managed.activeRefs.delete(ref)
+}
+
+// True while any visible component drives the terminal. When false the xterm
+// buffer is frozen at the deactivation state — screen-buffer readers (AI
+// output capture, prompt snapshots) must fall back to the buffered PTY stream
+// in sessionStore instead.
+export function isTerminalActive(sessionId: string): boolean {
+  const managed = terminals.get(sessionId)
+  return !!managed && managed.activeRefs.size > 0
+}
+
 export function getManagedTerminal(sessionId: string): ManagedTerminal | undefined {
   return terminals.get(sessionId)
 }
@@ -379,51 +709,4 @@ export function bumpOnDataGeneration(sessionId: string): number {
   if (!managed) return 0
   const next = ++managed.onDataGeneration
   return next
-}
-
-// ── P2 节流：session:data 按 session id 订阅分发 ──
-// 8 分屏 = 8 个 BaseTerminal，原先每个都监听全局 `session:data` 事件再过滤
-// id，导致每块数据被广播到所有监听器。改为单点全局监听 + Map<sessionId,
-// Set<handler>> 索引，按 id 分发给对应订阅者，避免 O(n) 广播 + 过滤。
-const sessionDataSubscribers = new Map<string, Set<(data: string) => void>>()
-let sessionDataGlobalUnsub: (() => void) | null = null
-
-function ensureSessionDataGlobalListener(): void {
-  if (sessionDataGlobalUnsub) return
-  sessionDataGlobalUnsub = Events.On('session:data', (ev: { data: { id: string; data: string } }) => {
-    const payload = ev.data
-    if (!payload || !payload.id) return
-    const subs = sessionDataSubscribers.get(payload.id)
-    if (!subs || subs.size === 0) return
-    // 复制一份再遍历，避免回调中 unsubscribe 修改 Set 导致迭代异常
-    for (const h of Array.from(subs)) {
-      try {
-        h(payload.data)
-      } catch (e) {
-        console.error('[terminalManager] session:data subscriber error', e)
-      }
-    }
-  })
-}
-
-/** 订阅指定 session 的 data 事件。handler 只会收到属于该 sessionId 的数据。 */
-export function subscribeSessionData(sessionId: string, handler: (data: string) => void): void {
-  if (!sessionId) return
-  let subs = sessionDataSubscribers.get(sessionId)
-  if (!subs) {
-    subs = new Set()
-    sessionDataSubscribers.set(sessionId, subs)
-  }
-  subs.add(handler)
-  ensureSessionDataGlobalListener()
-}
-
-/** 取消订阅。当 sessionId 没有任何订阅者时清理 Map 条目。 */
-export function unsubscribeSessionData(sessionId: string, handler: (data: string) => void): void {
-  const subs = sessionDataSubscribers.get(sessionId)
-  if (!subs) return
-  subs.delete(handler)
-  if (subs.size === 0) {
-    sessionDataSubscribers.delete(sessionId)
-  }
 }

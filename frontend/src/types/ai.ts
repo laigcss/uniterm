@@ -11,12 +11,6 @@ export type InteractionMode = 'chat' | 'readonly' | 'agent'
 
 export type AIAgentStatus = 'thinking' | 'outputting' | 'executing' | 'confirming'
 
-export interface AIConfig {
-  apiKey: string
-  baseURL: string
-  model: string
-}
-
 export interface ToolCall {
   id: string
   type: 'function'
@@ -39,12 +33,35 @@ export interface PendingTool {
   dangerous: boolean
 }
 
+export type AIAttachmentKind = 'image' | 'text'
+
+/**
+ * An image or text-file the user attached to a user message.
+ *
+ * `data` holds raw base64 for images (no `data:` prefix — that is the shape
+ * every upstream protocol wants) and the verbatim file contents for text
+ * files. It is persisted with the session so attachments keep working across
+ * turns and survive a restart. Never write it to a log.
+ */
+export interface AIAttachment {
+  id: string
+  kind: AIAttachmentKind
+  name: string
+  mime: string
+  size: number
+  data: string
+}
+
 export interface AIMessage {
   id: string
   role: 'user' | 'assistant' | 'tool'
   content: string
+  thinking?: string   // reasoning/thinking text streamed by the model (collapsible in UI)
+  createdAt?: number           // epoch ms when the message was created
+  thinkingDurationMs?: number  // how long the model's thinking lasted (assistant)
   _rawApiMsg?: Record<string, unknown>  // exact message from API, passed back verbatim
   _contextHeader?: string  // dynamic context prepended in API requests but hidden in UI
+  attachments?: AIAttachment[]  // user-message attachments forwarded to the model
   tool_calls?: ToolCall[]
   tool_call_id?: string
   pendingTools?: PendingTool[]

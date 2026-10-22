@@ -14,8 +14,8 @@
 #
 set -euo pipefail
 
-GH_REPO="${GH_REPO:-ys-ll/ai-ops-terminal}"
-GITEE_REPO="${GITEE_REPO:-ys-l/ai-ops-terminal}"
+GH_REPO="${GH_REPO:-ys-ll/uniterm}"
+GITEE_REPO="${GITEE_REPO:-ys-l/uniterm}"
 GITEE_API="${GITEE_API:-https://gitee.com/api/v5}"
 TARGET_COMMITISH="${TARGET_COMMITISH:-main}"
 

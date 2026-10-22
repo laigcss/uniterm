@@ -7,7 +7,7 @@
         <button class="btn btn-default" @click="onCancelQuery">{{ t('common.cancel') }}</button>
       </div>
     </div>
-    <div class="editor-top" :style="{ height: topHeight + 'px' }">
+    <div class="editor-top" :style="editorCollapsed ? {} : { height: topHeight + 'px' }">
       <div class="editor-toolbar">
         <input
           v-model="nlInput"
@@ -16,17 +16,25 @@
           @keydown.enter="generateSQL"
         />
         <button class="btn btn-default btn-sm" @click="generateSQL" :disabled="aiGenerating || !nlInput.trim()">
-          <Sparkles :size="14" :class="{ 'ai-pulse': aiGenerating }" />
+          <Sparkles :size="'0.875rem'" :class="{ 'ai-pulse': aiGenerating }" />
           {{ aiGenerating ? '...' : 'AI' }}
         </button>
         <button class="btn btn-default btn-sm" @click="historyOpen = !historyOpen">
-          <History :size="14" />
+          <History :size="'0.875rem'" />
           {{ t('db.queryHistory') }}
         </button>
         <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.runSqlFile')" @click="onOpenScriptFile">
-          <FolderOpen :size="14" />
+          <FolderOpen :size="'0.875rem'" />
         </button>
         <button class="btn btn-primary btn-sm" title="Ctrl+Enter" @click="onExecute">{{ t('db.execute') }}</button>
+        <button
+          class="btn btn-ghost btn-icon btn-sm editor-collapse-btn"
+          :title="editorCollapsed ? t('common.expand') : t('common.collapse')"
+          @click="editorCollapsed = !editorCollapsed"
+        >
+          <ChevronDown v-if="editorCollapsed" :size="'0.875rem'" />
+          <ChevronUp v-else :size="'0.875rem'" />
+        </button>
       </div>
       <div v-if="historyOpen" class="history-panel">
         <div v-if="history.length === 0" class="history-empty">{{ t('db.noHistory') }}</div>
@@ -44,7 +52,7 @@
           </span>
         </button>
       </div>
-      <div class="sql-editor-wrap">
+      <div v-show="!editorCollapsed" class="sql-editor-wrap">
         <SyntaxEditor
           ref="editorRef"
           v-model="sql"
@@ -54,7 +62,7 @@
         />
       </div>
     </div>
-    <div class="editor-resizer" @mousedown="onResizeStart" />
+    <div v-show="!editorCollapsed" class="editor-resizer" @mousedown="onResizeStart" />
     <div class="editor-bottom">
       <div v-if="error" class="error-msg">{{ error }}</div>
       <div v-if="scriptResult" class="script-result" :class="{ 'has-error': scriptResult.failedLine }">
@@ -84,14 +92,14 @@
             v-if="tableName && !isView"
             class="btn btn-default btn-sm"
             @click="startInsertRow"
-          ><Plus :size="14" /> {{ t('db.insertRow') }}</button>
+          ><Plus :size="'0.875rem'" /> {{ t('db.insertRow') }}</button>
           <button
             ref="exportBtnRef"
             class="btn btn-ghost btn-icon btn-sm"
             :title="t('db.exportResults')"
             @click.stop="exportMenuRef?.toggle($event.currentTarget as HTMLElement)"
           >
-            <Download :size="14" />
+            <Download :size="'0.875rem'" />
           </button>
           <Menu
             ref="exportMenuRef"
@@ -138,7 +146,7 @@
         </span>
         <el-pagination
           v-if="browseMode"
-          small
+          size="small"
           background
           layout="sizes, prev, pager, next"
           :total="browsePageTotal"
@@ -153,7 +161,7 @@
       <el-dialog
         v-model="insertingRow"
         :title="t('db.insertRow')"
-        width="640px"
+        width="40rem"
         append-to-body
         destroy-on-close
       >
@@ -176,7 +184,7 @@
       <el-dialog
         v-model="editingRow"
         :title="t('common.edit')"
-        width="640px"
+        width="40rem"
         append-to-body
         destroy-on-close
       >
@@ -200,14 +208,15 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
-import { Sparkles, History, FolderOpen, Download, Plus } from '@lucide/vue'
+import { Sparkles, History, FolderOpen, Download, Plus, ChevronUp, ChevronDown } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from '../i18n'
 import SyntaxEditor from './SyntaxEditor.vue'
 import DBResultGrid from './DBResultGrid.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
-import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { ExecuteQuery, ExecuteStatement, GetTables, GetTableSchema, DBDefaultTableQuery, DBInsertRow, DBUpdateRow, DBDeleteRow, ExecuteSQLScript, OpenFileDialogFiltered, ReadFileBase64, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { chat } from '../services/llm'
 import { msg } from '../services/message'
 import { loadSqlHistory, pushSqlHistory } from '../composables/useDbSqlHistory'
@@ -781,7 +790,11 @@ async function onDeleteRowByRow(row: Record<string, any>) {
 // ?? Resize splitter ??
 
 const rootRef = ref<HTMLElement | null>(null)
-const topHeight = ref(200)
+// Collapsed shows only the toolbar so the result grid gets the height; on
+// narrow screens (phone or small window) start collapsed. All platforms
+// get the toggle button.
+const editorCollapsed = ref(isNarrowScreen.value)
+const topHeight = ref(isNarrowScreen.value ? 140 : 200)
 let resizeStartY = 0
 let resizeStartHeight = 0
 
@@ -1024,12 +1037,12 @@ function onEditRowCancel() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-subtle);
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.1875rem solid var(--border-subtle);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -1039,14 +1052,14 @@ function onEditRowCancel() {
 }
 .loading-text {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 .editor-top {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 8px 0;
+  padding: 0.5rem 0.5rem 0;
   min-height: 0;
   min-width: 0;
   width: 100%;
@@ -1054,15 +1067,15 @@ function onEditRowCancel() {
 }
 .editor-toolbar {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
   align-items: center;
   flex-shrink: 0;
 }
 .sql-editor-wrap {
   position: relative;
   flex: 1 1 auto;
-  min-height: 80px;
+  min-height: 5rem;
   min-width: 0;
   width: 100%;
   align-self: stretch;
@@ -1071,13 +1084,13 @@ function onEditRowCancel() {
 .nl-input {
   flex: 1;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
 }
 .nl-input:focus { border-color: var(--accent); }
@@ -1088,33 +1101,32 @@ function onEditRowCancel() {
   50% { opacity: 0.3; }
 }
 .history-panel {
-  max-height: 140px;
+  max-height: 8.75rem;
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   flex-shrink: 0;
 }
 .history-empty {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 .history-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   width: 100%;
   text-align: left;
-  padding: 6px 10px;
+  padding: 0.375rem 0.625rem;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-primary);
-  cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .history-item:hover { background: var(--bg-hover); }
 .history-sql {
@@ -1124,20 +1136,34 @@ function onEditRowCancel() {
 }
 .history-meta {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 .history-err { color: var(--error); }
 .editor-resizer {
-  height: 4px;
+  /* Hover accent floats over the editor's bottom edge (negative margin)
+     so it takes no layout height when idle - matches the tree resizers. */
+  height: 0.25rem;
+  margin-top: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: row-resize;
   background: transparent;
   flex-shrink: 0;
 }
-.editor-resizer:hover { background: var(--border-subtle); }
+.editor-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
+}
 .editor-bottom {
   flex: 1;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1145,29 +1171,29 @@ function onEditRowCancel() {
 }
 .error-msg {
   color: var(--error);
-  padding: 8px;
+  padding: 0.5rem;
   background: var(--error-subtle);
   border-radius: var(--radius-sm);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   user-select: text;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   flex-shrink: 0;
 }
 .result-info {
-  padding: 4px 0;
+  padding: 0.25rem 0;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 .script-result {
-  padding: 6px 8px;
-  margin-bottom: 8px;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.5rem;
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -1176,45 +1202,45 @@ function onEditRowCancel() {
   color: var(--error);
 }
 .script-ok { color: var(--text-primary); }
-.script-affected { margin-left: 12px; }
+.script-affected { margin-left: 0.75rem; }
 .script-error-head { font-weight: 600; }
-.script-error-detail { margin-top: 4px; font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
+.script-error-detail { margin-top: 0.25rem; font-family: var(--font-mono); font-size: 0.75rem; word-break: break-word; }
 .script-error-sql {
-  margin: 4px 0 0;
-  padding: 6px;
+  margin: 0.25rem 0 0;
+  padding: 0.375rem;
   background: var(--bg-base);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 160px;
+  max-height: 10rem;
   overflow: auto;
 }
 .result-duration { color: var(--text-muted); }
 .result-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   flex-shrink: 0;
 }
 .result-filter {
-  width: 200px;
-  padding: 3px 8px;
+  width: 12.5rem;
+  padding: 0.1875rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .result-filter:focus { border-color: var(--accent); }
 .result-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   margin-left: auto;
   min-width: 0;
 }
@@ -1223,55 +1249,67 @@ function onEditRowCancel() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   flex-shrink: 0;
 }
 .result-count {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 .save-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
   flex-shrink: 0;
 }
 .save-hint {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-right: auto;
 }
 .insert-row-form {
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: 8px;
-  margin-top: 4px;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
   flex-shrink: 0;
   overflow: auto;
   max-height: 40%;
 }
 .row-form {
-  display: flex;
-  flex-direction: column;
+  /* One shared grid so every row's column tracks resolve together: the
+     max-content toggle column (NULL / auto-increment / empty spacer) gets a
+     single uniform width across all rows instead of per-row sizes. */
+  display: grid;
+  /* Name/type shrink toward their min when the dialog narrows (small screens
+     force the dialog to 100vw - 1rem); the value input keeps a usable floor
+     (minmax(10rem, 1fr)) and the NULL toggle takes only its content width
+     instead of a fixed 6.75rem. */
+  grid-template-columns: minmax(4rem, 10rem) minmax(2.5rem, 5.625rem) minmax(10rem, 1fr) max-content;
+  gap: 0 0.625rem;
   max-height: 60vh;
-  overflow-y: auto;
+  /* Both axes: below ~440px viewports the track mins stop shrinking, so let
+     the form scroll horizontally instead of clipping. */
+  overflow: auto;
 }
 .row-form-row {
+  /* Each row spans the shared tracks via subgrid, so cells stay aligned and
+     rows without a toggle still reserve the same column width. */
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 160px 90px minmax(0, 1fr) 108px;
-  gap: 10px;
+  grid-template-columns: subgrid;
   align-items: center;
-  padding: 5px 0;
+  padding: 0.3125rem 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 .row-form-row:last-child { border-bottom: none; }
 .field-name {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -1280,7 +1318,7 @@ function onEditRowCancel() {
 }
 .field-type {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1290,21 +1328,20 @@ function onEditRowCancel() {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  font-size: 10px;
-  cursor: pointer;
+  gap: 0.25rem;
+  font-size: 0.625rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
-.field-toggle input { cursor: pointer; margin: 0; }
+.field-toggle input { margin: 0; }
 .field-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: var(--bg-base);
   color: var(--text-primary);
 }

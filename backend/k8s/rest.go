@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // maxK8sResponseBytes caps the size of any single REST response body so

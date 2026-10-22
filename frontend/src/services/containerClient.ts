@@ -3,14 +3,28 @@ import {
   ContainerAction, ContainerRename, ContainerStats, ContainerImages,
   ContainerRemoveImage, ContainerCreate, ContainerNamespaces,
   ContainerSetNamespace, ContainerStartLogs, ContainerStartPull,
-  ContainerStopStream, ContainerExecSession,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+  ContainerStartPush, ContainerTagImage, ContainerImagePrune,
+  ContainerImageInspect, ContainerImageHistory, ContainerRegistryLogin,
+  ContainerRuntimeInfo, ContainerStopStream, ContainerExecSession,
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import type {
   ContainerInfo, InspectResult, ContainerImage, ContainerStats as ContainerStatsInfo, ContainerCreateOptions,
+  ContainerTransferOptions, ContainerLoginOptions, ImageLayer, RuntimeInfo,
 } from '../types/container'
 
-export const connect = (id: string) => ContainerConnect(id)
+// 凭据补全弹窗（useTunnelCredentials）提交的临时账密；error 非 null 表示用户取消，
+// store 据此展示取消状态而不发起连接。
+export interface ContainerConnectCreds {
+  sshUser?: string
+  sshPassword?: string
+  tunnelUser?: string
+  tunnelPassword?: string
+  error?: string
+}
+
+export const connect = (id: string, creds?: ContainerConnectCreds) =>
+  ContainerConnect(id, creds?.sshUser || '', creds?.sshPassword || '', creds?.tunnelUser || '', creds?.tunnelPassword || '')
 export const disconnect = (id: string) => ContainerDisconnect(id)
 export const list = (id: string) => ContainerList(id) as Promise<ContainerInfo[]>
 export const inspect = (id: string, cid: string) => ContainerInspect(id, cid) as Promise<InspectResult>
@@ -58,6 +72,27 @@ export const startLogs = (connId: string, cid: string, tail: number, timestamps:
   onLine: (l: string) => void, onEnd?: (e: string) => void) =>
   startStream(() => ContainerStartLogs(connId, cid, tail, timestamps), onLine, onEnd)
 
-export const startPull = (connId: string, image: string,
+export const startPull = (connId: string, image: string, opts: ContainerTransferOptions,
   onLine: (l: string) => void, onEnd?: (e: string) => void) =>
-  startStream(() => ContainerStartPull(connId, image), onLine, onEnd)
+  startStream(() => ContainerStartPull(connId, image, opts as any), onLine, onEnd)
+
+export const startPush = (connId: string, image: string, opts: ContainerTransferOptions,
+  onLine: (l: string) => void, onEnd?: (e: string) => void) =>
+  startStream(() => ContainerStartPush(connId, image, opts as any), onLine, onEnd)
+
+export const tagImage = (connId: string, image: string, repoTag: string) =>
+  ContainerTagImage(connId, image, repoTag)
+
+export const imagePrune = (connId: string) => ContainerImagePrune(connId)
+
+export const imageInspect = (connId: string, imageID: string) =>
+  ContainerImageInspect(connId, imageID) as Promise<string>
+
+export const imageHistory = (connId: string, imageID: string) =>
+  ContainerImageHistory(connId, imageID) as Promise<ImageLayer[]>
+
+export const runtimeInfo = (connId: string) =>
+  ContainerRuntimeInfo(connId) as Promise<RuntimeInfo>
+
+export const registryLogin = (connId: string, opts: ContainerLoginOptions) =>
+  ContainerRegistryLogin(connId, opts as any)

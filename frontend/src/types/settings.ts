@@ -1,5 +1,6 @@
+
 export const SUPPORTED_LOCALES = [
-  'zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'de', 'es', 'fr', 'ru'
+  'zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'de', 'es', 'fr', 'ru', 'pt', 'vi'
 ] as const
 
 export type Locale = typeof SUPPORTED_LOCALES[number]
@@ -69,8 +70,8 @@ export interface TerminalSettings {
   fontWeight: number
   fontSize: number
   selectionAction: 'none' | 'copy'
-  rightClickAction: 'menu' | 'paste'
-  middleClickAction: 'paste' | 'menu'
+  rightClickAction: 'none' | 'menu' | 'paste'
+  middleClickAction: 'none' | 'paste' | 'menu'
   // Ctrl/Cmd + mouse wheel zooms the terminal font. Can be turned off (issue
   // #671) for scroll-sensitive mice; defaults to enabled.
   ctrlWheelZoom?: boolean
@@ -88,8 +89,13 @@ export interface TerminalSettings {
   // readable. 1 = xterm's no-op default = disabled.
   minimumContrast: number
   // Override for the session output log directory. Empty means the
-  // OS default under ~/Documents/ai-ops-terminal/logs.
+  // OS default under ~/Documents/uniTerm/logs.
   sessionLogDir: string
+  // Default local directory for files received with ZMODEM sz. Empty keeps
+  // the existing behavior of asking for a directory on every transfer.
+  zmodemDownloadDir: string
+  // Filename template: %S session, %H host, %M month, %D day, %h hour, %m minute.
+  sessionLogFilename: string
   // Characters that act as word boundaries for xterm.js's double-click
   // word selection. Default mirrors the built-in xterm separators
   // extended with the most common shell / path punctuation, so that
@@ -124,7 +130,7 @@ export interface AIModelConfig {
 }
 
 export const USER_AGENT_PRESETS: { label: string; value: string }[] = [
-  { label: 'ai-ops-terminal', value: 'ai-ops-terminal' },
+  { label: 'uniTerm', value: 'uniTerm' },
   { label: 'Claude Code', value: 'claude-code/1.0' },
   { label: 'Cursor', value: 'Cursor/1.0' },
   { label: 'Cline', value: 'Cline/1.0' },
@@ -136,17 +142,13 @@ export interface AISettings {
   maxTurns: number
   models: AIModelConfig[]
   activeModelId: string
-  // S2: 本地危险命令防线开关。默认开（true）—— agent.ts 的 getRisk 会
-  // 对命令做本地模式匹配，取 max(modelRisk, localRisk)，使被 prompt
-  // injection 劫持的模型无法把 rm -rf 声明为 read 绕过确认。
-  // 用户可在设置页关闭以完全信任模型声明（不推荐）。
-  localRiskGuardEnabled?: boolean
 }
 
 export type ShortcutAction =
   | 'nextTab' | 'prevTab'
-  | 'newConnection' | 'toggleSidebar'
+  | 'newConnection' | 'toggleSidebar' | 'openQuickCommands'
   | 'focusAI' | 'focusTerminal' | 'lockAI'
+  | 'maximizePanel'
   | 'closePanel'
   | 'navigatePrev' | 'navigateNext'
   | 'duplicateSession'
@@ -158,16 +160,36 @@ export type ShortcutAction =
   | 'toggleTimestamps'
   | 'zoomFontIn'
   | 'zoomFontOut'
+  | 'toggleFilePanel'    // 切换文件边栏
+  | 'toggleMonitor'      // 切换资源监控边栏
 
+// User-facing bindings only use ctrl/shift/alt. On macOS the runtime mirrors
+// every ctrl combo to Cmd (per-action shortcuts register both; the digit
+// shortcuts treat Ctrl and Cmd as one modifier), so Cmd is always covered by
+// ctrl. Alt bindings answer to the Option key (same key event).
 export interface KeyBinding {
   ctrl: boolean
-  meta?: boolean
   shift: boolean
   alt: boolean
   key: string
 }
 
-export type KeyboardSettings = Partial<Record<ShortcutAction, KeyBinding>>
+// tabSwitchModifier / panelSwitchModifier are not per-action bindings: only
+// their modifier flags (ctrl/meta/shift/alt) are read, their `key` stays
+// empty. The configured combo held together with a digit key (1-9) switches
+// to that tab / workspace panel, handled by onPlatformSystemShortcut in
+// App.vue. Unset = platform default (tabs: Ctrl on Windows/Linux, Cmd on
+// macOS; panels: Alt/Option); an entry with no modifier set disables that
+// digit family entirely. When both resolve to the same combo, tab switching
+// wins and the panel digit shortcuts are suppressed.
+export type KeyboardSettings = Partial<Record<ShortcutAction, KeyBinding>> & {
+  tabSwitchModifier?: KeyBinding
+  panelSwitchModifier?: KeyBinding
+  // Global (system-wide) show/hide hotkey for the tray. Not an in-app action:
+  // it is registered with the OS and fires even without focus. A binding with
+  // an empty key (the "cleared" state) disables it.
+  trayShowHide?: KeyBinding
+}
 
 export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   newConnection: 'shortcut.newConnection',
@@ -175,8 +197,10 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   prevTab: 'shortcut.prevTab',
   navigatePrev: 'shortcut.navigatePrev',
   navigateNext: 'shortcut.navigateNext',
+  maximizePanel: 'shortcut.maximizePanel',
   closePanel: 'shortcut.closePanel',
   toggleSidebar: 'shortcut.toggleSidebar',
+  openQuickCommands: 'shortcut.openQuickCommands',
   focusTerminal: 'shortcut.focusTerminal',
   focusAI: 'shortcut.focusAI',
   lockAI: 'shortcut.lockAI',
@@ -189,6 +213,8 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   toggleTimestamps: 'shortcut.toggleTimestamps',
   zoomFontIn: 'shortcut.zoomFontIn',
   zoomFontOut: 'shortcut.zoomFontOut',
+  toggleFilePanel: 'shortcut.toggleFilePanel',
+  toggleMonitor: 'shortcut.toggleMonitor',
 }
 
 export const DEFAULT_KEYBOARD: KeyboardSettings = {
@@ -196,9 +222,11 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   prevTab: { ctrl: true, shift: true, alt: false, key: 'tab' },
   newConnection: { ctrl: true, shift: true, alt: false, key: 'n' },
   toggleSidebar: { ctrl: true, shift: true, alt: false, key: 'h' },
+  openQuickCommands: { ctrl: true, shift: true, alt: false, key: 'm' },
   focusTerminal: { ctrl: true, shift: true, alt: false, key: 'j' },
   focusAI: { ctrl: true, shift: true, alt: false, key: 'k' },
   closePanel: { ctrl: true, shift: true, alt: false, key: 'q' },
+  maximizePanel: { ctrl: true, shift: true, alt: false, key: 'enter' },
   navigatePrev: { ctrl: false, shift: false, alt: true, key: 'arrowleft' },
   navigateNext: { ctrl: false, shift: false, alt: true, key: 'arrowright' },
   lockAI: { ctrl: true, shift: true, alt: false, key: 'l' },
@@ -211,6 +239,26 @@ export const DEFAULT_KEYBOARD: KeyboardSettings = {
   toggleTimestamps: { ctrl: true, shift: true, alt: false, key: 't' },
   zoomFontIn: { ctrl: true, shift: false, alt: false, key: '=' },
   zoomFontOut: { ctrl: true, shift: false, alt: false, key: '-' },
+  toggleFilePanel: { ctrl: true, shift: true, alt: false, key: 'b' },   // Ctrl+Shift+B
+  toggleMonitor: { ctrl: true, shift: true, alt: false, key: 'i' },     // Ctrl+Shift+I
+  trayShowHide: { ctrl: true, shift: false, alt: false, key: 'm' },
+}
+
+// Older settings.json files may carry a `meta` flag on bindings. Ctrl now
+// covers Cmd on macOS, so legacy meta-only bindings migrate to ctrl and the
+// flag itself is dropped; untouched actions fall back to their platform
+// defaults.
+export function normalizeKeyBindings(kb: KeyboardSettings): KeyboardSettings {
+  const out = { ...DEFAULT_KEYBOARD, ...kb } as KeyboardSettings & Record<string, KeyBinding | undefined>
+  for (const key of Object.keys(out)) {
+    const b = out[key] as (KeyBinding & { meta?: boolean }) | undefined
+    if (b && b.meta) {
+      const migrated = { ...b, ctrl: true }
+      delete migrated.meta
+      out[key] = migrated
+    }
+  }
+  return out
 }
 
 export interface SFTPBookmarks {
@@ -218,37 +266,76 @@ export interface SFTPBookmarks {
   remotePaths: string[]
 }
 
+// Start-page blocks: the content sections of the new-tab start
+// page the user can show/hide and reorder. The search box is a fixed header
+// row and is not configurable.
+export type StartPageBlock = 'favorites' | 'recent' | 'groups'
+
+export interface StartPageSettings {
+  // Missing keys fall back to START_PAGE_DEFAULTS (per-key merge on load).
+  visible: Record<StartPageBlock, boolean>
+  // Render order of the content sections.
+  order: StartPageBlock[]
+}
+
+export const START_PAGE_BLOCK_LABEL_KEYS: Record<StartPageBlock, string> = {
+  favorites: 'startTab.favorites',
+  recent: 'startTab.recentConnections',
+  groups: 'startTab.groups',
+}
+
+export const START_PAGE_DEFAULTS: StartPageSettings = {
+  visible: { favorites: true, recent: true, groups: true },
+  order: ['favorites', 'recent', 'groups'],
+}
+
 export interface AppSettings {
   theme: Theme
   language: Language
+  /** UI design baseline in px; the rem root derives from it (uiFontSize/12*16). */
+  uiFontSize: number
   terminal: TerminalSettings
   ai: AISettings
   keyboard: KeyboardSettings
   autoCheckUpdate: boolean
+  // Update source for checks and downloads: "auto" picks by UI language with
+  // cross-source fallback; "github" forces the official source; "gitee"
+  // forces the domestic mirror.
+  updateSource: 'auto' | 'github' | 'gitee'
   closeTabPrompt: boolean
   closeAppPrompt: boolean
+  // Startup prompt to reopen the tabs that were open when the app last quit
+  // (issue #937). The snapshot is always recorded either way.
+  restoreTabsPrompt: boolean
   sftpBookmarks: SFTPBookmarks
+  // Whether the dual-pane SFTP tab's transfer panel starts out visible.
+  // The panel auto-pops on every new transfer task regardless of this flag;
+  // the flag only remembers the last visibility across restarts.
+  sftpTransferPanelVisible: boolean
   customTerminalThemes: CustomTerminalTheme[]
   defaultLocalShell: string
+  gitBashPath: string
   // Which side of the tab the close (X) button sits on.
   tabCloseButton: 'left' | 'right'
+  // Whether the per-tab numeric shortcut hint (e.g. Ctrl+1) is drawn on the
+  // tab itself; the hover tooltips elsewhere are unaffected.
+  showTabShortcutHints: boolean
+  // How the host list opens the connection menu: hover "⋯"/star buttons
+  // ("button") or right-click only, with the hover buttons hidden
+  // ("rightclick"). The right-click menu works in both modes.
+  hostListMenuStyle: 'button' | 'rightclick'
+  // What the tab bar's "+" button (and the newConnection shortcut) opens:
+  // the start page ("startPage", default) or a local terminal with the
+  // default shell ("localTerminal").
+  newTabAction: 'startPage' | 'localTerminal'
   // Which connection-sidebar tab icons are visible, keyed by view id.
   // Missing keys fall back to SIDEBAR_TAB_DEFAULTS.
   sidebarTabs: Record<string, boolean>
-  // SSH host-key verification policy (S1).
-  //   'accept-new' (default, TOFU) — first connect records the fingerprint,
-  //     a change surfaces a confirmation dialog carrying old/new fingerprints.
-  //   'strict' — a change is rejected outright (no dialog).
-  //   'off' — host-key verification disabled (legacy InsecureIgnoreHostKey).
-  hostKeyStrategy?: HostKeyStrategy
-  // F4: 终端录制与回放 — 新终端连接时是否自动开始录制。默认 false。
-  autoRecord?: boolean
-  // F4: 录制文件存储目录。空表示使用后端默认 ~/.ai-ops-terminal/records/。
-  recordingsDir?: string
+  // Which blocks the new-tab start page shows and in what order. See the
+  // persistence-contract note on TerminalSettings: this field MUST also
+  // exist in the Go AppSettings (backend/store/settings_store.go).
+  startPage: StartPageSettings
 }
-
-// SSH host-key verification policy (S1). See AppSettings.hostKeyStrategy.
-export type HostKeyStrategy = 'accept-new' | 'strict' | 'off'
 
 // Default visibility per sidebar view. "connections" is the primary view and
 // is always shown (never hidden by either the settings card or the tab-strip
@@ -275,9 +362,14 @@ export const SIDEBAR_TAB_ORDER: { key: string; labelKey: string }[] = [
   { key: 'personalization', labelKey: 'sidebar.personalization' },
 ]
 
+// Platform UI text baseline: macOS native text runs larger than the
+// Windows 12px design size. Mirrors index.html's pre-paint detection.
+export const DEFAULT_UI_FONT_SIZE = /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 14 : 12
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'dark',
+  theme: 'system',
   language: 'system',
+  uiFontSize: DEFAULT_UI_FONT_SIZE,
   terminal: {
     theme: FOLLOW_APP_THEME,
     fontFamily: 'JetBrains Mono Variable',
@@ -296,6 +388,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     cursorStyle: 'block',
     minimumContrast: 4.5,
     sessionLogDir: '',
+    zmodemDownloadDir: '',
+    sessionLogFilename: '%S_%H_%M%D_%h%m.log',
     wordSeparator: '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
     showLineNumbers: false,
     showTimestamps: false,
@@ -313,30 +407,37 @@ export const DEFAULT_SETTINGS: AppSettings = {
         protocol: 'anthropic' as const
       }
     ],
-    activeModelId: 'model-default',
-    localRiskGuardEnabled: true
+    activeModelId: 'model-default'
   },
   keyboard: { ...DEFAULT_KEYBOARD },
   autoCheckUpdate: true,
+  updateSource: 'auto',
   closeTabPrompt: true,
   closeAppPrompt: true,
+  restoreTabsPrompt: true,
   sftpBookmarks: {
     localPaths: [],
     remotePaths: []
   },
+  sftpTransferPanelVisible: false,
   customTerminalThemes: [],
   defaultLocalShell: '',
+  gitBashPath: '',
   tabCloseButton: 'left',
+  showTabShortcutHints: true,
+  hostListMenuStyle: 'button',
+  newTabAction: 'startPage',
   sidebarTabs: { ...SIDEBAR_TAB_DEFAULTS },
-  hostKeyStrategy: 'accept-new',
-  autoRecord: false,
-  recordingsDir: ''
+  startPage: {
+    visible: { ...START_PAGE_DEFAULTS.visible },
+    order: [...START_PAGE_DEFAULTS.order]
+  }
 }
 
 export interface TerminalThemeEntry { label: string; value: string; type: 'dark' | 'light' }
 export const TERMINAL_THEMES: TerminalThemeEntry[] = [
-  { label: 'ai-ops-terminal Dark', value: 'aiops-dark', type: 'dark' },
-  { label: 'ai-ops-terminal Light', value: 'aiops-light', type: 'light' },
+  { label: 'uniTerm Dark', value: 'aiops-dark', type: 'dark' },
+  { label: 'uniTerm Light', value: 'aiops-light', type: 'light' },
   { label: 'Solarized Dark', value: 'solarized-dark', type: 'dark' },
   { label: 'Solarized Light', value: 'solarized-light', type: 'light' },
   { label: 'Monokai', value: 'monokai', type: 'dark' },
@@ -399,10 +500,11 @@ export const SELECTION_ACTIONS: { label: string; value: TerminalSettings['select
 
 // Timestamp column display formats. `value` is a tokenized template consumed
 // by formatTimestampMs (see utils/terminalGutter.ts); the option text is its
-// i18n label.
-export const TIMESTAMP_FORMATS: { labelKey: string; value: string; sample: string }[] = [
-  { labelKey: 'settings.timestampFormatTime', value: 'HH:mm:ss', sample: '12:34:56' },
-  { labelKey: 'settings.timestampFormatDateTime', value: 'YYYY-MM-DD HH:mm:ss', sample: '2026-08-18 12:34:56' },
+// i18n label followed by the template itself.
+export const TIMESTAMP_FORMATS: { labelKey: string; value: string }[] = [
+  { labelKey: 'settings.timestampFormatTime', value: 'HH:mm:ss' },
+  { labelKey: 'settings.timestampFormatTimeMs', value: 'HH:mm:ss.SSS' },
+  { labelKey: 'settings.timestampFormatDateTime', value: 'YYYY-MM-DD HH:mm:ss' },
 ]
 
 export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorStyle'] }[] = [
@@ -413,7 +515,8 @@ export const CURSOR_STYLES: { labelKey: string; value: TerminalSettings['cursorS
 
 export const RIGHT_CLICK_ACTIONS: { label: string; value: TerminalSettings['rightClickAction'] }[] = [
   { label: 'Show context menu', value: 'menu' },
-  { label: 'Paste from clipboard', value: 'paste' }
+  { label: 'Paste from clipboard', value: 'paste' },
+  { label: 'No action', value: 'none' }
 ]
 
 export const LANGUAGE_OPTIONS: { value: Locale; label: string; native: string }[] = [
@@ -426,11 +529,22 @@ export const LANGUAGE_OPTIONS: { value: Locale; label: string; native: string }[
   { value: 'es', label: 'Español', native: 'Español' },
   { value: 'fr', label: 'Français', native: 'Français' },
   { value: 'ru', label: 'Русский', native: 'Русский' },
+  { value: 'pt', label: 'Português', native: 'Português' },
+  { value: 'vi', label: 'Tiếng Việt', native: 'Tiếng Việt' },
 ]
+
+export interface UpdateAsset {
+  name: string
+  url: string
+  sha256: string
+  source: 'github' | 'gitee'
+}
 
 export interface UpdateInfo {
   hasUpdate: boolean
   current: string
   latest: string
   releaseUrl: string
+  changelog: string
+  assets: UpdateAsset[]
 }

@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // MCPTool describes a tool exposed by an MCP server. InputSchema is the raw

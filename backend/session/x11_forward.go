@@ -525,7 +525,7 @@ func displayTargetString(display string) string {
 func xServerHint(goos string) string {
 	switch goos {
 	case "windows":
-		return "Windows: VcXsrv is bundled with ai-ops-terminal (plugins/vcxsrv). If missing, reinstall ai-ops-terminal."
+		return "Windows: VcXsrv is bundled with uniTerm (plugins/vcxsrv). If missing, reinstall uniTerm."
 	case "darwin":
 		return "macOS: install and start XQuartz, then try again."
 	default:

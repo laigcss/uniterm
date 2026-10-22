@@ -11,11 +11,11 @@ declare module '*.vue' {
 }
 
 // Wails bindings (Go -> JS) 仅生成 .js，无 .d.ts；统一声明为 any 以通过 vue-tsc。
-// 覆盖 ../../bindings/github.com/laigcss/ai-ops-terminal/app、.../backend/store/models 等所有子路径。
-declare module '../../bindings/github.com/laigcss/ai-ops-terminal/*'
-declare module '../../../bindings/github.com/laigcss/ai-ops-terminal/*'
-declare module '../bindings/github.com/laigcss/ai-ops-terminal/*'
-declare module 'bindings/github.com/laigcss/ai-ops-terminal/*'
+// 覆盖 ../../bindings/github.com/ys-ll/uniterm/app、.../backend/store/models 等所有子路径。
+declare module '../../bindings/github.com/ys-ll/uniterm/*'
+declare module '../../../bindings/github.com/ys-ll/uniterm/*'
+declare module '../bindings/github.com/ys-ll/uniterm/*'
+declare module 'bindings/github.com/ys-ll/uniterm/*'
 
 // 第三方无类型声明的模块
 declare module '@novnc/novnc'

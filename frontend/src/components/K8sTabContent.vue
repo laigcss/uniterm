@@ -2,34 +2,78 @@
   <div class="db-tab-content">
     <div v-if="error" class="k8s-fatal">{{ error }}</div>
     <div v-else-if="!connId" class="k8s-connecting">Connecting…</div>
-    <div v-else class="db-main">
-      <div class="db-left" :style="{ width: leftWidth + 'px' }">
+    <div v-else class="db-main" :class="{ 'm-tree-host': isNarrowScreen }">
+      <div v-if="isNarrowScreen && treeOpen" class="m-tree-overlay" @click="treeOpen = false" />
+      <div
+        v-show="isNarrowScreen || treeOpen"
+        class="db-left"
+        :class="{ 'm-tree': isNarrowScreen, 'm-tree-open': isNarrowScreen && treeOpen }"
+        :style="isNarrowScreen ? {} : { width: leftWidth + 'px' }"
+      >
         <K8sTree :model-value="rootResourceKey" @update:model-value="selectResource" />
       </div>
-      <div class="db-resizer" @mousedown="onResizeStart" />
+      <div v-if="!isNarrowScreen && treeOpen" class="db-resizer" @mousedown="onResizeStart" />
       <div class="db-right">
-        <K8sBreadcrumb
-          :stack="navStack"
-          :namespace="currentNamespace"
-          :namespace-options="namespaceOptions"
-          @pop="popTo"
-          @update:namespace="setNamespace"
-        />
-        <div v-if="namespaceError" class="k8s-ns-warning" role="status">{{ namespaceError }}</div>
-        <K8sResourceList
-          :conn-id="connId"
-          :frame="topFrame"
-          :namespace-options="namespaceOptions"
-          @open-detail="openDetail"
-          @open-yaml="openYaml"
-          @open-logs="openLogs"
-          @view-pods="viewPods"
-          @open-crd="openCrd"
-          @open-terminal="openTerminal"
-          @changed="() => {}"
-        />
+        <template v-if="topFrame.kind === 'overview'">
+          <div class="tree-head">
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
+            <span class="tree-head-title">{{ t('k8s.overview') }}</span>
+          </div>
+          <K8sOverview :conn-id="connId" :context-name="props.connection.name" @navigate="selectResource" />
+        </template>
+        <template v-else>
+          <K8sBreadcrumb
+            :stack="navStack"
+            :namespace="currentNamespace"
+            :namespace-options="namespaceOptions"
+            @pop="popTo"
+            @update:namespace="setNamespace"
+          >
+            <template #toggle>
+              <button
+                class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+                :title="treeOpen ? t('common.collapse') : t('common.expand')"
+                @click="treeOpen = !treeOpen"
+              >
+                <PanelLeft :size="'0.875rem'" />
+              </button>
+            </template>
+          </K8sBreadcrumb>
+          <div v-if="namespaceError" class="k8s-ns-warning" role="status">{{ namespaceError }}</div>
+          <K8sResourceList
+            :conn-id="connId"
+            :frame="topFrame"
+            :namespace-options="namespaceOptions"
+            @open-detail="openDetail"
+            @open-yaml="openYaml"
+            @open-logs="openLogs"
+            @view-pods="viewPods"
+            @open-crd="openCrd"
+            @open-terminal="openTerminal"
+          @open-files="openFiles"
+            @changed="() => {}"
+          />
+        </template>
       </div>
     </div>
+
+    <!-- 多容器 Pod 的容器选择菜单（单实例，containers 数组经 slot current 传入） -->
+    <Menu ref="containerMenuRef" v-model:visible="containerMenuVisible">
+      <template #default="{ current }">
+        <MenuItem
+          v-for="c in (current as string[]) || []"
+          :key="c"
+          iconic
+          @click="onContainerPick(c)"
+        >{{ c }}</MenuItem>
+      </template>
+    </Menu>
 
     <K8sDetailDrawer
       :conn-id="connId"
@@ -46,7 +90,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { PanelLeft } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
+import { useI18n } from '../i18n'
+import { ElMessage } from 'element-plus'
 import * as k8sClient from '../services/k8sClient'
 import { usePanelStore } from '../stores/panelStore'
 import { useTabStore } from '../stores/tabStore'
@@ -57,11 +104,17 @@ import K8sTree from './K8sTree.vue'
 import K8sResourceList from './K8sResourceList.vue'
 import K8sBreadcrumb from './K8sBreadcrumb.vue'
 import K8sDetailDrawer from './K8sDetailDrawer.vue'
+import K8sOverview from './K8sOverview.vue'
+import { OVERVIEW_KEY } from '../types/k8s'
+import Menu from './Menu.vue'
+import MenuItem from './MenuItem.vue'
 import { parseCRD, crdListPath } from '../services/k8sCrd'
 import type { K8sTab, NavFrame } from '../types/k8s'
 import type { ConnectionConfig } from '../types/session'
 
 const props = defineProps<{ tab: K8sTab; connection: ConnectionConfig }>()
+
+const { t } = useI18n()
 
 const { resolveTunnelCredentials } = useTunnelCredentials()
 
@@ -105,19 +158,26 @@ async function loadNamespaces() {
 }
 
 // ── nav stack ──────────────────────────────────────────────────
-const navStack = ref<NavFrame[]>([{ kind: 'list', resourceKey: 'pods', namespace: props.tab.namespace || '' }])
+const navStack = ref<NavFrame[]>([{ kind: 'overview' }])
 const topFrame = computed(() => navStack.value[navStack.value.length - 1])
 const rootResourceKey = computed(() => {
+  if (topFrame.value.kind === 'overview') return OVERVIEW_KEY
   const base = navStack.value[0]
   return base.kind === 'list' ? base.resourceKey : ''
 })
 const currentNamespace = computed(() => {
   const f = topFrame.value
+  if (f.kind === 'overview') return props.tab.namespace || ''
   return f.kind === 'custom' ? f.namespace : (f as any).namespace || ''
 })
 
-function selectResource(key: string) {
-  navStack.value = [{ kind: 'list', resourceKey: key, namespace: currentNamespace.value }]
+function selectResource(key: string, nameFilter?: string) {
+  closeTree()
+  if (key === OVERVIEW_KEY) {
+    navStack.value = [{ kind: 'overview' }]
+    return
+  }
+  navStack.value = [{ kind: 'list', resourceKey: key, namespace: currentNamespace.value, nameFilter: nameFilter || undefined }]
 }
 function popTo(index: number) {
   navStack.value = navStack.value.slice(0, index + 1)
@@ -176,26 +236,55 @@ function crSelfPathOverride(): ((obj: any) => string) | undefined {
     return crdListPath(crd, ns).split('?')[0] + '/' + encodeURIComponent(obj.metadata?.name)
   }
 }
-async function openTerminal(pod: any) {
+// Pod 文件浏览：container-file 会话复用 container 的双栏文件管理（k8s 走
+// exec WebSocket 通道）。仅运行中的 Pod 可用。
+function openFiles(pod: any, _ev?: MouseEvent) {
+  if (pod.status?.phase !== 'Running') return
+  void import('../composables/connectionLauncher').then(({ launchContainerFileBrowser }) => {
+    void launchContainerFileBrowser({
+      id: connId.value, name: pod.metadata?.name || 'pod', type: 'container-file' as any,
+      host: '', port: 0, user: '', authType: 'password' as any,
+      containerId: pod.metadata?.name, containerNamespace: pod.metadata?.namespace || '',
+    } as any, { persist: false })
+  })
+}
+
+// 多容器 Pod：点终端按钮后在按钮位置弹出下拉菜单选容器；单容器直接进入。
+const containerMenuRef = ref<InstanceType<typeof Menu> | null>(null)
+const containerMenuVisible = ref(false)
+const pendingPod = ref<any>(null)
+
+function openTerminal(pod: any, ev?: MouseEvent) {
   const containers = (pod.spec?.containers || []).map((c: any) => c.name)
-  let container = containers[0]
+  if (!containers.length) return
+  if (containers.length === 1) {
+    void doExec(pod, containers[0])
+    return
+  }
+  pendingPod.value = pod
+  if (ev) containerMenuRef.value?.openAt(ev.clientX, ev.clientY, containers)
+  else containerMenuRef.value?.openAt(window.innerWidth / 2, window.innerHeight / 2, containers)
+}
+
+function onContainerPick(container: string) {
+  containerMenuRef.value?.close()
+  const pod = pendingPod.value
+  pendingPod.value = null
+  if (pod) void doExec(pod, container)
+}
+
+async function doExec(pod: any, container: string) {
   try {
-    if (containers.length > 1) {
-      const { value } = await ElMessageBox.prompt(
-        `Container (${containers.join(', ')})`, 'Select container',
-        { inputValue: containers[0], inputValidator: (v: string) => containers.includes(v) || 'unknown container' },
-      )
-      container = value
-    }
     const ns = pod.metadata?.namespace
     const info = await k8sClient.execSession(connId.value, ns, pod.metadata?.name, container)
     const title = `${pod.metadata?.name}/${container}`
     // Store exec params on the config so Panel.vue can rebuild the stream on reconnect.
     const cfg = {
-      id: '', name: title, type: 'k8s-exec' as any, host: '', port: 0, user: '', authType: 'password' as any,
-      k8sExecConnId: connId.value, k8sNamespace: ns, k8sExecPod: pod.metadata?.name, k8sExecContainer: container,
+      id: '', name: title, type: 'container-exec' as any, host: '', port: 0, user: '', authType: 'password' as any,
+      containerExecConnId: connId.value, containerExecNamespace: ns,
+      containerExecContainerId: pod.metadata?.name, containerExecContainerName: container,
     }
-    const panel = panelStore.createPanel(cfg as any, 'k8s-exec')
+    const panel = panelStore.createPanel(cfg as any, 'container-exec')
     panelStore.updateTitle(panel.id, title)
     panelStore.bindSession(panel.id, info.id)
     sessionStore.initSession(info.id)
@@ -211,6 +300,13 @@ async function openTerminal(pod: any) {
 
 // 左侧宽度 + resizer（抄 DBTabContent）
 const leftWidth = ref(220)
+
+// Narrow screens turn the tree into an overlay drawer (closed by default);
+// wide screens keep it inline and the toggle collapses it.
+const treeOpen = ref(!isNarrowScreen.value)
+function closeTree() {
+  if (isNarrowScreen.value) treeOpen.value = false
+}
 let resizeStartX = 0
 let resizeStartWidth = 0
 let resizing = false
@@ -318,14 +414,26 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .db-resizer {
-  width: 4px;
+  /* Hover area floats over the tree edge (negative margin) so it takes
+     no layout width when idle and never blanks the content side. */
+  width: 0.25rem;
+  margin-left: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-.db-resizer:hover {
-  background: var(--border-subtle, #333);
+.db-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 .db-right {
   flex: 1;
@@ -335,17 +443,17 @@ onBeforeUnmount(() => {
 }
 .k8s-fatal {
   color: var(--el-color-danger, #f56);
-  padding: 12px;
+  padding: 0.75rem;
 }
 .k8s-connecting {
-  padding: 12px;
+  padding: 0.75rem;
   opacity: 0.7;
 }
 .k8s-ns-warning {
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--el-color-warning, #e6a23c);
-  background: var(--el-color-warning-light-9, #fdf6ec);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
   border-bottom: 1px solid var(--el-color-warning-light-5, #faecd8);
   flex-shrink: 0;
 }

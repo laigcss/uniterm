@@ -11,7 +11,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -149,6 +149,8 @@ func defaultPort(typ string) int {
 		return 23
 	case "rdp":
 		return 3389
+	case "vnc":
+		return 5900
 	}
 	return 0
 }

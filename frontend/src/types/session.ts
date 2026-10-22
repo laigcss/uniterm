@@ -6,12 +6,6 @@ export interface ConnectionGroup {
   parentId?: string
 }
 
-export interface GroupTreeNode {
-  group: ConnectionGroup
-  connections: ConnectionConfig[]
-  children: GroupTreeNode[]
-}
-
 export interface PostLoginExpectStep {
   expect: string
   send: string
@@ -19,15 +13,28 @@ export interface PostLoginExpectStep {
   timeoutSecond?: number
 }
 
+// Per-connection SSH algorithm preferences. mode omitted/'compatible' uses the
+// built-in compatible set; 'custom' relies on the four preference lists (order
+// = negotiation priority, each list non-empty).
+export interface SSHAlgoConfig {
+  mode?: 'compatible' | 'secure' | 'custom'
+  keyExchanges?: string[]
+  ciphers?: string[]
+  macs?: string[]
+  hostKeys?: string[]
+}
+
 export interface ConnectionConfig {
   id: string
   name: string
   remark?: string
-  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'local' | 'wsl' | 'wsl-file' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'x11-desktop'
+  type: 'ssh' | 'telnet' | 'mosh' | 'rdp' | 'vnc' | 'spice' | 'database' | 'redis' | 'mongodb' | 'elasticsearch' | 'local' | 'wsl' | 'wsl-file' | 'sftp' | 'scp' | 'monitor' | 'ftp' | 'serial' | 'smb' | 'webdav' | 's3' | 'tcp' | 'k8s' | 'container' | 'container-file' | 'x11-desktop' | 'workspace'
   host: string
   port: number
   user: string
-  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity' | 'apikey'
+  authType: 'password' | 'key' | 'keyText' | 'agent' | 'identity' | 'kerberos' | 'apikey'
+  kerberosRealm?: string // realm used for IP targets, e.g. EXAMPLE.COM
+  sshAlgorithms?: SSHAlgoConfig // undefined = compatible default
   password?: string
   keyPath?: string
   keyContent?: string // inline private-key text (authType === 'keyText')
@@ -39,6 +46,9 @@ export interface ConnectionConfig {
   fileTransferProto?: 'sftp' | 'scp'
   groupId?: string
   // RDP-specific
+  // Desktop size, or a sentinel: -1 = follow the primary monitor
+  // ("full screen" option), -2 = adaptive (desktop follows the window size;
+  // the backend reconnects with the new size after it stays stable).
   rdpFixedWidth?: number
   rdpFixedHeight?: number
   rdpSmartSizing?: boolean
@@ -57,7 +67,7 @@ export interface ConnectionConfig {
   serialDataBits?: number
   serialStopBits?: number
   serialParity?: string
-  dbType?: string   // database type key
+  dbType?: string   // database type key — SQL family only (mysql/postgres/oracle/sqlserver/rqlite/sqlite, sqlite keeps the file path in host); Redis/MongoDB/Elasticsearch are standalone types
   dbName?: string   // default database name
   dbParams?: string // extra DSN query parameters, e.g. "sslmode=require&connect_timeout=30"
   // Elasticsearch / OpenSearch. The auth type reuses the shared `authType`
@@ -90,6 +100,9 @@ export interface ConnectionConfig {
   // and passes them in CreateSession.
   initialCols?: number
   initialRows?: number
+  // Defer Connect() until after the frontend measures the terminal size.
+  // SSH panels set this true so the PTY starts with correct dimensions.
+  // Companion SFTP/monitor sessions and batch execution set it false.
   deferConnect?: boolean
   tunnelSSHUser?: string
   tunnelSSHPassword?: string
@@ -98,7 +111,6 @@ export interface ConnectionConfig {
   // FTP-specific
   ftpEncryption?: string  // "none" | "auto" | "required"
   ftpPassive?: boolean
-  ftpEncoding?: string    // "utf-8" | "gbk" | "shift-jis" | "latin-1"
   // Opt in to FTPS InsecureSkipVerify. Defaults to false (verify enabled).
   // Off by default preserves backwards compatibility for users today who
   // rely on it for self-signed certs — but the toggle now exists so the
@@ -125,6 +137,10 @@ export interface ConnectionConfig {
   s3UrlStyle?: 'virtual' | 'path'
   // Terminal encoding (SSH/Telnet)
   encoding?: string // "utf-8" | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
+  // Terminal type reported to the remote host (SSH pty-req / telnet TTYPE /
+  // local TERM env). Values outside the backend session.EffectiveTermType
+  // whitelist fall back to xterm-256color.
+  termType?: string
   // Backspace key byte sequence for terminal-stream types (ssh/telnet/serial).
   // 'del'  = ASCII DEL (0x7F) — xterm.js default
   // 'bs'   = ASCII BS  (0x08) — Huawei/H3C/Cisco network gear, Windows convention
@@ -133,8 +149,6 @@ export interface ConnectionConfig {
   // Telnet-specific options
   telnetNegotiationMode?: 'active' | 'passive'
   telnetSendMode?: 'character' | 'line'
-  telnetLocalEcho?: boolean
-  telnetNewlineMode?: 'cr' | 'crlf'
   // Shared terminal options
   localEcho?: boolean
   newlineMode?: 'cr' | 'crlf'
@@ -143,6 +157,12 @@ export interface ConnectionConfig {
   // (XQuartz on macOS, VcXsrv on Windows). Silent degradation on
   // missing $DISPLAY / xauth — see backend x11_forward.go.
   x11Forwarding?: boolean
+  agentForwarding?: boolean
+  // When the OSC-7 cwd hook is typed into the SSH login shell: 'startup'
+  // injects right after the shell starts (default, stored as empty);
+  // 'follow' defers injection until the file panel's path-follow toggle is
+  // first enabled for a session.
+  cwdHookMode?: 'startup' | 'follow'
   // Enable session output log automatically on first connect. Applies
   // to terminal-stream types (ssh/telnet/serial/mosh/local).
   logOnConnect?: boolean
@@ -152,10 +172,11 @@ export interface ConnectionConfig {
   k8sContext?: string
   k8sNamespace?: string
   k8sInsecureTls?: boolean
-  // K8s exec terminal (k8s-exec panel) — params needed to reconnect the exec stream.
-  k8sExecConnId?: string
-  k8sExecPod?: string
-  k8sExecContainer?: string
+  // Exec terminal (container-exec panel) — params needed to reconnect the exec
+  // stream. containerExecNamespace/containerExecContainerName are k8s-only
+  // (pod namespace / target container in the pod); empty for docker runtimes.
+  containerExecNamespace?: string
+  containerExecContainerName?: string
   // Container connection (type: 'container')
   containerTransport?: 'ssh' | 'local'
   containerSSHConnId?: string
@@ -164,14 +185,51 @@ export interface ConnectionConfig {
   containerExecConnId?: string
   containerExecContainerId?: string
   containerExecShell?: string
+  // Container file browser (type: 'container-file') — config.ID 即容器/k8s 连接 ID，
+  // containerId 为目标容器（k8s 为 Pod 名），containerNamespace 仅 k8s 使用
+  containerId?: string
+  containerNamespace?: string
   // X11 Desktop (type: 'x11-desktop') — carries its own SSH credentials
   // (host, port, user, authType, password, keyPath) for direct connection.
   // X11 forwarding is forced on automatically. The actual desktop is
-  // rendered by the local X server (VcXsrv/XQuartz/Xorg), not inside ai-ops-terminal.
+  // rendered by the local X server (VcXsrv/XQuartz/Xorg), not inside uniTerm.
   x11DesktopDesktopType?: 'gnome' | 'kde' | 'xfce' | 'mate' | 'cinnamon' | 'openbox' | 'custom'
   // Custom desktop command (only used when desktopType === 'custom').
   // Passed to sshd verbatim, so it goes through /bin/sh -c on the remote.
   x11DesktopCustomCmd?: string
+  // Saved-workspace fields (type === 'workspace'): a named workspace snapshot
+  // living in the connection tree. Members hold only connectionId references —
+  // host credentials re-resolve at connect time, never stored here.
+  workspaceMembers?: SavedWorkspaceMember[]
+  workspaceLayout?: SavedWorkspaceLayoutNode | null
+}
+
+// One terminal slot inside a saved workspace. Layout leaves reference `id`
+// (stable across re-saves of the same live workspace — the panel id is reused).
+export interface SavedWorkspaceMember {
+  id: string
+  connectionId?: string // "" for self-contained members (local/wsl)
+  type: string
+  title: string
+  shellPath?: string
+}
+
+// Mirrors the runtime LayoutNode with leaf panelId replaced by member id.
+export interface SavedWorkspaceLayoutNode {
+  type: 'leaf' | 'split'
+  memberId?: string
+  direction?: 'horizontal' | 'vertical'
+  children?: SavedWorkspaceLayoutNode[]
+  sizes?: number[]
+}
+
+// Result of the generic terminal connect path, consumed by workspace
+// orchestration (create-from-selection / open-saved) to remap layouts and
+// distinguish credential-cancel from connect failure.
+export type MemberConnectStatus = 'ok' | 'cancelled' | 'failed'
+export interface MemberConnectResult {
+  status: MemberConnectStatus
+  panelId?: string
 }
 
 export interface SessionInfo {

@@ -1,48 +1,33 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	stdsync "sync"
 	"time"
 
-	"github.com/mattn/go-ieproxy"
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
-)
+	_ "golang.org/x/image/webp" // registered for image.DecodeConfig
+	"image"
+	_ "image/gif"  // registered for image.DecodeConfig
+	_ "image/jpeg" // registered for image.DecodeConfig
+	_ "image/png"  // registered for image.DecodeConfig
 
-// warnIfInsecureBaseURL logs a warning when baseURL uses plaintext http://
-// against a non-local host. S3: respects user choice (does not block), but
-// leaves an audit trail in ~/.ai-ops-terminal/ai-ops-terminal.log so a leaked API key via
-// social-engineered baseURL is at least visible after the fact.
-// Local hosts (localhost, 127.0.0.1, 0.0.0.0, ::1) are exempt so local
-// Ollama / LM Studio setups stay silent.
-func warnIfInsecureBaseURL(baseURL string) {
-	if baseURL == "" {
-		return
-	}
-	u, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return
-	}
-	if u.Scheme != "http" {
-		return
-	}
-	host := u.Hostname()
-	if host == "" || host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1" {
-		return
-	}
-	log.Writef("[S3] WARNING: ChatCompletion called with plaintext http baseURL host=%q (API key sent in cleartext); user chose to proceed", host)
-}
+	"github.com/mattn/go-ieproxy"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
+)
 
 // llmProxy is the Proxy function for the shared LLM transport. It resolves
 // the OS system proxy (Windows registry / macOS system config, including PAC
@@ -139,10 +124,7 @@ func injectCacheControl(reqBody map[string]interface{}) {
 // ChatCompletion streams the Anthropic API response via SSE, emitting Wails
 // events for each token while collecting the full message. It returns the
 // complete message JSON when the stream ends (backward-compatible).
-func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, protocol string, userAgent string, proxyID string) (string, error) {
-	// S3: audit-log plaintext http baseURL (non-local) without blocking.
-	warnIfInsecureBaseURL(baseURL)
-
+func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, protocol string, userAgent string, proxyID string, sessionID string) (string, error) {
 	// Parse the incoming request body (always Anthropic format from frontend)
 	var reqBody map[string]interface{}
 	if err := json.Unmarshal([]byte(requestJSON), &reqBody); err != nil {
@@ -150,7 +132,14 @@ func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, 
 	}
 
 	if userAgent == "" {
-		userAgent = "ai-ops-terminal"
+		userAgent = "uniTerm"
+	}
+
+	// Attachment guard rail: validate image blocks before anything is sent so
+	// an oversized / malformed / over-count attachment produces a readable
+	// error instead of an upstream 400 (FR-3, FR-6).
+	if err := validateRequestAttachments(reqBody); err != nil {
+		return "", err
 	}
 
 	client, err := a.llmClientFor(proxyID)
@@ -160,7 +149,7 @@ func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string, 
 
 	switch protocol {
 	case "openai":
-		return a.chatCompletionOpenAI(apiKey, baseURL, model, reqBody, userAgent, client)
+		return a.chatCompletionOpenAI(apiKey, baseURL, model, reqBody, userAgent, sessionID, client)
 	case "responses":
 		return a.chatCompletionResponses(apiKey, baseURL, model, reqBody, userAgent, client)
 	}
@@ -218,6 +207,10 @@ func proxyTransportURL(p *session.SocksProxy) (*url.URL, error) {
 
 // chatCompletionAnthropic handles the native Anthropic Messages API with SSE streaming.
 func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, client *http.Client) (string, error) {
+	// Computed once so a non-200 response can be reported as a readable
+	// attachment error when the request carried images (FR-6).
+	hasImages := requestHasImageAttachment(reqBody)
+
 	reqBody["stream"] = true
 
 	modifiedJSON, err := json.Marshal(reqBody)
@@ -235,48 +228,65 @@ func (a *App) chatCompletionAnthropic(apiKey, baseURL, model string, reqBody map
 		url = base + "/v1/messages"
 	}
 
-	ctx, cleanup := a.prepareSSEContext()
-	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
 
-	headers := map[string]string{
-		"x-api-key":         apiKey,
-		"anthropic-version": "2023-06-01",
-		"anthropic-beta":    "prompt-caching-2024-07-31",
-		"User-Agent":        userAgent,
-	}
-	res, scanner, err := doSSERequest(ctx, client, url, modifiedJSON, headers)
+	// F-308: atomic pointer swap so overlapping ChatCompletion calls
+	// don't clobber each other's cancel function.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
+	defer func() {
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(modifiedJSON))
 	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
+	req.Header.Set("User-Agent", userAgent)
+
+	// Use the shared client so this path honors the same system/env proxy
+	// resolution and connection pool as the OpenAI/Responses paths.
+	res, err := client.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
+		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	state := &streamState{}
-	result, err := runSSEStream(scanner, state, a.emit, newAnthropicEventMapper())
-	if err != nil {
-		return "", err
-	}
-	if result != "" {
-		return result, nil
+	if res.StatusCode != http.StatusOK {
+		// F-305: cap error-body reads at 64 KiB.
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
+		// A vision-less model answers a multimodal request with a 4xx; report
+		// that as a readable attachment error instead of the raw upstream body.
+		return "", upstreamError(res.StatusCode, body, hasImages)
 	}
 
-	// Stream ended without message_stop — emit a best-effort final message if any
-	// blocks were accumulated (mirrors the original fallback behaviour).
-	if len(state.contentBlocks) > 0 {
-		return finalizeStreamMessage(state)
-	}
-	return "", fmt.Errorf("stream ended without message_stop")
-}
-
-// newAnthropicEventMapper builds the Anthropic Messages API SSE event mapper.
-// Per-call state (currentBlock / currentBlockIndex) is captured in the closure;
-// the shared streamState holds the accumulated content blocks, role and usage.
-func newAnthropicEventMapper() sseLineMapper {
+	var contentBlocks []map[string]interface{}
 	var currentBlock map[string]interface{}
+	var messageRole string
+	var usage map[string]interface{}
 	currentBlockIndex := -1
-	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
+
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		dataStr := line[6:]
+
 		var event map[string]interface{}
 		if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
-			return streamAction{}
+			continue
 		}
 
 		eventType, _ := event["type"].(string)
@@ -284,14 +294,14 @@ func newAnthropicEventMapper() sseLineMapper {
 		switch eventType {
 		case "message_start":
 			if msg, ok := event["message"].(map[string]interface{}); ok {
-				state.messageRole, _ = msg["role"].(string)
+				messageRole, _ = msg["role"].(string)
 			}
 
 		case "content_block_start":
 			currentBlockIndex++
 			if block, ok := event["content_block"].(map[string]interface{}); ok {
 				currentBlock = block
-				emit("ai:block_start", map[string]interface{}{
+				a.emit("ai:block_start", map[string]interface{}{
 					"index":         currentBlockIndex,
 					"content_block": block,
 				})
@@ -309,10 +319,33 @@ func newAnthropicEventMapper() sseLineMapper {
 					}
 					currentBlock["text"] = currentBlock["text"].(string) + text
 				}
-				emit("ai:token", map[string]interface{}{
+				a.emit("ai:token", map[string]interface{}{
 					"text":  text,
 					"index": currentBlockIndex,
 				})
+			}
+			if deltaType == "thinking_delta" && currentBlock != nil {
+				thinking, _ := delta["thinking"].(string)
+				if thinking == "" {
+					continue
+				}
+				if s, ok := currentBlock["thinking"].(string); ok {
+					currentBlock["thinking"] = s + thinking
+				} else {
+					currentBlock["thinking"] = thinking
+				}
+				a.emit("ai:thinking", aiThinkingEvent{
+					Text:  thinking,
+					Index: currentBlockIndex,
+				})
+			}
+			if deltaType == "signature_delta" && currentBlock != nil {
+				sig, _ := delta["signature"].(string)
+				if s, ok := currentBlock["signature"].(string); ok {
+					currentBlock["signature"] = s + sig
+				} else {
+					currentBlock["signature"] = sig
+				}
 			}
 			if deltaType == "input_json_delta" && currentBlock != nil {
 				partial, _ := delta["partial_json"].(string)
@@ -334,41 +367,59 @@ func newAnthropicEventMapper() sseLineMapper {
 						}
 					}
 				}
-				state.contentBlocks = append(state.contentBlocks, currentBlock)
+				contentBlocks = append(contentBlocks, currentBlock)
 				currentBlock = nil
 			}
 
 		case "message_delta":
 			if u, ok := event["usage"].(map[string]interface{}); ok {
-				state.usage = u
+				usage = u
 			}
 			if delta, ok := event["delta"].(map[string]interface{}); ok {
 				if stopReason, ok := delta["stop_reason"].(string); ok {
-					emit("ai:done", map[string]interface{}{
+					a.emit("ai:done", map[string]interface{}{
 						"message": map[string]interface{}{
-							"role":    state.messageRole,
-							"content": state.contentBlocks,
+							"role":    messageRole,
+							"content": contentBlocks,
 						},
-						"usage":       state.usage,
+						"usage":       usage,
 						"stop_reason": stopReason,
 					})
 				}
 			}
 
 		case "message_stop":
-			result, err := finalizeStreamMessage(state)
-			if err != nil {
-				return streamAction{err: err}
+			fullMessage := map[string]interface{}{
+				"role":    messageRole,
+				"content": contentBlocks,
 			}
-			return streamAction{done: true, result: result}
+			resultJSON, err := json.Marshal(fullMessage)
+			if err != nil {
+				return "", fmt.Errorf("marshal full message: %w", err)
+			}
+			return string(resultJSON), nil
 
 		case "error":
 			errData, _ := event["error"].(map[string]interface{})
 			errMsg, _ := errData["message"].(string)
-			return streamAction{err: fmt.Errorf("stream error: %s", errMsg)}
+			return "", fmt.Errorf("stream error: %s", errMsg)
 		}
-		return streamAction{}
 	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	if len(contentBlocks) > 0 {
+		fullMessage := map[string]interface{}{
+			"role":    messageRole,
+			"content": contentBlocks,
+		}
+		resultJSON, _ := json.Marshal(fullMessage)
+		return string(resultJSON), nil
+	}
+
+	return "", fmt.Errorf("stream ended without message_stop")
 }
 
 // marshalAnthropicFinalMessage encodes a final message using a pooled
@@ -410,13 +461,43 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 	switch role {
 	case "user":
 		out := map[string]interface{}{"role": "user"}
+		// Image attachments force OpenAI's multi-part content form. Text-only
+		// messages keep the plain string form they have always used, so the
+		// existing text/tool_result behaviour is untouched.
+		var parts []map[string]interface{}
+		hasImage := false
 		if contentStr, ok := content.(string); ok {
 			out["content"] = contentStr
 		} else if contentBlocks, ok := content.([]interface{}); ok {
 			for _, block := range contentBlocks {
 				if b, ok := block.(map[string]interface{}); ok {
 					if bType, _ := b["type"].(string); bType == "text" {
-						out["content"] = b["text"]
+						if hasImage {
+							parts = append(parts, map[string]interface{}{"type": "text", "text": toString(b["text"])})
+						} else {
+							out["content"] = b["text"]
+						}
+					}
+					if bType, _ := b["type"].(string); bType == "image" {
+						dataURL, err := anthropicImageBlockToDataURL(b)
+						if err != nil {
+							// Validated before dispatch; skip rather than emit a
+							// half-built request if a caller bypassed that guard.
+							continue
+						}
+						if !hasImage {
+							hasImage = true
+							// Re-seed any text seen before the first image so
+							// block order (and therefore prompt order) survives.
+							if s, ok := out["content"].(string); ok && s != "" {
+								parts = append(parts, map[string]interface{}{"type": "text", "text": s})
+							}
+							delete(out, "content")
+						}
+						parts = append(parts, map[string]interface{}{
+							"type":      "image_url",
+							"image_url": map[string]interface{}{"url": dataURL},
+						})
 					}
 					if bType, _ := b["type"].(string); bType == "tool_result" {
 						toolMsg := map[string]interface{}{
@@ -428,6 +509,9 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 					}
 				}
 			}
+		}
+		if hasImage {
+			out["content"] = parts
 		}
 		// Emit tool messages first, then any text user message. An OpenAI-format
 		// assistant message with tool_calls must be immediately followed by the
@@ -469,6 +553,11 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 		if len(toolCalls) > 0 {
 			out["tool_calls"] = toolCalls
 		}
+		// A message whose only blocks were thinking/signature would otherwise
+		// serialize with neither content nor tool_calls and be rejected.
+		if _, hasContent := out["content"]; !hasContent && len(toolCalls) == 0 {
+			out["content"] = ""
+		}
 		results = append([]map[string]interface{}{out}, results...)
 
 	default:
@@ -492,10 +581,28 @@ func toString(v interface{}) string {
 	}
 }
 
+func isOpenCodeGoBaseURL(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+
+	if !strings.EqualFold(u.Hostname(), "opencode.ai") {
+		return false
+	}
+
+	path := strings.TrimRight(u.Path, "/")
+	return path == "/zen/go/v1" || strings.HasPrefix(path, "/zen/go/v1/")
+}
+
 // chatCompletionOpenAI converts the Anthropic-format request to OpenAI,
 // calls the OpenAI Chat Completions API with SSE streaming, and converts
 // the response back to Anthropic format so the frontend sees no difference.
-func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, client *http.Client) (string, error) {
+func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, sessionID string, client *http.Client) (string, error) {
+	// Computed once so a non-200 response can be reported as a readable
+	// attachment error when the request carried images (FR-6).
+	hasImages := requestHasImageAttachment(reqBody)
+
 	url := strings.TrimRight(baseURL, "/") + "/chat/completions"
 
 	// --- Build OpenAI-format request body ---
@@ -541,111 +648,190 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		return "", fmt.Errorf("marshal openai request: %w", err)
 	}
 
-	ctx, cleanup := a.prepareSSEContext()
-	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
 
-	headers := map[string]string{
-		"Authorization": "Bearer " + apiKey,
-		"User-Agent":    userAgent,
-	}
-	res, scanner, err := doSSERequest(ctx, client, url, requestJSON, headers)
+	// F-308: register our cancel in the App-level pointer and only
+	// clear it on the way out if no one replaced us. The previous code
+	// stored a single context.CancelFunc under a mutex and unconditionally
+	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
+	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
+	defer func() {
+		// CAS the slot back to nil, but only if it still points at our
+		// own cancel — a newer call may have already taken over the slot.
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
 	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	if sessionID != "" && isOpenCodeGoBaseURL(baseURL) {
+		req.Header.Set("x-opencode-session", sessionID)
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
+		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	state := &streamState{messageRole: "assistant"}
+	if res.StatusCode != http.StatusOK {
+		// F-305: cap the error-body read at 64 KiB so a hostile or
+		// buggy upstream returning a multi-GB error body can't OOM
+		// the Go process.
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
+		// A vision-less model answers a multimodal request with a 4xx; report
+		// that as a readable attachment error instead of the raw upstream body.
+		return "", upstreamError(res.StatusCode, body, hasImages)
+	}
 
+	// --- Parse OpenAI SSE stream, emit Anthropic-format events ---
+	var contentBlocks []map[string]interface{}
+	var currentBlock map[string]interface{}
+	var messageRole = "assistant"
+	currentBlockIndex := -1
+	activeToolCalls := make(map[int]map[string]interface{}) // index -> accumulating tool_call
+	// F-307: per-block text and input buffers so accumulation is O(n)
+	// instead of O(n²) string concat per token. Flushed to the block
+	// map on content_block_stop / finish_reason.
+	var currentTextBuf, currentInputBuf bytes.Buffer
+	// Per-tool input buffer so each tool_call's argument concat stays
+	// O(n). Keyed by the tool's index — multiple tool_calls can run
+	// in parallel (one per idx).
+	toolInputBufs := make(map[int]*bytes.Buffer)
+
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	// Accumulating buffer for an open "thinking" block (OpenAI-compatible
+	// reasoning models stream delta.reasoning_content before/around content).
+	var reasoningBuf bytes.Buffer
+
+	flushCurrentTextBlock := func() {
+		if currentBlock == nil {
+			return
+		}
+		switch t, _ := currentBlock["type"].(string); t {
+		case "text":
+			if currentTextBuf.Len() > 0 {
+				currentBlock["text"] = currentTextBuf.String()
+			}
+			currentTextBuf.Reset()
+		case "thinking":
+			if reasoningBuf.Len() > 0 {
+				currentBlock["thinking"] = reasoningBuf.String()
+			}
+			reasoningBuf.Reset()
+		}
+		contentBlocks = append(contentBlocks, currentBlock)
+		currentBlock = nil
+	}
+
+	// Emit message_start at the beginning
 	// F-320: typed payload (frontend reads event.message.role).
 	a.emit("ai:message_start", aiMessageStartEvent{
 		Role: "assistant",
 	})
 
-	result, err := runSSEStream(scanner, state, a.emit, newOpenAIChatEventMapper())
-	if err != nil {
-		return "", err
-	}
-	if result != "" {
-		return result, nil
-	}
-
-	// Stream ended without [DONE] / finish_reason — emit a best-effort final
-	// message if any blocks were accumulated (mirrors the original fallback).
-	if len(state.contentBlocks) > 0 {
-		return finalizeStreamMessage(state)
-	}
-	return "", fmt.Errorf("stream ended without completion")
-}
-
-// newOpenAIChatEventMapper builds the OpenAI Chat Completions SSE event mapper.
-// Per-call state (currentBlock, activeToolCalls, per-block text/input buffers
-// for F-307 O(n) accumulation) is captured in the closure; the shared streamState
-// holds the accumulated content blocks and role.
-func newOpenAIChatEventMapper() sseLineMapper {
-	var currentBlock map[string]interface{}
-	currentBlockIndex := -1
-	activeToolCalls := make(map[int]map[string]interface{})
-	// F-307: per-block text and input buffers so accumulation is O(n)
-	// instead of O(n²) string concat per token.
-	var currentTextBuf bytes.Buffer
-	// Per-tool input buffer so each tool_call's argument concat stays O(n).
-	toolInputBufs := make(map[int]*bytes.Buffer)
-
-	flushCurrentTextBlock := func(state *streamState) {
-		if currentBlock == nil {
-			return
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
 		}
-		if t, _ := currentBlock["type"].(string); t == "text" && currentTextBuf.Len() > 0 {
-			currentBlock["text"] = currentTextBuf.String()
-		}
-		state.contentBlocks = append(state.contentBlocks, currentBlock)
-		currentBlock = nil
-		currentTextBuf.Reset()
-	}
+		dataStr := line[6:]
 
-	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
 		if strings.TrimSpace(dataStr) == "[DONE]" {
 			// Emit content_block_stop for any open block
 			if currentBlock != nil {
-				flushCurrentTextBlock(state)
-				emit("ai:content_block_stop", aiContentBlockStopEvent{
+				flushCurrentTextBlock()
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
 			// Close any open tool_use blocks
 			for idx, tc := range activeToolCalls {
-				state.contentBlocks = append(state.contentBlocks, tc)
-				emit("ai:content_block_stop", aiContentBlockStopEvent{
+				contentBlocks = append(contentBlocks, tc)
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
 
-			emitStreamDone(emit, state, "end_turn")
-			result, err := finalizeStreamMessage(state)
-			if err != nil {
-				return streamAction{err: err}
+			// Emit message_delta and message_stop
+			// F-320: typed payload.
+			a.emit("ai:done", aiDoneEvent{
+				Message: map[string]interface{}{
+					"role":    messageRole,
+					"content": contentBlocks,
+				},
+				StopReason: "end_turn",
+			})
+
+			fullMessage := map[string]interface{}{
+				"role":    messageRole,
+				"content": contentBlocks,
 			}
-			return streamAction{done: true, result: result}
+			resultJSON, _ := json.Marshal(fullMessage)
+			return string(resultJSON), nil
 		}
 
 		var ev openaiStreamEvent
 		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
-			return streamAction{}
+			continue
 		}
 		if len(ev.Choices) == 0 {
-			return streamAction{}
+			continue
 		}
 		choice := ev.Choices[0]
 		delta := choice.Delta
+
+		// Handle reasoning/thinking content (DeepSeek-R1, QwQ, o-series via
+		// compatible gateways). Accumulated into a thinking block so it is
+		// preserved in message history, and streamed live via ai:thinking.
+		if delta.ReasoningContent != "" {
+			if currentBlock == nil || currentBlock["type"] != "thinking" {
+				// Close previous block if any
+				if currentBlock != nil {
+					flushCurrentTextBlock()
+					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
+						Index: currentBlockIndex,
+					})
+				}
+				currentBlockIndex++
+				currentBlock = map[string]interface{}{
+					"type":     "thinking",
+					"thinking": "",
+				}
+				reasoningBuf.Reset()
+				a.emit("ai:block_start", aiBlockStartEvent{
+					Index:        currentBlockIndex,
+					ContentBlock: map[string]interface{}{"type": "thinking"},
+				})
+			}
+			reasoningBuf.WriteString(delta.ReasoningContent)
+			a.emit("ai:thinking", aiThinkingEvent{
+				Text:  delta.ReasoningContent,
+				Index: currentBlockIndex,
+			})
+		}
 
 		// Handle text content
 		if delta.Content != "" {
 			if currentBlock == nil || currentBlock["type"] != "text" {
 				// Close previous block if any
 				if currentBlock != nil {
-					flushCurrentTextBlock(state)
-					emit("ai:content_block_stop", aiContentBlockStopEvent{
+					flushCurrentTextBlock()
+					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -655,13 +841,16 @@ func newOpenAIChatEventMapper() sseLineMapper {
 					"text": "",
 				}
 				currentTextBuf.Reset()
-				emit("ai:block_start", aiBlockStartEvent{
+				// F-320: typed payload.
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index:        currentBlockIndex,
 					ContentBlock: currentBlock,
 				})
 			}
 			currentTextBuf.WriteString(delta.Content)
-			emit("ai:token", aiTokenEvent{
+			// F-320: typed struct + dropped unused fields — see
+			// chatCompletionAnthropic for rationale.
+			a.emit("ai:token", aiTokenEvent{
 				Text:  delta.Content,
 				Index: currentBlockIndex,
 			})
@@ -677,8 +866,8 @@ func newOpenAIChatEventMapper() sseLineMapper {
 			if _, exists := activeToolCalls[idx]; !exists {
 				// Close current text block if open
 				if currentBlock != nil {
-					flushCurrentTextBlock(state)
-					emit("ai:content_block_stop", aiContentBlockStopEvent{
+					flushCurrentTextBlock()
+					a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 						Index: currentBlockIndex,
 					})
 				}
@@ -689,7 +878,8 @@ func newOpenAIChatEventMapper() sseLineMapper {
 					"name":  "",
 					"input": "",
 				}
-				emit("ai:block_start", aiBlockStartEvent{
+				// F-320: typed payload.
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index: currentBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -711,7 +901,8 @@ func newOpenAIChatEventMapper() sseLineMapper {
 					toolInputBufs[idx] = buf
 				}
 				buf.WriteString(args)
-				emit("ai:input_json_delta", aiInputJsonDeltaEvent{
+				// F-320: typed payload.
+				a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 					PartialJSON: args,
 				})
 			}
@@ -722,8 +913,8 @@ func newOpenAIChatEventMapper() sseLineMapper {
 		if finishReason != "" && finishReason != "null" {
 			// Close any open text block
 			if currentBlock != nil {
-				flushCurrentTextBlock(state)
-				emit("ai:content_block_stop", aiContentBlockStopEvent{
+				flushCurrentTextBlock()
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: currentBlockIndex,
 				})
 			}
@@ -745,13 +936,14 @@ func newOpenAIChatEventMapper() sseLineMapper {
 						tc["input"] = inputObj
 					}
 				}
-				state.contentBlocks = append(state.contentBlocks, tc)
-				emit("ai:content_block_stop", aiContentBlockStopEvent{
+				contentBlocks = append(contentBlocks, tc)
+				a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 					Index: idx,
 				})
 			}
 			activeToolCalls = make(map[int]map[string]interface{})
 			toolInputBufs = nil
+			currentInputBuf.Reset()
 
 			stopReason := "end_turn"
 			if finishReason == "tool_calls" {
@@ -762,15 +954,41 @@ func newOpenAIChatEventMapper() sseLineMapper {
 				stopReason = "end_turn"
 			}
 
-			emitStreamDone(emit, state, stopReason)
-			result, err := finalizeStreamMessage(state)
-			if err != nil {
-				return streamAction{err: err}
+			// F-320: typed payload.
+			a.emit("ai:done", aiDoneEvent{
+				Message: map[string]interface{}{
+					"role":    messageRole,
+					"content": contentBlocks,
+				},
+				StopReason: stopReason,
+			})
+
+			fullMessage := map[string]interface{}{
+				"role":    messageRole,
+				"content": contentBlocks,
 			}
-			return streamAction{done: true, result: result}
+			resultJSON, _ := json.Marshal(fullMessage)
+			return string(resultJSON), nil
 		}
-		return streamAction{}
 	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	if len(contentBlocks) > 0 || len(activeToolCalls) > 0 {
+		for _, tc := range activeToolCalls {
+			contentBlocks = append(contentBlocks, tc)
+		}
+		fullMessage := map[string]interface{}{
+			"role":    messageRole,
+			"content": contentBlocks,
+		}
+		resultJSON, _ := json.Marshal(fullMessage)
+		return string(resultJSON), nil
+	}
+
+	return "", fmt.Errorf("stream ended without completion")
 }
 
 // anthropicToolToResponses converts an Anthropic tool definition to the
@@ -827,6 +1045,22 @@ func convertAnthropicMessageToResponses(msg map[string]interface{}) []map[string
 			if txt, _ := b["text"].(string); txt != "" {
 				textParts = append(textParts, map[string]interface{}{"type": textType, "text": txt})
 			}
+		case "image":
+			// Images are only ever sent by the user; the Responses API takes a
+			// flat input_image part whose image_url is the data URL itself
+			// (unlike Chat Completions' nested image_url object).
+			if role == "assistant" {
+				continue
+			}
+			dataURL, err := anthropicImageBlockToDataURL(b)
+			if err != nil {
+				// Validated before dispatch; skip rather than emit a malformed item.
+				continue
+			}
+			textParts = append(textParts, map[string]interface{}{
+				"type":      "input_image",
+				"image_url": dataURL,
+			})
 		case "tool_use":
 			argsStr := "{}"
 			if input, ok := b["input"]; ok {
@@ -865,6 +1099,10 @@ func convertAnthropicMessageToResponses(msg map[string]interface{}) []map[string
 // events back to Anthropic-format events so the frontend sees no difference.
 // Stateless: full history is sent as `input` each turn; reasoning items are ignored.
 func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map[string]interface{}, userAgent string, client *http.Client) (string, error) {
+	// Computed once so a non-200 response can be reported as a readable
+	// attachment error when the request carried images (FR-6).
+	hasImages := requestHasImageAttachment(reqBody)
+
 	url := strings.TrimRight(baseURL, "/") + "/responses"
 
 	// --- Build Responses-format request body ---
@@ -906,93 +1144,134 @@ func (a *App) chatCompletionResponses(apiKey, baseURL, model string, reqBody map
 		return "", fmt.Errorf("marshal responses request: %w", err)
 	}
 
-	ctx, cleanup := a.prepareSSEContext()
-	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
 
-	headers := map[string]string{
-		"Authorization": "Bearer " + apiKey,
-		"User-Agent":    userAgent,
-	}
-	res, scanner, err := doSSERequest(ctx, client, url, requestJSON, headers)
+	// F-308: register our cancel in the App-level pointer and only
+	// clear it on the way out if no one replaced us. The previous code
+	// stored a single context.CancelFunc under a mutex and unconditionally
+	// nil'd it on defer; when two ChatCompletion calls overlapped, call A's
+	// defer wiped call B's cancel and CancelChatStream became a no-op for B.
+	myCancel := cancel
+	a.chatCancel.Store(&myCancel)
+	defer func() {
+		// CAS the slot back to nil, but only if it still points at our
+		// own cancel — a newer call may have already taken over the slot.
+		a.chatCancel.CompareAndSwap(&myCancel, nil)
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestJSON))
 	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("User-Agent", userAgent)
+
+	res, err := client.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("AI_REQUEST_TIMEOUT")
+		}
 		return "", err
 	}
 	defer res.Body.Close()
 
-	state := &streamState{messageRole: "assistant"}
-
-	a.emit("ai:message_start", aiMessageStartEvent{
-		Role: "assistant",
-	})
-
-	result, err := runSSEStream(scanner, state, a.emit, newResponsesEventMapper())
-	if err != nil {
-		return "", err
-	}
-	if result != "" {
-		return result, nil
+	if res.StatusCode != http.StatusOK {
+		// F-305: cap the error-body read at 64 KiB so a hostile or
+		// buggy upstream returning a multi-GB error body can't OOM
+		// the Go process.
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
+		// A vision-less model answers a multimodal request with a 4xx; report
+		// that as a readable attachment error instead of the raw upstream body.
+		return "", upstreamError(res.StatusCode, body, hasImages)
 	}
 
-	// Stream ended without response.completed — emit a best-effort final
-	// message if any blocks were accumulated (mirrors the original fallback).
-	if len(state.contentBlocks) > 0 {
-		return finalizeStreamMessage(state)
-	}
-	return "", fmt.Errorf("stream ended without completion")
-}
-
-// newResponsesEventMapper builds the OpenAI Responses API SSE event mapper.
-// Per-call state (output_index → block/index maps, per-block text/input buffers
-// for F-307 O(n) accumulation) is captured in the closure; the shared streamState
-// holds the accumulated content blocks.
-func newResponsesEventMapper() sseLineMapper {
+	// --- Parse Responses SSE stream, emit Anthropic-format events ---
+	var contentBlocks []map[string]interface{}
 	// Map Responses output_index -> our content block index / accumulating block.
 	blockByOutputIdx := make(map[int]map[string]interface{})
 	idxByOutputIdx := make(map[int]int)
 	nextBlockIndex := 0
 	// F-307: parallel maps of *bytes.Buffer so text/input accumulation
-	// is O(n) instead of O(n²) string concat per token.
+	// is O(n) instead of O(n²) string concat per token. Outputs may run
+	// in parallel (different output_index) so a single shared buffer
+	// doesn't work — keep one per output_index.
 	textBufs := make(map[int]*bytes.Buffer)
 	inputBufs := make(map[int]*bytes.Buffer)
+	// Reasoning summary accumulation, keyed by output_index like the others.
+	reasoningBufs := make(map[int]*bytes.Buffer)
 
-	finish := func(state *streamState, emit func(string, ...any), stopReason string) streamAction {
-		resultJSON, err := json.Marshal(map[string]interface{}{
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	// F-320: typed payload.
+	a.emit("ai:message_start", aiMessageStartEvent{
+		Role: "assistant",
+	})
+
+	finish := func(stopReason string) (string, error) {
+		fullMessage := map[string]interface{}{
 			"role":    "assistant",
-			"content": state.contentBlocks,
-		})
+			"content": contentBlocks,
+		}
+		resultJSON, err := json.Marshal(fullMessage)
 		if err != nil {
-			return streamAction{err: fmt.Errorf("marshal final message: %w", err)}
+			return "", fmt.Errorf("marshal final message: %w", err)
 		}
 		// F-320: typed payload with json.RawMessage so the
 		// already-marshaled message bytes pass through untouched.
-		emitStreamDoneRaw(emit, resultJSON, stopReason)
-		return streamAction{done: true, result: string(resultJSON)}
+		a.emit("ai:done", struct {
+			Message    json.RawMessage `json:"message"`
+			StopReason string          `json:"stop_reason"`
+		}{
+			Message:    json.RawMessage(resultJSON),
+			StopReason: stopReason,
+		})
+		return string(resultJSON), nil
 	}
 
-	return func(dataStr string, state *streamState, emit func(string, ...any)) streamAction {
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		dataStr := line[6:]
 		if strings.TrimSpace(dataStr) == "[DONE]" {
-			return streamAction{}
+			continue
 		}
 
 		var ev responsesStreamEvent
 		if err := json.Unmarshal([]byte(dataStr), &ev); err != nil {
-			return streamAction{}
+			continue
 		}
 
 		switch ev.Type {
 		case "response.output_item.added":
 			var item responsesStreamItem
 			if err := json.Unmarshal(ev.Item, &item); err != nil {
-				return streamAction{}
+				continue
 			}
 			switch item.Type {
 			case "message":
 				block := map[string]interface{}{"type": "text", "text": ""}
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
-				emit("ai:block_start", aiBlockStartEvent{
+				// F-320: typed payload.
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index:        nextBlockIndex,
 					ContentBlock: block,
+				})
+				nextBlockIndex++
+			case "reasoning":
+				// Reasoning items: keep the summary text as a thinking block
+				// (mirrors the OpenAI path) and stream it live via ai:thinking.
+				block := map[string]interface{}{"type": "thinking", "thinking": ""}
+				blockByOutputIdx[ev.OutputIndex] = block
+				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
+				a.emit("ai:block_start", aiBlockStartEvent{
+					Index:        nextBlockIndex,
+					ContentBlock: map[string]interface{}{"type": "thinking"},
 				})
 				nextBlockIndex++
 			case "function_call":
@@ -1004,7 +1283,8 @@ func newResponsesEventMapper() sseLineMapper {
 				}
 				blockByOutputIdx[ev.OutputIndex] = block
 				idxByOutputIdx[ev.OutputIndex] = nextBlockIndex
-				emit("ai:block_start", aiBlockStartEvent{
+				// F-320: typed payload.
+				a.emit("ai:block_start", aiBlockStartEvent{
 					Index: nextBlockIndex,
 					ContentBlock: map[string]interface{}{
 						"type": "tool_use",
@@ -1018,18 +1298,38 @@ func newResponsesEventMapper() sseLineMapper {
 		case "response.output_text.delta":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				return streamAction{}
+				continue
 			}
 			if ev.Delta == "" {
-				return streamAction{}
+				continue
 			}
+			// F-307: append to per-block *bytes.Buffer instead of
+			// O(n²) string concatenation. Flushed on output_item.done.
 			buf, ok := textBufs[ev.OutputIndex]
 			if !ok {
 				buf = &bytes.Buffer{}
 				textBufs[ev.OutputIndex] = buf
 			}
 			buf.WriteString(ev.Delta)
-			emit("ai:token", aiTokenEvent{
+			// F-320: typed struct + dropped unused fields — see
+			// chatCompletionAnthropic for rationale.
+			a.emit("ai:token", aiTokenEvent{
+				Text:  ev.Delta,
+				Index: idxByOutputIdx[ev.OutputIndex],
+			})
+
+		case "response.reasoning_summary_text.delta":
+			block := blockByOutputIdx[ev.OutputIndex]
+			if block == nil || ev.Delta == "" {
+				continue
+			}
+			buf, ok := reasoningBufs[ev.OutputIndex]
+			if !ok {
+				buf = &bytes.Buffer{}
+				reasoningBufs[ev.OutputIndex] = buf
+			}
+			buf.WriteString(ev.Delta)
+			a.emit("ai:thinking", aiThinkingEvent{
 				Text:  ev.Delta,
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
@@ -1037,10 +1337,10 @@ func newResponsesEventMapper() sseLineMapper {
 		case "response.function_call_arguments.delta":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				return streamAction{}
+				continue
 			}
 			if ev.Delta == "" {
-				return streamAction{}
+				continue
 			}
 			buf, ok := inputBufs[ev.OutputIndex]
 			if !ok {
@@ -1048,15 +1348,17 @@ func newResponsesEventMapper() sseLineMapper {
 				inputBufs[ev.OutputIndex] = buf
 			}
 			buf.WriteString(ev.Delta)
-			emit("ai:input_json_delta", aiInputJsonDeltaEvent{
+			// F-320: typed payload.
+			a.emit("ai:input_json_delta", aiInputJsonDeltaEvent{
 				PartialJSON: ev.Delta,
 			})
 
 		case "response.output_item.done":
 			block := blockByOutputIdx[ev.OutputIndex]
 			if block == nil {
-				return streamAction{}
+				continue
 			}
+			// F-307: flush per-block buffers once into the block map.
 			if buf, ok := textBufs[ev.OutputIndex]; ok {
 				if buf.Len() > 0 {
 					block["text"] = buf.String()
@@ -1079,28 +1381,46 @@ func newResponsesEventMapper() sseLineMapper {
 				}
 				delete(inputBufs, ev.OutputIndex)
 			}
-			state.contentBlocks = append(state.contentBlocks, block)
-			emit("ai:content_block_stop", aiContentBlockStopEvent{
+			if buf, ok := reasoningBufs[ev.OutputIndex]; ok {
+				if buf.Len() > 0 && block["type"] == "thinking" {
+					block["thinking"] = buf.String()
+				}
+				delete(reasoningBufs, ev.OutputIndex)
+			}
+			contentBlocks = append(contentBlocks, block)
+			// F-320: typed payload.
+			a.emit("ai:content_block_stop", aiContentBlockStopEvent{
 				Index: idxByOutputIdx[ev.OutputIndex],
 			})
 			delete(blockByOutputIdx, ev.OutputIndex)
 
 		case "response.completed":
 			stopReason := "end_turn"
-			for _, b := range state.contentBlocks {
+			for _, b := range contentBlocks {
 				if b["type"] == "tool_use" {
 					stopReason = "tool_use"
 					break
 				}
 			}
-			return finish(state, emit, stopReason)
+			return finish(stopReason)
 
 		case "response.failed", "error":
+			// Marshal the typed event back out for the error message; the
+			// caller doesn't need the original map shape.
 			body, _ := json.Marshal(ev)
-			return streamAction{err: fmt.Errorf("responses stream error: %s", string(body))}
+			return "", fmt.Errorf("responses stream error: %s", string(body))
 		}
-		return streamAction{}
 	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	if len(contentBlocks) > 0 {
+		return finish("end_turn")
+	}
+
+	return "", fmt.Errorf("stream ended without completion")
 }
 
 // CancelChatStream cancels the currently active ChatCompletion stream.
@@ -1145,7 +1465,7 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string, proxyID string) ([]M
 	} else {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	req.Header.Set("User-Agent", "ai-ops-terminal")
+	req.Header.Set("User-Agent", "uniTerm")
 
 	// F-208: share the same transport as the LLM clients so the model
 	// list call also benefits from the keep-alive pool; the request
@@ -1180,32 +1500,6 @@ func (a *App) FetchModels(apiKey, baseURL, protocol string, proxyID string) ([]M
 		return nil, fmt.Errorf("failed to parse models response: %w", err)
 	}
 	return result.Data, nil
-}
-
-// AI Config Store methods
-
-func (a *App) SaveAIConfig(config store.AIConfig) error {
-	if a.settingsStore == nil {
-		return fmt.Errorf("settings store not initialized")
-	}
-	settings, err := a.settingsStore.Load()
-	if err != nil {
-		return fmt.Errorf("load settings: %w", err)
-	}
-	// Update the active model's fields
-	for i := range settings.AI.Models {
-		if settings.AI.Models[i].ID == settings.AI.ActiveModelID {
-			settings.AI.Models[i].APIKey = config.APIKey
-			settings.AI.Models[i].BaseURL = config.BaseURL
-			settings.AI.Models[i].Model = config.Model
-			break
-		}
-	}
-	if err := a.settingsStore.Save(settings); err != nil {
-		return err
-	}
-	a.triggerAutoSync()
-	return nil
 }
 
 // SkillsStore methods
@@ -1319,6 +1613,15 @@ type aiInputJsonDeltaEvent struct {
 	PartialJSON string `json:"partial_json"`
 }
 
+// aiThinkingEvent carries streamed reasoning/thinking text (Anthropic
+// thinking_delta, OpenAI delta.reasoning_content, or Responses reasoning
+// summary deltas). The frontend appends these to the current assistant
+// message's thinking buffer and renders them in the collapsible thinking box.
+type aiThinkingEvent struct {
+	Text  string `json:"text"`
+	Index int    `json:"index"`
+}
+
 type aiMessageStartEvent struct {
 	Role string `json:"role"`
 }
@@ -1350,8 +1653,9 @@ type openaiDeltaToolCall struct {
 }
 
 type openaiStreamDelta struct {
-	Content   string                `json:"content"`
-	ToolCalls []openaiDeltaToolCall `json:"tool_calls"`
+	Content          string                `json:"content"`
+	ReasoningContent string                `json:"reasoning_content"`
+	ToolCalls        []openaiDeltaToolCall `json:"tool_calls"`
 }
 
 type openaiStreamChoice struct {
@@ -1378,4 +1682,369 @@ type responsesStreamEvent struct {
 	OutputIndex int             `json:"output_index"`
 	Item        json.RawMessage `json:"item"`
 	Delta       string          `json:"delta"`
+}
+
+// --- Attachment support (merged from app_ai_attachment.go) ---
+
+// Attachment support for the AI assistant.
+//
+// uniTerm is a model proxy: it never performs OCR, image recognition or any
+// other multimodal inference itself. Attachments are validated here and then
+// forwarded verbatim to the upstream multimodal model, which does the actual
+// understanding. The frontend builds Anthropic-format content blocks; this
+// file is the backend half — the safety net that keeps a malformed or
+// oversized payload from reaching (and being rejected by) the upstream API,
+// plus the block translation the OpenAI / Responses converters need.
+//
+// The limits below are mirrored in frontend/src/services/attachments.ts
+// (ATTACHMENT_LIMITS). Keep both in sync: the frontend owns the user-facing
+// validation messages, this file owns the enforcement that cannot be bypassed
+// from the renderer.
+const (
+	// AttachmentMaxImageBytes caps one image attachment (5 MiB decoded).
+	AttachmentMaxImageBytes = 5 * 1024 * 1024
+	// AttachmentMaxTextBytes caps one text-file attachment (5 MiB).
+	AttachmentMaxTextBytes = 5 * 1024 * 1024
+	// AttachmentMaxImageSide is the longest-edge pixel cap for one image.
+	// Providers reject oversized frames independently of byte size —
+	// Anthropic refuses anything above 8000 x 8000 px — and a tall or wide
+	// screenshot can easily be under the byte cap yet over this one.
+	AttachmentMaxImageSide = 8000
+	// AttachmentMaxImagesPerMessage is the hard ceiling on images inside one
+	// upstream message. The product rule is AttachmentImagesPerMessage (see
+	// below), but a single API message can legitimately carry more: aiStore
+	// merges consecutive user messages when an assistant turn produced nothing
+	// (a failed request, a cancelled turn), so two pasted screenshots from two
+	// turns become one message. This ceiling only stops a runaway payload; it
+	// is deliberately above the product rule so that legitimate history is
+	// never rejected.
+	AttachmentMaxImagesPerMessage = 8
+	// AttachmentMaxTextFilesPerMessage caps text files per user message.
+	AttachmentMaxTextFilesPerMessage = 3
+)
+
+// Sentinel errors surfaced to the frontend. The renderer matches on these
+// prefixes and renders a localized, human-readable message — upstream 400
+// bodies are never shown to the user for attachment failures.
+var (
+	errAttachmentTooLarge        = errors.New("AI_ATTACHMENT_TOO_LARGE")
+	errAttachmentUnsupportedType = errors.New("AI_ATTACHMENT_UNSUPPORTED_TYPE")
+	errAttachmentTooMany         = errors.New("AI_ATTACHMENT_TOO_MANY")
+	errAttachmentEmpty           = errors.New("AI_ATTACHMENT_EMPTY")
+	errAttachmentInvalid         = errors.New("AI_ATTACHMENT_INVALID")
+	// errAttachmentTooLargePixels is the pixel-side counterpart of
+	// errAttachmentTooLarge: the bytes fit but the frame does not.
+	errAttachmentTooLargePixels = errors.New("AI_ATTACHMENT_TOO_LARGE_PIXELS")
+	// errAttachmentUnsupportedByModel is returned instead of the raw upstream
+	// body when a request carrying images is rejected in a way that indicates
+	// the target model / endpoint has no vision support.
+	errAttachmentUnsupportedByModel = errors.New("AI_ATTACHMENT_UNSUPPORTED_BY_MODEL")
+)
+
+// attachmentImageMediaTypes is the image whitelist. Mirrors
+// ATTACHMENT_IMAGE_TYPES in the frontend service.
+var attachmentImageMediaTypes = map[string]bool{
+	"image/png":  true,
+	"image/jpeg": true,
+	"image/jpg":  true,
+	"image/gif":  true,
+	"image/webp": true,
+}
+
+// anthropicImageBlockToDataURL renders an Anthropic image content block as a
+// data URL and enforces the image whitelist / size cap.
+//
+//	{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}
+//	  -> "data:image/png;base64,..."
+//
+// Only base64 sources are accepted: the renderer always inlines clipboard and
+// file bytes, so a remote URL source would mean the model fetches an
+// arbitrary address on the user's behalf.
+func anthropicImageBlockToDataURL(block map[string]interface{}) (string, error) {
+	source, ok := block["source"].(map[string]interface{})
+	if !ok {
+		return "", errAttachmentInvalid
+	}
+	if srcType, _ := source["type"].(string); srcType != "base64" {
+		return "", errAttachmentUnsupportedType
+	}
+
+	mediaType := strings.ToLower(strings.TrimSpace(stringField(source, "media_type")))
+	if !attachmentImageMediaTypes[mediaType] {
+		return "", errAttachmentUnsupportedType
+	}
+
+	data := strings.TrimSpace(stringField(source, "data"))
+	if data == "" {
+		return "", errAttachmentEmpty
+	}
+
+	// Decode to measure the *real* byte count: base64 length alone is a poor
+	// proxy (padding would push a file that is exactly at the limit over it).
+	// This also rejects payloads that are not valid base64 before they reach
+	// the upstream API.
+	decoded, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return "", errAttachmentInvalid
+	}
+	if len(decoded) == 0 {
+		return "", errAttachmentEmpty
+	}
+	if len(decoded) > AttachmentMaxImageBytes {
+		return "", errAttachmentTooLarge
+	}
+
+	// Byte size is only half of the upstream contract: providers also cap the
+	// frame itself (Anthropic: 8000 x 8000 px), and a long screenshot is often
+	// tiny in bytes yet thousands of pixels tall. DecodeConfig reads just the
+	// image header, so this stays cheap. The whitelist has already pinned the
+	// media type to png/jpeg, so the registered decoders cover every payload
+	// that can get here; an undecodable header means the "image" is corrupt
+	// and would be rejected upstream anyway.
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(decoded))
+	if err != nil {
+		return "", errAttachmentInvalid
+	}
+	if cfg.Width > AttachmentMaxImageSide || cfg.Height > AttachmentMaxImageSide {
+		return "", errAttachmentTooLargePixels
+	}
+
+	return "data:" + mediaType + ";base64," + data, nil
+}
+
+func stringField(m map[string]interface{}, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+// validateRequestAttachments walks every message in an Anthropic-format
+// request and enforces the per-message attachment limits. Runs before any
+// upstream call so the user gets a readable, localized message instead of a
+// provider 400.
+func validateRequestAttachments(reqBody map[string]interface{}) error {
+	msgs, ok := reqBody["messages"].([]interface{})
+	if !ok {
+		return nil
+	}
+	for _, m := range msgs {
+		msg, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		blocks, ok := msg["content"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		images := 0
+		for _, raw := range blocks {
+			block, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if bType, _ := block["type"].(string); bType != "image" {
+				continue
+			}
+			images++
+			if images > AttachmentMaxImagesPerMessage {
+				return errAttachmentTooMany
+			}
+			if _, err := anthropicImageBlockToDataURL(block); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// requestHasImageAttachment reports whether any message carries an image
+// block. Used to decide how to phrase an upstream rejection.
+func requestHasImageAttachment(reqBody map[string]interface{}) bool {
+	msgs, ok := reqBody["messages"].([]interface{})
+	if !ok {
+		return false
+	}
+	for _, m := range msgs {
+		msg, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		blocks, ok := msg["content"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, raw := range blocks {
+			if block, ok := raw.(map[string]interface{}); ok {
+				if bType, _ := block["type"].(string); bType == "image" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// visionRejectionPhrases are the ways providers say "I can't take an image".
+var (
+	visionSubjectWords     = []string{"image", "vision", "multimodal", "content type"}
+	visionRejectionPhrases = []string{
+		"not support", "unsupported", "not allowed", "invalid", "unknown", "unrecognized",
+	}
+	// sizeRejectionPhrases are the ways providers say "this image is too
+	// big" — in pixels, since bytes are already capped before dispatch.
+	// Both halves must match: an image subject and a size phrase, so a
+	// "max_tokens is too large" error is never misclassified.
+	sizeRejectionPhrases = []string{
+		"exceed", "too large", "dimension", "resolution", "width", "height", "pixel",
+	}
+)
+
+// isImageSizeRejection reports whether an upstream error message means "the
+// image frame is over the provider's pixel limits" rather than "no vision".
+// The local pre-flight uses the Anthropic limits, but other providers cap
+// tighter, so a frame that passes locally can still be refused upstream.
+func isImageSizeRejection(detail string) bool {
+	lower := strings.ToLower(detail)
+	if !isVisionSubject(lower) {
+		return false
+	}
+	for _, phrase := range sizeRejectionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// isVisionSubject reports whether the error text is about images at all.
+func isVisionSubject(lower string) bool {
+	for _, word := range visionSubjectWords {
+		if strings.Contains(lower, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// isVisionRejection reports whether an upstream error message means "this model
+// cannot take images" rather than a genuine request bug. Providers word this
+// both ways round ("does not support image input", "invalid image_url"), so the
+// check is order-independent.
+func isVisionRejection(detail string) bool {
+	lower := strings.ToLower(detail)
+	if !isVisionSubject(lower) {
+		return false
+	}
+	for _, phrase := range visionRejectionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// upstreamError turns a non-200 upstream response into an error the UI can
+// render. Attachment-bearing requests that fail with a vision-related 4xx are
+// reported as errAttachmentUnsupportedByModel (plus the upstream's own
+// human-readable `error.message`, never the raw JSON/HTML envelope); a
+// pixel-limit refusal gets its own sentinel so the UI can suggest downscaling.
+// Everything else keeps the pre-existing "HTTP <code>: <body>" behaviour.
+func upstreamError(status int, body []byte, hasImages bool) error {
+	if hasImages && status >= 400 && status < 500 {
+		detail := upstreamErrorDetail(body)
+		if isVisionRejection(detail) {
+			return fmt.Errorf("%w: %s", errAttachmentUnsupportedByModel, detail)
+		}
+		if isImageSizeRejection(detail) {
+			return fmt.Errorf("%w: %s", errAttachmentTooLargePixels, detail)
+		}
+	}
+	return fmt.Errorf("HTTP %d: %s", status, string(body))
+}
+
+// upstreamErrorDetail extracts the human-readable message from an OpenAI- or
+// Anthropic-shaped error body, collapsing whitespace and truncating so a
+// hostile or HTML-returning gateway cannot flood the chat panel.
+func upstreamErrorDetail(body []byte) string {
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+		Message string `json:"message"`
+	}
+	detail := ""
+	if json.Unmarshal(body, &parsed) == nil {
+		switch {
+		case parsed.Error.Message != "":
+			detail = parsed.Error.Message
+		case parsed.Message != "":
+			detail = parsed.Message
+		}
+	}
+	detail = strings.Join(strings.Fields(detail), " ")
+	if len(detail) > 300 {
+		detail = detail[:300] + "…"
+	}
+	return detail
+}
+
+// --- Local file drag-drop (merged from app_ai_attachment_file.go) ---
+// Local file drag-drop support for the AI composer.
+//
+// The webview never receives dropped file content: the window runs with
+// EnableFileDrop, so OS drops are intercepted at the native layer and arrive
+// in the renderer as absolute paths (see the WindowFilesDropped re-emit in
+// main.go). The renderer hands each dropped path to this binding, which reads
+// the file off disk and returns its bytes base64-encoded; the renderer wraps
+// them in a File and reuses the regular attachment pipeline (whitelist,
+// per-kind caps, count limits, pixel check — attachments.ts). The caps here
+// are the same un-bypassable guard rails as validateRequestAttachments.
+
+// errAttachmentIsDirectory marks a dropped path that is a directory rather
+// than a file; the renderer maps it to its own localized message.
+var errAttachmentIsDirectory = errors.New("AI_ATTACHMENT_IS_DIRECTORY")
+
+// maxLocalAttachmentReadBytes caps one dropped file read. Mirrors
+// AttachmentMaxImageBytes / AttachmentMaxTextBytes (the same value) — the
+// renderer owns the per-kind user-facing messages, this owns the enforcement.
+const maxLocalAttachmentReadBytes = AttachmentMaxImageBytes
+
+// LocalAttachmentFile is one local file handed to the AI composer's
+// drag-drop flow.
+type LocalAttachmentFile struct {
+	Name    string `json:"name"`
+	Size    int64  `json:"size"`
+	DataB64 string `json:"dataB64"`
+}
+
+// ReadLocalAttachmentFile reads a local file dropped onto the AI composer.
+// Directories, empty files and files over the size cap are rejected before
+// reading; anything else is returned with its content base64-encoded.
+func (a *App) ReadLocalAttachmentFile(path string) (LocalAttachmentFile, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return LocalAttachmentFile{}, errAttachmentInvalid
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return LocalAttachmentFile{}, err
+	}
+	if info.IsDir() {
+		return LocalAttachmentFile{}, errAttachmentIsDirectory
+	}
+	if info.Size() == 0 {
+		return LocalAttachmentFile{}, errAttachmentEmpty
+	}
+	if info.Size() > maxLocalAttachmentReadBytes {
+		return LocalAttachmentFile{}, errAttachmentTooLarge
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return LocalAttachmentFile{}, err
+	}
+	return LocalAttachmentFile{
+		Name:    info.Name(),
+		Size:    info.Size(),
+		DataB64: base64.StdEncoding.EncodeToString(data),
+	}, nil
 }

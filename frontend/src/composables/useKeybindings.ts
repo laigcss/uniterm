@@ -17,7 +17,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useCompanionStore } from '../stores/companionStore'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { CloseSession } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { CloseSession } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { focusPanelTerminal } from './useFocusTerminal'
 import { loadKeybindings, installGlobalListener, uninstallGlobalListener } from './useKeyboardShortcuts'
 import type { ShortcutAction } from '../types/settings'
@@ -194,6 +194,23 @@ export function useKeybindings(deps: KeybindingDeps) {
         return
       }
       duplicateSession(tab)
+    },
+    openQuickCommands: () => {
+      sidebarVisible.value = true
+      nextTick(() => sidebarRef.value?.openQuickCommands())
+    },
+    maximizePanel: () => {
+      const tab = tabStore.activeTab
+      if (!tab || tab.type !== 'workspace' || !tab.activePanelId) return
+      const panelId = tab.activePanelId
+      tabStore.toggleWorkspacePanelMaximize(tab.id)
+      nextTick(() => focusPanelTerminal(panelId))
+    },
+    toggleFilePanel: () => {
+      companionStore.toggleFiles()
+    },
+    toggleMonitor: () => {
+      companionStore.toggleMonitor()
     },
   }
 

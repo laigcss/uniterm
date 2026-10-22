@@ -1,4 +1,39 @@
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import type { Ref } from 'vue'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import '@xterm/xterm/css/xterm.css'
+import { SessionResize } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { queuedSessionWrite } from '../services/sessionWriter'
+import { writeClipboard } from '../composables/useClipboardWrite'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useLocalStateStore } from '../stores/localStateStore'
+import { useSessionStore } from '../stores/sessionStore'
+import { stripCursorBlink } from '../utils/cursor'
+import { formatFontFamily } from '../utils/formatFontFamily'
+import { resolveXtermBackground, applyTerminalBgVar, resolveTerminalThemeName } from '../composables/useTerminalTheme'
+import { Browser, Events } from '@wailsio/runtime'
 import type { CustomTerminalTheme } from '../types/settings'
+
+export interface UseTerminalOptions {
+  onSessionData?: (data: string) => void
+  onSessionStatus?: (status: string) => void
+}
+
+export interface UseTerminalReturn {
+  terminalRef: Ref<HTMLDivElement | undefined>
+  terminal: Terminal | null
+  fitAddon: FitAddon | null
+  searchAddon: SearchAddon | null
+  write: (data: string) => void
+  resize: () => void
+  getSelection: () => string
+  clear: () => void
+  focus: () => void
+  setRetryOnEnter: (value: boolean) => void
+}
 
 export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]): any {
   const custom = customThemes?.find(t => t.id === name)
@@ -354,5 +389,466 @@ export function getXtermTheme(name: string, customThemes?: CustomTerminalTheme[]
       }
     default:
       return base
+  }
+}
+
+export function useTerminal(
+  getSessionId: () => string | null | undefined,
+  options?: UseTerminalOptions
+): UseTerminalReturn {
+  const settingsStore = useSettingsStore()
+  const sessionStore = useSessionStore()
+
+  const terminalRef = ref<HTMLDivElement>()
+  let terminal: Terminal | null = null
+  let fitAddon: FitAddon | null = null
+  let searchAddon: SearchAddon | null = null
+  // Track loaded addons for unmount dispose; some (e.g. WebLinks) leave
+  // host elements behind after terminal.dispose() in older xterm.
+  const loadedAddons: Array<{ dispose?: () => void }> = []
+  let resizeObserver: ResizeObserver | null = null
+  let intersectionObserver: IntersectionObserver | null = null
+  let unsubscribe: (() => void) | null = null
+  let statusUnsubscribe: (() => void) | null = null
+  let onDocumentMouseUp: (() => void) | null = null
+  let onMouseDownGlobal: ((e: MouseEvent) => void) | null = null
+
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null
+  let isResizing = false
+  let splitResizing = false
+  let suppressResizeUntil = 0
+  let retryOnEnter = false
+  let hoverEl: HTMLDivElement | null = null
+  let cachedCellWidth = 0
+  let cachedCellHeight = 0
+  let cachedFontKey = ''
+
+  function getTerminalOptions() {
+    const ts = settingsStore.settings.terminal
+    const ls = useLocalStateStore()
+    const themeName = resolveTerminalThemeName(ts.theme, settingsStore.resolvedAppTheme)
+    const theme = resolveXtermBackground(
+      getXtermTheme(themeName, settingsStore.settings.customTerminalThemes),
+      ls.state.backgroundEnabled,
+      ls.state.backgroundImage
+    )
+    return {
+      fontSize: ts.fontSize || 13,
+      fontFamily: formatFontFamily(ts.fontFamily, ts.fallbackFont),
+      fontWeight: ts.fontWeight || 400,
+      theme,
+      cursorBlink: ts.cursorBlink ?? true,
+      rightClickSelectsWord: false,
+      scrollback: ts.maxHistoryLines || 2500,
+      allowProposedApi: true,
+      allowTransparency: true,
+      wordSeparator: ts.wordSeparator || '\\ :;~`!@#$%^&*()=+|[]{}\'",<>?',
+    }
+  }
+
+  // Wrap stripCursorBlink with current blink setting for convenience
+  function stripBlink(data: string): string {
+    return stripCursorBlink(data, settingsStore.settings.terminal.cursorBlink ?? true)
+  }
+
+  function resize() {
+    const sessionId = getSessionId()
+    if (!terminal || !fitAddon || !sessionId) return
+    const el = terminalRef.value
+    if (!el) return
+
+    // Use getBoundingClientRect to get actual rendered size (bypasses
+    // getComputedStyle caching issues during flex shrink).
+    const rect = el.getBoundingClientRect()
+
+    // Read xterm's internally-measured character dimensions.
+    // Use try/catch because these are internal APIs that may change between versions.
+    let cellWidth = 0
+    let cellHeight = 0
+    const fontKey = `${terminal.options.fontSize}|${terminal.options.fontFamily}`
+    if (fontKey === cachedFontKey && cachedCellWidth > 0 && cachedCellHeight > 0) {
+      cellWidth = cachedCellWidth
+      cellHeight = cachedCellHeight
+    } else {
+      try {
+        const core = (terminal as any)._core
+        const dims = core?._renderService?.dimensions
+        if (dims) {
+          cellWidth = dims.css?.cell?.width || 0
+          cellHeight = dims.css?.cell?.height || 0
+        }
+      } catch {
+        cellWidth = 0
+        cellHeight = 0
+      }
+      if (cellWidth > 0 && cellHeight > 0) {
+        cachedCellWidth = cellWidth
+        cachedCellHeight = cellHeight
+        cachedFontKey = fontKey
+      }
+    }
+
+    if (cellWidth === 0 || cellHeight === 0) {
+      // Fallback to FitAddon if char dims aren't ready yet.
+      fitAddon.fit()
+      if (terminal.cols <= 0 || terminal.rows <= 0) return
+      SessionResize(sessionId, terminal.cols, terminal.rows).catch(() => {})
+      return
+    }
+
+    // Use the container's actual rendered size (rect) to compute cols/rows.
+    // terminal.element's clientWidth may not shrink when the container shrinks
+    // because xterm's internal screen/canvas width can hold it at the old size.
+    const scrollbarWidth = (terminal as any)._core?.viewport?.scrollBarWidth || 0
+    const cols = Math.floor((rect.width - scrollbarWidth) / cellWidth)
+    const rows = Math.floor(rect.height / cellHeight)
+    const newCols = Math.max(2, cols)
+    const newRows = Math.max(1, rows)
+
+    if (terminal.cols !== newCols || terminal.rows !== newRows) {
+      terminal.resize(newCols, newRows)
+      SessionResize(sessionId, newCols, newRows).catch(() => {})
+    }
+  }
+
+  function write(data: string) {
+    terminal?.write(data)
+  }
+
+  function getSelection(): string {
+    return terminal?.getSelection() || ''
+  }
+
+  function clear() {
+    terminal?.clear()
+  }
+
+  function focus() {
+    terminal?.focus()
+  }
+
+  function setRetryOnEnter(value: boolean) {
+    retryOnEnter = value
+  }
+
+  function onWindowResize() {
+    const el = terminalRef.value
+    if (!el) return
+    if (!isResizing) {
+      isResizing = true
+      el.classList.add('resizing')
+    }
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      isResizing = false
+      el.classList.remove('resizing')
+      resize()
+    }, 400)
+  }
+
+  function onSplitResizeStart() {
+    splitResizing = true
+  }
+
+  function onSplitResizeEnd() {
+    splitResizing = false
+    if (resizeTimer) {
+      clearTimeout(resizeTimer)
+      resizeTimer = null
+    }
+    suppressResizeUntil = Date.now() + 200
+    nextTick(() => {
+      setTimeout(() => {
+        // Force layout so getComputedStyle returns up-to-date dimensions
+        void terminalRef.value?.offsetWidth
+        resize()
+      }, 0)
+    })
+  }
+
+  onMounted(() => {
+    if (!terminalRef.value) return
+
+    terminal = new Terminal(getTerminalOptions())
+
+    fitAddon = new FitAddon()
+    terminal.loadAddon(fitAddon)
+    loadedAddons.push(fitAddon)
+    // Register web links addon: underline http/https links, Ctrl+Click to open
+    const webLinksAddon = new WebLinksAddon(
+      (event, uri) => {
+        if (event.ctrlKey || event.metaKey) {
+          Browser.OpenURL(uri)
+        }
+      },
+      {
+        hover(event, _text, _location) {
+          if (!hoverEl) {
+            hoverEl = document.createElement('div')
+            hoverEl.className = 'xterm-link-tooltip'
+            terminal!.element!.appendChild(hoverEl)
+          }
+          const rect = terminal!.element!.getBoundingClientRect()
+          hoverEl.textContent = 'Ctrl + Click to open'
+          hoverEl.style.left = (event.clientX - rect.left + 12) + 'px'
+          hoverEl.style.top = (event.clientY - rect.top - 28) + 'px'
+          hoverEl.style.display = 'block'
+        },
+        leave() {
+          if (hoverEl) {
+            hoverEl.style.display = 'none'
+          }
+        }
+      }
+    )
+    terminal.loadAddon(webLinksAddon)
+    loadedAddons.push(webLinksAddon)
+
+    searchAddon = new SearchAddon()
+    terminal.loadAddon(searchAddon)
+    loadedAddons.push(searchAddon)
+
+    terminal.open(terminalRef.value)
+    applyTerminalBgVar(terminal, terminal.options.theme ?? {})
+    // Force synchronous layout so grid rows are sized before xterm measures
+    void terminalRef.value.offsetHeight
+    fitAddon.fit()
+
+    // Restore terminal content from session buffer after tab move/merge
+    const sessionId = getSessionId()
+    if (sessionId) {
+      const history = sessionStore.getData(sessionId)
+      if (history) {
+        terminal.write(stripBlink(history))
+      }
+    }
+
+    // Retry resize: after a tab move/merge the layout may not be stable yet,
+    // so fitAddon.fit() can compute 0 cols/rows and skip SessionResize.
+    ;[100, 300, 600, 1000, 1500].forEach(d => setTimeout(() => resize(), d))
+
+    terminal.onData((data) => {
+      if (retryOnEnter && (data === '\r' || data === '\n')) {
+        retryOnEnter = false
+        if (options?.onSessionStatus) {
+          options.onSessionStatus('retry')
+        }
+        return
+      }
+      const sid = getSessionId()
+      if (sid) {
+        queuedSessionWrite(sid, data)
+      }
+    })
+
+    // Selection action: copy on mouse up (only when a new selection was made).
+    // Use mouseDownOnThisTerminal to ensure copy only fires when the user
+    // actually started selecting inside this terminal. Without this, clicking
+    // another panel (or returning from another app) would trigger copy from
+    // this terminal's leftover selection.
+    let selectionStartText = ''
+    let mouseDownOnThisTerminal = false
+    onDocumentMouseUp = () => {
+      if (!mouseDownOnThisTerminal) return
+      mouseDownOnThisTerminal = false
+      if (settingsStore.settings.terminal.selectionAction === 'copy') {
+        const text = terminal?.getSelection()
+        if (text && text !== selectionStartText) {
+          // writeClipboard, not navigator.clipboard directly — the browser path
+          // alone never reaches the system clipboard on Android (see
+          // useClipboardWrite.ts), and the platform ordering lives there.
+          writeClipboard(text)
+        }
+      }
+    }
+    document.addEventListener('mouseup', onDocumentMouseUp)
+    terminal.element?.addEventListener('mousedown', () => {
+      mouseDownOnThisTerminal = true
+      selectionStartText = terminal?.getSelection() || ''
+    })
+    onMouseDownGlobal = (e: MouseEvent) => {
+      if (!terminal || !terminal.element?.contains(e.target as Node)) {
+        mouseDownOnThisTerminal = false
+      }
+    }
+    document.addEventListener('mousedown', onMouseDownGlobal)
+
+    unsubscribe =Events.On('session:data', (ev) => { const payload: { id: string; data: string } = ev.data; 
+      const sid = getSessionId()
+      if (payload.id === sid && terminal) {
+        // Filter ED3 (erase scrollback). For ED2 (clear screen), replace with
+        // newline scrolling + home so that current viewport content is pushed
+        // into scrollback before clearing, matching standard terminal behavior.
+        let data = stripBlink(payload.data).replace(/\x1b\[3J/g, '')
+        if (data.includes('\x1b[2J')) {
+          const rows = terminal.rows
+          const scrollClear = '\n'.repeat(rows) + '\x1b[H'
+          data = data.replace(/\x1b\[H\x1b\[2J/g, scrollClear)
+          data = data.replace(/\x1b\[2J/g, scrollClear)
+        }
+        terminal.write(data)
+        if (options?.onSessionData) {
+          options.onSessionData(data)
+        }
+      }
+     })
+
+    retryOnEnter = false
+    statusUnsubscribe =Events.On('session:status', (ev) => { const payload: { id: string; status: string } = ev.data; 
+      const sid = getSessionId()
+      if (payload.id !== sid) return
+      if (payload.status === 'connected') {
+        retryOnEnter = false
+        if (options?.onSessionStatus) {
+          options.onSessionStatus(payload.status)
+        }
+        // Force send current terminal size to sync the backend PTY after reconnect.
+        const sid = getSessionId()
+        if (sid && terminal && terminal.cols > 0 && terminal.rows > 0) {
+          SessionResize(sid, terminal.cols, terminal.rows).catch(() => {})
+        }
+        resize()
+      } else if (payload.status === 'error') {
+        retryOnEnter = true
+        if (options?.onSessionStatus) {
+          options.onSessionStatus(payload.status)
+        }
+        terminal?.write('\r\n\x1b[31mConnection failed. Press Enter to retry.\x1b[0m\r\n')
+      } else if (payload.status === 'disconnected') {
+        retryOnEnter = true
+        if (options?.onSessionStatus) {
+          options.onSessionStatus(payload.status)
+        }
+      } else {
+        if (options?.onSessionStatus) {
+          options.onSessionStatus(payload.status)
+        }
+      }
+     })
+
+    window.addEventListener('resize', onWindowResize)
+    window.addEventListener('split:resize-start', onSplitResizeStart)
+    window.addEventListener('split:resize-end', onSplitResizeEnd)
+
+    // Also handle container-only resize (AI sidebar drag, etc.)
+    resizeObserver = new ResizeObserver(() => {
+      if (isResizing || splitResizing || Date.now() < suppressResizeUntil) return
+      const el = terminalRef.value
+      if (!el) return
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => resize(), 150)
+    })
+    resizeObserver.observe(terminalRef.value)
+
+    intersectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          resize()
+        }
+      })
+    })
+    intersectionObserver.observe(terminalRef.value)
+  })
+
+  // Watch sessionId changes to rebind session data
+  watch(() => getSessionId(), (newId) => {
+    if (newId && terminal) {
+      // Restore buffered session data that arrived before bindSession
+      const history = sessionStore.getData(newId)
+      if (history) {
+        terminal.write(stripBlink(history))
+      }
+      // Retry resize multiple times with longer delays to ensure backend Connect is ready
+      const delays = [200, 400, 600, 800, 1000, 1500, 2000]
+      delays.forEach((delay) => {
+        setTimeout(() => resize(), delay)
+      })
+    }
+  })
+
+  function applyXtermTheme(themeName: string) {
+    if (!terminal) return
+    const ls = useLocalStateStore()
+    const theme = resolveXtermBackground(
+      getXtermTheme(resolveTerminalThemeName(themeName, settingsStore.resolvedAppTheme), settingsStore.settings.customTerminalThemes),
+      ls.state.backgroundEnabled,
+      ls.state.backgroundImage
+    )
+    terminal.options.theme = theme
+    applyTerminalBgVar(terminal, theme)
+  }
+
+  // Watch terminal settings changes
+  watch(() => settingsStore.settings.terminal, (ts) => {
+    if (!terminal) return
+    if (ts.fontSize) terminal.options.fontSize = ts.fontSize
+    if (ts.fontFamily) terminal.options.fontFamily = formatFontFamily(ts.fontFamily, ts.fallbackFont)
+    if (ts.fontWeight) terminal.options.fontWeight = ts.fontWeight
+    if (ts.maxHistoryLines) terminal.options.scrollback = ts.maxHistoryLines
+    if (ts.theme) applyXtermTheme(ts.theme)
+    if (typeof ts.cursorBlink === 'boolean') {
+      terminal.options.cursorBlink = ts.cursorBlink
+      if (!ts.cursorBlink) terminal.write('\x1b[?12l')
+    }
+    resize()
+  }, { deep: true })
+
+  // Watch for background image toggling to update terminal transparency
+  const localStateStore = useLocalStateStore()
+  watch(
+    () => localStateStore.state.backgroundEnabled,
+    () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
+  )
+
+  // Re-apply when the app theme flips so FOLLOW_APP_THEME tracks it live.
+  watch(
+    () => settingsStore.resolvedAppTheme,
+    () => applyXtermTheme(settingsStore.settings.terminal.theme || 'dark')
+  )
+
+  onUnmounted(() => {
+    resizeObserver?.disconnect()
+    intersectionObserver?.disconnect()
+    // Addons detach listeners through the terminal; dispose them first.
+    for (const addon of loadedAddons) {
+      try {
+        addon.dispose?.()
+      } catch {
+        // ignore — some addons don't fully implement dispose
+      }
+    }
+    loadedAddons.length = 0
+    // Detach the tooltip element the WebLinksAddon may have left behind.
+    if (hoverEl && hoverEl.parentElement) {
+      hoverEl.parentElement.removeChild(hoverEl)
+    }
+    hoverEl = null
+    terminal?.dispose()
+    unsubscribe?.()
+    statusUnsubscribe?.()
+    if (onDocumentMouseUp) {
+      document.removeEventListener('mouseup', onDocumentMouseUp)
+      onDocumentMouseUp = null
+    }
+    if (onMouseDownGlobal) {
+      document.removeEventListener('mousedown', onMouseDownGlobal)
+      onMouseDownGlobal = null
+    }
+    window.removeEventListener('resize', onWindowResize)
+    window.removeEventListener('split:resize-start', onSplitResizeStart)
+    window.removeEventListener('split:resize-end', onSplitResizeEnd)
+  })
+
+  return {
+    terminalRef,
+    terminal,
+    fitAddon,
+    searchAddon,
+    write,
+    resize,
+    getSelection,
+    clear,
+    focus,
+    setRetryOnEnter
   }
 }

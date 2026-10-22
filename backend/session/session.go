@@ -3,10 +3,13 @@ package session
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 type SessionStatus string
@@ -31,15 +34,71 @@ type ConnectionGroup struct {
 	ParentId *string `json:"parentId,omitempty"`
 }
 
+// SSHAlgoConfig holds per-connection SSH algorithm preferences. See
+// ssh_config.go for the mode semantics. nil (or an empty Mode) on
+// ConnectionConfig.SSHAlgorithms selects the compatible mode.
+type SSHAlgoConfig struct {
+	Mode string `json:"mode,omitempty"`
+	// Only consulted in custom mode; each list is the negotiation preference
+	// order and must be non-empty with supported algorithm names only.
+	KeyExchanges []string `json:"keyExchanges,omitempty"`
+	Ciphers      []string `json:"ciphers,omitempty"`
+	MACs         []string `json:"macs,omitempty"`
+	HostKeys     []string `json:"hostKeys,omitempty"`
+}
+
+// CwdHook injection timing for SSH connections (ConnectionConfig.CwdHookMode).
+const (
+	// CwdHookModeStartup injects the OSC-7 cwd hook right after the login
+	// shell starts (default).
+	CwdHookModeStartup = "startup"
+	// CwdHookModeFollow skips the startup injection; the hook is typed into
+	// the running shell on demand when the frontend's directory-follow toggle
+	// first enables for the session.
+	CwdHookModeFollow = "follow"
+)
+
+// effectiveCwdHookMode returns the effective cwd-hook mode for a connection.
+//
+// On HarmonyOS (UNITERM_HARMONYOS=1), the ArkWeb terminal's stty -echo does
+// not take effect before the hook body is echoed back, causing the shell
+// integration code to display in the terminal. Overriding to "follow" skips
+// the startup injection entirely; the hook can still be injected on demand
+// when the user enables directory-follow.
+func effectiveCwdHookMode(mode string) string {
+	if os.Getenv("UNITERM_HARMONYOS") == "1" && mode != CwdHookModeFollow {
+		return CwdHookModeFollow
+	}
+	return mode
+}
+
+// CwdHookInjector is implemented by sessions whose OSC-7 cwd hook can be
+// typed into the shell after the session is up — SSH with CwdHookMode
+// "follow", where the startup injection is skipped.
+type CwdHookInjector interface {
+	InjectCwdHook() error
+}
+
 type ConnectionConfig struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Remark   string `json:"remark,omitempty"`
-	Type     string `json:"type"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
-	AuthType string `json:"authType"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Remark string `json:"remark,omitempty"`
+	Type   string `json:"type"`
+	Host   string `json:"host"`
+	Port   int    `json:"port"`
+	User   string `json:"user"`
+	// SSHAlgorithms customizes the negotiated algorithms for SSH-based
+	// sessions. nil keeps the compatible default.
+	SSHAlgorithms *SSHAlgoConfig `json:"sshAlgorithms,omitempty"`
+	AuthType      string         `json:"authType"`
+	// AuthType "agent" uses SSH_AUTH_SOCK on Unix. On Windows it uses Pageant,
+	// falling back to the Windows OpenSSH agent named pipe.
+	// AuthType "kerberos" uses the local Kerberos credential cache and
+	// SSH gssapi-with-mic; no password or private key is persisted.
+	// KerberosRealm is appended to the host service principal when Host is an
+	// IP address, producing host/<ip>@<REALM>. Domain-name targets keep their
+	// existing canonicalization behavior.
+	KerberosRealm string `json:"kerberosRealm,omitempty"`
 	// IdentityId references a saved Identity (see identity.go). When set with
 	// AuthType "identity", MaterializeIdentity resolves and injects the
 	// credentials at connect time.
@@ -54,6 +113,11 @@ type ConnectionConfig struct {
 	KeyContent string  `json:"keyContent,omitempty"`
 	GroupId    *string `json:"groupId,omitempty"`
 	// RDP-specific fields
+	// RdpFixedWidth/Height carry the requested desktop size, or a sentinel:
+	// -1 = follow the primary monitor on connect (the "full screen" option),
+	// -2 = adaptive: the desktop size follows the .rdp-area window size — when
+	// the window size stays stable for a short delay, the session reconnects
+	// with the new size so the server renders at the window's resolution.
 	RdpFixedWidth  int  `json:"rdpFixedWidth,omitempty"`
 	RdpFixedHeight int  `json:"rdpFixedHeight,omitempty"`
 	RdpSmartSizing bool `json:"rdpSmartSizing"`
@@ -71,6 +135,11 @@ type ConnectionConfig struct {
 	ShellPath string `json:"shellPath,omitempty"`
 	// Working directory for local terminal (defaults to user home directory if empty)
 	Cwd string `json:"cwd,omitempty"`
+	// CwdHookMode controls when the OSC-7 cwd hook is typed into an SSH login
+	// shell: "" / "startup" injects right after the shell starts (default),
+	// "follow" skips the startup injection and defers it until the frontend's
+	// directory-follow toggle first enables for a session of this connection.
+	CwdHookMode string `json:"cwdHookMode,omitempty"`
 	// Serial port configuration
 	SerialPort     string  `json:"serialPort,omitempty"`
 	SerialBaudRate int     `json:"serialBaudRate,omitempty"`
@@ -131,7 +200,6 @@ type ConnectionConfig struct {
 	// FTP-specific fields
 	FtpEncryption string `json:"ftpEncryption,omitempty"` // "none"(default) | "auto" | "required"
 	FtpPassive    bool   `json:"ftpPassive"`              // passive mode (default true)
-	FtpEncoding   string `json:"ftpEncoding,omitempty"`   // "utf-8" | "gbk" | "shift-jis" | "latin-1"
 	// FtpSkipVerify opts in to tls.Config.InsecureSkipVerify for FTPS connections.
 	// Defaults to false (verify enabled). Off by default preserves backwards
 	// compatibility for users today who rely on it for self-signed certs —
@@ -160,9 +228,13 @@ type ConnectionConfig struct {
 	// "SecondLevelDomainForbidden" (issue #452). "path" uses path-style
 	// (https://endpoint/bucket/key) for AWS S3 and MinIO.
 	S3URLStyle string `json:"s3UrlStyle,omitempty"`
-	// Terminal character encoding for ssh/telnet:
-	// "" / "utf-8"(default) | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr"
+	// Terminal character encoding for ssh/telnet, filename charset for ftp:
+	// "" / "utf-8"(default) | "gbk" | "gb2312" | "gb18030" | "big5" | "shift-jis" | "euc-jp" | "euc-kr" | "latin-1"
 	Encoding string `json:"encoding,omitempty"`
+	// TermType is the terminal type reported to the remote host (SSH
+	// pty-req / telnet TTYPE / local TERM env). "" falls back to
+	// DefaultTermType; see EffectiveTermType for the whitelist.
+	TermType string `json:"termType,omitempty"`
 	// X11Forwarding enables SSH X11 forwarding (ssh -X semantics). Sends an
 	// "x11-req" global request after RequestPty; accepts "x11" channels from
 	// the server and bridges them to the local X server at $DISPLAY. If
@@ -171,6 +243,10 @@ type ConnectionConfig struct {
 	// emitted in the terminal (silent degradation). Trusted mode is used as
 	// fallback when MIT-MAGIC-COOKIE-1 cannot be read from $XAUTHORITY.
 	X11Forwarding bool `json:"x11Forwarding,omitempty"`
+	// AgentForwarding exposes the local SSH agent to the remote SSH session
+	// (the equivalent of OpenSSH's -A option). The private keys remain in the
+	// local agent; only signing requests are forwarded.
+	AgentForwarding bool `json:"agentForwarding,omitempty"`
 	// Backspace key byte sequence for terminal-stream types (ssh/telnet/serial).
 	// The translation happens on the frontend in applyBackspaceKey before the
 	// byte hits SessionWrite, so the backend does not read this field — it is
@@ -199,6 +275,10 @@ type ConnectionConfig struct {
 	ContainerTransport string `json:"containerTransport,omitempty"` // "ssh" | "local"
 	ContainerSSHConnID string `json:"containerSSHConnId,omitempty"` // 引用的 SSH 连接（transport=ssh）
 	ContainerRuntime   string `json:"containerRuntime,omitempty"`   // "docker" | "podman" | "nerdctl"
+	// 容器文件会话（type=container-file）的目标容器 ID；容器连接走 config.ID
+	// ContainerNamespace 仅 k8s 连接使用（目标 Pod 的资源 namespace）
+	ContainerID        string `json:"containerId,omitempty"`
+	ContainerNamespace string `json:"containerNamespace,omitempty"`
 	// LogOnConnect, when true, tells the App layer to enable the
 	// session output log automatically the first time this panel binds
 	// a session. It has no effect on later reconnects — a manually
@@ -217,10 +297,80 @@ type ConnectionConfig struct {
 	//                 /bin/sh -c on the remote).
 	X11DesktopDesktopType string `json:"x11DesktopDesktopType,omitempty"`
 	X11DesktopCustomCmd   string `json:"x11DesktopCustomCmd,omitempty"`
-	// HostKeyStrategy overrides the global SSH host-key verification policy
-	// for this connection. Empty means: use the AppSettings default
-	// (accept-new / strict / off). See backend/session/hostkey.go.
-	HostKeyStrategy string `json:"hostKeyStrategy,omitempty"`
+	// Saved-workspace fields. Used when Type == "workspace": the config is a
+	// named, persisted workspace snapshot living in the connection tree.
+	// Members hold only a ConnectionID reference — host credentials re-resolve
+	// through the normal connection decryption path at connect time, so no
+	// secret is ever duplicated here.
+	WorkspaceMembers []SavedWorkspaceMember    `json:"workspaceMembers,omitempty"`
+	WorkspaceLayout  *SavedWorkspaceLayoutNode `json:"workspaceLayout,omitempty"`
+}
+
+// DefaultTermType is the terminal type reported to remote hosts when the
+// connection does not configure one (the pty-req terminal name for SSH, the
+// TTYPE reply for telnet, and the TERM environment entry for local shells).
+const DefaultTermType = "xterm-256color"
+
+// supportedTermTypes whitelists the terminal names a connection may choose
+// from. The value is sent verbatim to remote hosts (SSH pty-req, telnet
+// TTYPE), so anything outside this set falls back to DefaultTermType instead
+// of reaching the server's terminfo lookup.
+var supportedTermTypes = map[string]bool{
+	"xterm-256color": true,
+	"xterm":          true,
+	"vt100":          true,
+	"vt220":          true,
+	"vt320":          true,
+	"ansi":           true,
+	"linux":          true,
+}
+
+// EffectiveTermType maps the connection's terminal type to the value sent to
+// the remote host: the configured value when supported, DefaultTermType
+// otherwise (including for the empty/unset case).
+func EffectiveTermType(cfgTermType string) string {
+	if supportedTermTypes[cfgTermType] {
+		return cfgTermType
+	}
+	return DefaultTermType
+}
+
+// ExplicitTermType returns the connection's terminal type only when the user
+// explicitly chose a supported one, and "" otherwise. Local-shell sessions
+// use this to keep their existing "never override inherited environment"
+// behavior unless the user made an explicit per-connection choice.
+func ExplicitTermType(cfgTermType string) string {
+	if supportedTermTypes[cfgTermType] {
+		return cfgTermType
+	}
+	return ""
+}
+
+// SavedWorkspaceMember is one terminal slot inside a saved workspace.
+type SavedWorkspaceMember struct {
+	// ID is the stable member identity; saved-layout leaves reference it.
+	// The frontend reuses the source panel's id, so a re-save of the same
+	// live workspace keeps ids stable.
+	ID string `json:"id"`
+	// ConnectionID references the saved host the member connects to; empty
+	// for self-contained members (local/wsl terminals).
+	ConnectionID string `json:"connectionId,omitempty"`
+	// Type is the terminal panel kind (ssh/local/wsl/telnet/serial/...).
+	Type string `json:"type"`
+	// Title is the display title saved from the live panel.
+	Title string `json:"title"`
+	// ShellPath recreates local/wsl members (wsl://<distro> carries the distro).
+	ShellPath string `json:"shellPath,omitempty"`
+}
+
+// SavedWorkspaceLayoutNode mirrors the frontend LayoutNode with the leaf
+// panelId replaced by the stable member ID (runtime panel ids are ephemeral).
+type SavedWorkspaceLayoutNode struct {
+	Type      string                     `json:"type"` // "leaf" | "split"
+	MemberID  string                     `json:"memberId,omitempty"`
+	Direction string                     `json:"direction,omitempty"` // "horizontal" | "vertical"
+	Children  []SavedWorkspaceLayoutNode `json:"children,omitempty"`
+	Sizes     []float64                  `json:"sizes,omitempty"`
 }
 
 // ConnectionStoreData is the top-level structure persisted to connections.json.
@@ -262,6 +412,7 @@ type Session interface {
 	SetOnBinaryCallback(cb func([]byte))
 	SetOnStatusChangeCallback(cb func(SessionStatus))
 	SetZmodemMode(bool)
+	EndZmodem([]byte)
 	IsZmodemMode() bool
 }
 
@@ -273,10 +424,27 @@ type baseSession struct {
 	onDataCallback   func([]byte)
 	onBinaryCallback func([]byte)
 	onStatusCallback func(SessionStatus)
+	// statusListeners are ADDITIONAL status observers (AddStatusListener),
+	// fired after onStatusCallback. Cross-cutting concerns (the Android
+	// foreground-keepalive counter) register here so they survive the App
+	// layer re-registering onStatusCallback via SetOnStatusChangeCallback.
+	statusListeners []func(SessionStatus)
+	// dataTaps are ADDITIONAL data observers (AddDataTap), fired alongside the
+	// single-slot onDataCallback without replacing it. Used by the MCP
+	// foreground job tap to collect a typed command's output without disturbing
+	// the frontend's own stream subscription.
+	dataTaps []func([]byte)
+	// statusTaps are REMOVABLE status observers (AddStatusTap); a short-lived
+	// watcher (MCP foreground job EOF) detaches when its job ends, unlike
+	// session-lifetime statusListeners. Guarded by s.mu.
+	statusTaps       []func(SessionStatus)
 	mu               sync.RWMutex
 	pendingCols      int
 	pendingRows      int
 	zmodemMode       bool
+	zmodemTimer      *time.Timer
+	zmodemDeadline   time.Time
+	zmodemGeneration uint64
 	lastReadTime     atomic.Int64
 	// outputLogWriter, if non-nil, receives a copy of every byte emitted
 	// via emitData. It is set by the App layer and lives longer than any
@@ -286,7 +454,9 @@ type baseSession struct {
 	// logOnConnect mirrors ConnectionConfig.LogOnConnect so the App
 	// layer can query it via AutoLogOnConnect() and decide whether to
 	// enable the log the first time this session binds to a panel.
-	logOnConnect bool
+	logOnConnect   bool
+	logSessionName string
+	logHost        string
 	// idleSignal is sent-to (non-blocking) every time RecordReadActivity
 	// runs. waitIdle subscribes to this channel to avoid the busy-loop
 	// that previously woke every 50ms; see F-017. idleSignalOnce makes
@@ -294,7 +464,61 @@ type baseSession struct {
 	// baseSession constructor.
 	idleSignal     chan struct{}
 	idleSignalOnce sync.Once
+	// Async emit machinery (issue #1053). Terminal sessions call
+	// startEmitLoop so emitData hands chunks to the emitLoop goroutine
+	// instead of invoking the (synchronous) Wails event callback inline —
+	// a cat of a binary file used to back-pressure the PTY readLoop
+	// through the frontend and froze the whole app. Sessions that never
+	// call startEmitLoop (zero-value test sessions, monitor JSON
+	// consumers) keep the synchronous path. Guarded by emitMu.
+	emitMu      sync.Mutex
+	emitCond    *sync.Cond
+	emitQueue   [][]byte
+	emitDropped int
+	emitClosing bool
+	// emitOverflow marks degraded drop-oldest mode: set when the producer
+	// blocked on a full queue past emitBlockWatchdog, cleared once the
+	// queue fully drains. Guarded by emitMu.
+	emitOverflow bool
+	// emitQuit is closed (and emitCond broadcast) once by stopEmitLoop;
+	// emitDone is closed by emitLoop when it has fully exited. nil until
+	// startEmitLoop runs.
+	emitQuit chan struct{}
+	emitDone chan struct{}
+	emitOnce sync.Once
 }
+
+const (
+	// emitQueueCapacity bounds the pending chunk queue. When the consumer
+	// (frontend) falls behind, the producer blocks first (flow control —
+	// see queueEmit); the OLDEST chunks are dropped only after the
+	// emitBlockWatchdog expires, mirroring Alacritty/WezTerm where fresher
+	// output matters more than stale bytes. Losing stale `cat` output is
+	// cosmetic, but losing bytes from a full-screen TUI (menuconfig, vim,
+	// ...) desyncs the screen — so dropping is a last resort, not the norm.
+	emitQueueCapacity = 64
+)
+
+var (
+	// emitFlushInterval coalesces high-frequency chunks into one IPC
+	// event per window, cutting Wails emit count 10-100x under load.
+	// Package-level var so tests can shorten it.
+	emitFlushInterval = 16 * time.Millisecond
+	// emitBlockWatchdog bounds how long queueEmit blocks the producer while
+	// the queue is full. Blocking backpressures the PTY/SSH channel and
+	// pauses the remote writer — the way a physical terminal applies flow
+	// control — keeping the byte stream lossless for full-screen TUIs. If
+	// the consumer stays wedged past the watchdog, the producer degrades
+	// to drop-oldest so the readLoop and terminal input stay alive.
+	// Package-level var so tests can shorten it.
+	emitBlockWatchdog = 3 * time.Second
+)
+
+const (
+	// emitStopWait bounds how long stopEmitLoop waits for the final
+	// flush. If the consumer is wedged, disconnect must not hang on it.
+	emitStopWait = 2 * time.Second
+)
 
 func (s *baseSession) ID() string            { return s.id }
 func (s *baseSession) Type() string          { return s.sessionType }
@@ -313,13 +537,112 @@ func (s *baseSession) SetOnStatusChangeCallback(cb func(SessionStatus)) {
 	s.onStatusCallback = cb
 }
 
+// AddStatusListener registers an ADDITIONAL status observer. Unlike
+// SetOnStatusChangeCallback (single slot, owned by the App layer and
+// overwritten on re-register), listeners accumulate — used by cross-cutting
+// concerns like the Android foreground-keepalive tracker that must survive
+// the app layer re-registering its own callback.
+func (s *baseSession) AddStatusListener(cb func(SessionStatus)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statusListeners = append(s.statusListeners, cb)
+}
+
+// AddDataTap registers an additive data observer. Unlike the single-slot
+// SetOnDataCallback (owned by the App layer and overwritten on re-register),
+// taps accumulate and are fired alongside it, so a job tap never replaces the
+// frontend's stream subscription. Returns an unsubscribe function.
+func (s *baseSession) AddDataTap(cb func([]byte)) func() {
+	s.mu.Lock()
+	s.dataTaps = append(s.dataTaps, cb)
+	idx := len(s.dataTaps) - 1
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		if idx < len(s.dataTaps) {
+			s.dataTaps = append(s.dataTaps[:idx], s.dataTaps[idx+1:]...)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// AddStatusTap registers an additional, REMOVABLE status observer and returns
+// an unsubscribe function. AddStatusListener has no removal — fine for
+// session-lifetime consumers, but short-lived watchers (the MCP foreground
+// job's EOF watcher) need to detach when their job ends.
+func (s *baseSession) AddStatusTap(cb func(SessionStatus)) (untap func()) {
+	s.mu.Lock()
+	s.statusTaps = append(s.statusTaps, cb)
+	idx := len(s.statusTaps) - 1
+	s.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			if idx < len(s.statusTaps) {
+				s.statusTaps = append(s.statusTaps[:idx], s.statusTaps[idx+1:]...)
+			}
+			s.mu.Unlock()
+		})
+	}
+}
+
 func (s *baseSession) setStatus(st SessionStatus) {
 	s.mu.Lock()
 	s.status = st
 	cb := s.onStatusCallback
+	listeners := make([]func(SessionStatus), len(s.statusListeners))
+	copy(listeners, s.statusListeners)
+	taps := make([]func(SessionStatus), len(s.statusTaps))
+	copy(taps, s.statusTaps)
 	s.mu.Unlock()
+	if st == StatusDisconnected || st == StatusError {
+		// Terminal output is over; flush anything still queued (e.g. the
+		// disconnect notice emitted right before Disconnect) and release
+		// the emitLoop goroutine. emitData falls back to the synchronous
+		// path afterwards.
+		s.stopEmitLoop()
+	}
 	if cb != nil {
 		cb(st)
+	}
+	for _, l := range listeners {
+		l(st)
+	}
+	for _, tap := range taps {
+		tap(st)
+	}
+}
+
+// startEmitLoop enables the async, bounded emit path for this session.
+// Called by terminal session types from Connect. Idempotent.
+func (s *baseSession) startEmitLoop() {
+	s.emitOnce.Do(func() {
+		s.emitQuit = make(chan struct{})
+		s.emitDone = make(chan struct{})
+		s.emitCond = sync.NewCond(&s.emitMu)
+		go s.emitLoop()
+	})
+}
+
+// stopEmitLoop shuts the emit loop down, flushing everything still queued
+// so the tail of the output (e.g. a disconnect notice queued right before
+// Disconnect) is never lost. After it returns, emitData falls back to the
+// synchronous path. Safe to call multiple times and when never started.
+func (s *baseSession) stopEmitLoop() {
+	s.emitMu.Lock()
+	if s.emitQuit == nil || s.emitClosing {
+		s.emitMu.Unlock()
+		return
+	}
+	s.emitClosing = true
+	s.emitMu.Unlock()
+	close(s.emitQuit)
+	s.emitCond.Broadcast()
+	select {
+	case <-s.emitDone:
+	case <-time.After(emitStopWait):
+		log.Writef("session %s: emitLoop did not exit within %s during stop", s.id, emitStopWait)
 	}
 }
 
@@ -327,12 +650,148 @@ func (s *baseSession) emitData(data []byte) {
 	s.mu.RLock()
 	w := s.outputLogWriter
 	cb := s.onDataCallback
+	taps := make([]func([]byte), len(s.dataTaps))
+	copy(taps, s.dataTaps)
 	s.mu.RUnlock()
 	if w != nil {
 		w(data)
 	}
-	if cb != nil {
-		cb(data)
+	for _, tap := range taps {
+		tap(data)
+	}
+	if cb == nil {
+		return
+	}
+	if s.queueEmit(data) {
+		return
+	}
+	// Synchronous path: emit loop never started (zero-value sessions and
+	// tests), already stopped, or a zmodem transfer is in progress — file
+	// transfer bytes must never be dropped or delayed.
+	cb(data)
+}
+
+// queueEmit hands data to the emit loop. Returns false when the caller must
+// emit synchronously instead. Copies the bytes: readLoops reuse their read
+// buffer across iterations.
+//
+// When the queue is full the producer blocks first (flow control): the PTY/
+// SSH channel backpressures and the remote writer pauses, so no bytes are
+// lost and full-screen TUIs stay in sync. Only when the block outlives
+// emitBlockWatchdog — the consumer is wedged, not merely slow — does it
+// degrade to drop-oldest, keeping the readLoop and terminal input alive.
+// Degradation is sticky until the queue fully drains, so a long wedged
+// period drops steadily instead of re-waiting the watchdog on every chunk.
+func (s *baseSession) queueEmit(data []byte) bool {
+	if s.IsZmodemMode() {
+		return false
+	}
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	if s.emitQuit == nil || s.emitClosing {
+		return false
+	}
+	if len(s.emitQueue) >= emitQueueCapacity && !s.emitOverflow {
+		watchdog := time.AfterFunc(emitBlockWatchdog, s.emitCond.Broadcast)
+		defer watchdog.Stop()
+		deadline := time.Now().Add(emitBlockWatchdog)
+		for len(s.emitQueue) >= emitQueueCapacity && !s.emitClosing {
+			if !time.Now().Before(deadline) {
+				// Consumer wedged past the watchdog: degrade to
+				// drop-oldest until the queue drains again.
+				s.emitOverflow = true
+				break
+			}
+			s.emitCond.Wait()
+		}
+	}
+	for len(s.emitQueue) >= emitQueueCapacity {
+		// Drop-oldest keeps the readLoop unblocked and the terminal
+		// showing the freshest output. Reached only in degraded mode.
+		s.emitQueue = s.emitQueue[1:]
+		s.emitDropped++
+	}
+	if s.emitClosing {
+		// stopEmitLoop broadcast while we waited: the queue has been
+		// force-flushed, so hand this chunk to the synchronous path.
+		return false
+	}
+	s.emitQueue = append(s.emitQueue, append([]byte(nil), data...))
+	s.emitCond.Signal()
+	return true
+}
+
+// drainEmitQueue returns all currently queued chunks under one lock.
+func (s *baseSession) drainEmitQueue() [][]byte {
+	s.emitMu.Lock()
+	chunks := s.emitQueue
+	s.emitQueue = nil
+	// Queue fully drained: the consumer caught up, so return to lossless
+	// flow-control mode on the next full queue.
+	s.emitOverflow = false
+	dropped := s.emitDropped
+	s.emitDropped = 0
+	s.emitMu.Unlock()
+	if dropped > 0 {
+		log.Writef("session %s: emit queue overflow, dropped %d stale chunk(s)", s.id, dropped)
+	}
+	return chunks
+}
+
+// flushEmitChunks coalesces chunks into a single callback invocation so a
+// flood of output costs one IPC event per flush window, not one per chunk.
+func (s *baseSession) flushEmitChunks(chunks [][]byte) {
+	s.mu.RLock()
+	cb := s.onDataCallback
+	s.mu.RUnlock()
+	if cb == nil || len(chunks) == 0 {
+		return
+	}
+	if len(chunks) == 1 {
+		cb(chunks[0])
+		return
+	}
+	total := 0
+	for _, c := range chunks {
+		total += len(c)
+	}
+	joined := make([]byte, 0, total)
+	for _, c := range chunks {
+		joined = append(joined, c...)
+	}
+	cb(joined)
+}
+
+func (s *baseSession) emitLoop() {
+	defer close(s.emitDone)
+	timer := time.NewTimer(time.Hour)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	for {
+		// Sleep until data arrives or shutdown is requested.
+		s.emitMu.Lock()
+		for len(s.emitQueue) == 0 && !s.emitClosing {
+			s.emitCond.Wait()
+		}
+		s.emitMu.Unlock()
+
+		for {
+			// Batch window: give the producer a beat to accumulate more
+			// chunks before flushing.
+			timer.Reset(emitFlushInterval)
+			select {
+			case <-s.emitQuit:
+				s.flushEmitChunks(s.drainEmitQueue())
+				return
+			case <-timer.C:
+			}
+			chunks := s.drainEmitQueue()
+			if len(chunks) == 0 {
+				break
+			}
+			s.flushEmitChunks(chunks)
+		}
 	}
 }
 
@@ -354,6 +813,22 @@ func (s *baseSession) SetLogOnConnect(v bool) { s.logOnConnect = v }
 // AutoLogOnConnect reports whether this session was created from a
 // connection configured to start logging automatically.
 func (s *baseSession) AutoLogOnConnect() bool { return s.logOnConnect }
+
+// SetLogIdentity records the connection fields used by the session-log
+// filename template. It is called before Connect, so auto-logging can use the
+// original configured name and host even while the connection is starting.
+func (s *baseSession) SetLogIdentity(name, host string) {
+	s.mu.Lock()
+	s.logSessionName = name
+	s.logHost = host
+	s.mu.Unlock()
+}
+
+func (s *baseSession) LogIdentity() (name, host string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.logSessionName, s.logHost
+}
 
 func (s *baseSession) SetPendingSize(cols, rows int) {
 	s.mu.Lock()
@@ -381,8 +856,54 @@ func (s *baseSession) getInitialSize(defCols, defRows int) (int, int) {
 
 func (s *baseSession) SetZmodemMode(v bool) {
 	s.mu.Lock()
-	s.zmodemMode = v
+	s.setZmodemModeLocked(v)
 	s.mu.Unlock()
+}
+
+// EndZmodem leaves binary mode and emits terminal bytes that followed the
+// protocol's final handshake through the normal text-output path. Session
+// types with an output decoder can override this method.
+func (s *baseSession) EndZmodem(trailing []byte) {
+	s.mu.Lock()
+	s.setZmodemModeLocked(false)
+	w := s.outputLogWriter
+	cb := s.onDataCallback
+	s.mu.Unlock()
+	if w != nil && len(trailing) > 0 {
+		w(trailing)
+	}
+	if cb != nil && len(trailing) > 0 {
+		cb(trailing)
+	}
+}
+
+// This is only a final safety net for an abandoned frontend transfer. Keep it
+// longer than the frontend protocol watchdog so file-picker interaction is not
+// mistaken for a stalled transfer.
+var zmodemModeTimeout = 2 * time.Minute
+
+func (s *baseSession) setZmodemModeLocked(v bool) {
+	s.zmodemGeneration++
+	s.zmodemMode = v
+	if s.zmodemTimer != nil {
+		s.zmodemTimer.Stop()
+		s.zmodemTimer = nil
+	}
+	if !v {
+		s.zmodemDeadline = time.Time{}
+		return
+	}
+	generation := s.zmodemGeneration
+	s.zmodemDeadline = time.Now().Add(zmodemModeTimeout)
+	s.zmodemTimer = time.AfterFunc(zmodemModeTimeout, func() {
+		s.mu.Lock()
+		if s.zmodemMode && s.zmodemGeneration == generation {
+			s.zmodemMode = false
+			s.zmodemTimer = nil
+			s.zmodemDeadline = time.Time{}
+		}
+		s.mu.Unlock()
+	})
 }
 
 func (s *baseSession) IsZmodemMode() bool {
@@ -398,9 +919,12 @@ func (s *baseSession) SetOnBinaryCallback(cb func([]byte)) {
 }
 
 func (s *baseSession) emitBinary(data []byte) {
-	s.mu.RLock()
+	s.mu.Lock()
 	cb := s.onBinaryCallback
-	s.mu.RUnlock()
+	if s.zmodemMode {
+		s.setZmodemModeLocked(true)
+	}
+	s.mu.Unlock()
 	if cb != nil {
 		cb(data)
 	}

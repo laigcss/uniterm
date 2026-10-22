@@ -1,12 +1,21 @@
 import { defineStore } from 'pinia'
 import { shallowReactive } from 'vue'
 import type { Panel, PanelStatus, ConnectionConfig } from '../types/workspace'
-import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { DisableSessionOutputLog, RegisterSessionForPanel, UnregisterSession } from '../../bindings/github.com/ys-ll/uniterm/app'
+
+export interface TransferFileState {
+  path: string
+  status: 'running' | 'done' | 'failed'
+}
 
 export interface TransferTaskUI {
   id: string
   type: 'upload' | 'download'
   name: string
+  // Full source/target paths from the backend's start payload — the retry
+  // spec round-trips these back to SftpRetryTransfer.
+  localPath: string
+  remotePath: string
   percentage: number
   speed: string
   eta: string
@@ -14,6 +23,12 @@ export interface TransferTaskUI {
   lastBytes: number
   lastTime: number
   total: number
+  // Directory-transfer detail (empty for single-file tasks).
+  fileCount: number
+  completedFiles: number
+  currentFile: string
+  files: TransferFileState[]
+  failedFiles: { path: string; error: string }[]
 }
 
 export interface VNCCache {
@@ -27,6 +42,9 @@ export interface SPICECache {
 }
 
 // shallowReactive: vncCaches/spiceCaches 持有 RFB/DOM 实例，深层 reactive 代理会破坏实例方法且浪费性能。
+// panels Map is individually wrapped with shallowReactive so that
+// Map.get/set/delete have reactive tracking (shallowReactive on the
+// outer object does NOT proxy Map internals — the Map is returned as-is).
 const panelState = shallowReactive<{
   panels: Map<string, Panel>
   transferTasks: Map<string, TransferTaskUI[]>
@@ -34,7 +52,7 @@ const panelState = shallowReactive<{
   vncCaches: Map<string, VNCCache>
   spiceCaches: Map<string, SPICECache>
 }>({
-  panels: new Map(),
+  panels: shallowReactive(new Map()),
   transferTasks: new Map(),
   proxyAddrs: new Map(),
   vncCaches: new Map(),
@@ -97,6 +115,15 @@ export const usePanelStore = defineStore('panel', () => {
     if (!p) return
     const prev = p.sessionId
     p.sessionId = sessionId
+    // shallowReactive does not track deep property mutations on Map values.
+    // Re-setting the same object reference is a no-op (Vue checks oldValue ===
+    // value), so we must delete + set to force the Map trigger.  Without this,
+    // the database tree panel never loads on first connect: the tab opens with
+    // sessionId='' before CreateSession completes, and bindSession's mutation
+    // is invisible to Vue's reactivity system.
+    panelState.panels.delete(panelId)
+    panelState.panels.set(panelId, p)
+
     // Tell the backend which panel this session belongs to so per-panel
     // output logging survives reconnects. The previous session's binding
     // is dropped best-effort — if it's already gone the backend no-ops.
@@ -110,23 +137,37 @@ export const usePanelStore = defineStore('panel', () => {
 
   function updateStatus(panelId: string, status: PanelStatus) {
     const p = panelState.panels.get(panelId)
-    if (p) p.status = status
+    if (p) {
+      p.status = status
+      panelState.panels.delete(panelId)
+      panelState.panels.set(panelId, p)
+    }
   }
 
   function updateTitle(panelId: string, title: string) {
     const p = panelState.panels.get(panelId)
     if (!p) return
     p.title = makeTitleUnique(title, panelId)
+    panelState.panels.delete(panelId)
+    panelState.panels.set(panelId, p)
   }
 
   function setOutputLog(panelId: string, state: { enabled: boolean; path: string }) {
     const p = panelState.panels.get(panelId)
-    if (p) p.outputLog = state
+    if (p) {
+      p.outputLog = state
+      panelState.panels.delete(panelId)
+      panelState.panels.set(panelId, p)
+    }
   }
 
   function movePanelToTab(panelId: string, tabId: string) {
     const p = panelState.panels.get(panelId)
-    if (p) p.tabId = tabId
+    if (p) {
+      p.tabId = tabId
+      panelState.panels.delete(panelId)
+      panelState.panels.set(panelId, p)
+    }
   }
 
   function getTransferTasks(panelId: string): TransferTaskUI[] {
@@ -134,6 +175,10 @@ export const usePanelStore = defineStore('panel', () => {
       panelState.transferTasks.set(panelId, [])
     }
     return panelState.transferTasks.get(panelId)!
+  }
+
+  function removeTransferTasks(key: string) {
+    panelState.transferTasks.delete(key)
   }
 
   function setProxyAddr(panelId: string, addr: string) {
@@ -205,6 +250,7 @@ export const usePanelStore = defineStore('panel', () => {
     vncCaches: panelState.vncCaches,
     spiceCaches: panelState.spiceCaches,
     getTransferTasks,
+    removeTransferTasks,
     createPanel,
     removePanel,
     getPanel,

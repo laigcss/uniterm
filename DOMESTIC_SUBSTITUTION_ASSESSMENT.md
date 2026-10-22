@@ -1,7 +1,7 @@
-# 国产化替代评估报告（ai-ops-terminal / 原 uniTerm）
+# 国产化替代评估报告（uniTerm / 原 uniTerm）
 
 > **文档性质**：国产化（信创）替代可行性评估汇总报告
-> **评估对象**：ai-ops-terminal（原 uniTerm）跨平台 AI 运维终端管理桌面应用
+> **评估对象**：uniTerm（原 uniTerm）跨平台 AI 运维终端管理桌面应用
 > **汇总编写**：国产化替代评估报告汇总编写员（task 43）
 > **数据来源**：`research/00`～`research/04` 五份调研文件（全部已读取）
 > **编写日期**：2026-10-12
@@ -13,7 +13,7 @@
 
 ### 1.1 一段话总结
 
-ai-ops-terminal 是一款基于 Wails v3 + Go + Vue 3 + Element Plus + xterm.js 的跨平台桌面运维终端工具（Go 后端 53,746 行 + Vue3/TS 前端 81,648 行）。经全栈逐层评估，**最务实、可信、低成本的国产化落地方向是「CPU 多架构构建 + 国产 OS（openEuler/麒麟/deepin）适配 + 数据库驱动替换 + 对象存储迁移至 S3 兼容国产云存储」**，这些方向项目已有基础（已专门为 Kylin V10/RHEL 8/openEuler 构建独立包）且改动集中在构建链与配置层。**中等可行的是「国密加密（AES-GCM → SM4-GCM）替换 + 国产数据库 PoC」**，需工程化处理版本兼容但路径清晰。**仓颉语言替代 Go 后端当前不具备现实可行性**（SSH/SFTP/终端解析/MongoDB/ES 等关键库缺失，属长期观察项）；**ArkTS/ArkUI 仅适合"HarmonyOS 专用版"**（需重写 8.2 万行前端且失去跨平台能力）。多数服务端中间件（ShardingSphere/Dubbo/ServiceComb/ShenYu/Seata）对桌面终端工具属**过度设计**，不建议引入。
+uniTerm 是一款基于 Wails v3 + Go + Vue 3 + Element Plus + xterm.js 的跨平台桌面运维终端工具（Go 后端 53,746 行 + Vue3/TS 前端 81,648 行）。经全栈逐层评估，**最务实、可信、低成本的国产化落地方向是「CPU 多架构构建 + 国产 OS（openEuler/麒麟/deepin）适配 + 数据库驱动替换 + 对象存储迁移至 S3 兼容国产云存储」**，这些方向项目已有基础（已专门为 Kylin V10/RHEL 8/openEuler 构建独立包）且改动集中在构建链与配置层。**中等可行的是「国密加密（AES-GCM → SM4-GCM）替换 + 国产数据库 PoC」**，需工程化处理版本兼容但路径清晰。**仓颉语言替代 Go 后端当前不具备现实可行性**（SSH/SFTP/终端解析/MongoDB/ES 等关键库缺失，属长期观察项）；**ArkTS/ArkUI 仅适合"HarmonyOS 专用版"**（需重写 8.2 万行前端且失去跨平台能力）。多数服务端中间件（ShardingSphere/Dubbo/ServiceComb/ShenYu/Seata）对桌面终端工具属**过度设计**，不建议引入。
 
 ### 1.2 技术分层替代可行性排序速览表（从易到难）
 
@@ -46,7 +46,7 @@ ai-ops-terminal 是一款基于 Wails v3 + Go + Vue 3 + Element Plus + xterm.js 
 
 | 项 | 值 |
 |----|----|
-| 项目名称 | ai-ops-terminal（原 uniTerm） |
+| 项目名称 | uniTerm（原 uniTerm） |
 | 定位 | 跨平台 AI 运维终端管理桌面应用 |
 | Go 后端代码规模 | 53,746 行 |
 | Vue3/TS 前端代码规模 | 81,648 行 |

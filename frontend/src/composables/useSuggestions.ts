@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { SaveTerminalHistory, LoadTerminalHistory } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { SaveTerminalHistory, LoadTerminalHistory } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { chat } from '../services/llm'
 import { useQuickCommandStore } from '../stores/quickCommandStore'
 import { useI18n } from '../i18n'
@@ -61,7 +61,6 @@ export function useSuggestions() {
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
 
   async function loadHistory(): Promise<HistoryEntry[]> {
     if (historyLoaded) {

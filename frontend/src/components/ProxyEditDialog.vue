@@ -3,24 +3,24 @@
     append-to-body
     :model-value="visible"
     :title="proxy ? t('settings.editProxy') : t('settings.addProxy')"
-    width="480px"
+    width="30rem"
     @update:model-value="(v: boolean) => emit('update:visible', v)"
   >
-    <el-form label-width="90px">
+    <el-form label-width="5.625rem">
       <el-form-item :label="t('conn.name')">
         <el-input v-model="form.name" :placeholder="t('conn.namePlaceholder')" />
       </el-form-item>
       <el-form-item :label="t('conn.proxyType')">
         <el-radio-group v-model="form.kind">
-          <el-radio-button label="socks5">SOCKS5</el-radio-button>
-          <el-radio-button label="http">HTTP</el-radio-button>
+          <el-radio-button value="socks5">SOCKS5</el-radio-button>
+          <el-radio-button value="http">HTTP</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-form-item :label="t('conn.host')">
         <el-input v-model="form.host" placeholder="127.0.0.1" />
       </el-form-item>
       <el-form-item :label="t('conn.port')">
-        <el-input-number v-model="form.port" :min="1" :max="65535" />
+        <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" />
       </el-form-item>
       <el-form-item :label="t('conn.user')">
         <el-input v-model="form.user" />

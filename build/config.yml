@@ -5,12 +5,12 @@ version: '3'
 
 # This information is used to generate the build assets.
 info:
-  companyName: "ai-ops-terminal"
-  productName: "ai-ops-terminal"
-  productIdentifier: "com.laigcss.ai-ops-terminal"
-  description: "ai-ops-terminal - a multi-protocol remote connection terminal"
-  copyright: "(c) ai-ops-terminal"
-  comments: "ai-ops-terminal"
+  companyName: "uniTerm"
+  productName: "uniTerm"
+  productIdentifier: "com.laigcss.uniTerm"
+  description: "uniTerm - a multi-protocol remote connection terminal"
+  copyright: "(c) uniTerm"
+  comments: "uniTerm"
   version: "1.9.2"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension

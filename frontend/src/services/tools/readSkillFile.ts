@@ -1,6 +1,6 @@
 // tools/readSkillFile.ts — read_skill_file 工具定义。
 
-import { GetSkillFile } from '../../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { GetSkillFile } from '../../../bindings/github.com/ys-ll/uniterm/app'
 import {
   InputValidationError,
   validateRequiredString,

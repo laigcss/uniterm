@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // TestAtomicWrite_NotPartialOnCrash simulates a kill -9 mid-save by calling

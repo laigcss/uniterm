@@ -1,0 +1,64 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "uniTerm HarmonyOS shell"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "uniTerm entry"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "uniTerm"
+    },
+    {
+      "name": "reason_internet",
+      "value": "Network permission required to connect to local Go backend server"
+    },
+    {
+      "name": "reason_network_info",
+      "value": "Network info required to detect backend server status"
+    },
+    {
+      "name": "reason_background",
+      "value": "Background running permission required to keep Go subprocess alive"
+    },
+    {
+      "name": "reason_pasteboard",
+      "value": "Pasteboard read permission required for copy/paste functionality"
+    },
+    {
+      "name": "loading_starting",
+      "value": "Starting uniTerm..."
+    },
+    {
+      "name": "loading_restarting",
+      "value": "Restarting..."
+    },
+    {
+      "name": "error_timeout",
+      "value": "Backend startup timed out, please verify the Go binary"
+    },
+    {
+      "name": "error_crashed",
+      "value": "Backend process crashed multiple times, auto-restart stopped"
+    },
+    {
+      "name": "error_refused",
+      "value": "Cannot connect to backend server, Go subprocess may not be running"
+    },
+    {
+      "name": "error_timeout_connect",
+      "value": "Connection to backend timed out, check network or backend status"
+    },
+    {
+      "name": "error_reset",
+      "value": "Connection reset, backend may be restarting"
+    },
+    {
+      "name": "btn_retry",
+      "value": "Retry"
+    }
+  ]
+}

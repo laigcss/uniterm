@@ -3,13 +3,13 @@
     :model-value="visible"
     @update:model-value="(v: boolean) => !v && onCancel()"
     :title="t('encrypt.title')"
-    width="480px"
+    width="30rem"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
   >
     <p v-if="existingSecrets > 0" class="encrypt-hint">{{ t('encrypt.existing', { n: existingSecrets }) }}</p>
-    <el-form label-width="120px" class="encrypt-form" @submit.prevent="onConfirm">
+    <el-form label-width="7.5rem" class="encrypt-form" @submit.prevent="onConfirm">
       <el-form-item :label="t('config.encryption')">
         <el-select v-model="mode" popper-class="mode-select-popper" style="width: 100%">
           <el-option :label="t('encrypt.keychain')" value="keychain">
@@ -37,6 +37,7 @@
     </el-form>
     <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
     <template #footer>
+      <el-button @click="onQuit">{{ t('unlock.quit') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="onConfirm">{{ t('common.confirm') }}</el-button>
     </template>
   </el-dialog>
@@ -45,7 +46,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from '../i18n'
+import { QuitApp } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useCredentialStore } from '../stores/credentialStore'
+import { isMobilePlatform } from '../utils/platform'
 
 const props = defineProps<{ visible: boolean; existingSecrets: number }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'done'): void }>()
@@ -58,6 +61,25 @@ const pw2 = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
 
+// Mobile (android/ios) only supports the system keychain — skip the picker and
+// set it up directly. Covers every path that opens this dialog: first run,
+// keychain-lost recovery and manual reset. On failure the dialog stays open
+// showing the error.
+const isMobile = isMobilePlatform()
+
+async function autoKeychainSetup() {
+  submitting.value = true
+  try {
+    await cred.setup('keychain', '')
+    emit('done')
+    emit('update:visible', false)
+  } catch (e: any) {
+    errorMsg.value = e?.message || String(e)
+  } finally {
+    submitting.value = false
+  }
+}
+
 // Reset on every open so a previously-entered password isn't shown again.
 watch(() => props.visible, (v) => {
   if (v) {
@@ -65,6 +87,7 @@ watch(() => props.visible, (v) => {
     pw.value = ''
     pw2.value = ''
     errorMsg.value = ''
+    if (isMobile) void autoKeychainSetup()
   }
 })
 
@@ -86,10 +109,18 @@ async function onConfirm() {
   }
 }
 function onCancel() { emit('update:visible', false) }
+async function onQuit() {
+  submitting.value = true
+  try {
+    await QuitApp()
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <style scoped>
-.encrypt-form { display: flex; flex-direction: column; gap: 4px; }
-.encrypt-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 13px; }
-.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
+.encrypt-form { display: flex; flex-direction: column; gap: 0.25rem; }
+.encrypt-hint { margin: 0 0 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; }
+.form-error { color: var(--el-color-danger); font-size: 0.8125rem; margin-top: 0.5rem; }
 </style>

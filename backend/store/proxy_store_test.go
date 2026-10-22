@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 func TestProxyStoreRoundTrip(t *testing.T) {
@@ -71,5 +71,46 @@ func TestProxyStoreCorrupt(t *testing.T) {
 	}
 	if _, err := s.Load(); err == nil {
 		t.Fatal("expected error loading corrupt file")
+	}
+}
+
+func mustProxyStore(t *testing.T) *ProxyStore {
+	t.Helper()
+	s, err := NewProxyStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewProxyStore: %v", err)
+	}
+	s.SetPasswordStore(fakeCipherStore{})
+	return s
+}
+
+// TestProxyStoreSyncRoundTrip pins the sync exchange contract for
+// proxies.json: the blob must carry plaintext secrets and survive a
+// round-trip through a store on another directory.
+func TestProxyStoreSyncRoundTrip(t *testing.T) {
+	a := mustProxyStore(t)
+	seed := session.ProxyStoreData{Proxies: []session.Proxy{{
+		ID: "p1", Name: "px", Kind: "socks5", Host: "h", Port: 1080, Pass: "pp",
+	}}}
+	if err := a.Save(seed); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	plain, err := a.ExportPlain()
+	if err != nil {
+		t.Fatalf("ExportPlain: %v", err)
+	}
+	if !contains(string(plain), "pp") || contains(string(plain), "enc:v1:") {
+		t.Fatalf("blob must carry plaintext secrets: %s", plain)
+	}
+	b := mustProxyStore(t)
+	if err := b.ImportPlain(plain); err != nil {
+		t.Fatalf("ImportPlain: %v", err)
+	}
+	got, err := b.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got.Proxies) != 1 || got.Proxies[0].ID != "p1" || got.Proxies[0].Pass != "pp" {
+		t.Fatalf("proxies lost: %+v", got.Proxies)
 	}
 }

@@ -1,15 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { AppSettings, AIModelConfig, CustomTerminalTheme } from '../types/settings'
-import { DEFAULT_SETTINGS, DEFAULT_KEYBOARD } from '../types/settings'
-import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { DEFAULT_SETTINGS, normalizeKeyBindings } from '../types/settings'
+import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import { setLocale } from '../i18n'
+import { useAIConfigStore } from './aiConfigStore'
 
 // Module-level un-subscriber for the cross-window store:settings:changed listener.
 // Tracked at module scope so re-imports under HMR can detach the previous
 // listener before re-subscribing (FE-03).
 let unsubSettingsChanged: (() => void) | null = null
+let unsubAiChanged: (() => void) | null = null
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AppSettings>({ ...DEFAULT_SETTINGS })
@@ -42,13 +44,60 @@ export const useSettingsStore = defineStore('settings', () => {
   // For navigating to a specific settings category from other components
   const openCategory = ref<string | null>(null)
 
+  // Tracks the last ai.json payload pushed from this store so unrelated
+  // settings saves don't rewrite the AI config file needlessly.
+  let lastSavedAiJson = ''
+
+  // Overlay the syncable AI slice (ai.json) onto the settings blob and
+  // validate the device-local activeModelId against the synced catalog.
+  function recomposeAi() {
+    const aiCfg = useAIConfigStore()
+    const models = aiCfg.models.length ? aiCfg.models : settings.value.ai.models
+    settings.value.ai = {
+      maxTurns: aiCfg.maxTurns,
+      models,
+      activeModelId: models.some(m => m.id === settings.value.ai.activeModelId)
+        ? settings.value.ai.activeModelId
+        : (models[0]?.id ?? DEFAULT_SETTINGS.ai.activeModelId)
+    }
+  }
+
+  function syncAiConfigFromSettings() {
+    const aiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
+    if (aiJson === lastSavedAiJson) return
+    lastSavedAiJson = aiJson
+    const aiCfg = useAIConfigStore()
+    aiCfg.maxTurns = settings.value.ai.maxTurns
+    aiCfg.models = settings.value.ai.models
+    aiCfg.save()
+  }
+
+  // Apply the UI font baseline to the rem root and cache it for the
+  // pre-paint script in index.html (avoids a wrong-size flash on reload).
+  function applyUiFontSize() {
+    const px = (settings.value.uiFontSize / 12) * 16
+    document.documentElement.style.fontSize = px + 'px'
+    try {
+      localStorage.setItem('uiFontSize', String(settings.value.uiFontSize))
+    } catch {
+      // private mode etc. — the loaded value still applies this session
+    }
+  }
+
   function applyTheme() {
     let theme = settings.value.theme
     if (theme === 'system') {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      document.documentElement.dataset.theme = prefersDark ? 'dark' : 'light'
-    } else {
-      document.documentElement.dataset.theme = theme
+      theme = prefersDark ? 'dark' : 'light'
+    }
+    document.documentElement.dataset.theme = theme
+    // Cache the resolved theme for the pre-paint script in index.html (issue
+    // #1135): it applies this before the first paint so the window doesn't
+    // flash the dark no-[data-theme] default while settings load.
+    try {
+      localStorage.setItem('appTheme', theme)
+    } catch {
+      // private mode etc. — the pre-paint script falls back to matchMedia
     }
   }
 
@@ -57,11 +106,20 @@ export const useSettingsStore = defineStore('settings', () => {
       const loadedSettings = await LoadSettings()
       if (loadedSettings) {
         settings.value = mergeSettings(loadedSettings)
-        loaded.value = true
       }
     } catch {
       // use defaults
+    } finally {
+      loaded.value = true
     }
+    // Apply the theme before anything slow: the AI store load and the shell
+    // probe (which spawns wsl.exe) below must not delay data-theme past the
+    // first paint. applyTheme() only depends on the loaded settings.
+    applyTheme()
+    await useAIConfigStore().load()
+    recomposeAi()
+    lastSavedAiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
+    applyUiFontSize()
     try {
       availableShells.value = await GetAvailableShells()
     } catch {
@@ -71,7 +129,6 @@ export const useSettingsStore = defineStore('settings', () => {
     // logs enabled before the user opens the settings tab already
     // respect it. Fire-and-forget; the backend has a safe empty fallback.
     SetDefaultSessionLogDir(settings.value.terminal.sessionLogDir || '').catch(() => {})
-    applyTheme()
     setLocale(settings.value.language)
   }
 
@@ -89,13 +146,26 @@ export const useSettingsStore = defineStore('settings', () => {
     } catch {
       // use defaults
     }
+    await useAIConfigStore().load()
+    recomposeAi()
+    applyUiFontSize()
     applyTheme()
     setLocale(settings.value.language)
+  }
+
+  async function refreshAvailableShells() {
+    try {
+      availableShells.value = await GetAvailableShells()
+    } catch {
+      availableShells.value = []
+    }
   }
 
   async function save() {
     try {
       await SaveSettings(settings.value)
+      // Mirror the syncable AI slice into ai.json (skipped when unchanged).
+      syncAiConfigFromSettings()
       // Keep the backend override in sync on every save. Cheap and
       // avoids the need for a dedicated watcher on this single field.
       SetDefaultSessionLogDir(settings.value.terminal.sessionLogDir || '').catch(() => {})
@@ -172,6 +242,18 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const sftpBookmarks = computed(() => settings.value.sftpBookmarks)
 
+  // Writable computed so components can toggle visibility directly; every
+  // write is persisted with the settings blob. The transfer panel auto-pops
+  // on new tasks regardless of this flag — it only remembers the last
+  // visibility across restarts.
+  const sftpTransferPanelVisible = computed<boolean>({
+    get: () => settings.value.sftpTransferPanelVisible,
+    set: (v: boolean) => {
+      settings.value.sftpTransferPanelVisible = v
+      save()
+    }
+  })
+
   function addSftpBookmark(mode: 'local' | 'remote', path: string) {
     const key = mode === 'local' ? 'localPaths' : 'remotePaths'
     const paths = settings.value.sftpBookmarks[key]
@@ -200,6 +282,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // Apply theme when it changes
   watch(() => settings.value.theme, applyTheme)
 
+  // Apply the UI font baseline as soon as it changes (no restart needed)
+  watch(() => settings.value.uiFontSize, applyUiFontSize)
+
   // Listen for system color scheme changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     systemPrefersDark.value = e.matches
@@ -214,19 +299,36 @@ export const useSettingsStore = defineStore('settings', () => {
     if (data) {
       settings.value = mergeSettings(data)
       loaded.value = true
+      applyUiFontSize()
       applyTheme()
+    }
+  })
+
+  // AI config changed via a sync pull — refresh the local composition.
+  unsubAiChanged?.()
+  unsubAiChanged = Events.On('store:ai:changed', (ev) => {
+    const data = ev.data as { maxTurns?: number; models?: AIModelConfig[] } | null
+    if (data) {
+      const aiCfg = useAIConfigStore()
+      aiCfg.maxTurns = data.maxTurns ?? DEFAULT_SETTINGS.ai.maxTurns
+      aiCfg.models = data.models?.length ? data.models : aiCfg.models
+      recomposeAi()
+      lastSavedAiJson = JSON.stringify({ maxTurns: settings.value.ai.maxTurns, models: settings.value.ai.models })
     }
   })
 
   function dispose() {
     unsubSettingsChanged?.()
     unsubSettingsChanged = null
+    unsubAiChanged?.()
+    unsubAiChanged = null
   }
 
   return {
     settings,
     loaded,
     availableShells,
+    refreshAvailableShells,
     theme,
     resolvedAppTheme,
     language,
@@ -247,6 +349,7 @@ export const useSettingsStore = defineStore('settings', () => {
     removeModel,
     setActiveModel,
     sftpBookmarks,
+    sftpTransferPanelVisible,
     addSftpBookmark,
     removeSftpBookmark,
     addCustomTheme,
@@ -260,6 +363,7 @@ function mergeSettings(loaded: AppSettings): AppSettings {
   return {
     theme: loaded.theme || DEFAULT_SETTINGS.theme,
     language: loaded.language || DEFAULT_SETTINGS.language,
+    uiFontSize: loaded.uiFontSize ?? DEFAULT_SETTINGS.uiFontSize,
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...loaded.terminal,
@@ -270,31 +374,46 @@ function mergeSettings(loaded: AppSettings): AppSettings {
     ai: {
       maxTurns: loaded.ai?.maxTurns ?? DEFAULT_SETTINGS.ai.maxTurns,
       models: loaded.ai?.models?.length ? loaded.ai.models : DEFAULT_SETTINGS.ai.models,
-      activeModelId: loaded.ai?.activeModelId || DEFAULT_SETTINGS.ai.activeModelId,
-      localRiskGuardEnabled: loaded.ai?.localRiskGuardEnabled ?? DEFAULT_SETTINGS.ai.localRiskGuardEnabled
+      activeModelId: loaded.ai?.activeModelId || DEFAULT_SETTINGS.ai.activeModelId
     },
-    keyboard: {
-      ...DEFAULT_KEYBOARD,
-      ...(loaded.keyboard || {})
-    },
+    keyboard: normalizeKeyBindings(loaded.keyboard || {}),
     autoCheckUpdate: loaded.autoCheckUpdate ?? DEFAULT_SETTINGS.autoCheckUpdate,
+    updateSource: loaded.updateSource ?? DEFAULT_SETTINGS.updateSource,
     closeTabPrompt: loaded.closeTabPrompt ?? DEFAULT_SETTINGS.closeTabPrompt,
     closeAppPrompt: loaded.closeAppPrompt ?? DEFAULT_SETTINGS.closeAppPrompt,
+    restoreTabsPrompt: loaded.restoreTabsPrompt ?? DEFAULT_SETTINGS.restoreTabsPrompt,
     sftpBookmarks: {
       localPaths: loaded.sftpBookmarks?.localPaths || [],
       remotePaths: loaded.sftpBookmarks?.remotePaths || []
     },
+    sftpTransferPanelVisible: loaded.sftpTransferPanelVisible ?? DEFAULT_SETTINGS.sftpTransferPanelVisible,
     customTerminalThemes: loaded.customTerminalThemes || [],
     defaultLocalShell: loaded.defaultLocalShell ?? DEFAULT_SETTINGS.defaultLocalShell,
+    gitBashPath: loaded.gitBashPath ?? DEFAULT_SETTINGS.gitBashPath,
     tabCloseButton: loaded.tabCloseButton || DEFAULT_SETTINGS.tabCloseButton,
+    showTabShortcutHints: loaded.showTabShortcutHints ?? DEFAULT_SETTINGS.showTabShortcutHints,
+    hostListMenuStyle: loaded.hostListMenuStyle || DEFAULT_SETTINGS.hostListMenuStyle,
+    newTabAction: loaded.newTabAction || DEFAULT_SETTINGS.newTabAction,
     // Per-key merge so a settings.json written before a view existed (or
     // with a key dropped) still gets the default for that view.
     sidebarTabs: {
       ...DEFAULT_SETTINGS.sidebarTabs,
       ...(loaded.sidebarTabs || {})
     },
-    hostKeyStrategy: loaded.hostKeyStrategy ?? DEFAULT_SETTINGS.hostKeyStrategy,
-    autoRecord: loaded.autoRecord ?? DEFAULT_SETTINGS.autoRecord,
-    recordingsDir: loaded.recordingsDir ?? DEFAULT_SETTINGS.recordingsDir
+    // Per-key visible merge; the order is validated against the known block
+    // ids and backfilled with any missing blocks (older settings.json files
+    // or hand-edited ones).
+    startPage: mergeStartPage(loaded.startPage)
   }
+}
+
+function mergeStartPage(loaded: AppSettings['startPage']): AppSettings['startPage'] {
+  const visible = {
+    ...DEFAULT_SETTINGS.startPage.visible,
+    ...(loaded?.visible || {})
+  }
+  const known = DEFAULT_SETTINGS.startPage.order
+  const persisted = (loaded?.order || []).filter(b => known.includes(b))
+  const order = [...persisted, ...known.filter(b => !persisted.includes(b))]
+  return { visible, order }
 }

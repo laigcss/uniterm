@@ -8,6 +8,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/ys-ll/uniterm/backend/container"
+	"github.com/ys-ll/uniterm/backend/credentials"
+	"github.com/ys-ll/uniterm/backend/importer"
+	"github.com/ys-ll/uniterm/backend/k8s"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/mcp"
+	"github.com/ys-ll/uniterm/backend/mcpclient"
+	"github.com/ys-ll/uniterm/backend/mcpjob"
+	"github.com/ys-ll/uniterm/backend/platform"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
+	"github.com/ys-ll/uniterm/backend/sync"
+	"github.com/ys-ll/uniterm/backend/update"
+	"github.com/ys-ll/uniterm/backend/utils"
+	"golang.org/x/crypto/ssh"
 	"io"
 	"net"
 	"net/http"
@@ -21,33 +38,20 @@ import (
 	stdsync "sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/laigcss/ai-ops-terminal/backend/container"
-	"github.com/laigcss/ai-ops-terminal/backend/credentials"
-	"github.com/laigcss/ai-ops-terminal/backend/importer"
-	"github.com/laigcss/ai-ops-terminal/backend/k8s"
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/mcp"
-	"github.com/laigcss/ai-ops-terminal/backend/platform"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
-	"github.com/laigcss/ai-ops-terminal/backend/sync"
-	"github.com/laigcss/ai-ops-terminal/backend/update"
-	"github.com/laigcss/ai-ops-terminal/backend/utils"
-	"golang.org/x/crypto/ssh"
 )
 
 type App struct {
 	ctx                  context.Context
 	app                  *application.App
 	window               *application.WebviewWindow
+	notifier             *notifications.NotificationService // system notifications (MCP approval prompts)
 	sessionManager       *session.SessionManager
 	k8sManager           *k8s.Manager
 	containerManager     *container.Manager
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
 	settingsStore        *store.SettingsStore
+	aiConfigStore        *store.AIConfigStore
 	identityStore        *store.IdentityStore
 	proxyStore           *store.ProxyStore
 	localStateStore      *store.LocalStateStore
@@ -57,9 +61,12 @@ type App struct {
 	tunnelStore          *store.TunnelStore
 	terminalHistoryStore *store.TerminalHistoryStore
 	recentStore          *store.RecentStore
+	favoriteStore        *store.FavoriteStore
 	syncService          *sync.SyncService
 	tunnelService        *session.TunnelService
-	mcpManager           *mcp.MCPManager
+	tunnelStartsMu       stdsync.Mutex
+	tunnelStarts         map[string]*tunnelStartRequest
+	tunnelsClosed        bool
 	mainHwnd             uintptr
 	originalWndProc      uintptr
 	wndProcCb            uintptr // keep alive to prevent GC
@@ -93,6 +100,28 @@ type App struct {
 	httpClient     *http.Client
 	httpClientOnce stdsync.Once
 
+	// MCP server (external AI agents): listener + token auth + approval
+	// bridge. Lazily created once stores are ready (ensureMCPServer).
+	mcpServer *mcp.Server
+	mcpOnce   stdsync.Once
+	// mcpApprovals maps pending approval request ids to their answer channels.
+	mcpApprovals   map[string]chan mcpApprovalVerdict
+	mcpApprovalsMu stdsync.Mutex
+	// Token hot-reload cache: mcp.json mtime → parsed token map.
+	mcpTokenCacheMu    stdsync.Mutex
+	mcpTokenCache      map[string]mcp.TokenInfo
+	mcpTokenCacheMtime time.Time
+
+	// MCP client (uniTerm connects to external MCP servers). Separate from the
+	// mcpServer above: that one exposes uniTerm to external agents; this one
+	// feeds external tools into the built-in AI panel. Lazily created.
+	mcpClient     *mcpclient.Manager
+	mcpClientOnce stdsync.Once
+	// Unified async foreground-job registry (mcp uniterm_exec mode=foreground).
+	// Background non-PTY exec stays on the session mcpExec path.
+	jobs    *mcpjob.Registry
+	jobOnce stdsync.Once
+
 	// session objects and the log file spans all of them. sessionToPanel
 	// tracks the current session→panel binding so emitData can look up
 	// the right logger. panelAutoTriggered records which panels have
@@ -102,11 +131,19 @@ type App struct {
 	sessionToPanel     map[string]string
 	panelAutoTriggered map[string]bool
 	panelLogMu         stdsync.Mutex
+	// MCP file tools: per-SSH-session companion file-transfer session ids
+	// (created lazily, protocol per the connection's fileTransferProto) and
+	// the completion waiters registered by in-flight MCP transfers.
+	mcpFileSessions    map[string]string
+	mcpFileMu          stdsync.Mutex
+	mcpTransferWaiters map[string]chan mcpTransferOutcome
+	mcpTransferMu      stdsync.Mutex
 	// customLogDir, when non-empty, overrides defaultSessionLogDir()
 	// as the target for new session logs. Set from settings via
 	// SetDefaultSessionLogDir; ongoing logs are not migrated.
-	customLogDir   string
-	customLogDirMu stdsync.RWMutex
+	customLogDir         string
+	sessionLogFilename   string
+	sessionLogSettingsMu stdsync.RWMutex
 
 	// errCh accumulates non-fatal init failures during startup() so the
 	// frontend can surface them (see StartupError / "app:startup-error"
@@ -117,17 +154,45 @@ type App struct {
 	startupErr error
 }
 
+// A request owns cancellation while configuration and credentials are loading,
+// before the tunnel service has registered its connection lifecycle.
+type tunnelStartRequest struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	state  session.TunnelState
+	err    error
+}
+
 func NewApp(webviewDataPath string) *App {
-	return &App{
+	a := &App{
 		webviewDataPath:    webviewDataPath,
 		panelLogs:          make(map[string]*session.OutputLogger),
 		sessionToPanel:     make(map[string]string),
 		panelAutoTriggered: make(map[string]bool),
+		mcpFileSessions:    make(map[string]string),
+		mcpTransferWaiters: make(map[string]chan mcpTransferOutcome),
 		k8sManager:         k8s.NewManager(),
 		containerManager:   container.NewManager(),
-		mcpManager:         mcp.NewManager(),
 		errCh:              make(chan error, 16),
 	}
+
+	// Transfer progress is published as Wails events, not OSC sequences in the
+	// terminal data stream. MCP file tools additionally hook completion
+	// events to synchronously wait on their transfer tasks.
+	session.TransferEventSink = func(sid string, payload map[string]any) {
+		a.mcpDispatchTransferEvent(payload)
+		a.emit("sftp:transfer", payload)
+	}
+
+	// OSC-7 cwd reports from SSH/WSL terminals (see backend/session/shell_
+	// integration.go) are forwarded so the frontend can follow the active
+	// directory in the sidebar.
+	session.TerminalCwdSink = func(sid string, cwd string) {
+		a.emit("terminal:cwd", map[string]any{"sessionId": sid, "cwd": cwd})
+	}
+
+	return a
 }
 
 // emit is a v3 helper that forwards an event to the frontend. It no-ops when
@@ -168,13 +233,6 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 
 	a.sessionManager = session.NewSessionManager()
 	a.tunnelService = session.NewTunnelService()
-
-	// S1: wire the Wails event emitter into the session package so SSH
-	// host-key changes can surface a `session:hostkey-changed` event to
-	// the frontend for the TOFU confirmation dialog.
-	session.SetHostKeyEmitter(func(name string, payload any) {
-		a.emit(name, payload)
-	})
 
 	// Defer EventsEmit from WndProc to avoid blocking the modal resize/move loop.
 	a.moveResizeCh = make(chan string, 10)
@@ -224,6 +282,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 // it until SetDataDir picks a directory; on the normal path it runs once at
 // startup. Runs exactly once either way.
 func (a *App) initStores(dataDir string, upgrade bool) {
+	// Point clink:// local shells at the app data dir (they drop a tuned
+	// clink profile next to the stores; see backend/session/local_clink.go).
+	session.SetClinkProfileDir(filepath.Join(dataDir, "clink"))
+
 	cs, err := store.NewConnectionStore(dataDir)
 	if err != nil {
 		log.Writef("Failed to init connection store: %v", err)
@@ -251,10 +313,16 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		// respects the user's choice from a prior run.
 		if settings, err := ss.Load(); err == nil {
 			a.SetDefaultSessionLogDir(settings.Terminal.SessionLogDir)
-			// S1: prime the SSH host-key verification policy from persisted
-			// settings so the very first connection honors the user's choice.
-			session.SetDefaultHostKeyStrategy(session.ParseHostKeyStrategy(settings.HostKeyStrategy))
+			a.setSessionLogFilename(settings.Terminal.SessionLogFilename)
 		}
+	}
+
+	acs, err := store.NewAIConfigStore(dataDir)
+	if err != nil {
+		log.Writef("Failed to init AI config store: %v", err)
+		a.sendStartupErr(fmt.Errorf("ai config store: %w", err))
+	} else {
+		a.aiConfigStore = acs
 	}
 
 	is, err := store.NewIdentityStore(dataDir)
@@ -283,17 +351,22 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	if _, err := a.recentStore.Load(); err != nil {
 		log.Writef("recentStore.Load: %v", err)
 	}
+	a.favoriteStore = store.NewFavoriteStore(dataDir)
+	if _, err := a.favoriteStore.Load(); err != nil {
+		log.Writef("favoriteStore.Load: %v", err)
+	}
 
 	// Push tunnel runtime state to the frontend, and bring up auto-start tunnels.
 	a.tunnelService.SetStateCallback(func(st session.TunnelState) {
 		a.emit("tunnel:state", st)
 	})
-	go a.autoStartTunnels()
 	go a.watchForeground(a.ctx)
 
 	// Credential store + auto-unlock / upgrade (wires PasswordStore into
 	// connection + settings stores).
 	a.initCredentials(dataDir, upgrade)
+	// Resolve saved tunnel credentials only after the credential store is ready.
+	go a.autoStartTunnels()
 
 	// Sync service: sync metadata (sync-config.json + local repo clone) lives
 	// in the system user-config dir; the config files it encrypts/decrypts are
@@ -307,6 +380,11 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 		// Normalize enc:v1: fields at the sync boundary using the credential
 		// store (set by initCredentials above).
 		syncSvc.SetPasswordStore(a.credentialStore)
+		// Config-exchange registry: the sync layer holds only SyncableStore
+		// interface values (sync → store would cycle through credentials),
+		// so the concrete stores are assembled here — the only place that
+		// imports both packages.
+		syncSvc.SetStores(a.syncableStores())
 		// Auto-sync on startup if enabled
 		if syncSvc.IsAutoSyncEnabled() {
 			go func() {
@@ -330,6 +408,18 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	}
 
 	a.storesReady = true
+
+	// External-agent MCP server: auto-start when enabled in settings.
+	a.mcpApprovals = make(map[string]chan mcpApprovalVerdict)
+	if err := a.StartMCP(); err != nil {
+		log.Writef("mcp: start failed: %v", err)
+		a.emit("app:startup-error", "MCP server: "+err.Error())
+	}
+
+	// MCP client: connect persisted external servers so their tools are
+	// available to the built-in AI panel. Failures are logged per-server; one
+	// bad external server never blocks startup.
+	a.StartMCPClient()
 
 	// Raise the window to the foreground once, shortly after launch. On Windows a
 	// relaunched instance can otherwise land behind other windows; the short delay
@@ -357,6 +447,13 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 // normal path.
 func (a *App) initCredentials(dataDir string, upgrade bool) {
 	cred := credentials.New(dataDir, sync.NewKeychain())
+	// The reset/setup ciphertext guards scan the data dir; the declaring
+	// manifest lives in the store package.
+	secretFiles := make([]string, 0, len(store.SecretFiles))
+	for _, sf := range store.SecretFiles {
+		secretFiles = append(secretFiles, sf.File)
+	}
+	cred.SetSecretFiles(secretFiles)
 
 	if upgrade {
 		// Only this once (the upgrade migration) is worth logging; ordinary
@@ -416,6 +513,19 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	if a.settingsStore != nil {
 		a.settingsStore.SetPasswordStore(cred)
 	}
+	if a.aiConfigStore != nil {
+		a.aiConfigStore.SetPasswordStore(cred)
+		// One-shot settings->ai.json migration. Runs after the password store
+		// is wired so model apiKeys land encrypted; the settings.json copy is
+		// left intact so a rollback to a pre-split build still finds them.
+		if a.settingsStore != nil {
+			if settings, err := a.settingsStore.Load(); err == nil {
+				if err := a.aiConfigStore.MigrateFromSettingsIfNeeded(settings); err != nil {
+					log.Writef("ai.json migration failed: %v", err)
+				}
+			}
+		}
+	}
 	if a.identityStore != nil {
 		a.identityStore.SetPasswordStore(cred)
 	}
@@ -474,6 +584,10 @@ func (a *App) saveWindowStateFromRuntime() {
 	if a.localStateStore == nil {
 		return
 	}
+	// Server mode (headless): no window to query.
+	if a.window == nil {
+		return
+	}
 	// Do not save geometry when minimised — the position is off-screen
 	// (-32000, -32000 on Windows) and the size is the tiny taskbar thumbnail,
 	// which would restore incorrectly.
@@ -504,6 +618,46 @@ func (a *App) SaveWindowState(x, y, width, height int, maximised bool) {
 	ls.WindowHeight = height
 	ls.WindowMaximised = maximised
 	a.localStateStore.Save(ls)
+}
+
+// resetWindowGeometry recovers a lost window (tray menu item): shows it,
+// restores it from maximised, centres it on the PRIMARY screen at the app's
+// standard 1200x800, and persists the new geometry so the next start doesn't
+// restore the lost position. The size is clamped to the primary screen's
+// work area so the taskbar isn't covered.
+func (a *App) resetWindowGeometry() {
+	win := a.win()
+	if win == nil || a.app == nil {
+		return
+	}
+	win.UnMaximise()
+
+	const stdW, stdH = 1200, 800
+	screen := a.app.Screen.GetPrimary()
+	if screen == nil {
+		// Screen API unavailable — at least centre it on the default screen.
+		win.SetSize(stdW, stdH)
+		win.Center()
+	} else {
+		wa := screen.WorkArea
+		w, h := stdW, stdH
+		if w > wa.Width {
+			w = wa.Width
+		}
+		if h > wa.Height {
+			h = wa.Height
+		}
+		win.SetSize(w, h)
+		win.SetPosition(wa.X+(wa.Width-w)/2, wa.Y+(wa.Height-h)/2)
+	}
+
+	// Persist so a restart doesn't resurrect the lost position. Deferred so
+	// the window manager settles the move/resize first.
+	time.AfterFunc(300*time.Millisecond, a.saveWindowStateFromRuntime)
+
+	// The whole point is recovering a lost window — raise it to the
+	// foreground last so the repositioned result is what the user sees.
+	showMainWindow(win)
 }
 
 // IsForeground reports whether the app window is currently in the
@@ -629,6 +783,9 @@ func (a *App) watchForeground(ctx context.Context) {
 			if a.ctx == nil {
 				continue
 			}
+			if a.window == nil {
+				continue
+			}
 			visible := !a.win().IsMinimised()
 			if visible != a.foreground.Load() {
 				a.SetAppVisibility(visible)
@@ -639,14 +796,23 @@ func (a *App) watchForeground(ctx context.Context) {
 
 func (a *App) shutdown() {
 	a.unsubclassMainWindow()
+	if a.mcpServer != nil {
+		a.mcpServer.Stop()
+	}
+	if a.mcpClient != nil {
+		a.mcpClient.CloseAll()
+	}
+	a.tunnelStartsMu.Lock()
+	a.tunnelsClosed = true
+	for _, request := range a.tunnelStarts {
+		request.cancel()
+	}
+	a.tunnelStartsMu.Unlock()
 	if a.tunnelService != nil {
 		a.tunnelService.Shutdown()
 	}
 	if a.sessionManager != nil {
 		a.sessionManager.CloseAll()
-	}
-	if a.mcpManager != nil {
-		a.mcpManager.StopAll()
 	}
 	cleanupExtEditsOnExit()
 	session.CleanupSSHX11Server()
@@ -654,6 +820,30 @@ func (a *App) shutdown() {
 		_ = a.terminalHistoryStore.Close()
 	}
 	os.RemoveAll(a.webviewDataPath)
+}
+
+// FavoriteStore methods
+
+func (a *App) GetFavoriteConnections() []string {
+	if a.favoriteStore == nil {
+		return []string{}
+	}
+	return a.favoriteStore.GetAll()
+}
+
+func (a *App) SaveFavoriteConnections(ids []string) error {
+	if a.favoriteStore == nil {
+		return fmt.Errorf("favorite store not initialized")
+	}
+	if _, err := a.favoriteStore.Load(); err != nil {
+		log.Writef("favoriteStore.Load: %v", err)
+	}
+	err := a.favoriteStore.Save(ids)
+	if err == nil {
+		a.emit("store:favorites:changed", a.favoriteStore.GetAll())
+		a.triggerAutoSync()
+	}
+	return err
 }
 
 // ConnectionStore methods
@@ -705,13 +895,24 @@ func (a *App) SaveProxies(data session.ProxyStoreData) error {
 	return a.proxyStore.Save(data)
 }
 
-// ExportConnections writes the full store to destPath as a .utm file. When
-// password is non-empty, password fields are encrypted; otherwise cleared.
+// ExportConnections writes the full store to destPath as a .utm file. Every
+// identity-referencing connection is materialized first — the identity store
+// itself is not exported, so the credentials travel inside the connections
+// and the file never depends on this machine's identity store — and all
+// manifest-declared secret fields are encrypted with password.
 func (a *App) ExportConnections(destPath, password string) error {
 	if a.connectionStore == nil {
 		return fmt.Errorf("connection store not initialized")
 	}
 	data, err := a.connectionStore.Load()
+	if err != nil {
+		return err
+	}
+	resolve, err := a.identityResolver()
+	if err != nil {
+		return err
+	}
+	data, err = importer.MaterializeForExport(data, resolve)
 	if err != nil {
 		return err
 	}
@@ -751,6 +952,26 @@ func (a *App) SaveTunnels(data session.TunnelStoreData) error {
 	}
 	err := a.tunnelStore.Save(data)
 	if err == nil {
+		// Cancel pending reconnects as well as live forwards when a tunnel is
+		// removed, including deletions saved by another window.
+		if a.tunnelService != nil {
+			kept := make(map[string]bool, len(data.Tunnels))
+			for _, tunnel := range data.Tunnels {
+				kept[tunnel.ID] = true
+			}
+			a.tunnelStartsMu.Lock()
+			for id, request := range a.tunnelStarts {
+				if !kept[id] {
+					request.cancel()
+				}
+			}
+			a.tunnelStartsMu.Unlock()
+			for _, state := range a.tunnelService.TunnelStates() {
+				if !kept[state.ID] {
+					a.tunnelService.StopTunnel(state.ID)
+				}
+			}
+		}
 		a.emit("store:tunnels:changed", data)
 	}
 	return err
@@ -932,42 +1153,146 @@ func (a *App) proxyDisabledName(id string) (string, bool) {
 	return "", false
 }
 
-// StartTunnel brings the tunnel with the given ID up and returns its state.
-func (a *App) StartTunnel(id string) (session.TunnelState, error) {
-	if a.tunnelService == nil || a.tunnelStore == nil || a.connectionStore == nil {
-		return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
+// withExitCredOverride wraps a ConnResolver so the tunnel's exit connection
+// gets its empty user/password filled from inline credentials — the same
+// semantics as the TunnelSSHUser/TunnelSSHPassword handling in app_terminal.go:
+// inline values only fill EMPTY fields (never overwrite saved ones) and only on
+// the exit hop. Empty inline credentials return the resolver unchanged.
+func withExitCredOverride(resolve session.ConnResolver, exitID, user, password string) session.ConnResolver {
+	if user == "" && password == "" {
+		return resolve
 	}
-	data, err := a.tunnelStore.Load()
-	if err != nil {
-		return session.TunnelState{}, err
-	}
-	var t *session.Tunnel
-	for i := range data.Tunnels {
-		if data.Tunnels[i].ID == id {
-			t = &data.Tunnels[i]
-			break
+	return func(id string) (session.ConnectionConfig, bool) {
+		cfg, ok := resolve(id)
+		if !ok || id != exitID {
+			return cfg, ok
 		}
+		if cfg.User == "" && user != "" {
+			cfg.User = user
+		}
+		if cfg.Password == "" && password != "" {
+			cfg.Password = password
+		}
+		return cfg, true
 	}
-	if t == nil {
-		return session.TunnelState{}, fmt.Errorf("tunnel %s not found", id)
+}
+
+// StartTunnel brings the tunnel with the given ID up and returns its state.
+// user/password carry inline credentials resolved by the frontend's credential
+// dialog for exit connections with nothing saved; they only fill empty fields.
+func (a *App) StartTunnel(id, user, password string) (session.TunnelState, error) {
+	return a.startTunnel(id, user, password, false)
+}
+
+func (a *App) startTunnel(id, user, password string, autoStartOnly bool) (session.TunnelState, error) {
+	return a.runTunnelStart(id, func(ctx context.Context) (session.TunnelState, error) {
+		if a.tunnelService == nil || a.tunnelStore == nil || a.connectionStore == nil {
+			return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
+		}
+		data, err := a.tunnelStore.Load()
+		if err != nil {
+			return session.TunnelState{}, err
+		}
+		var t *session.Tunnel
+		for i := range data.Tunnels {
+			if data.Tunnels[i].ID == id {
+				t = &data.Tunnels[i]
+				break
+			}
+		}
+		if t == nil {
+			if autoStartOnly {
+				return session.TunnelState{ID: id, Status: session.TunnelStopped}, nil
+			}
+			return session.TunnelState{}, fmt.Errorf("tunnel %s not found", id)
+		}
+		if ctx.Err() != nil || (autoStartOnly && !t.AutoStart) {
+			return session.TunnelState{ID: id, Status: session.TunnelStopped}, nil
+		}
+		resolve, err := a.connResolver()
+		if err != nil {
+			return session.TunnelState{}, err
+		}
+		resolve = withExitCredOverride(resolve, t.SSHConnID, user, password)
+		st := a.tunnelService.StartTunnelContext(ctx, *t, resolve)
+		// A failed start is reported through the state (error, or reconnecting when
+		// automatic retries are enabled, with Error text);
+		// returning a Go error here too would turn the Wails call into a rejected
+		// promise and the frontend would lose the state it needs for the toast.
+		return st, nil
+	})
+}
+
+func (a *App) runTunnelStart(id string, start func(context.Context) (session.TunnelState, error)) (session.TunnelState, error) {
+	a.tunnelStartsMu.Lock()
+	if a.tunnelsClosed {
+		a.tunnelStartsMu.Unlock()
+		return session.TunnelState{ID: id, Status: session.TunnelStopped}, nil
+	}
+	if existing := a.tunnelStarts[id]; existing != nil && existing.ctx.Err() == nil {
+		a.tunnelStartsMu.Unlock()
+		<-existing.done
+		return existing.state, existing.err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	request := &tunnelStartRequest{ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	if a.tunnelStarts == nil {
+		a.tunnelStarts = make(map[string]*tunnelStartRequest)
+	}
+	a.tunnelStarts[id] = request
+	a.tunnelStartsMu.Unlock()
+	defer func() {
+		a.tunnelStartsMu.Lock()
+		if a.tunnelStarts[id] == request {
+			delete(a.tunnelStarts, id)
+		}
+		close(request.done)
+		a.tunnelStartsMu.Unlock()
+	}()
+	request.state, request.err = start(ctx)
+	if ctx.Err() != nil {
+		request.state, request.err = session.TunnelState{ID: id, Status: session.TunnelStopped}, nil
+	}
+	// The service retains ctx for a running/retrying lifecycle. Cancelling it
+	// here would stop a successful start as soon as its RPC returned.
+	if request.err != nil || request.state.Status == session.TunnelStopped || request.state.Status == session.TunnelError {
+		cancel()
+	}
+	return request.state, request.err
+}
+
+// StopTunnel tears down the tunnel with the given ID.
+func (a *App) StopTunnel(id string) error {
+	a.tunnelStartsMu.Lock()
+	if request := a.tunnelStarts[id]; request != nil {
+		request.cancel()
+	}
+	a.tunnelStartsMu.Unlock()
+	if a.tunnelService != nil {
+		a.tunnelService.StopTunnel(id)
+	}
+	return nil
+}
+
+// TestTunnel validates an unsaved tunnel configuration: it brings the tunnel
+// up under a throwaway ID through the same path as StartTunnel (SSH chain
+// dial/auth, then listener bind — for remote mode that also proves the port is
+// free on the server) and tears it down immediately. Status=Running means
+// everything bound; Error carries the reason. user/password carry inline
+// credentials resolved by the frontend's credential dialog (same override
+// semantics as StartTunnel).
+
+func (a *App) TestTunnel(t session.Tunnel, user, password string) (session.TunnelState, error) {
+	if a.tunnelService == nil || a.connectionStore == nil {
+		return session.TunnelState{}, fmt.Errorf("tunnel service not initialized")
 	}
 	resolve, err := a.connResolver()
 	if err != nil {
 		return session.TunnelState{}, err
 	}
-	st := a.tunnelService.StartTunnel(*t, resolve)
-	if st.Status == session.TunnelError {
-		return st, fmt.Errorf("%s", st.Error)
-	}
+	resolve = withExitCredOverride(resolve, t.SSHConnID, user, password)
+	st := a.tunnelService.TestTunnel(t, resolve)
 	return st, nil
-}
-
-// StopTunnel tears down the tunnel with the given ID.
-func (a *App) StopTunnel(id string) error {
-	if a.tunnelService != nil {
-		a.tunnelService.StopTunnel(id)
-	}
-	return nil
 }
 
 // ListTunnelStates returns the runtime state of every known tunnel.
@@ -988,13 +1313,18 @@ func (a *App) autoStartTunnels() {
 	if err != nil {
 		return
 	}
-	resolve, err := a.connResolver()
-	if err != nil {
-		return
-	}
 	for _, t := range data.Tunnels {
 		if t.AutoStart {
-			a.tunnelService.StartTunnel(t, resolve)
+			// A previous connection may take time to establish. Re-read this
+			// definition so a tunnel deleted or disabled meanwhile stays stopped.
+			st, err := a.startTunnel(t.ID, "", "", true)
+			if err != nil {
+				log.Writef("auto-start tunnel %s (%s): %v", t.Name, t.ID, err)
+			} else if st.Error != "" {
+				// The failure also reaches the frontend via the tunnel:state
+				// event; the log keeps a trace for diagnostics.
+				log.Writef("auto-start tunnel %s (%s): %s", t.Name, t.ID, st.Error)
+			}
 		}
 	}
 }
@@ -1005,7 +1335,14 @@ func (a *App) SaveLocalState(state store.LocalState) error {
 	if a.localStateStore == nil {
 		return fmt.Errorf("local state store not initialized")
 	}
-	return a.localStateStore.Save(state)
+	err := a.localStateStore.Save(state)
+	if err == nil {
+		// MCP endpoint follows the enabled switch / port without a restart.
+		if mcpErr := a.StartMCP(); mcpErr != nil {
+			log.Writef("mcp: restart after local state save failed: %v", mcpErr)
+		}
+	}
+	return err
 }
 
 func (a *App) LoadLocalState() (store.LocalState, error) {
@@ -1112,8 +1449,44 @@ func (a *App) ClearBackgroundImage() error {
 	return nil
 }
 
-// reloadStoresAfterSync reloads connections and settings from disk and emits
-// events so the frontend refreshes after a sync pull.
+// syncableStores assembles the config-exchange registry handed to the sync
+// service. It lives in app.go because this is the only package that imports
+// both backend/sync and backend/store — the concrete stores satisfy
+// sync.SyncableStore structurally, so neither package needs to import the
+// other (sync → store would cycle through credentials). A store that failed
+// to init is skipped: sync then never exchanges that blob, instead of
+// panicking on a nil receiver.
+func (a *App) syncableStores() []sync.SyncableStore {
+	stores := make([]sync.SyncableStore, 0, 8)
+	if a.connectionStore != nil {
+		stores = append(stores, a.connectionStore)
+	}
+	if a.identityStore != nil {
+		stores = append(stores, a.identityStore)
+	}
+	if a.proxyStore != nil {
+		stores = append(stores, a.proxyStore)
+	}
+	if a.aiConfigStore != nil {
+		stores = append(stores, a.aiConfigStore)
+	}
+	if a.favoriteStore != nil {
+		stores = append(stores, a.favoriteStore)
+	}
+	if a.quickCommandsStore != nil {
+		stores = append(stores, a.quickCommandsStore)
+	}
+	if a.tunnelStore != nil {
+		stores = append(stores, a.tunnelStore)
+	}
+	if a.settingsStore != nil {
+		stores = append(stores, a.settingsStore)
+	}
+	return stores
+}
+
+// reloadStoresAfterSync reloads every store a sync pull may have rewritten
+// and emits events so the frontend refreshes without a restart.
 func (a *App) reloadStoresAfterSync() {
 	if a.connectionStore != nil {
 		if data, err := a.connectionStore.Load(); err == nil {
@@ -1123,6 +1496,11 @@ func (a *App) reloadStoresAfterSync() {
 	if a.settingsStore != nil {
 		if settings, err := a.settingsStore.Load(); err == nil {
 			a.emit("store:settings:changed", settings)
+		}
+	}
+	if a.aiConfigStore != nil {
+		if cfg, err := a.aiConfigStore.Load(); err == nil {
+			a.emit("store:ai:changed", cfg)
 		}
 	}
 	if a.quickCommandsStore != nil {
@@ -1138,6 +1516,16 @@ func (a *App) reloadStoresAfterSync() {
 	if a.proxyStore != nil {
 		if data, err := a.proxyStore.Load(); err == nil {
 			a.emit("store:proxies:changed", data)
+		}
+	}
+	if a.favoriteStore != nil {
+		if data, err := a.favoriteStore.Load(); err == nil {
+			a.emit("store:favorites:changed", data)
+		}
+	}
+	if a.tunnelStore != nil {
+		if data, err := a.tunnelStore.Load(); err == nil {
+			a.emit("store:tunnels:changed", data)
 		}
 	}
 }
@@ -1270,6 +1658,35 @@ func (a *App) SyncConfigureRepo(repoURL, username, token, masterPassword string)
 	return result, err
 }
 
+// SyncTestRemote probes a snapshot remote with form-provided values
+// (the add-repo dialog's test-connection button), without saving anything.
+func (a *App) SyncTestRemote(backend string, remote sync.RemoteConfig, secret string) error {
+	if a.syncService == nil {
+		return fmt.Errorf("sync service not initialized")
+	}
+	if !a.waitSyncReady(time.Second) {
+		return fmt.Errorf("sync service still initializing")
+	}
+	return a.syncService.TestRemote(backend, remote, secret)
+}
+
+// SyncConfigureRemote configures a snapshot remote (webdav/sftp/s3/smb)
+// as the sync backend.
+func (a *App) SyncConfigureRemote(backend string, remote sync.RemoteConfig, secret, masterPassword string) (*sync.SyncResult, error) {
+	if a.syncService == nil {
+		return nil, fmt.Errorf("sync service not initialized")
+	}
+	if !a.waitSyncReady(time.Second) {
+		return nil, fmt.Errorf("sync service still initializing")
+	}
+	result, err := a.syncService.ConfigureRepoRemote(backend, remote, secret, masterPassword)
+	if err == nil {
+		a.reloadStoresAfterSync()
+		a.emit("sync:completed")
+	}
+	return result, err
+}
+
 // SyncChangePassword re-encrypts synced files with a new master password.
 func (a *App) SyncChangePassword(oldPassword, newPassword string) error {
 	if a.syncService == nil {
@@ -1292,6 +1709,20 @@ func (a *App) SyncVerifyPassword(password, username, token string) error {
 	return a.syncService.VerifySyncPassword(password, username, token)
 }
 
+// SyncUpdateRemotePassword swaps the snapshot remote credential only. The
+// server,
+// remote folder and username are display-only in the edit dialog —
+// changing the sync target must go through delete + re-configure.
+func (a *App) SyncUpdateRemotePassword(secret, masterPassword string) error {
+	if a.syncService == nil {
+		return fmt.Errorf("sync service not initialized")
+	}
+	if !a.waitSyncReady(time.Second) {
+		return fmt.Errorf("sync service still initializing")
+	}
+	return a.syncService.UpdateRemotePassword(secret, masterPassword)
+}
+
 // SyncDeleteRepo removes the sync repository configuration.
 func (a *App) SyncDeleteRepo() error {
 	if a.syncService == nil {
@@ -1301,27 +1732,6 @@ func (a *App) SyncDeleteRepo() error {
 		return fmt.Errorf("sync service still initializing")
 	}
 	return a.syncService.DeleteRepo()
-}
-
-func (a *App) LoadAIConfig() (store.AIConfig, error) {
-	if a.settingsStore == nil {
-		return store.AIConfig{}, fmt.Errorf("settings store not initialized")
-	}
-	settings, err := a.settingsStore.Load()
-	if err != nil {
-		return store.AIConfig{}, err
-	}
-	// Return the active model's config
-	for _, m := range settings.AI.Models {
-		if m.ID == settings.AI.ActiveModelID {
-			return store.AIConfig{
-				APIKey:  m.APIKey,
-				BaseURL: m.BaseURL,
-				Model:   m.Model,
-			}, nil
-		}
-	}
-	return store.AIConfig{}, nil
 }
 
 // AI Session Store methods
@@ -1348,11 +1758,12 @@ func (a *App) SaveSettings(settings store.AppSettings) error {
 	}
 	err := a.settingsStore.Save(settings)
 	if err == nil {
-		// S1: keep the live SSH host-key policy in sync with the persisted
-		// value so the next connection picks up the new strategy without a
-		// restart.
-		session.SetDefaultHostKeyStrategy(session.ParseHostKeyStrategy(settings.HostKeyStrategy))
+		a.SetDefaultSessionLogDir(settings.Terminal.SessionLogDir)
+		a.setSessionLogFilename(settings.Terminal.SessionLogFilename)
 		a.triggerAutoSync()
+		// Re-apply the global show/hide hotkey so binding changes (and the
+		// enable switch) take effect immediately. No-op when unchanged.
+		applyGlobalShowHideHotkey(a.app, a.window, trayHotkeyBinding(&settings))
 	}
 	return err
 }
@@ -1364,12 +1775,24 @@ func (a *App) LoadSettings() (store.AppSettings, error) {
 	return a.settingsStore.Load()
 }
 
-// AcceptHostKeyChange replaces the recorded SSH host key for host:port with
-// the new key, after the user confirmed the change in the frontend's
-// "host key changed" dialog (S1). Subsequent connections will trust the new
-// key without prompting.
-func (a *App) AcceptHostKeyChange(host, port, keyType, newKeyB64 string) error {
-	return session.AcceptHostKeyChange(host, port, keyType, newKeyB64)
+// AIConfigStore methods
+
+func (a *App) LoadAIModels() (store.AIStoreData, error) {
+	if a.aiConfigStore == nil {
+		return store.AIStoreData{}, fmt.Errorf("ai config store not initialized")
+	}
+	return a.aiConfigStore.Load()
+}
+
+func (a *App) SaveAIModels(cfg store.AIStoreData) error {
+	if a.aiConfigStore == nil {
+		return fmt.Errorf("ai config store not initialized")
+	}
+	err := a.aiConfigStore.Save(cfg)
+	if err == nil {
+		a.triggerAutoSync()
+	}
+	return err
 }
 
 // QuickCommandsStore methods
@@ -1450,8 +1873,77 @@ func (a *App) SaveCommand(name, description, argumentHint, body string) error {
 	return a.commandsStore.SaveCommand(name, description, argumentHint, body)
 }
 
-func (a *App) OpenFileDialog() (string, error) {
-	return a.app.Dialog.OpenFile().SetTitle("Select File").PromptForSingleSelection()
+// expandDialogDir expands a leading "~" and returns dir only if it is an
+// existing absolute directory; otherwise it returns "".
+func expandDialogDir(dir string) string {
+	if dir == "~" || strings.HasPrefix(dir, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return ""
+		}
+		dir = filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(dir, "~"), "/"))
+	}
+	if dir == "" || !filepath.IsAbs(dir) {
+		return ""
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+// resolveDialogDir picks the first candidate that is an existing directory,
+// falling back to the home directory. The platform pickers silently ignore a
+// non-existent directory URL and reopen at the OS-remembered "last location",
+// which on macOS is frequently somewhere with no visible route to ~/... (#947),
+// so the fallback has to be resolved here rather than left to the panel.
+func resolveDialogDir(candidates ...string) string {
+	for _, c := range candidates {
+		if dir := expandDialogDir(c); dir != "" {
+			return dir
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// openFileDialog builds an open-file picker that starts in a known-good
+// directory. Hidden files are revealed whenever the start directory is itself
+// inside a dot directory (~/.ssh, ~/.kube): the platform panels hide those
+// entries by default, so navigating up to home and back would otherwise leave
+// the target unreachable rather than merely hard to find.
+func (a *App) openFileDialog(title, startDir string) *application.OpenFileDialogStruct {
+	dir := resolveDialogDir(startDir)
+	return a.app.Dialog.OpenFile().
+		SetTitle(title).
+		SetDirectory(dir).
+		ShowHiddenFiles(hasHiddenSegment(dir))
+}
+
+// hasHiddenSegment reports whether any path segment starts with a dot, i.e.
+// whether reaching dir again by hand requires hidden files to be visible.
+func hasHiddenSegment(dir string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(dir), "/") {
+		if len(seg) > 1 && seg[0] == '.' {
+			return true
+		}
+	}
+	return false
+}
+
+// OpenFileDialog opens a single-file picker. startDir is optional and accepts
+// "~"-prefixed paths; it defaults to the home directory.
+func (a *App) OpenFileDialog(startDir ...string) (string, error) {
+	return a.openFileDialog("Select File", firstArg(startDir)).PromptForSingleSelection()
+}
+
+// firstArg unwraps the optional trailing argument the dialog bindings take, so
+// existing zero-argument callers keep working.
+func firstArg(args []string) string {
+	if len(args) > 0 {
+		return args[0]
+	}
+	return ""
 }
 
 // OpenPrivateKeyFile opens the private-key picker, reads the selected file's
@@ -1459,8 +1951,12 @@ func (a *App) OpenFileDialog() (string, error) {
 // content is validated before returning; a passphrase-protected key is accepted
 // (the user supplies its passphrase separately) but content that doesn't look
 // like a PEM private key is rejected with an immediate error.
+//
+// The picker starts in ~/.ssh with hidden files shown, since that is where keys
+// live and a dot directory is otherwise unreachable in the panel.
 func (a *App) OpenPrivateKeyFile() (string, error) {
-	path, err := a.app.Dialog.OpenFile().SetTitle("Select Private Key").PromptForSingleSelection()
+	path, err := a.openFileDialog("Select Private Key", "~/.ssh").
+		PromptForSingleSelection()
 	if err != nil {
 		return "", err
 	}
@@ -1510,42 +2006,71 @@ func looksLikePrivateKeyPEM(data []byte) bool {
 	return true
 }
 
+// OpenKubeconfigFile opens the kubeconfig picker, reads the selected file and
+// returns its text for pasting into the inline kubeconfig field. The content is
+// parsed as a kubeconfig before returning so obviously wrong files are rejected
+// up front; full connection validity is still checked when a context is loaded.
+// Starts in ~/.kube with hidden files shown, for the same reason as the key
+// picker.
+func (a *App) OpenKubeconfigFile() (string, error) {
+	path, err := a.openFileDialog("Select Kubeconfig", "~/.kube").
+		PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		// Picker cancelled — nothing to import.
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read kubeconfig: %w", err)
+	}
+	if _, err := k8s.ParseBytes(data); err != nil {
+		return "", utils.UserErr("invalid_kubeconfig")
+	}
+	return string(data), nil
+}
+
 // OpenFileDialogFiltered is like OpenFileDialog but restricts the picker to
 // a single extension filter (e.g. for importing a specific file format).
-func (a *App) OpenFileDialogFiltered(title, filterDisplayName, filterPattern string) (string, error) {
+func (a *App) OpenFileDialogFiltered(title, filterDisplayName, filterPattern string, startDir ...string) (string, error) {
 	return a.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
-		Title: title,
+		Title:     title,
+		Directory: resolveDialogDir(firstArg(startDir)),
 		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
 	}).PromptForSingleSelection()
 }
 
-func (a *App) OpenMultipleFilesDialog() ([]string, error) {
-	return a.app.Dialog.OpenFile().SetTitle("Select Files").PromptForMultipleSelection()
+func (a *App) OpenMultipleFilesDialog(startDir ...string) ([]string, error) {
+	return a.openFileDialog("Select Files", firstArg(startDir)).
+		PromptForMultipleSelection()
 }
 
-func (a *App) OpenDirectoryDialog() (string, error) {
-	return a.app.Dialog.OpenFile().
-		SetTitle("Select Directory").
+func (a *App) OpenDirectoryDialog(startDir ...string) (string, error) {
+	return a.openFileDialog("Select Directory", firstArg(startDir)).
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		PromptForSingleSelection()
 }
 
-func (a *App) SaveFileDialog(defaultName string) (string, error) {
+func (a *App) SaveFileDialog(defaultName string, startDir ...string) (string, error) {
 	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
-		Title:    "Save File",
-		Filename: defaultName,
+		Title:     "Save File",
+		Filename:  defaultName,
+		Directory: resolveDialogDir(firstArg(startDir)),
 	}).PromptForSingleSelection()
 }
 
 // SaveFileDialogFiltered is like SaveFileDialog but restricts the picker to
 // a single extension filter (e.g. for exporting a specific file format).
-func (a *App) SaveFileDialogFiltered(title, defaultName, filterDisplayName, filterPattern string) (string, error) {
+func (a *App) SaveFileDialogFiltered(title, defaultName, filterDisplayName, filterPattern string, startDir ...string) (string, error) {
 	return a.app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
-		Title:    title,
-		Filename: defaultName,
+		Title:     title,
+		Filename:  defaultName,
+		Directory: resolveDialogDir(firstArg(startDir)),
 		Filters: []application.FileFilter{
 			{DisplayName: filterDisplayName, Pattern: filterPattern},
 		},
@@ -1558,6 +2083,33 @@ func (a *App) GetDesktopPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(homeDir, "Desktop"), nil
+}
+
+// GetDefaultSSHKeyPaths returns the local default SSH private-key paths for
+// the connection form's "use default" button. The standard OpenSSH names under
+// ~/.ssh are listed in preference order (id_ed25519, id_rsa, id_ecdsa,
+// id_dsa), and only the ones that exist are returned — the frontend cycles
+// through them on repeated clicks. When none exist it returns the
+// conventional ~/.ssh/id_rsa so the field still gets filled. Paths are always
+// absolute — "~" is never expanded at connect time, so a bare "~/.ssh/id_rsa"
+// would fail to read.
+func (a *App) GetDefaultSSHKeyPaths() []string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	sshDir := filepath.Join(home, ".ssh")
+	var paths []string
+	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa", "id_dsa"} {
+		p := filepath.Join(sshDir, name)
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		paths = append(paths, filepath.Join(sshDir, "id_rsa"))
+	}
+	return paths
 }
 
 func (a *App) GetPlatform() string {
@@ -1588,24 +2140,70 @@ func (a *App) GetAppInfo() AppInfo {
 	}
 }
 
-// RelaunchApp spawns a fresh instance, then quits the current one so settings
-// that are fixed at startup (e.g. the window title bar) can take effect. The
-// new process is started first; a delay lets it finish spawning and raise its
-// own window to the foreground (see bringMainWindowToFront) before this instance
-// exits — while this process is still the foreground process, which is what
-// grants the new one set-foreground permission on Windows.
+// relaunchPending marks that the successor process should be spawned once
+// the current one has fully exited (checked in main() after w3app.Run()
+// returns). Quitting BEFORE spawning is what makes RelaunchApp compatible
+// with single-instance locking: if the successor were spawned first, it
+// would see the lock still held and exit immediately, killing the app.
+// (The old spawn-first order existed to inherit Windows set-foreground
+// permission; the successor now focuses itself at startup instead.)
+var relaunchPending atomic.Bool
+
+// RelaunchApp quits the current instance and spawns a fresh one afterwards
+// so settings that are fixed at startup (e.g. the window title bar) can take
+// effect.
 func (a *App) RelaunchApp() {
-	if err := a.relaunchProcess(); err != nil {
-		log.Writef("relaunch failed: %v", err)
-	}
-	go func() {
-		time.Sleep(800 * time.Millisecond)
-		a.app.Quit()
-	}()
+	relaunchPending.Store(true)
+	a.app.Quit()
+}
+
+// QuitApp exits the application. The unlock dialog offers it so a user who
+// wants neither to unlock nor to clear credentials is never forced into
+// either choice.
+func (a *App) QuitApp() {
+	a.app.Quit()
 }
 
 func (a *App) CheckForUpdate(source string) (*update.UpdateInfo, error) {
 	return update.Check(Version, source)
+}
+
+// updateManager holds the in-progress update state (download → apply).
+var updateManager = update.NewManager()
+
+// emitUpdateProgress forwards update progress payloads to the frontend.
+func (a *App) emitUpdateProgress(p update.Progress) {
+	a.app.Event.Emit("update:progress", p)
+}
+
+// DownloadUpdate downloads and verifies the best available update asset from
+// the ordered candidate list (primary source first, mirror as fallback).
+// Progress is streamed to the frontend via the update:progress event.
+func (a *App) DownloadUpdate(assets []update.UpdateAsset) error {
+	if devBuild {
+		return fmt.Errorf("updates are disabled in development builds")
+	}
+	if len(assets) == 0 {
+		return fmt.Errorf("no update assets available")
+	}
+	_, err := updateManager.Download(assets, a.emitUpdateProgress)
+	return err
+}
+
+// ApplyUpdate installs the staged update and restarts the app. For Windows
+// installer-channel installs it spawns a detached updater that runs the new
+// NSIS installer after this process exits (the installer relaunches the app),
+// so it just quits instead of relaunching.
+func (a *App) ApplyUpdate() error {
+	if err := updateManager.Apply(a.emitUpdateProgress); err != nil {
+		return err
+	}
+	if update.DetectChannel() == update.ChannelInstaller {
+		a.app.Quit()
+		return nil
+	}
+	a.RelaunchApp()
+	return nil
 }
 
 // FrontendLog writes a frontend log message to the application log file.
@@ -1665,6 +2263,7 @@ type CredentialStatus struct {
 	Unlocked        bool   `json:"unlocked"`
 	NeedsSetup      bool   `json:"needsSetup"`
 	KeychainLost    bool   `json:"keychainLost"`
+	DecryptFailed   bool   `json:"decryptFailed"`
 	ExistingSecrets int    `json:"existingSecrets"`
 }
 
@@ -1683,6 +2282,12 @@ func (a *App) SetDataDir(kind, customDir string, migrate bool) error {
 	target, err := dataDirFor(kind, customDir)
 	if err != nil {
 		return err
+	}
+	// Migrating onto the current data dir (or into a directory inside it)
+	// would copyDir the dir onto itself and then removeDataDir the only
+	// copy. Refuse before anything is touched.
+	if a.dataDir != "" && dataDirContains(a.dataDir, target) {
+		return fmt.Errorf("the chosen directory is the current data dir (or inside it): %s", target)
 	}
 	if !isWritable(target) {
 		return fmt.Errorf("directory not writable: %s", target)
@@ -1744,10 +2349,12 @@ func (a *App) GetCredentialStatus() (CredentialStatus, error) {
 	}
 	st := a.credentialStore.Status()
 	return CredentialStatus{
-		Mode:         st.Mode,
-		Unlocked:     st.Unlocked,
-		NeedsSetup:   st.NeedsSetup,
-		KeychainLost: st.KeychainLost,
+		Mode:            st.Mode,
+		Unlocked:        st.Unlocked,
+		NeedsSetup:      st.NeedsSetup,
+		KeychainLost:    st.KeychainLost,
+		DecryptFailed:   st.DecryptFailed,
+		ExistingSecrets: st.ExistingSecrets,
 	}, nil
 }
 
@@ -1861,9 +2468,24 @@ func (a *App) ResetCredentials() error {
 }
 
 // reencryptAll decrypts all secret fields under oldKey and re-encrypts them
-// under newKey by loading (decrypt) then saving (encrypt) both stores.
+// under newKey by loading (decrypt) then force-saving (encrypt) every store
+// with wired secrets. The force flag bypasses the F-105 hash-skip: a rekey
+// saves unchanged plaintext under a new key, which the skip would otherwise
+// swallow — meta/keychain would then point at the new key while every file
+// stays under the old one (an unrecoverable lockout).
+//
+// All loads run before any write, so a load failure leaves the files
+// untouched. Saves all run to completion before errors are checked; on any
+// failure the key goes back to oldKey and every store is force-saved again,
+// which re-encrypts it under the old key — all files end up under a single
+// consistent key, exactly as before the rekey.
+//
+// The wired store set is checked against the SecretFiles manifest before any
+// key is swapped, so a secret file without a wired store (the ai.json gap
+// that once stayed under the old key) fails the rekey loudly instead of
+// being silently skipped.
 func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
-	if a.connectionStore == nil || a.settingsStore == nil || a.identityStore == nil || a.proxyStore == nil {
+	if a.connectionStore == nil || a.settingsStore == nil || a.identityStore == nil || a.proxyStore == nil || a.aiConfigStore == nil {
 		return errors.New("stores not initialized")
 	}
 	conns, err := a.connectionStore.Load()
@@ -1882,46 +2504,65 @@ func (a *App) reencryptAll(cs *credentials.Store, oldKey, newKey []byte) error {
 	if err != nil {
 		return err
 	}
-	// Swap key, re-encrypt on save.
+	ai, err := a.aiConfigStore.Load()
+	if err != nil {
+		return err
+	}
+	saves := []func() error{
+		func() error { return a.connectionStore.ForceSave(conns) },
+		func() error { return a.settingsStore.ForceSave(settings) },
+		func() error { return a.identityStore.ForceSave(idents) },
+		func() error { return a.proxyStore.ForceSave(proxies) },
+		func() error { return a.aiConfigStore.ForceSave(ai) },
+	}
 	cs.SetKey(newKey)
-	if err := a.connectionStore.Save(conns); err != nil {
-		cs.SetKey(oldKey)
-		return err
+	var saveErrs []error
+	for _, save := range saves {
+		if err := save(); err != nil {
+			saveErrs = append(saveErrs, err)
+		}
 	}
-	if err := a.settingsStore.Save(settings); err != nil {
-		// Roll the connection store back under oldKey so both files stay
-		// encrypted under a single consistent key.
-		cs.SetKey(oldKey)
-		_ = a.connectionStore.Save(conns)
-		return err
+	if len(saveErrs) == 0 {
+		return nil
 	}
-	if err := a.identityStore.Save(idents); err != nil {
-		// Roll back under oldKey: revert the key and re-save conns and settings
-		// so all files stay encrypted under a single consistent key.
-		cs.SetKey(oldKey)
-		_ = a.connectionStore.Save(conns)
-		_ = a.settingsStore.Save(settings)
-		return err
+	// Roll everything back under oldKey. The failed store's file is still
+	// under the old key, so re-saving it is a no-op rewrite of the same
+	// ciphertext; the rest are switched back.
+	cs.SetKey(oldKey)
+	for _, save := range saves {
+		_ = save()
 	}
-	if err := a.proxyStore.Save(proxies); err != nil {
-		cs.SetKey(oldKey)
-		_ = a.connectionStore.Save(conns)
-		_ = a.settingsStore.Save(settings)
-		_ = a.identityStore.Save(idents)
-		return err
-	}
-	return nil
+	return errors.Join(saveErrs...)
 }
 
-// clearEncryptedFields rewrites connections.json and settings.json with empty
-// secret fields WITHOUT decrypting. It must work while the credential store is
-// locked (keychain-lost / reset), when Load()/Save() would fail because they
-// require the master key to decrypt the very fields we are clearing.
+// dataDirContains reports whether sub denotes the same directory as dir or
+// lies inside it. The comparison is lexical after Clean — the migration guard
+// runs before the target necessarily exists, so there is no filesystem
+// round-trip to resolve symlinks through; Windows paths are case-insensitive.
+func dataDirContains(dir, sub string) bool {
+	dir, sub = filepath.Clean(dir), filepath.Clean(sub)
+	if goruntime.GOOS == "windows" {
+		dir, sub = strings.ToLower(dir), strings.ToLower(sub)
+	}
+	if dir == sub {
+		return true
+	}
+	rel, err := filepath.Rel(dir, sub)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// clearEncryptedFields blanks every manifest-declared secret field WITHOUT
+// decrypting. It must work while the credential store is gone (reset), when
+// Load()/Save() would fail because they require the master key to decrypt the
+// very fields being cleared. The field list is the store's secret-field
+// manifest — the same one encryption and the setup guard derive from; the
+// hand-written list this used to be missed key content and ai.json, leaving
+// ciphertext behind that wedged the next Setup.
 func (a *App) clearEncryptedFields() {
-	clearSecretsInFile(filepath.Join(a.dataDir, "connections.json"), "connections")
-	clearSecretsInFile(filepath.Join(a.dataDir, "settings.json"), "settings")
-	clearSecretsInFile(filepath.Join(a.dataDir, "identities.json"), "identities")
-	clearSecretsInFile(filepath.Join(a.dataDir, "proxies.json"), "proxies")
+	store.ClearAllSecretFields(a.dataDir)
 }
 
 // clearSecretsInFile blanks the secret fields (connections[].password or

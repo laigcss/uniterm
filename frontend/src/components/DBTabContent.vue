@@ -1,7 +1,13 @@
 <template>
   <div class="db-tab-content">
-    <div class="db-main">
-      <div class="db-left" :style="{ width: leftWidth + 'px' }">
+    <div class="db-main" :class="{ 'm-tree-host': isNarrowScreen }">
+      <div v-if="isNarrowScreen && treeOpen" class="m-tree-overlay" @click="treeOpen = false" />
+      <div
+        v-show="isNarrowScreen || treeOpen"
+        class="db-left"
+        :class="{ 'm-tree': isNarrowScreen, 'm-tree-open': isNarrowScreen && treeOpen }"
+        :style="isNarrowScreen ? {} : { width: leftWidth + 'px' }"
+      >
         <DBTreePanel
           ref="treeRef"
           :session-id="sessionId"
@@ -15,13 +21,27 @@
           @object-removed="onObjectRemoved"
         />
       </div>
-      <div class="db-resizer" @mousedown="onResizeStart" />
+      <div v-if="!isNarrowScreen && treeOpen" class="db-resizer" @mousedown="onResizeStart" />
       <div class="db-right">
         <div v-if="docs.length === 0" class="db-placeholder">
+          <button
+            class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+            :title="treeOpen ? t('common.collapse') : t('common.expand')"
+            @click="treeOpen = !treeOpen"
+          >
+            <PanelLeft :size="'0.875rem'" />
+          </button>
           <span>{{ t('db.selectTableHint') }}</span>
         </div>
         <template v-else>
           <div class="doc-tabs">
+            <button
+              class="btn btn-ghost btn-icon btn-sm m-tree-toggle"
+              :title="treeOpen ? t('common.collapse') : t('common.expand')"
+              @click="treeOpen = !treeOpen"
+            >
+              <PanelLeft :size="'0.875rem'" />
+            </button>
             <div ref="docTabsScrollRef" class="doc-tabs-scroll" @wheel="onTabsWheel">
               <template v-for="(doc, index) in docs" :key="doc.id">
                 <div
@@ -41,10 +61,10 @@
                   @dragend="clearDragState"
                   @drop.prevent="onDocDrop($event, index)"
                 >
-                  <Table2 v-if="doc.kind === 'table' && !doc.isView" :size="12" class="doc-tab-icon" />
-                  <Eye v-else-if="doc.kind === 'table'" :size="12" class="doc-tab-icon" />
-                  <Database v-else-if="doc.kind === 'db-objects'" :size="12" class="doc-tab-icon" />
-                  <Code2 v-else :size="12" class="doc-tab-icon" />
+                  <Table2 v-if="doc.kind === 'table' && !doc.isView" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Eye v-else-if="doc.kind === 'table'" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Database v-else-if="doc.kind === 'db-objects'" :size="'0.75rem'" class="doc-tab-icon" />
+                  <Code2 v-else :size="'0.75rem'" class="doc-tab-icon" />
                   <span class="doc-tab-title" :title="docTitle(doc)">{{ docTitle(doc) }}</span>
                   <span class="doc-tab-close" @click.stop="closeDoc(doc.id)">×</span>
                 </button>
@@ -57,7 +77,7 @@
               :title="t('tab.more')"
               @click.stop="docMoreMenuRef?.toggle($event.currentTarget as HTMLElement)"
             >
-              <MoreHorizontal :size="14" />
+              <MoreHorizontal :size="'0.875rem'" />
             </button>
             <Menu ref="docMoreMenuRef" v-model:visible="docMoreMenuVisible" align="end">
               <MenuItem
@@ -72,10 +92,10 @@
 
           <Menu ref="ctxMenuRef" v-model:visible="ctxMenuVisible" v-slot="{ current }">
             <template v-if="current">
-              <MenuItem @click="onCtxClose(current)">{{ t('tab.close') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseOthersOf(current) }" @click="onCtxCloseOthers(current)">{{ t('tab.closeOther') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseLeftOf(current) }" @click="onCtxCloseLeft(current)">{{ t('tab.closeLeft') }}</MenuItem>
-              <MenuItem :class="{ disabled: !canCloseRightOf(current) }" @click="onCtxCloseRight(current)">{{ t('tab.closeRight') }}</MenuItem>
+              <MenuItem @click="onCtxClose(current as string)">{{ t('tab.close') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseOthersOf() }" @click="onCtxCloseOthers(current as string)">{{ t('tab.closeOther') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseLeftOf(current as string) }" @click="onCtxCloseLeft(current as string)">{{ t('tab.closeLeft') }}</MenuItem>
+              <MenuItem :class="{ disabled: !canCloseRightOf(current as string) }" @click="onCtxCloseRight(current as string)">{{ t('tab.closeRight') }}</MenuItem>
               <MenuDivider />
               <MenuItem @click="onCtxCloseAll">{{ t('tab.closeAll') }}</MenuItem>
             </template>
@@ -188,7 +208,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Table2, Eye, Code2, Database, MoreHorizontal } from '@lucide/vue'
+import { Table2, Eye, Code2, Database, MoreHorizontal, PanelLeft } from '@lucide/vue'
+import { isNarrowScreen } from '../utils/platform'
 import { useI18n } from '../i18n'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -197,7 +218,7 @@ import DBTreePanel from './DBTreePanel.vue'
 import DBTableStructure from './DBTableStructure.vue'
 import DBQueryEditor from './DBQueryEditor.vue'
 import DBObjectList from './DBObjectList.vue'
-import { GetTableSchema } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { GetTableSchema } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { ColumnInfo } from '../types/database'
 
 defineOptions({ name: 'DBTabContent' })
@@ -238,6 +259,13 @@ const leftWidth = ref(220)
 let resizeStartX = 0
 let resizeStartWidth = 0
 
+// Narrow screens turn the tree into an overlay drawer (closed by default);
+// wide screens keep it inline and the toggle collapses it. Close the drawer
+// once the user picks something so the content gets the full width back.
+const treeOpen = ref(!isNarrowScreen.value)
+function closeTree() {
+  if (isNarrowScreen.value) treeOpen.value = false
+}
 
 function nextId(prefix: string) {
   docSeq += 1
@@ -271,7 +299,7 @@ const ctxMenuVisible = ref(false)
 function ctxIndexFor(id: string) {
   return docs.value.findIndex(d => d.id === id)
 }
-function canCloseOthersOf(_id?: string) {
+function canCloseOthersOf() {
   return docs.value.length > 1
 }
 function canCloseLeftOf(id: string) {
@@ -433,11 +461,12 @@ async function loadSchema(doc: DocTab) {
   try {
     const schema = await GetTableSchema(props.sessionId, doc.dbName, doc.tableName)
     doc.tableColumns = schema.columns
-    doc.primaryKeys = schema.columns.filter((c: { isPrimary?: boolean; name: string }) => c.isPrimary).map((c: { name: string }) => c.name)
+    doc.primaryKeys = schema.columns.filter((c: ColumnInfo) => c.isPrimary).map((c: ColumnInfo) => c.name)
   } catch { /* ignore */ }
 }
 
 async function onSelectTable(dbName: string, tableName: string, isView = false) {
+  closeTree()
   const existing = findTableDoc(dbName, tableName)
   if (existing) {
     existing.subTab = 'data'
@@ -463,6 +492,7 @@ async function onSelectTable(dbName: string, tableName: string, isView = false) 
 }
 
 async function onViewStructure(dbName: string, tableName: string) {
+  closeTree()
   const existing = findTableDoc(dbName, tableName)
   if (existing) {
     existing.isView = false
@@ -492,6 +522,7 @@ function openStructureSub(doc: DocTab) {
 }
 
 function onOpenDatabase(dbName: string, tab: 'query' | 'objects' = 'objects') {
+  closeTree()
   // Prefer objects list when opening a database; only open query when explicitly requested.
   const kind: DocKind = tab === 'query' ? 'db-query' : 'db-objects'
   const existing = findDbDoc(kind, dbName)
@@ -516,6 +547,7 @@ function onOpenDatabase(dbName: string, tab: 'query' | 'objects' = 'objects') {
 }
 
 function onNewQuery(dbName?: string) {
+  closeTree()
   const db = dbName || activeDb.value || props.defaultDbName || ''
   const doc: DocTab = {
     id: nextId('query'),
@@ -560,7 +592,6 @@ function onObjectRemoved(payload: { dbName: string; tableName?: string; kind: 't
 function onResizeStart(e: MouseEvent) {
   resizeStartX = e.clientX
   resizeStartWidth = leftWidth.value
-
   document.addEventListener('mousemove', onResizeMove)
   document.addEventListener('mouseup', onResizeEnd)
 }
@@ -571,7 +602,6 @@ function onResizeMove(e: MouseEvent) {
 }
 
 function onResizeEnd() {
-
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', onResizeEnd)
 }
@@ -595,14 +625,26 @@ function onResizeEnd() {
   overflow: hidden;
 }
 .db-resizer {
-  width: 4px;
+  /* Hover area floats over the tree edge (negative margin) so it takes
+     no layout width when idle and never blanks the content side. */
+  width: 0.25rem;
+  margin-left: -0.25rem;
+  position: relative;
+  z-index: 1;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-.db-resizer:hover {
-  background: var(--border-subtle);
+.db-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.1875rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 .db-right {
   flex: 1;
@@ -617,7 +659,7 @@ function onResizeEnd() {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .doc-tabs-scroll {
   display: flex;
@@ -628,16 +670,15 @@ function onResizeEnd() {
 .doc-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 6px 8px 6px 12px;
+  gap: 0.375rem;
+  max-width: 11.25rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
   border: none;
   border-right: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   flex-shrink: 0;
 }
 .doc-tab:hover {
@@ -647,7 +688,7 @@ function onResizeEnd() {
 .doc-tab.active {
   background: var(--bg-base);
   color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -0.125rem 0 var(--accent);
 }
 .doc-tab-icon {
   flex-shrink: 0;
@@ -659,11 +700,11 @@ function onResizeEnd() {
   white-space: nowrap;
 }
 .doc-tab-close {
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
-  border-radius: 3px;
-  font-size: 14px;
+  width: 1rem;
+  height: 1rem;
+  line-height: 0.875rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -672,17 +713,17 @@ function onResizeEnd() {
   color: var(--text-primary);
 }
 .doc-tab-indicator {
-  width: 2px;
-  min-width: 2px;
+  width: 0.125rem;
+  min-width: 0.125rem;
   align-self: stretch;
   background: var(--accent);
   opacity: 0.8;
-  margin: 4px 0;
-  border-radius: 1px;
+  margin: 0.25rem 0;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .doc-tab-more {
-  width: 28px;
+  width: 1.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -690,7 +731,6 @@ function onResizeEnd() {
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
 }
 .doc-tab-more:hover {
@@ -698,13 +738,12 @@ function onResizeEnd() {
   color: var(--text-primary);
 }
 .doc-tab-new {
-  width: 32px;
+  width: 2rem;
   border: none;
   border-left: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
   flex-shrink: 0;
 }
 .doc-tab-new:hover {
@@ -722,32 +761,31 @@ function onResizeEnd() {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 8px;
+  padding: 0 0.5rem;
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 2rem;
 }
 .db-subtabs-actions {
   justify-content: space-between;
 }
 .db-subtabs-label {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  padding: 0 8px;
+  padding: 0 0.5rem;
 }
 .db-subtabs-right {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .db-tab {
-  padding: 6px 16px;
+  padding: 0.375rem 1rem;
   border: none;
   background: none;
   color: var(--text-secondary);
-  cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
+  font-size: 0.8125rem;
+  border-bottom: 0.125rem solid transparent;
   transition: all 0.15s ease;
 }
 .db-tab:hover {
@@ -772,6 +810,15 @@ function onResizeEnd() {
   justify-content: center;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
+  position: relative;
+}
+/* Empty-state keeps the tree toggle reachable at the same top-left spot
+   the doc-tabs row occupies once tabs exist. */
+.db-placeholder .m-tree-toggle {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  margin-right: 0;
 }
 </style>

@@ -1,6 +1,13 @@
 <template>
-  <div class="settings-tab">
-    <div class="settings-sidebar">
+  <div class="settings-tab" ref="settingsTabRef" :class="{ narrow: isNarrow }">
+    <div class="settings-sidebar" :class="{ collapsed: sidebarCollapsed, 'no-anim': !sidebarAnimReady }">
+      <button
+        class="sidebar-collapse-btn"
+        :title="t('settings.toggleSidebar')"
+        @click="sidebarCollapsed = !sidebarCollapsed"
+      >
+        <el-icon><component :is="sidebarCollapsed ? ChevronRight : ChevronLeft" /></el-icon>
+      </button>
       <div
         v-for="cat in categories"
         :key="cat.key"
@@ -9,7 +16,7 @@
         @click="settingsStore.activeCategory = cat.key"
       >
         <el-icon class="category-icon"><component :is="cat.icon" /></el-icon>
-        <span class="category-label">{{ cat.label }}</span>
+        <span v-if="!sidebarCollapsed" class="category-label">{{ cat.label }}</span>
       </div>
     </div>
 
@@ -52,6 +59,24 @@
           </div>
 
           <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.uiFontSize') }}</div>
+              <div class="setting-desc">{{ t('settings.uiFontSizeDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                v-model="settingsStore.settings.uiFontSize"
+                :min="10"
+                :max="18"
+                :step="1"
+                controls-position="right"
+                @change="settingsStore.save()"
+              />
+            </div>
+          </div>
+
+          <!-- No OS window title bar on mobile -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.systemTitleBar') }}</div>
               <div class="setting-desc">{{ t('settings.systemTitleBarDesc') }}</div>
@@ -156,6 +181,32 @@
             </div>
           </div>
 
+          <!-- Tab shortcut badges are already suppressed on mobile -->
+          <div v-if="!isMobile" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.showTabShortcutHints') }}</div>
+              <div class="setting-desc">{{ t('settings.showTabShortcutHintsDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch v-model="settingsStore.settings.showTabShortcutHints" @change="settingsStore.save()" />
+            </div>
+          </div>
+
+          <!-- Touch has no hover: 'rightclick' style would leave host rows
+               with no visible menu affordance (long-press still works) -->
+          <div v-if="!isMobile" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.hostListMenuStyle') }}</div>
+              <div class="setting-desc">{{ t('settings.hostListMenuStyleDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.hostListMenuStyle" @change="settingsStore.save()">
+                <el-option :label="t('settings.hostListMenuStyleButton')" value="button" />
+                <el-option :label="t('settings.hostListMenuStyleRightClick')" value="rightclick" />
+              </el-select>
+            </div>
+          </div>
+
           <div class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.sidebarTabs') }}</div>
@@ -181,9 +232,24 @@
             </div>
           </div>
 
+          <!-- Tab bar "+" default action (issue #1043): start page or local
+               terminal. Also applies to the new-tab keyboard shortcut. -->
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.newTabAction') }}</div>
+              <div class="setting-desc">{{ t('settings.newTabActionDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="settingsStore.settings.newTabAction" @change="settingsStore.save()">
+                <el-option :label="t('settings.newTabActionStartPage')" value="startPage" />
+                <el-option :label="t('settings.newTabActionLocalTerminal')" value="localTerminal" />
+              </el-select>
+            </div>
           </div>
 
-        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
+          </div>
+
+        <h2 class="section-title">{{ t('settings.interaction') }}</h2>
         <div class="settings-group">
           <div class="setting-card">
             <div class="setting-info">
@@ -194,7 +260,8 @@
             </div>
           </div>
 
-          <div class="setting-card">
+          <!-- Mobile apps don't "quit" (back button = background) -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.closeAppPrompt') }}</div>
             </div>
@@ -203,7 +270,19 @@
             </div>
           </div>
 
+          <!-- Reopen last session's tabs at startup (issue #937) -->
           <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.restoreTabsPrompt') }}</div>
+              <div class="setting-desc">{{ t('settings.restoreTabsPromptDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-switch v-model="settingsStore.settings.restoreTabsPrompt" @change="settingsStore.save()" />
+            </div>
+          </div>
+
+          <!-- No local CLI editors on mobile -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.externalEditor') }}</div>
               <div class="setting-desc">{{ t('settings.externalEditorDesc') }}</div>
@@ -230,8 +309,11 @@
           </div>
         </div>
 
-        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.storageSecurity') }}</h2>
-        <div class="settings-group">
+        <!-- Hidden entirely on mobile: data dir is OS-managed and keychain
+             encryption is the only supported mode, so nothing is configurable -->
+        <template v-if="!isMobile">
+          <h2 class="section-title">{{ t('settings.storageSecurity') }}</h2>
+          <div class="settings-group">
           <div class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('config.dataDir') }}</div>
@@ -276,24 +358,8 @@
               <el-button size="small" @click="openChangePassword">{{ t('config.changePassword') }}</el-button>
             </div>
           </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('settings.hostKeyStrategy') }}</div>
-              <div class="setting-desc">{{ t('settings.hostKeyStrategyDesc') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-select
-                :model-value="settingsStore.settings.hostKeyStrategy || 'accept-new'"
-                @update:model-value="(v: string) => { settingsStore.settings.hostKeyStrategy = v as any; settingsStore.save() }"
-              >
-                <el-option :label="t('settings.hostKeyAcceptNew')" value="accept-new" />
-                <el-option :label="t('settings.hostKeyStrict')" value="strict" />
-                <el-option :label="t('settings.hostKeyOff')" value="off" />
-              </el-select>
-            </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- 终端配置 -->
@@ -324,7 +390,7 @@
                   </el-option-group>
                 </el-select>
                 <button class="btn btn-ghost btn-icon btn-sm" :title="t('theme.newTitle')" @click="openThemeEditor()">
-                  <Plus :size="14" />
+                  <Plus :size="'0.875rem'" />
                 </button>
                 <button
                   v-if="isCustomTheme(settingsStore.settings.terminal.theme)"
@@ -332,7 +398,7 @@
                   :title="t('theme.editTitle')"
                   @click="openThemeEditor(settingsStore.settings.terminal.theme)"
                 >
-                  <Pencil :size="14" />
+                  <Pencil :size="'0.875rem'" />
                 </button>
               </div>
             </div>
@@ -346,7 +412,7 @@
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.fontFamily" @change="settingsStore.save()">
                 <template #header>
-                  <div style="padding:4px 12px">
+                  <div style="padding:0.25rem 0.75rem">
                     <el-checkbox v-model="firstMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
                   </div>
                 </template>
@@ -369,7 +435,7 @@
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.fallbackFont" @change="settingsStore.save()">
                 <template #header>
-                  <div style="padding:4px 12px">
+                  <div style="padding:0.25rem 0.75rem">
                     <el-checkbox v-model="secondMonoOnly" @click.stop>{{ t('settings.fontMonoOnly') }}</el-checkbox>
                   </div>
                 </template>
@@ -412,6 +478,7 @@
                 v-model="settingsStore.settings.terminal.fontSize"
                 :min="8"
                 :max="32"
+                controls-position="right"
                 @change="settingsStore.save()"
               />
             </div>
@@ -489,13 +556,13 @@
             </div>
             <div class="setting-control">
               <el-select v-model="settingsStore.settings.terminal.timestampFormat" @change="settingsStore.save()">
-                <el-option v-for="opt in TIMESTAMP_FORMATS" :key="opt.value" :label="t(opt.labelKey)" :value="opt.value" />
+                <el-option v-for="opt in TIMESTAMP_FORMATS" :key="opt.value" :label="`${t(opt.labelKey)} (${opt.value})`" :value="opt.value" />
               </el-select>
             </div>
           </div>
         </div>
 
-        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.interaction') }}</h2>
+        <h2 class="section-title">{{ t('settings.interaction') }}</h2>
         <div class="settings-group">
           <div class="setting-card">
             <div class="setting-info">
@@ -525,7 +592,8 @@
             </div>
           </div>
 
-          <div class="setting-card">
+          <!-- No mouse buttons on touch screens -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.rightClick') }}</div>
               <div class="setting-desc">{{ t('settings.rightClickDesc') }}</div>
@@ -534,11 +602,12 @@
               <el-select v-model="settingsStore.settings.terminal.rightClickAction" @change="settingsStore.save()">
                 <el-option :label="t('settings.rightClickMenu')" value="menu" />
                 <el-option :label="t('settings.rightClickPaste')" value="paste" />
+                <el-option :label="t('settings.selectionNone')" value="none" />
               </el-select>
             </div>
           </div>
 
-          <div class="setting-card">
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.middleClick') }}</div>
               <div class="setting-desc">{{ t('settings.middleClickDesc') }}</div>
@@ -547,11 +616,12 @@
               <el-select v-model="settingsStore.settings.terminal.middleClickAction" @change="settingsStore.save()">
                 <el-option :label="t('settings.rightClickPaste')" value="paste" />
                 <el-option :label="t('settings.rightClickMenu')" value="menu" />
+                <el-option :label="t('settings.selectionNone')" value="none" />
               </el-select>
             </div>
           </div>
 
-          <div class="setting-card">
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.ctrlWheelZoom') }}</div>
               <div class="setting-desc">{{ t('settings.ctrlWheelZoomDesc') }}</div>
@@ -582,9 +652,11 @@
           </div>
         </div>
 
-        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.session') }}</h2>
+        <h2 class="section-title">{{ t('settings.session') }}</h2>
         <div class="settings-group">
-          <div class="setting-card">
+          <!-- No user shells exist on mobile (same reason the start page hides
+               the local terminal button) -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.defaultLocalShell') }}</div>
               <div class="setting-desc">{{ t('settings.defaultLocalShellDesc') }}</div>
@@ -601,6 +673,21 @@
             </div>
           </div>
 
+          <div v-if="!isMobile" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.gitBashPath') }}</div>
+              <div class="setting-desc">{{ t('settings.gitBashPathDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input
+                v-model="settingsStore.settings.gitBashPath"
+                clearable
+                placeholder="C:\Users\you\scoop\apps\git\current"
+                @change="onGitBashPathChange"
+              />
+            </div>
+          </div>
+
           <div class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.maxHistory') }}</div>
@@ -612,12 +699,38 @@
                 :min="100"
                 :max="50000"
                 :step="100"
+                controls-position="right"
                 @change="settingsStore.save()"
               />
             </div>
           </div>
 
-          <div class="setting-card">
+          <!-- Local dirs are not user-selectable under mobile scoped storage -->
+          <div v-if="!isMobile" class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.zmodemDownloadDir') }}</div>
+              <div class="setting-desc">{{ t('settings.zmodemDownloadDirDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input
+                v-model="settingsStore.settings.terminal.zmodemDownloadDir"
+                :placeholder="t('settings.zmodemDownloadDirPlaceholder')"
+                class="dir-input"
+                @change="settingsStore.save()"
+                clearable
+              >
+                <template #append>
+                  <el-tooltip :content="t('settings.browse')" placement="top">
+                    <el-button :aria-label="t('settings.browse')" @click="pickZmodemDownloadDir">
+                      <el-icon><FolderOpen :size="'1rem'" /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </template>
+              </el-input>
+            </div>
+          </div>
+
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
               <div class="setting-title">{{ t('settings.sessionLogDir') }}</div>
               <div class="setting-desc">{{ t('settings.sessionLogDirDesc', { path: defaultLogDir }) }}</div>
@@ -633,7 +746,7 @@
                 <template #append>
                   <el-tooltip :content="t('settings.browse')" placement="top">
                     <el-button :aria-label="t('settings.browse')" @click="pickLogDir">
-                      <el-icon><FolderOpen :size="16" /></el-icon>
+                      <el-icon><FolderOpen :size="'1rem'" /></el-icon>
                     </el-button>
                   </el-tooltip>
                 </template>
@@ -641,43 +754,20 @@
             </div>
           </div>
 
-          <!-- F4: 终端录制与回放 -->
-          <div class="setting-card">
+          <!-- Session logs go to the app-private dir on mobile; the filename
+               pattern is not user-serviceable there -->
+          <div v-if="!isMobile" class="setting-card">
             <div class="setting-info">
-              <div class="setting-title">{{ t('settings.autoRecord') }}</div>
-              <div class="setting-desc">{{ t('settings.autoRecordHint') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-switch
-                :model-value="settingsStore.settings.autoRecord ?? false"
-                @update:model-value="(v: boolean) => { settingsStore.settings.autoRecord = v; settingsStore.save() }"
-              />
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('settings.recordingsDir') }}</div>
-              <div class="setting-desc">{{ t('settings.recordingsDirHint') }}</div>
+              <div class="setting-title">{{ t('settings.sessionLogFilename') }}</div>
+              <div class="setting-desc">{{ t('settings.sessionLogFilenameDesc') }}</div>
             </div>
             <div class="setting-control">
               <el-input
-                :model-value="settingsStore.settings.recordingsDir ?? ''"
-                :placeholder="'~/.ai-ops-terminal/records/'"
-                class="dir-input"
-                @update:model-value="(v: string) => { settingsStore.settings.recordingsDir = v; settingsStore.save() }"
+                v-model="settingsStore.settings.terminal.sessionLogFilename"
+                placeholder="%S_%H_%M%D_%h%m.log"
+                @change="settingsStore.save()"
                 clearable
               />
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('record.list') }}</div>
-              <div class="setting-desc">{{ t('record.sensitiveWarning') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-button @click="openRecordList">{{ t('record.manage') }}</el-button>
             </div>
           </div>
         </div>
@@ -688,7 +778,7 @@
         <h2 class="section-title">{{ t('settings.skills') }}</h2>
         <p class="section-desc">{{ t('settings.skillsDesc') }}</p>
         <SkillsManager />
-        <h2 class="section-title" style="margin-top: 28px">{{ t('settings.commands') }}</h2>
+        <h2 class="section-title">{{ t('settings.commands') }}</h2>
         <p class="section-desc">{{ t('settings.commandsDesc') }}</p>
         <CommandsManager />
       </div>
@@ -699,7 +789,7 @@
         <p class="section-desc">{{ t('settings.syncDesc') }}</p>
 
         <!-- Empty state: no repo configured -->
-        <div v-if="!syncStore.config.repoUrl" class="sync-card">
+        <div v-if="!isSyncConfigured" class="sync-card">
           <div class="sync-card-header">{{ t('settings.syncRepoCard') }}</div>
           <div class="sync-card-body empty-state">
             <p class="empty-text">{{ t('settings.syncEmptyDesc') }}</p>
@@ -720,12 +810,12 @@
             <div class="sync-card-body">
               <div class="repo-info">
                 <div class="repo-info-row">
-                  <span class="repo-label">{{ t('settings.syncRepoUrl') }}</span>
-                  <span class="repo-value">{{ syncStore.config.repoUrl }}</span>
+                  <span class="repo-label">{{ syncStore.config.backend !== 'git' ? t('addRepo.serverUrl') : t('settings.syncRepoUrl') }}</span>
+                  <span class="repo-value">{{ syncStore.config.backend !== 'git' ? syncStore.config.remote?.server : syncStore.config.repoUrl }}</span>
                 </div>
                 <div class="repo-info-row">
                   <span class="repo-label">{{ t('settings.syncUsername') }}</span>
-                  <span class="repo-value">{{ syncStore.config.username }}</span>
+                  <span class="repo-value">{{ syncStore.config.backend !== 'git' ? syncStore.config.remote?.user : syncStore.config.username }}</span>
                 </div>
               </div>
               <div class="repo-actions">
@@ -765,6 +855,21 @@
                 <span class="sync-auto-desc">{{ t('settings.syncAutoDesc') }}</span>
                 <el-switch v-model="syncStore.config.autoSync" @change="handleAutoSyncToggle" />
               </div>
+              <div class="sync-scope-row">
+                <div class="sync-scope-header">
+                  <span class="sync-auto-label">{{ t('settings.syncScope') }}</span>
+                  <span class="scope-hint">{{ t('settings.syncScopeHint') }}</span>
+                </div>
+                <el-checkbox-group
+                  v-model="syncScopeModel"
+                  :disabled="syncStore.syncing"
+                  @change="handleScopeChange"
+                >
+                  <el-checkbox v-for="item in SYNC_FILE_ITEMS" :key="item.file" :value="item.file">
+                    {{ t(item.label) }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </div>
             </div>
           </div>
         </template>
@@ -775,13 +880,13 @@
         <h2 class="section-title">{{ t('settings.identities') }}</h2>
         <p class="section-desc">{{ t('settings.identitiesDesc') }}</p>
         <el-button type="primary" @click="openIdentityDialog()">{{ t('settings.addIdentity') }}</el-button>
-        <el-table :data="identityStore.identities" size="small" style="margin-top: 12px">
+        <el-table :data="identityStore.identities" size="small" style="margin-top: 0.75rem">
           <el-table-column prop="name" :label="t('conn.name')" />
           <el-table-column prop="username" :label="t('conn.user')" />
           <el-table-column :label="t('conn.authType')">
             <template #default="{ row }">{{ row.authType === 'password' ? t('conn.password') : row.authType === 'keyText' ? t('conn.keyText') : t('conn.keyPath') }}</template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="160">
+          <el-table-column :label="t('common.actions')" :width="uiPx(160)">
             <template #default="{ row }">
               <el-button size="small" @click="openIdentityDialog(row)">{{ t('common.edit') }}</el-button>
               <el-button size="small" type="danger" @click="removeIdentity(row)">{{ t('common.delete') }}</el-button>
@@ -796,13 +901,13 @@
         <h2 class="section-title">{{ t('settings.proxies') }}</h2>
         <p class="section-desc">{{ t('settings.proxiesDesc') }}</p>
         <el-button type="primary" @click="openProxyDialog()">{{ t('settings.addProxy') }}</el-button>
-        <el-table :data="proxyStore.proxies" size="small" style="margin-top: 12px">
+        <el-table :data="proxyStore.proxies" size="small" style="margin-top: 0.75rem">
           <el-table-column prop="name" :label="t('conn.name')" />
-          <el-table-column prop="kind" :label="t('conn.proxyType')" width="100" />
+          <el-table-column prop="kind" :label="t('conn.proxyType')" :width="uiPx(100)" />
           <el-table-column :label="t('settings.proxyHost')">
             <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
           </el-table-column>
-          <el-table-column :label="t('settings.enabled')" width="80">
+          <el-table-column :label="t('settings.enabled')" :width="uiPx(80)">
             <template #default="{ row }">
               <el-switch
                 :model-value="row.enabled !== false"
@@ -811,7 +916,7 @@
               />
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="160">
+          <el-table-column :label="t('common.actions')" :width="uiPx(160)">
             <template #default="{ row }">
               <el-button size="small" @click="openProxyDialog(row)">{{ t('common.edit') }}</el-button>
               <el-button size="small" type="danger" @click="removeProxy(row)">{{ t('common.delete') }}</el-button>
@@ -826,26 +931,33 @@
         <h2 class="section-title">{{ t('settings.tunnels') }}</h2>
         <p class="section-desc">{{ t('settings.tunnelsDesc') }}</p>
         <el-button type="primary" @click="openTunnelDialog()">{{ t('tunnels.addTunnel') }}</el-button>
-        <el-table :data="tunnelStore.tunnels" size="small" style="margin-top: 12px">
+        <el-table :data="tunnelStore.tunnels" size="small" style="margin-top: 0.75rem">
           <el-table-column prop="name" :label="t('tunnels.name')" />
-          <el-table-column :label="t('tunnels.modeCol')" width="100">
+          <el-table-column :label="t('tunnels.modeCol')" :width="uiPx(150)">
             <template #default="{ row }">{{ modeName(row.mode) }}</template>
           </el-table-column>
-          <el-table-column :label="t('tunnels.listenCol')" width="120">
+          <el-table-column :label="t('tunnels.listenCol')" :width="uiPx(120)">
             <template #default="{ row }">:{{ effPort(row) }}</template>
           </el-table-column>
-          <el-table-column :label="t('tunnels.statusCol')" width="120">
+          <el-table-column :label="t('tunnels.statusCol')" :width="uiPx(160)">
             <template #default="{ row }">
               <el-switch
-                :model-value="statusOf(row.id) === 'running'"
+                :model-value="tunnelStore.isActive(row.id)"
+                :title="tunnelStore.isActive(row.id) ? t('tunnels.stop') : t('tunnels.start')"
                 @change="toggleRun(row)"
-                :loading="togglingTunnelId === row.id"
               />
+              <div :title="tunnelStore.statusTitle(row.id)">{{ tunnelStore.statusLabel(row.id) }}</div>
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="160">
+          <el-table-column :label="t('common.actions')" :width="uiPx(160)">
             <template #default="{ row }">
-              <el-button size="small" @click="openTunnelDialog(row)">{{ t('common.edit') }}</el-button>
+              <!-- Connecting and reconnecting tunnels must also stop before edits. -->
+              <el-button
+                size="small"
+                :disabled="tunnelStore.isActive(row.id)"
+                :title="tunnelStore.isActive(row.id) ? t('tunnels.editDisabledActive') : undefined"
+                @click="openTunnelDialog(row)"
+              >{{ t('common.edit') }}</el-button>
               <el-button size="small" type="danger" @click="removeTunnel(row)">{{ t('common.delete') }}</el-button>
             </template>
           </el-table-column>
@@ -853,40 +965,35 @@
         <TunnelEditDialog v-model="tunnelDialogVisible" :editing-id="editingTunnelId" />
       </div>
 
-      <!-- MCP Servers -->
-      <div v-if="settingsStore.activeCategory === 'mcp'" class="settings-section">
-        <h2 class="section-title">{{ t('settings.mcp') }}</h2>
-        <MCPServerSettings />
-      </div>
-
       <!-- 关于 -->
       <div v-if="settingsStore.activeCategory === 'about'" class="settings-section">
         <h2 class="section-title">{{ t('settings.about') }}</h2>
         <div class="about-content">
-          <div class="about-appname">ai-ops-terminal</div>
+          <div class="about-appname">uniTerm</div>
           <p class="about-desc">{{ t('settings.aboutDesc') }}</p>
           <div class="about-version">
             {{ t('settings.version') }}: {{ updateCheck.updateInfo?.current || '...' }}
           </div>
           <div class="about-links">
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/laigcss/ai-ops-terminal')">
-              <Globe :size="14" class="about-link-icon" />
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://uniterm.net')">
+              <Globe :size="'0.875rem'" class="about-link-icon" />
               {{ t('settings.homepage') }}
             </a>
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/laigcss/ai-ops-terminal')">
-              <BookOpen :size="14" class="about-link-icon" />
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL(locale === 'zh-CN' ? 'https://uniterm.net/guide/zh/introduction' : 'https://uniterm.net/guide/en/introduction')">
+              <BookOpen :size="'0.875rem'" class="about-link-icon" />
               {{ t('settings.userManual') }}
             </a>
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/laigcss/ai-ops-terminal')">
-              <svg class="about-link-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://github.com/ys-ll/uniterm')">
+              <GitHubLogo class="about-link-icon" />
               GitHub
             </a>
-            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://gitee.com/laigcss/ai-ops-terminal')">
-              <svg class="about-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296z"/></svg>
+            <a href="#" class="about-link" @click.prevent="Browser.OpenURL('https://gitee.com/ys-l/uniterm')">
+              <GiteeLogo class="about-link-icon" />
               Gitee
             </a>
           </div>
-          <div class="about-update-actions">
+          <!-- In-app update download is desktop-only; mobile updates via APK -->
+          <div v-if="!isMobile" class="about-update-actions">
             <el-button
              
               :loading="updateCheck.checking"
@@ -895,62 +1002,190 @@
               {{ updateCheck.checking ? t('settings.checking') : t('settings.checkUpdate') }}
             </el-button>
           </div>
-          <div class="about-auto-check">
+          <div v-if="!isMobile" class="about-auto-check">
             <el-checkbox
               v-model="updateCheck.autoCheck"
             >
               {{ t('settings.autoCheckUpdate') }}
             </el-checkbox>
           </div>
+          <div v-if="!isMobile" class="about-update-source">
+            <span class="about-update-source-label">{{ t('settings.updateSource') }}</span>
+            <el-select
+              v-model="updateCheck.source"
+              size="small"
+              class="about-update-source-select"
+              @change="(v: 'auto' | 'github' | 'gitee') => updateCheck.setSource(v)"
+            >
+              <el-option :label="t('settings.updateSourceAuto')" value="auto" />
+              <el-option :label="t('settings.updateSourceGithub')" value="github" />
+              <el-option :label="t('settings.updateSourceGitee')" value="gitee" />
+            </el-select>
+          </div>
         </div>
       </div>
 
       <!-- 快捷键设置 -->
-      <div v-if="settingsStore.activeCategory === 'keyboard'" class="settings-section">
-        <h2 class="section-title">{{ t('shortcut.title') }}</h2>
+      <div v-if="settingsStore.activeCategory === 'keyboard' && !isMobile" class="settings-section">
+        <p v-if="isMac" class="kb-hint kb-modifier-note">{{ t('shortcut.modifierNote') }}</p>
+        <template v-for="cat in shortcutCategories" :key="cat.key">
+          <h2 class="section-title">{{ t(cat.label) }}</h2>
+          <table class="kb-table">
+            <thead>
+              <tr>
+                <th>{{ t('shortcut.colFunction') }}</th>
+                <th>{{ t('shortcut.colBinding') }}</th>
+                <th>{{ t('shortcut.colActions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-if="cat.key === 'tabs'">
+                <tr>
+                  <td>{{ t('shortcut.switchToTabByIndex') }}</td>
+                  <td><kbd class="kb-key">{{ tabSwitchBindingDisplay() }}</kbd></td>
+                  <td class="kb-actions">
+                    <el-button
+                      :type="rebindingTabSwitch ? 'warning' : 'default'"
+                      @click="startRebindTabSwitch()"
+                    >
+                      {{ rebindingTabSwitch ? t('shortcut.pressModifier') : t('shortcut.edit') }}
+                    </el-button>
+                    <el-button
+                      v-if="rebindingTabSwitch"
+                      @click="stopRebind()"
+                    >
+                      {{ t('shortcut.cancel') }}
+                    </el-button>
+                    <el-button
+                      v-if="rebindingTabSwitch"
+                      type="danger"
+                      @click="clearTabSwitchModifier()"
+                    >
+                      {{ t('shortcut.clear') }}
+                    </el-button>
+                    <el-button
+                      v-if="!isTabSwitchModifierUnset() && !rebindingTabSwitch"
+                      type="danger"
+                      @click="resetTabSwitchModifier()"
+                    >
+                      {{ t('shortcut.reset') }}
+                    </el-button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>{{ t('shortcut.switchToPanelByIndex') }}</td>
+                  <td><kbd class="kb-key">{{ panelSwitchBindingDisplay() }}</kbd></td>
+                  <td class="kb-actions">
+                    <el-button
+                      :type="rebindingPanelSwitch ? 'warning' : 'default'"
+                      @click="startRebindPanelSwitch()"
+                    >
+                      {{ rebindingPanelSwitch ? t('shortcut.pressModifier') : t('shortcut.edit') }}
+                    </el-button>
+                    <el-button
+                      v-if="rebindingPanelSwitch"
+                      @click="stopRebind()"
+                    >
+                      {{ t('shortcut.cancel') }}
+                    </el-button>
+                    <el-button
+                      v-if="rebindingPanelSwitch"
+                      type="danger"
+                      @click="clearPanelSwitchModifier()"
+                    >
+                      {{ t('shortcut.clear') }}
+                    </el-button>
+                    <el-button
+                      v-if="!isPanelSwitchModifierUnset() && !rebindingPanelSwitch"
+                      type="danger"
+                      @click="resetPanelSwitchModifier()"
+                    >
+                      {{ t('shortcut.reset') }}
+                    </el-button>
+                  </td>
+                </tr>
+              </template>
+              <tr
+                v-for="action in cat.actions"
+                :key="action"
+              >
+                <td>{{ t(SHORTCUT_LABELS[action] || action) }}</td>
+                <td><kbd class="kb-key">{{ bindingDisplay(action) }}</kbd></td>
+                <td class="kb-actions">
+                  <el-button
+
+                    :type="rebindingAction === action ? 'warning' : 'default'"
+                    @click="startRebind(action)"
+                  >
+                    {{ rebindingAction === action ? t('shortcut.pressKey') : t('shortcut.edit') }}
+                  </el-button>
+                  <el-button
+                    v-if="rebindingAction === action"
+
+                    @click="stopRebind()"
+                  >
+                    {{ t('shortcut.cancel') }}
+                  </el-button>
+                  <el-button
+                    v-if="rebindingAction === action"
+
+                    type="danger"
+                    @click="clearBinding(action)"
+                  >
+                    {{ t('shortcut.clear') }}
+                  </el-button>
+                  <el-button
+                    v-if="!isDefaultBinding(action) && rebindingAction !== action"
+
+                    type="danger"
+                    @click="resetBinding(action)"
+                  >
+                    {{ t('shortcut.reset') }}
+                  </el-button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <!-- 系统全局热键（托盘等，系统级生效） -->
+        <h2 class="section-title">{{ t('shortcut.globalHotkeys') }}</h2>
         <table class="kb-table">
           <thead>
             <tr>
               <th>{{ t('shortcut.colFunction') }}</th>
               <th>{{ t('shortcut.colBinding') }}</th>
-              <th style="width:190px;">{{ t('shortcut.colActions') }}</th>
+              <th>{{ t('shortcut.colActions') }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="action in (Object.keys(SHORTCUT_LABELS) as ShortcutAction[])"
-              :key="action"
-            >
-              <td>{{ t(SHORTCUT_LABELS[action] || action) }}</td>
-              <td><kbd class="kb-key">{{ bindingDisplay(action) }}</kbd></td>
+            <tr>
+              <td>{{ t('shortcut.trayHotkeyRow') }}</td>
+              <td><kbd class="kb-key">{{ trayHotkeyDisplay() }}</kbd></td>
               <td class="kb-actions">
                 <el-button
-                 
-                  :type="rebindingAction === action ? 'warning' : 'default'"
-                  @click="startRebind(action)"
+                  :type="rebindingTrayHotkey ? 'warning' : 'default'"
+                  @click="startRebindTrayHotkey()"
                 >
-                  {{ rebindingAction === action ? t('shortcut.pressKey') : t('shortcut.edit') }}
+                  {{ rebindingTrayHotkey ? t('shortcut.pressKey') : t('shortcut.edit') }}
                 </el-button>
                 <el-button
-                  v-if="rebindingAction === action"
-                 
+                  v-if="rebindingTrayHotkey"
                   @click="stopRebind()"
                 >
                   {{ t('shortcut.cancel') }}
                 </el-button>
                 <el-button
-                  v-if="rebindingAction === action"
-                 
+                  v-if="rebindingTrayHotkey"
                   type="danger"
-                  @click="clearBinding(action)"
+                  @click="clearTrayHotkey()"
                 >
                   {{ t('shortcut.clear') }}
                 </el-button>
                 <el-button
-                  v-if="!isDefaultBinding(action) && rebindingAction !== action"
-                 
+                  v-if="!isTrayHotkeyDefault() && !rebindingTrayHotkey"
                   type="danger"
-                  @click="resetBinding(action)"
+                  @click="resetTrayHotkey()"
                 >
                   {{ t('shortcut.reset') }}
                 </el-button>
@@ -975,18 +1210,9 @@
                 v-model="settingsStore.settings.ai.maxTurns"
                 :min="0"
                 :max="100"
+                controls-position="right"
                 @change="settingsStore.save()"
               />
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-info">
-              <div class="setting-title">{{ t('settings.localRiskGuard') }}</div>
-              <div class="setting-desc">{{ t('settings.localRiskGuardDesc') }}</div>
-            </div>
-            <div class="setting-control">
-              <el-switch :model-value="settingsStore.settings.ai.localRiskGuardEnabled ?? true" @update:model-value="(v: boolean) => { settingsStore.settings.ai.localRiskGuardEnabled = v; settingsStore.save() }" />
             </div>
           </div>
 
@@ -996,7 +1222,7 @@
               <div class="setting-desc">{{ t('settings.modelListDesc') }}</div>
             </div>
             <div class="setting-control">
-              <el-button @click="openNewModelForm"><Plus :size="14" /> {{ t('settings.addModel') }}</el-button>
+              <el-button @click="openNewModelForm"><Plus :size="'0.875rem'" /> {{ t('settings.addModel') }}</el-button>
             </div>
           </div>
 
@@ -1009,7 +1235,7 @@
             <div class="model-main">
               <el-radio
                 :model-value="settingsStore.settings.ai.activeModelId"
-                :label="model.id"
+                :value="model.id"
                 @change="settingsStore.setActiveModel(model.id)"
               >
                 <span class="model-name">{{ model.name }}</span>
@@ -1018,20 +1244,224 @@
             </div>
             <div class="model-actions">
               <el-button link @click="editModel(model)">
-                <el-icon><Pencil :size="14" /></el-icon>
+                <el-icon><Pencil :size="'0.875rem'" /></el-icon>
               </el-button>
               <el-button link type="danger" @click="removeModelConfirm(model)">
-                <el-icon><Trash2 :size="14" /></el-icon>
+                <el-icon><Trash2 :size="'0.875rem'" /></el-icon>
               </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MCP 服务器(外部 AI agent) — 无 Android 后端,入口已在移动端隐藏 -->
+      <div v-if="settingsStore.activeCategory === 'mcp'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.mcpSection') }}</h2>
+        <p class="section-desc">{{ t('settings.mcpSectionDesc') }}</p>
+
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpEnabled') }}</div>
+              <div class="setting-desc">{{ t('settings.mcpEnabledDesc') }}</div>
+              <div v-if="mcpStatus.running" class="setting-desc mcp-running">{{ t('settings.mcpRunningOn', { port: mcpStatus.port }) }}</div>
+              <div v-else-if="mcp.enabled" class="setting-desc mcp-running mcp-error">{{ t('settings.mcpNotRunning') }}</div>
+            </div>
+            <div class="setting-control switch-control">
+              <el-switch v-model="mcp.enabled" @change="saveMcp()" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpPort') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input-number v-model="mcpPort" :min="1" :max="65535" controls-position="right" @change="saveMcp()" />
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpPolicy') }}</div>
+              <div class="setting-desc">{{ t('settings.mcpPolicyDesc') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="mcp.policy" @change="saveMcp()">
+                <!-- Same option set and labels as the AI panel's mode menu (ai.*) so both fronts read identically. -->
+                <el-option :label="t('ai.confirmAll')" value="confirm_all" />
+                <el-option :label="t('ai.confirmWrite')" value="confirm_write" />
+                <el-option :label="t('ai.confirmDangerous')" value="confirm_dangerous" />
+                <el-option :label="t('ai.bypass')" value="bypass" />
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title">{{ t('settings.mcpClientTokens') }}</h2>
+        <p class="section-desc">{{ t('settings.mcpTokensDesc') }}</p>
+
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpGenerateToken') }}</div>
+            </div>
+            <div class="setting-control mcp-token-controls">
+              <el-input v-model="newTokenName" :placeholder="t('settings.mcpTokenName')" style="width: 10rem" />
+              <el-button @click="generateToken">{{ t('settings.mcpGenerateToken') }}</el-button>
+            </div>
+          </div>
+
+          <div
+            v-for="name in mcpTokens"
+            :key="name"
+            class="model-card"
+          >
+            <div class="model-main mcp-token-main">
+              <el-icon class="mcp-token-icon"><Key :size="'0.875rem'" /></el-icon>
+              <span class="model-name">{{ name }}</span>
+            </div>
+            <div class="model-actions">
+              <el-button link type="danger" @click="revokeToken(name)">
+                <el-icon><Trash2 :size="'0.875rem'" /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MCP 客户端 (uniTerm 作为 client 连接外部服务器) — 无 Android 后端,入口已在移动端隐藏 -->
+      <div v-if="settingsStore.activeCategory === 'mcp-client'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.mcpClientSection') }}</h2>
+        <p class="section-desc">{{ t('settings.mcpClientSectionDesc') }}</p>
+
+        <div class="settings-group">
+          <div
+            v-for="c in mcpClients"
+            :key="c.name"
+            class="model-card"
+          >
+            <div class="model-main">
+              <el-icon class="mcp-token-icon"><Plug :size="'0.875rem'" /></el-icon>
+              <span class="model-name">{{ c.name }}</span>
+              <span class="setting-desc">
+                {{ c.transport === 'stdio' ? (c.command || '') : (c.url || '') }}
+              </span>
+              <span class="setting-desc">
+                {{ mcpClientStatus(c.name)?.connected
+                  ? t('settings.mcpClientOnline', { tools: mcpClientStatus(c.name)?.tools ?? 0 })
+                  : (mcpClientStatus(c.name)?.error ? mcpClientStatus(c.name)?.error : t('settings.mcpClientOffline')) }}
+              </span>
+            </div>
+            <div class="model-actions">
+              <el-switch v-model="c.enabled" @change="saveMcpClient(c)" />
+              <el-button link @click="testMcpClient(c)">{{ t('settings.mcpClientTest') }}</el-button>
+              <el-button link :loading="reconnectingClient === c.name" @click="reconnectMcpClient(c)">{{ t('settings.mcpClientReconnect') }}</el-button>
+              <el-button link type="danger" @click="removeMcpClient(c.name)">
+                <el-icon><Trash2 :size="'0.875rem'" /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section-title">{{ t('settings.mcpClientAdd') }}</h2>
+        <div class="settings-group">
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpClientName') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-input v-model="mcpClientForm.name" :placeholder="t('settings.mcpClientNamePlaceholder')" style="width: 12rem" />
+            </div>
+          </div>
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpClientTransport') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="mcpClientForm.transport" style="width: 10rem">
+                <el-option label="stdio" value="stdio" />
+                <el-option label="streamable-http" value="streamable-http" />
+                <el-option label="sse" value="sse" />
+              </el-select>
+            </div>
+          </div>
+          <div class="setting-card" v-if="mcpClientForm.transport === 'stdio'">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpClientCommand') }}</div>
+              <div class="setting-desc">{{ t('settings.mcpClientCommandDesc') }}</div>
+            </div>
+            <div class="setting-control" style="min-width: 16rem">
+              <el-input v-model="mcpClientForm.command" placeholder="npx -y @modelcontextprotocol/server-filesystem /tmp" />
+            </div>
+          </div>
+          <div class="setting-card" v-else>
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpClientUrl') }}</div>
+            </div>
+            <div class="setting-control" style="min-width: 16rem">
+              <el-input v-model="mcpClientForm.url" placeholder="http://127.0.0.1:8080/mcp" />
+            </div>
+          </div>
+          <div class="setting-card">
+            <div class="setting-info">
+              <div class="setting-title">{{ t('settings.mcpClientHeaders') }}</div>
+              <div class="setting-desc">{{ t('settings.mcpClientHeadersDesc') }}</div>
+            </div>
+            <div class="setting-control" style="min-width: 16rem">
+              <el-input v-model="mcpClientForm.headersText" type="textarea" :rows="2" placeholder='{ "Authorization": "Bearer ..." }' />
+            </div>
+          </div>
+          <div class="setting-card">
+            <div class="setting-info"></div>
+            <div class="setting-control">
+              <el-button type="primary" @click="addMcpClient">{{ t('settings.mcpClientAddButton') }}</el-button>
             </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- MCP token setup wizard (one-time token + per-client configs) -->
+    <MCPSetupDialog
+      v-model:visible="mcpSetupVisible"
+      :token="mcpTokenCreated"
+      :port="mcpStatus.port || mcpPort"
+      @close="onMcpSetupClose"
+    />
+
     <!-- Model Form Dialog -->
-    <el-dialog append-to-body v-model="showModelForm" :title="editingModel ? t('settings.editModel') : t('settings.newModel')" width="400px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="showModelForm" :title="editingModel ? t('settings.editModel') : t('settings.newModel')" width="25rem">
+      <el-form label-width="5rem">
+        <el-form-item label="预设">
+          <el-select
+            v-model="selectedPreset"
+            style="width: 100%"
+            filterable
+            :placeholder="t('settings.modelPresetPlaceholder')"
+            @change="applyPreset"
+          >
+            <el-option-group label="国内主流">
+              <el-option label="DeepSeek (深度求索)" value="deepseek" />
+              <el-option label="通义千问 (阿里)" value="qwen" />
+              <el-option label="智谱 GLM" value="zhipu" />
+              <el-option label="文心一言 (百度)" value="wenxin" />
+              <el-option label="Moonshot (月之暗面)" value="moonshot" />
+              <el-option label="MiniMax" value="minimax" />
+              <el-option label="零一万物 (Yi)" value="lingyi" />
+            </el-option-group>
+            <el-option-group label="国际主流">
+              <el-option label="OpenAI GPT" value="openai" />
+              <el-option label="Anthropic Claude" value="claude" />
+              <el-option label="Google Gemini" value="gemini" />
+            </el-option-group>
+            <el-option-group label="本地部署">
+              <el-option label="Ollama (本地)" value="ollama" />
+              <el-option label="vLLM (本地)" value="vllm" />
+              <el-option label="LM Studio (本地)" value="lmstudio" />
+            </el-option-group>
+          </el-select>
+        </el-form-item>
         <el-form-item :label="t('settings.modelName')">
           <el-input v-model="modelForm.name" />
         </el-form-item>
@@ -1071,7 +1501,7 @@
               />
             </el-select>
             <el-button class="inline-add-btn" :title="t('conn.newProxy')" @click="modelProxyDialogVisible = true">
-              <Plus :size="14" />
+              <Plus :size="'0.875rem'" />
             </el-button>
           </div>
         </el-form-item>
@@ -1089,7 +1519,7 @@
               <el-option
                 v-for="s in modelSelectOptions"
                 :key="s.value"
-                :label="s.value"
+                :label="s.label"
                 :value="s.value"
               />
             </el-select>
@@ -1102,10 +1532,10 @@
           <el-button :loading="testingConnection" @click="testConnection">
             {{ t('settings.testConnection') }}
           </el-button>
-          <span v-if="testResult != null" :class="testResult ? 'test-ok' : 'test-fail'" style="margin-left: 8px; font-size: 13px;">
+          <span v-if="testResult != null" :class="testResult ? 'test-ok' : 'test-fail'" style="margin-left: 0.5rem; font-size: 0.8125rem;">
             {{ testResult ? t('settings.testSuccess') : t('settings.testFailed') }}
           </span>
-          <span v-if="testError" style="margin-left: 8px; font-size: 12px; color: var(--error); word-break: break-all;">{{ testError }}</span>
+          <span v-if="testError" style="margin-left: 0.5rem; font-size: 0.75rem; color: var(--error); word-break: break-all;">{{ testError }}</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1128,8 +1558,8 @@
     <!-- Config dialogs -->
     <DataDirDialog v-model:visible="dataDirVisible" :first-run="false" @done="onDataDirChange" />
 
-    <el-dialog append-to-body v-model="showSetupMaster" :title="t('config.setupMasterTitle')" width="440px">
-      <el-form label-width="100px" class="settings-form" @submit.prevent="doSetupMaster">
+    <el-dialog append-to-body v-model="showSetupMaster" :title="t('config.setupMasterTitle')" width="27.5rem">
+      <el-form label-width="6.25rem" class="settings-form" @submit.prevent="doSetupMaster">
         <el-form-item :label="t('encrypt.password')">
           <el-input v-model="setupPw" type="password" show-password />
         </el-form-item>
@@ -1144,8 +1574,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog append-to-body v-model="showVerifyMaster" :title="t('config.verifyMasterTitle')" width="440px">
-      <el-form label-width="100px" class="settings-form" @submit.prevent="doVerifyMaster">
+    <el-dialog append-to-body v-model="showVerifyMaster" :title="t('config.verifyMasterTitle')" width="27.5rem">
+      <el-form label-width="6.25rem" class="settings-form" @submit.prevent="doVerifyMaster">
         <el-form-item :label="t('config.verifyCurrentPassword')">
           <div class="verify-field">
             <el-input v-model="verifyPw" type="password" show-password />
@@ -1160,8 +1590,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog append-to-body v-model="showChangePassword" :title="t('config.changePassword')" width="440px">
-      <el-form label-width="100px" class="settings-form" @submit.prevent="doChangePassword">
+    <el-dialog append-to-body v-model="showChangePassword" :title="t('config.changePassword')" width="27.5rem">
+      <el-form label-width="6.25rem" class="settings-form" @submit.prevent="doChangePassword">
         <el-form-item :label="t('config.oldPassword')">
           <el-input v-model="oldPw" type="password" show-password />
         </el-form-item>
@@ -1182,25 +1612,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft, Plug } from '@lucide/vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, onActivated } from 'vue'
+import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, FolderOpen, Key, Network, ArrowRightLeft, ChevronLeft, ChevronRight, Plug } from '@lucide/vue'
 import { msg } from '../services/message'
-import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors, GenerateMCPToken, RevokeMCPToken, ListMCPTokens, GetMCPStatus, ListMCPClients, SaveMCPClient, RemoveMCPClient, TestMCPClient, MCPClientStatuses, MCPReconnectClient } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useSyncStore } from '../stores/syncStore'
+import { useSyncStore, SYNC_FILE_ITEMS } from '../stores/syncStore'
 import { useLocalStateStore } from '../stores/localStateStore'
 import { useUpdateCheck } from '../composables/useUpdateCheck'
-import { useI18n } from '../i18n'
+import { useI18n, locale } from '../i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { warnIfInsecureBaseURL } from '../stores/aiStore'
 import { FONT_OPTIONS, FONT_WEIGHT_OPTIONS, LANGUAGE_OPTIONS, DEFAULT_KEYBOARD, SHORTCUT_LABELS, USER_AGENT_PRESETS, FOLLOW_APP_THEME, CURSOR_STYLES, TIMESTAMP_FORMATS, SIDEBAR_TAB_ORDER, SIDEBAR_TAB_DEFAULTS } from '../types/settings'
 import { formatFontFamily, normalizeFontFamilyValue } from '../utils/formatFontFamily'
 import { backendErrorText } from '../utils/backendError'
+import { getShellLabel as getShellLabelBase } from '../utils/shellLabel'
 import SkillsManager from './SkillsManager.vue'
 import CommandsManager from './CommandsManager.vue'
+import GitHubLogo from './icons/GitHubLogo.vue'
+import GiteeLogo from './icons/GiteeLogo.vue'
 import type { AIModelConfig, ShortcutAction, KeyBinding, KeyboardSettings } from '../types/settings'
+import { DEFAULT_MCP_SETTINGS } from '../types/mcp'
+import type { MCPStatus } from '../types/mcp'
+import MCPSetupDialog from './MCPSetupDialog.vue'
 import { useTerminalThemeOptions } from '../composables/useTerminalThemeOptions'
-import { uninstallGlobalListener, installGlobalListener, formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import { uninstallGlobalListener, installGlobalListener, formatKeyBinding, digitModifierCollides, digitModifierFlagsEqual, TAB_DEFAULT_FLAGS, PANEL_DEFAULT_FLAGS, setRebinding } from '../composables/useKeyboardShortcuts'
 import AddRepoDialog from './AddRepoDialog.vue'
 import EditRepoDialog from './EditRepoDialog.vue'
 import ChangePasswordDialog from './ChangePasswordDialog.vue'
@@ -1210,21 +1645,33 @@ import DataDirDialog from './DataDirDialog.vue'
 import IdentityEditDialog from './IdentityEditDialog.vue'
 import ProxyEditDialog from './ProxyEditDialog.vue'
 import TunnelEditDialog from './TunnelEditDialog.vue'
-import MCPServerSettings from './MCPServerSettings.vue'
 import { useCredentialStore } from '../stores/credentialStore'
 import { useIdentityStore } from '../stores/identityStore'
 import { useProxyStore } from '../stores/proxyStore'
 import { useTunnelStore } from '../stores/tunnelStore'
+import { useTunnelCredentials } from '../composables/useTunnelCredentials'
 import type { Tunnel, TunnelMode } from '../stores/tunnelStore'
 import type { Identity } from '../types/identity'
-import { Browser, Events } from '@wailsio/runtime'
+import { Browser } from '@wailsio/runtime'
+import { isMobilePlatform } from '../utils/platform'
 import type { Proxy } from '../types/proxy'
+import { uiPx } from '../utils/uiScale'
 
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
 const updateCheck = useUpdateCheck()
 const localStateStore = useLocalStateStore()
 const { t } = useI18n()
+const { resolveTunnelCredentials } = useTunnelCredentials()
+// Mobile (android/ios) has no OS window, no mouse, no local shell and a
+// system-managed data dir — settings that only make sense on the desktop are
+// hidden there via `v-if="!isMobile"` / category filtering below.
+const isMobile = isMobilePlatform()
+
+async function onGitBashPathChange() {
+  await settingsStore.save()
+  await settingsStore.refreshAvailableShells()
+}
 const platform = ref('')
 const isMac = computed(() => platform.value === 'darwin')
 
@@ -1356,6 +1803,13 @@ function openEditRepo() {
   syncStore.showEditRepo = true
 }
 
+// WebDAV configure leaves repoUrl empty, so "configured" depends on backend.
+const isSyncConfigured = computed(() =>
+  syncStore.config.backend !== 'git'
+    ? !!syncStore.config.remote?.server
+    : !!syncStore.config.repoUrl
+)
+
 async function handleSyncNow() {
   const result = await syncStore.doSync()
   if (!result) {
@@ -1373,6 +1827,38 @@ async function handleAutoSyncToggle() {
     await syncStore.saveConfig()
   } catch (e) {
     console.error('Failed to save auto sync toggle:', e)
+  }
+}
+
+// nil scope = legacy default: settings.json unchecked, everything else checked.
+const LEGACY_SCOPE = SYNC_FILE_ITEMS.filter(i => i.file !== 'settings.json').map(i => i.file)
+
+const syncScopeModel = computed<string[]>({
+  get: () => syncStore.config.syncScope ?? LEGACY_SCOPE,
+  set: (v) => { syncStore.config.syncScope = v },
+})
+
+// An empty selection would persist as [] which the backend resolves back to
+// the legacy default — the UI would show nothing syncing while the device
+// syncs all legacy files. Keep the last non-empty selection instead.
+const lastValidScope = ref<string[]>([...syncScopeModel.value])
+// Track the store reactively: loadConfig (and any future store reset) replaces
+// config.value asynchronously after setup, so a one-time snapshot could go stale.
+watch(() => syncStore.config.syncScope, (v) => {
+  if (v && v.length) lastValidScope.value = [...v]
+})
+
+async function handleScopeChange(v: string[]) {
+  if (v.length === 0) {
+    syncStore.config.syncScope = [...lastValidScope.value]
+    msg.warning(t('settings.syncScopeEmpty'))
+    return
+  }
+  lastValidScope.value = [...v]
+  try {
+    await syncStore.saveConfig()
+  } catch (e) {
+    console.error('Failed to save sync scope:', e)
   }
 }
 
@@ -1412,6 +1898,279 @@ function openThemeEditor(sourceThemeId?: string) {
   themeEditorSourceId.value = sourceThemeId
   themeEditorVisible.value = true
 }
+
+// ── Sidebar collapse ──
+// The category sidebar (11.25rem) pushes the settings panel off-screen on
+// narrow windows (phone portrait). Collapse to icons-only below the width
+// where the expanded layout stops fitting; the button toggles it manually
+// and the auto rule re-applies whenever the window crosses the threshold.
+const settingsTabRef = ref<HTMLElement | null>(null)
+// Estimate the collapse decision from the window width so the very first
+// paint is already correct — the element itself is not measurable before
+// mount, and a post-mount correction is what reads as a "slide-in".
+const sidebarCollapsed = ref(
+  window.innerWidth < 42 * parseFloat(getComputedStyle(document.documentElement).fontSize)
+)
+// Suppress the width transition until the first post-mount correction has
+// landed, covering the case where the estimate above was off (docked
+// sidebars make the tab narrower than the window).
+const sidebarAnimReady = ref(false)
+// Below the same threshold the side-by-side setting cards (info + fixed-width
+// control) cannot fit either, so the panel stacks them vertically.
+const isNarrow = ref(false)
+
+function updateSidebarCollapse() {
+  const el = settingsTabRef.value
+  if (!el) return
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  // Expanded layout needs ~13.1rem sidebar + ~29rem panel => 42rem minimum.
+  isNarrow.value = el.clientWidth < 42 * rem
+  sidebarCollapsed.value = isNarrow.value
+}
+
+let sidebarResizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  updateSidebarCollapse()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => sidebarAnimReady.value = true)
+  })
+  if (settingsTabRef.value) {
+    sidebarResizeObserver = new ResizeObserver(updateSidebarCollapse)
+    sidebarResizeObserver.observe(settingsTabRef.value)
+  }
+})
+
+onUnmounted(() => {
+  sidebarResizeObserver?.disconnect()
+  sidebarResizeObserver = null
+})
+
+// The tab lives inside <KeepAlive>: re-opening it re-attaches the DOM, which
+// fires the ResizeObserver and can flip the collapsed decision while the
+// width transition is already enabled. Re-suppress the transition across
+// each re-activation so the correction lands instantly, without sliding.
+onActivated(() => {
+  sidebarAnimReady.value = false
+  updateSidebarCollapse()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => sidebarAnimReady.value = true)
+  })
+})
+
+// ── MCP server (external AI agents) ─────────────────────────────
+// Config round-trips through localStateStore.state.mcp (Go struct
+// store.LocalState.MCP) — per device, never synced; tokens live in
+// mcp.json via the app bindings. Token creation opens the setup wizard
+// dialog (token + per-client onboarding snippets) instead of expanding
+// blocks inline.
+const mcp = reactive({ ...DEFAULT_MCP_SETTINGS })
+const mcpPort = ref(DEFAULT_MCP_SETTINGS.port || 61207)
+const mcpStatus = ref<MCPStatus>({ running: false, port: 0 })
+const mcpTokens = ref<string[]>([])
+const newTokenName = ref('')
+const mcpTokenCreated = ref('')
+const mcpSetupVisible = ref(false)
+
+// Mirror persisted settings into the reactive form once loaded.
+watch(() => localStateStore.state.mcp, (v) => {
+  if (v) {
+    Object.assign(mcp, v)
+    mcpPort.value = v.port || 61207
+  }
+}, { immediate: true })
+
+async function refreshMcpState() {
+  try { mcpStatus.value = await GetMCPStatus() } catch { mcpStatus.value = { running: false, port: 0 } }
+  try { mcpTokens.value = (await ListMCPTokens()) || [] } catch { mcpTokens.value = [] }
+}
+
+async function saveMcp() {
+  await localStateStore.update({
+    mcp: {
+      enabled: mcp.enabled,
+      port: mcpPort.value,
+      policy: mcp.policy,
+    },
+  })
+  refreshMcpState()
+}
+
+async function generateToken() {
+  const name = newTokenName.value.trim()
+  if (!name) { msg.error(t('settings.mcpTokenName')); return }
+  try {
+    const token = await GenerateMCPToken(name)
+    mcpTokenCreated.value = token
+    newTokenName.value = ''
+    mcpSetupVisible.value = true
+    refreshMcpState()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+// A token's plaintext exists only until the setup dialog closes; the wizard
+// cannot be reopened for an old token (hash-only storage) — regenerate it.
+function onMcpSetupClose() {
+  mcpSetupVisible.value = false
+  mcpTokenCreated.value = ''
+}
+
+async function revokeToken(name: string) {
+  try {
+    await ElMessageBox.confirm(
+      t('settings.mcpRevokeConfirm', { name }),
+      t('settings.mcpRevoke')
+    )
+  } catch {
+    return // user cancelled
+  }
+  try {
+    await RevokeMCPToken(name)
+    if (mcpTokens.value.length === 1 && mcpTokens.value[0] === name) mcpTokenCreated.value = ''
+    refreshMcpState()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+onMounted(refreshMcpState)
+
+// ── MCP client (uniTerm connects to external servers) ──────────
+// List persisted in mcp_clients.json via app bindings; live health comes from
+// MCPClientStatuses. Separate from the MCP server block above.
+interface MCPClientForm {
+  name: string
+  transport: string
+  command: string
+  url: string
+  headersText: string
+  enabled: boolean
+}
+const mcpClients = ref<any[]>([])
+const mcpClientHealth = ref<Record<string, { connected: boolean; tools: number; error: string }>>({})
+const mcpClientForm = reactive<MCPClientForm>({
+  name: '', transport: 'stdio', command: '', url: '', headersText: '', enabled: true,
+})
+
+function mcpClientStatus(name: string) {
+  return mcpClientHealth.value[name]
+}
+
+async function refreshMcpClients() {
+  try {
+    mcpClients.value = (await ListMCPClients()) || []
+  } catch { mcpClients.value = [] }
+  try {
+    const statuses = (await MCPClientStatuses()) || []
+    const map: Record<string, { connected: boolean; tools: number; error: string }> = {}
+    for (const s of statuses) map[s.name] = { connected: s.connected, tools: s.tools, error: s.error || '' }
+    mcpClientHealth.value = map
+  } catch { /* health optional */ }
+}
+
+async function saveMcpClient(c: any) {
+  try {
+    await SaveMCPClient({ ...c, headers: parseHeaders(c) })
+    refreshMcpClients()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+async function addMcpClient() {
+  const headers = parseHeaders(mcpClientForm)
+  const tokens = splitCommandLine(mcpClientForm.command)
+  const cfg = {
+    name: mcpClientForm.name.trim(),
+    transport: mcpClientForm.transport,
+    command: tokens[0] ?? '',
+    args: tokens.slice(1),
+    url: mcpClientForm.url.trim(),
+    headers,
+    enabled: true,
+  }
+  if (!cfg.name) { msg.error(t('settings.mcpClientName')); return }
+  try {
+    await SaveMCPClient(cfg)
+    mcpClientForm.name = ''; mcpClientForm.command = ''; mcpClientForm.url = ''; mcpClientForm.headersText = ''
+    refreshMcpClients()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+function parseHeaders(src: { headersText?: string; headers?: Record<string,string> }): Record<string, string> {
+  const merged: Record<string, string> = {}
+  if (src.headers && typeof src.headers === 'object') Object.assign(merged, src.headers)
+  const text = (src.headersText || '').trim()
+  if (!text) return merged
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed === 'object' && parsed) Object.assign(merged, parsed)
+    return merged
+  } catch {
+    msg.error(t('settings.mcpClientHeadersInvalid'))
+    return merged
+  }
+}
+
+function splitCommandLine(command: string): string[] {
+  // Minimal shell-like split: quoted segments preserved. Good enough for the
+  // common `npx -y pkg` form; full shell parsing stays out of scope here.
+  const out: string[] = []
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(command)) !== null) {
+    out.push(m[1] ?? m[2] ?? m[3] ?? '')
+  }
+  return out
+}
+
+async function testMcpClient(c: any) {
+  try {
+    const tools = await TestMCPClient({ ...c, headers: parseHeaders(c) })
+    msg.success(t('settings.mcpClientTestOk', { name: c.name, tools: tools.length }))
+    refreshMcpClients()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+// reconnectingClient 记录正在重连的服务器名称，用于按钮 loading 状态。
+const reconnectingClient = ref<string | null>(null)
+
+// reconnectMcpClient 手动重连指定的 MCP 客户端服务器。当 SSE / streamable-http
+// 长连接断开后，用户可点击"重连"按钮主动恢复连接，无需等待下一次工具调用
+// 才触发自动重连。重连成功后刷新健康状态。
+async function reconnectMcpClient(c: any) {
+  reconnectingClient.value = c.name
+  try {
+    await MCPReconnectClient(c.name)
+    await refreshMcpClients()
+    const status = mcpClientStatus(c.name)
+    msg.success(t('settings.mcpClientReconnectOk', { name: c.name, tools: status?.tools ?? 0 }))
+  } catch (e: any) {
+    msg.error(`${t('settings.mcpClientReconnectFailed')}: ${backendErrorText(e)}`)
+  } finally {
+    reconnectingClient.value = null
+  }
+}
+
+async function removeMcpClient(name: string) {
+  try {
+    await ElMessageBox.confirm(t('settings.mcpClientRemoveConfirm', { name }), t('settings.mcpClientRemove'))
+  } catch { return }
+  try {
+    await RemoveMCPClient(name)
+    refreshMcpClients()
+  } catch (e: any) {
+    msg.error(backendErrorText(e))
+  }
+}
+
+onMounted(refreshMcpClients)
 
 onMounted(async () => {
   try {
@@ -1495,17 +2254,20 @@ async function pickLogDir() {
   }
 }
 
-// F4: 打开录制列表弹窗（通过 Wails 事件触发 App.vue 中挂载的 RecordList）。
-function openRecordList() {
+async function pickZmodemDownloadDir() {
   try {
-    Events.Emit('app:open-record-list')
-  } catch {
-    window.dispatchEvent(new CustomEvent('app:open-record-list'))
+    const chosen = await OpenDirectoryDialog()
+    if (chosen) {
+      settingsStore.settings.terminal.zmodemDownloadDir = chosen
+      await settingsStore.save()
+    }
+  } catch (e: any) {
+    msg.error(String(e?.message ?? e))
   }
 }
 
 watch(() => settingsStore.openCategory, (cat) => {
-  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || cat === 'keyboard' || cat === 'identities' || cat === 'proxies' || cat === 'tunnels')) {
+  if (cat && (cat === 'basic' || cat === 'terminal' || cat === 'ai' || cat === 'sync' || cat === 'about' || (cat === 'keyboard' && !isMobile) || cat === 'identities' || cat === 'proxies' || cat === 'tunnels')) {
     settingsStore.activeCategory = cat
     settingsStore.openCategory = null
   }
@@ -1513,6 +2275,35 @@ watch(() => settingsStore.openCategory, (cat) => {
 
 // ── Keyboard rebinding ──
 const rebindingAction = ref<ShortcutAction | null>(null)
+
+// Capture mode for the modifier+digit tab/panel-switch rows: unlike
+// per-action bindings, only the modifier flags are stored and `key` stays
+// empty.
+const rebindingTabSwitch = ref(false)
+const rebindingPanelSwitch = ref(false)
+const rebindingTrayHotkey = ref(false)
+
+// Display grouping for the keyboard settings table: related shortcuts share
+// a sub-heading so the long list stays scannable. The two digit-modifier
+// rows are hardcoded in the 'tabs' section (custom edit/clear controls).
+// Every ShortcutAction must appear exactly once.
+const shortcutCategories: { key: string; label: string; actions: ShortcutAction[] }[] = [
+  {
+    key: 'tabs',
+    label: 'shortcut.catTabs',
+    actions: ['newConnection', 'nextTab', 'prevTab', 'navigatePrev', 'navigateNext', 'closePanel', 'duplicateSession', 'maximizePanel', 'lockAI'],
+  },
+  {
+    key: 'sidebar',
+    label: 'shortcut.catSidebar',
+    actions: ['toggleSidebar', 'openQuickCommands', 'focusAI', 'toggleFilePanel', 'toggleMonitor', 'openSettings'],
+  },
+  {
+    key: 'terminal',
+    label: 'shortcut.catTerminal',
+    actions: ['focusTerminal', 'copy', 'paste', 'terminalSearch', 'zoomFontIn', 'zoomFontOut', 'toggleLineNumbers', 'toggleTimestamps'],
+  },
+]
 
 function bindingDisplay(action: ShortcutAction): string {
   const b = settingsStore.settings.keyboard[action]
@@ -1525,7 +2316,6 @@ function isDefaultBinding(action: ShortcutAction): boolean {
   const def = DEFAULT_KEYBOARD[action]
   if (!current || !def) return true
   return current.ctrl === def.ctrl && current.shift === def.shift
-    && (current.meta || false) === (def.meta || false)
     && current.alt === def.alt && current.key === def.key
 }
 
@@ -1542,6 +2332,7 @@ let rebindListenerActive = false
 function startRebind(action: ShortcutAction) {
   rebindingAction.value = action
   uninstallGlobalListener()
+  setRebinding(true)
   if (!rebindListenerActive) {
     rebindListenerActive = true
     document.addEventListener('keydown', onRebindKeydown, true)
@@ -1556,29 +2347,41 @@ function stopRebind() {
     window.removeEventListener('blur', onRebindBlur)
   }
   rebindingAction.value = null
+  rebindingTabSwitch.value = false
+  rebindingPanelSwitch.value = false
+  rebindingTrayHotkey.value = false
+  setRebinding(false)
   installGlobalListener()
 }
 
 function clearBinding(action: ShortcutAction) {
   settingsStore.settings.keyboard = {
     ...settingsStore.settings.keyboard,
-    [action]: { ctrl: false, meta: false, shift: false, alt: false, key: '' }
+    [action]: { ctrl: false, shift: false, alt: false, key: '' }
   }
   settingsStore.save()
   stopRebind()
 }
 
 function onRebindKeydown(e: KeyboardEvent) {
+  if (rebindingTrayHotkey.value) return onRebindTrayHotkeyKeydown(e)
+  if (rebindingTabSwitch.value) return onRebindTabSwitchKeydown(e)
+  if (rebindingPanelSwitch.value) return onRebindPanelSwitchKeydown(e)
   if (!rebindingAction.value) return stopRebind()
   e.preventDefault()
   e.stopPropagation()
   const key = e.key
   if (key === 'Escape') return stopRebind()
   if (key === 'Control' || key === 'Shift' || key === 'Alt' || key === 'Meta') return
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    // Bare keys are never valid bindings — they would break normal typing.
+    msg.warning(t('shortcut.needsModifier'))
+    return
+  }
 
   const binding: KeyBinding = {
-    ctrl: e.ctrlKey,
-    meta: e.metaKey,
+    // macOS: Cmd is recorded as ctrl — ctrl combos mirror to Cmd at runtime.
+    ctrl: e.ctrlKey || e.metaKey,
     shift: e.shiftKey,
     alt: e.altKey,
     key: key.toLowerCase(),
@@ -1608,7 +2411,244 @@ function findConflict(binding: KeyBinding): ShortcutAction | null {
 }
 
 function bindingKey(binding: KeyBinding): string {
-  return `${binding.ctrl ? 'ctrl+' : ''}${binding.meta ? 'meta+' : ''}${binding.shift ? 'shift+' : ''}${binding.alt ? 'alt+' : ''}${binding.key.toLowerCase()}`
+  return `${binding.ctrl ? 'ctrl+' : ''}${binding.shift ? 'shift+' : ''}${binding.alt ? 'alt+' : ''}${binding.key.toLowerCase()}`
+}
+
+// ── Configurable digit modifiers (tab/panel switching) ──
+//
+// Only the modifier flags are stored (`key` stays empty). Unset = platform
+// default (tabs: Ctrl on Windows/Linux, Cmd on macOS; panels: Alt/Option);
+// cleared (no modifier) disables that digit family; any configured combo
+// moves it there. When both families resolve to the same combo, tab
+// switching wins and the panel digit shortcuts are suppressed (their badges
+// hide too — see panelDigitShortcutsSuppressed).
+
+type DigitModifierKey = 'tabSwitchModifier' | 'panelSwitchModifier'
+
+function digitModifierBindingDisplay(key: DigitModifierKey, defaultMods: string): string {
+  const b = settingsStore.settings.keyboard[key]
+  if (!b) {
+    // Effective platform default, shown so the row never reads as "off".
+    return `${defaultMods} + ${t('shortcut.digitKeys')}`
+  }
+  if (!b.ctrl && !b.shift && !b.alt) {
+    // Cleared = the family is disabled; show an empty binding.
+    return ''
+  }
+  // formatKeyBinding pushes the (empty) key too, leaving a trailing '+'
+  const mods = formatKeyBinding({ ctrl: !!b.ctrl, shift: !!b.shift, alt: !!b.alt, key: '' }, isMac.value).replace(/\++$/, '')
+  return `${mods} + ${t('shortcut.digitKeys')}`
+}
+
+function tabSwitchBindingDisplay(): string {
+  // Mac default shows the ⌘ symbol (not the word "Cmd") so the row matches
+  // the symbol style of formatKeyBinding and every other binding row.
+  return digitModifierBindingDisplay('tabSwitchModifier', isMac.value ? '⌘' : 'Ctrl')
+}
+
+function panelSwitchBindingDisplay(): string {
+  return digitModifierBindingDisplay('panelSwitchModifier', isMac.value ? '⌥' : 'Alt')
+}
+
+function isTabSwitchModifierUnset(): boolean {
+  return !settingsStore.settings.keyboard.tabSwitchModifier
+}
+
+function isPanelSwitchModifierUnset(): boolean {
+  return !settingsStore.settings.keyboard.panelSwitchModifier
+}
+
+function setDigitModifier(key: DigitModifierKey, binding: KeyBinding | null) {
+  const kb: KeyboardSettings = { ...settingsStore.settings.keyboard }
+  if (binding) {
+    const isTab = key === 'tabSwitchModifier'
+    // The two digit families are mutually exclusive: assigning one clears the
+    // other when it claims the same combo. An unset other family still counts
+    // through its own platform default — otherwise e.g. panels set to Ctrl
+    // would silently lose to the default tab switching. This runs BEFORE the
+    // own-default check below: recording e.g. Ctrl back onto tabs must clear
+    // a conflicting panel binding even though Ctrl is also the tab default.
+    const otherKey: DigitModifierKey = isTab ? 'panelSwitchModifier' : 'tabSwitchModifier'
+    const otherDefault = isTab ? PANEL_DEFAULT_FLAGS : TAB_DEFAULT_FLAGS
+    if (digitModifierCollides(kb[otherKey], otherDefault, binding)) {
+      kb[otherKey] = { ctrl: false, shift: false, alt: false, key: '' }
+    }
+    const ownDefault = isTab ? TAB_DEFAULT_FLAGS : PANEL_DEFAULT_FLAGS
+    // Recording a family's own platform default (Ctrl for tabs, Alt for
+    // panels) is the same as never having configured it — store nothing so
+    // the row keeps showing the default and reset stays hidden.
+    if (digitModifierFlagsEqual(binding, ownDefault)) {
+      delete kb[key]
+    } else {
+      kb[key] = binding
+      // Mirror the per-action conflict rule: an action explicitly bound to
+      // the same combo with a digit key would shadow the family for that
+      // digit (the global keybinding listener runs before the platform
+      // handler), so clear it like findConflict does for regular rebinds.
+      for (const [action, b] of Object.entries(kb) as [ShortcutAction, KeyBinding][]) {
+        if ((action as string) === key) continue
+        if (!b || !b.key || !/^[1-9]$/.test(b.key)) continue
+        if (digitModifierFlagsEqual(b, binding)) {
+          kb[action] = { ctrl: false, shift: false, alt: false, key: '' }
+        }
+      }
+    }
+  } else {
+    delete kb[key]
+  }
+  settingsStore.settings.keyboard = kb
+  settingsStore.save()
+}
+
+function setTabSwitchModifier(binding: KeyBinding | null) {
+  setDigitModifier('tabSwitchModifier', binding)
+}
+
+function setPanelSwitchModifier(binding: KeyBinding | null) {
+  setDigitModifier('panelSwitchModifier', binding)
+}
+
+function resetTabSwitchModifier() {
+  // Back to unset = platform default (Ctrl/Cmd+digit tabs, Alt/Option+digit
+  // workspace panels).
+  setDigitModifier('tabSwitchModifier', null)
+}
+
+function resetPanelSwitchModifier() {
+  // Back to unset = platform default (Alt/Option+digit workspace panels).
+  setDigitModifier('panelSwitchModifier', null)
+}
+
+function clearTabSwitchModifier() {
+  // All flags off = digit tab switching disabled; panels keep their digits.
+  setDigitModifier('tabSwitchModifier', { ctrl: false, shift: false, alt: false, key: '' })
+  stopRebind()
+}
+
+function clearPanelSwitchModifier() {
+  // All flags off = panel digit switching disabled; tabs keep their digits.
+  setDigitModifier('panelSwitchModifier', { ctrl: false, shift: false, alt: false, key: '' })
+  stopRebind()
+}
+
+function startRebindTabSwitch() {
+  rebindingTabSwitch.value = true
+  uninstallGlobalListener()
+  setRebinding(true)
+  if (!rebindListenerActive) {
+    rebindListenerActive = true
+    document.addEventListener('keydown', onRebindKeydown, true)
+    window.addEventListener('blur', onRebindBlur)
+  }
+}
+
+function startRebindPanelSwitch() {
+  rebindingPanelSwitch.value = true
+  uninstallGlobalListener()
+  setRebinding(true)
+  if (!rebindListenerActive) {
+    rebindListenerActive = true
+    document.addEventListener('keydown', onRebindKeydown, true)
+    window.addEventListener('blur', onRebindBlur)
+  }
+}
+
+// Modifier-only capture: bare modifier presses are ignored so the user can
+// build the combo (e.g. Ctrl+Alt); the next non-modifier key press confirms
+// the held modifiers — its own key is discarded.
+function onRebindModifierKeydown(e: KeyboardEvent, apply: (binding: KeyBinding) => void) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') return stopRebind()
+  if (e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta') return
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    // Bare keys are never valid bindings — they would break normal typing.
+    msg.warning(t('shortcut.needsModifier'))
+    return
+  }
+  // macOS: Cmd is recorded as ctrl — ctrl combos mirror to Cmd at runtime.
+  apply({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: '' })
+  stopRebind()
+}
+
+function onRebindTabSwitchKeydown(e: KeyboardEvent) {
+  onRebindModifierKeydown(e, setTabSwitchModifier)
+}
+
+function onRebindPanelSwitchKeydown(e: KeyboardEvent) {
+  onRebindModifierKeydown(e, setPanelSwitchModifier)
+}
+
+// ── Global show/hide hotkey (tray, system-wide) ──
+
+function trayHotkeyDisplay(): string {
+  const b = settingsStore.settings.keyboard.trayShowHide
+  return b ? formatKeyBinding(b, isMac.value) : ''
+}
+
+function isTrayHotkeyDefault(): boolean {
+  const b = settingsStore.settings.keyboard.trayShowHide
+  const def = DEFAULT_KEYBOARD.trayShowHide
+  if (!b || !def) return b === def
+  return b.ctrl === def.ctrl && b.shift === def.shift && b.alt === def.alt && b.key === def.key
+}
+
+function startRebindTrayHotkey() {
+  rebindingTrayHotkey.value = true
+  rebindingAction.value = null
+  rebindingTabSwitch.value = false
+  rebindingPanelSwitch.value = false
+  uninstallGlobalListener()
+  setRebinding(true)
+  if (!rebindListenerActive) {
+    rebindListenerActive = true
+    document.addEventListener('keydown', onRebindKeydown, true)
+    window.addEventListener('blur', onRebindBlur)
+  }
+}
+
+function onRebindTrayHotkeyKeydown(e: KeyboardEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') return stopRebind()
+  if (e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta') return
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    // Bare keys are never valid bindings — they would break normal typing.
+    msg.warning(t('shortcut.needsModifier'))
+    return
+  }
+  // macOS: Cmd is recorded as ctrl — ctrl combos mirror to Cmd at runtime.
+  settingsStore.settings.keyboard = {
+    ...settingsStore.settings.keyboard,
+    trayShowHide: {
+      ctrl: e.ctrlKey || e.metaKey,
+      shift: e.shiftKey,
+      alt: e.altKey,
+      key: e.key.toLowerCase()
+    }
+  }
+  settingsStore.save()
+  stopRebind()
+}
+
+function clearTrayHotkey() {
+  // All flags off + empty key = binding removed, hotkey unregistered.
+  settingsStore.settings.keyboard = {
+    ...settingsStore.settings.keyboard,
+    trayShowHide: { ctrl: false, shift: false, alt: false, key: '' }
+  }
+  settingsStore.save()
+  stopRebind()
+}
+
+function resetTrayHotkey() {
+  const def = DEFAULT_KEYBOARD.trayShowHide
+  if (!def) return
+  settingsStore.settings.keyboard = {
+    ...settingsStore.settings.keyboard,
+    trayShowHide: { ...def }
+  }
+  settingsStore.save()
 }
 
 function onRebindBlur() {
@@ -1621,18 +2661,30 @@ const categories = computed(() => {
   const cats = [
     { key: 'basic', label: t('settings.basic'), icon: Settings },
     { key: 'terminal', label: t('settings.terminal'), icon: Monitor },
-    { key: 'keyboard', label: t('shortcut.title'), icon: Keyboard },
+    // Keyboard shortcuts still WORK on mobile (physical keyboards), but the
+    // rebinding UI is desktop-only and hidden from the category list there.
+    ...(!isMobile ? [{ key: 'keyboard', label: t('shortcut.title'), icon: Keyboard }] : []),
     { key: 'ai', label: t('settings.ai'), icon: MessageCircleMore },
+    // MCP server has no mobile backend — hidden from the category list there.
+    ...(!isMobile ? [{ key: 'mcp', label: t('settings.mcp'), icon: Plug }] : []),
+    ...(!isMobile ? [{ key: 'mcp-client', label: t('settings.mcpClient'), icon: Plug }] : []),
     { key: 'skills', label: t('settings.skillsAndCommands'), icon: Wrench },
     { key: 'identities', label: t('settings.identities'), icon: Key },
     { key: 'proxies', label: t('settings.proxies'), icon: Network },
     { key: 'tunnels', label: t('settings.tunnels'), icon: ArrowRightLeft },
-    { key: 'mcp', label: t('settings.mcp'), icon: Plug },
     { key: 'sync', label: t('settings.sync'), icon: RefreshCw },
     { key: 'about', label: t('settings.about'), icon: Info },
   ]
   return cats
 })
+
+// A persisted 'keyboard' active category would show an empty settings page on
+// mobile — fall back to basic.
+watch(categories, (cats) => {
+  if (isMobile && settingsStore.activeCategory === 'keyboard' && !cats.some(c => c.key === 'keyboard')) {
+    settingsStore.activeCategory = 'basic'
+  }
+}, { immediate: true })
 
 // ── Identities (密钥库) ──
 const identityStore = useIdentityStore()
@@ -1676,7 +2728,6 @@ async function toggleProxy(row: Proxy, v: boolean) {
 const tunnelStore = useTunnelStore()
 const tunnelDialogVisible = ref(false)
 const editingTunnelId = ref<string | undefined>(undefined)
-const togglingTunnelId = ref<string | undefined>(undefined)
 
 // ── Sidebar tab visibility ──
 // Writable computed over AppSettings.sidebarTabs. "connections" never appears
@@ -1697,6 +2748,7 @@ function onSidebarTabsChange() {
   settingsStore.save()
 }
 function openTunnelDialog(t?: Tunnel) {
+  if (t && tunnelStore.isActive(t.id)) return
   editingTunnelId.value = t?.id
   tunnelDialogVisible.value = true
 }
@@ -1705,24 +2757,20 @@ async function removeTunnel(row: Tunnel) {
 }
 const modeName = (m: TunnelMode) => t(`tunnels.mode.${m}`)
 const effPort = (t: Tunnel) => tunnelStore.states[t.id]?.localPort || t.listenPort
-const statusOf = (id: string) => tunnelStore.statusOf(id)
 async function toggleRun(row: Tunnel) {
-  if (statusOf(row.id) === 'running') {
-    togglingTunnelId.value = row.id
+  if (tunnelStore.isActive(row.id)) {
     await tunnelStore.stop(row.id)
-    togglingTunnelId.value = undefined
   } else {
-    togglingTunnelId.value = row.id
-    const st = await tunnelStore.start(row.id)
-    togglingTunnelId.value = undefined
-    if (st.status === 'error') {
-      msg.error(st.error || t('tunnels.startFailed'))
-    }
+    // Exit connection without saved credentials: prompt for user/password and
+    // pass them inline (backend fills only empty fields). Cancel aborts.
+    const creds = await resolveTunnelCredentials(row.sshConnId)
+    if (!creds) return
+    await tunnelStore.start(row.id, creds.user, creds.password)
   }
 }
 
 const showModelForm = ref(false)
-const modelSuggestions = ref<Array<{ value: string }>>([])
+const modelSuggestions = ref<Array<{ value: string; label: string }>>([])
 // Always surface the currently-set model as an option so el-select renders it
 // when editing an existing model (before any fetch) — el-select won't display a
 // bound value that has no matching option, and allow-create only creates
@@ -1731,7 +2779,7 @@ const modelSelectOptions = computed(() => {
   const opts = modelSuggestions.value.slice()
   const cur = modelForm.model?.trim()
   if (cur && !opts.some(o => o.value === cur)) {
-    opts.unshift({ value: cur })
+    opts.unshift({ value: cur, label: cur })
   }
   return opts
 })
@@ -1747,13 +2795,55 @@ const modelForm = reactive({
   model: '',
   apiKey: '',
   protocol: 'anthropic' as 'anthropic' | 'openai' | 'responses',
-  userAgent: 'ai-ops-terminal' as string,
+  userAgent: 'uniTerm' as string,
   proxyId: '' as string,
 })
+
+// ── Model quick presets ──────────────────────────────────────────
+// Each preset pre-fills protocol + baseURL + model so the user only
+// needs to enter their API key.  Domestic providers (DeepSeek, Qwen,
+// GLM …) all expose an OpenAI-compatible /v1/chat/completions endpoint,
+// so we use the 'openai' protocol for them.
+interface ModelPreset {
+  name: string
+  protocol: 'anthropic' | 'openai' | 'responses'
+  baseURL: string
+  model: string
+}
+
+const MODEL_PRESETS: Record<string, ModelPreset> = {
+  deepseek:  { name: 'DeepSeek',         protocol: 'openai',    baseURL: 'https://api.deepseek.com/v1',                        model: 'deepseek-chat' },
+  qwen:      { name: '通义千问',          protocol: 'openai',    baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  zhipu:     { name: '智谱GLM',           protocol: 'openai',    baseURL: 'https://open.bigmodel.cn/api/paas/v4',              model: 'glm-4-plus' },
+  wenxin:    { name: '文心一言',          protocol: 'openai',    baseURL: 'https://qianfan.baidubce.com/v2',                   model: 'ernie-4.0-8k' },
+  moonshot:  { name: 'Moonshot',          protocol: 'openai',    baseURL: 'https://api.moonshot.cn/v1',                         model: 'moonshot-v1-8k' },
+  minimax:   { name: 'MiniMax',           protocol: 'openai',    baseURL: 'https://api.minimax.chat/v1',                       model: 'abab6.5-chat' },
+  lingyi:    { name: '零一万物',          protocol: 'openai',    baseURL: 'https://api.lingyiwanwu.com/v1',                    model: 'yi-large' },
+  openai:    { name: 'OpenAI GPT',        protocol: 'openai',    baseURL: 'https://api.openai.com/v1',                         model: 'gpt-4o' },
+  claude:    { name: 'Anthropic Claude',  protocol: 'anthropic', baseURL: 'https://api.anthropic.com',                          model: 'claude-sonnet-4-20250514' },
+  gemini:    { name: 'Google Gemini',     protocol: 'openai',    baseURL: 'https://generativelanguage.googleapis.com/v1beta',  model: 'gemini-2.0-flash' },
+  ollama:    { name: 'Ollama (本地)',     protocol: 'openai',    baseURL: 'http://localhost:11434/v1',                         model: 'llama3' },
+  vllm:      { name: 'vLLM (本地)',       protocol: 'openai',    baseURL: 'http://localhost:8000/v1',                          model: '' },
+  lmstudio:  { name: 'LM Studio (本地)',  protocol: 'openai',    baseURL: 'http://localhost:1234/v1',                          model: '' },
+}
+
+const selectedPreset = ref('')
+
+function applyPreset(key: string) {
+  const preset = MODEL_PRESETS[key]
+  if (!preset) return
+  modelForm.name = preset.name
+  modelForm.protocol = preset.protocol
+  modelForm.baseURL = preset.baseURL
+  modelForm.model = preset.model
+  // Clear any stale@fetch@ed model suggestions so the preset model shows cleanly.
+  modelSuggestions.value = []
+}
 
 function openNewModelForm() {
   editingModel.value = null
   resetModelForm()
+  selectedPreset.value = ''
   testResult.value = null
   testError.value = ''
   showModelForm.value = true
@@ -1762,6 +2852,7 @@ function openNewModelForm() {
 function editModel(model: AIModelConfig) {
   editingModel.value = model
   modelSuggestions.value = []
+  selectedPreset.value = ''
   testResult.value = null
   testError.value = ''
   Object.assign(modelForm, { ...model })
@@ -1781,8 +2872,6 @@ async function removeModelConfirm(model: AIModelConfig) {
 }
 
 function saveModel() {
-  // S3: 保存前校验 baseURL scheme，明文 http（非本地）弹警告不阻断。
-  warnIfInsecureBaseURL(modelForm.baseURL)
   if (editingModel.value) {
     settingsStore.updateModel(editingModel.value.id, { ...modelForm })
   } else {
@@ -1809,7 +2898,7 @@ function resetModelForm() {
   modelForm.model = ''
   modelForm.apiKey = ''
   modelForm.protocol = 'anthropic'
-  modelForm.userAgent = 'ai-ops-terminal'
+  modelForm.userAgent = 'uniTerm'
   modelForm.proxyId = ''
   modelSuggestions.value = []
 }
@@ -1823,8 +2912,9 @@ async function fetchModelList() {
   modelSuggestions.value = []
   try {
     const models = await FetchModels(modelForm.apiKey, modelForm.baseURL, modelForm.protocol, modelForm.proxyId || '')
-    modelSuggestions.value = (models || []).map((m: { display_name?: string; id: string }) => ({
-      value: m.display_name || m.id
+    modelSuggestions.value = (models || []).map((m: { id: string; display_name: string }) => ({
+      value: m.id,
+      label: m.display_name || m.id
     }))
     msg.success(t('settings.fetchModelsSuccess', { count: modelSuggestions.value.length }))
   } catch (e: any) {
@@ -1856,7 +2946,8 @@ async function testConnection() {
       testMsg,
       modelForm.protocol,
       modelForm.userAgent || '',
-      modelForm.proxyId || ''
+      modelForm.proxyId || '',
+      `uniterm-test-${Date.now()}`
     )
     testResult.value = true
     msg.success(t('settings.testSuccess'))
@@ -1870,17 +2961,7 @@ async function testConnection() {
 }
 
 function getShellLabel(path: string): string {
-  if (!path) return 'Local'
-  const lower = path.toLowerCase()
-  if (lower.startsWith('wsl://')) {
-    const distro = path.slice(6)
-    return distro ? `WSL - ${distro}` : 'WSL'
-  }
-  if (lower.includes('pwsh')) return 'PowerShell'
-  if (lower.includes('powershell')) return 'Windows PowerShell'
-  if (lower.includes('bash')) return 'Git Bash'
-  if (lower.includes('cmd')) return 'Command Prompt'
-  return path.split(/[\\/]/).pop() || path
+  return getShellLabelBase(path, 'Local')
 }
 
 const bgPreview = ref('')
@@ -1939,28 +3020,79 @@ async function onToggleSystemTitleBar(v: boolean) {
 }
 
 .settings-sidebar {
-  width: 180px;
+  width: 11.25rem;
   flex-shrink: 0;
-  margin-left: 20px;
-  margin-right: 10px;
-  padding: 16px 0;
+  margin-left: 1.25rem;
+  margin-right: 0.625rem;
+  padding: 1rem 0;
   border-right: 1px solid var(--border-hover);
+  transition: width 0.15s ease;
+  /* Scroll independently when the window is too short for every category */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-collapse-btn {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 0.5rem 0.5rem;
+  margin-left: auto;
+  padding: 0;
+  background: var(--bg-base);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: all 0.12s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Collapsed: icons only, centered */
+.settings-sidebar.no-anim,
+.settings-sidebar.no-anim .settings-category,
+.settings-sidebar.no-anim .sidebar-collapse-btn {
+  transition: none;
+}
+
+.settings-sidebar.collapsed {
+  width: 3.5rem;
+  margin-left: 0.625rem;
+  margin-right: 0.375rem;
+}
+
+.settings-sidebar.collapsed .sidebar-collapse-btn {
+  margin-left: auto;
+}
+
+.settings-sidebar.collapsed .settings-category {
+  justify-content: center;
+  padding: 0.625rem 0.5rem;
+  margin: 0 0.375rem;
+  gap: 0;
 }
 
 .settings-category {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  margin: 0 8px;
-  font-size: 13px;
+  gap: 0.625rem;
+  padding: 0.625rem 1rem;
+  margin: 0 0.5rem;
+  font-size: 0.8125rem;
   font-family: var(--font-ui);
-  cursor: pointer;
   user-select: none;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
   transition: all 0.12s ease;
-  border-left: 3px solid transparent;
+  border-left: 0.1875rem solid transparent;
 }
 
 .settings-category:hover {
@@ -1972,11 +3104,11 @@ async function onToggleSystemTitleBar(v: boolean) {
   background: var(--accent-subtle);
   color: var(--accent);
   border-left-color: var(--accent);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 
 .category-icon {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .category-label {
@@ -1985,41 +3117,59 @@ async function onToggleSystemTitleBar(v: boolean) {
 
 .settings-panel {
   flex: 1;
-  padding: 24px 32px;
+  padding: 1.5rem 2rem;
   overflow-y: auto;
 }
 
 .settings-section {
-  min-width: 400px;
+  min-width: min(25rem, 100%);
   max-width: 1000px;
   margin: 0 auto;
 }
 
+/* Narrow windows (phone portrait): stack each setting card vertically so the
+   control gets the full row instead of squeezing the title into one char
+   per line. */
+.settings-tab.narrow .setting-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.625rem;
+}
+
+.settings-tab.narrow .setting-control {
+  min-width: 0;
+}
+
+.settings-tab.narrow .setting-control .el-select,
+.settings-tab.narrow .setting-control .editor-select.el-select {
+  width: 100%;
+}
+
 .section-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   font-family: var(--font-ui);
-  margin: 0 0 20px 0;
+  margin: 1.25rem 0 1.25rem 0;
   color: var(--text-primary);
 }
 
 .settings-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .setting-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
+  gap: 1rem;
+  padding: 0.875rem 1.125rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   transition: all 0.12s ease;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(0.5rem);
 }
 
 .setting-card:hover {
@@ -2032,15 +3182,15 @@ async function onToggleSystemTitleBar(v: boolean) {
 }
 
 .setting-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   font-family: var(--font-ui);
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
 }
 
 .setting-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--font-ui);
   color: var(--text-muted);
   line-height: 1.4;
@@ -2048,32 +3198,40 @@ async function onToggleSystemTitleBar(v: boolean) {
 
 .setting-control {
   flex-shrink: 0;
-  min-width: 210px;
+  min-width: 13.125rem;
+}
+
+/* Switch-only cards (e.g. the MCP enable toggle) hug the right edge
+   instead of honoring the wide select-oriented min-width. */
+.setting-control.switch-control {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Keep the external-editor combobox the same width as the other select
    controls instead of the default 100% (the free-input form stretches). */
 .setting-control .editor-select.el-select {
-  width: 210px;
+  width: 13.125rem;
 }
 
 
 /* The append button's width adds to the input's, so pin the whole group to
-   the 210px the sibling selects render at instead of letting it overflow. */
+   the 13.125rem the sibling selects render at instead of letting it overflow. */
 .setting-control .dir-input {
-  width: 210px;
+  width: 13.125rem;
 }
 
 .config-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 
-.settings-form { display: flex; flex-direction: column; gap: 4px; }
-.switch-mode-hint { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
-.verify-field { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.settings-form { display: flex; flex-direction: column; gap: 0.25rem; }
+.switch-mode-hint { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+.verify-field { display: flex; flex-direction: column; gap: 0.25rem; width: 100%; }
 
-.form-error { color: var(--el-color-danger); font-size: 13px; margin-top: 8px; }
+.form-error { color: var(--el-color-danger); font-size: 0.8125rem; margin-top: 0.5rem; }
 
 .setting-control .el-select,
 .setting-control .el-input-number {
@@ -2083,7 +3241,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .theme-select-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   width: 100%;
 }
 
@@ -2098,11 +3256,11 @@ async function onToggleSystemTitleBar(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 18px;
+  gap: 1rem;
+  padding: 0.75rem 1.125rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   transition: all 0.12s ease;
 }
 
@@ -2118,62 +3276,88 @@ async function onToggleSystemTitleBar(v: boolean) {
 .model-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   flex: 1;
   min-width: 0;
 }
 
 .model-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .model-detail {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
-  margin-left: 24px;
+  margin-left: 1.5rem;
 }
 
 .model-actions {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   flex-shrink: 0;
+}
+
+/* MCP settings */
+.mcp-running {
+  color: var(--el-color-success);
+  font-family: var(--font-mono);
+}
+.mcp-running.mcp-error {
+  color: var(--el-color-danger);
+}
+.mcp-token-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.mcp-token-icon {
+  margin-right: 0.5rem;
+  color: var(--text-muted);
+}
+
+/* Token cards reuse .model-main (column layout for AI models); force the
+   icon and name onto one row. */
+.mcp-token-main {
+  flex-direction: row;
+  align-items: center;
 }
 
 .about-content {
   text-align: left;
-  padding: 20px 0;
+  padding: 1.25rem 0;
 }
 .about-appname {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 .about-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  margin: 0 0 24px 0;
+  margin: 0 0 1.5rem 0;
   line-height: 1.6;
-  max-width: 400px;
+  max-width: 25rem;
 }
 .about-version {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 .about-links {
   display: flex;
-  gap: 16px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
 }
 .about-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 0.375rem;
+  font-size: 0.75rem;
   color: var(--accent);
   text-decoration: none;
   transition: opacity 0.12s ease;
@@ -2183,22 +3367,24 @@ async function onToggleSystemTitleBar(v: boolean) {
   text-decoration: underline;
 }
 .about-link-icon {
+  width: 0.875rem;
+  height: 0.875rem;
   flex-shrink: 0;
   opacity: 0.7;
 }
 
 .section-desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
-  margin: 0;
+  margin: 0.75rem 0;
   line-height: 1.5;
 }
 
 .sync-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
   overflow: hidden;
 }
 
@@ -2206,29 +3392,29 @@ async function onToggleSystemTitleBar(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   font-family: var(--font-ui);
   color: var(--text-primary);
-  padding: 8px 12px 8px 18px;
+  padding: 0.5rem 0.75rem 0.5rem 1.125rem;
   background: var(--bg-hover);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .sync-card-body {
-  padding: 16px 18px;
+  padding: 1rem 1.125rem;
 }
 
 .sync-card-body.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 28px 18px;
+  gap: 0.75rem;
+  padding: 1.75rem 1.125rem;
 }
 
 .empty-text {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   margin: 0;
 }
@@ -2237,19 +3423,19 @@ async function onToggleSystemTitleBar(v: boolean) {
 .repo-info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
 }
 
 .repo-info-row {
   display: flex;
-  gap: 12px;
-  font-size: 13px;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .repo-label {
   color: var(--text-muted);
-  min-width: 70px;
+  min-width: 4.375rem;
   flex-shrink: 0;
 }
 
@@ -2262,14 +3448,14 @@ async function onToggleSystemTitleBar(v: boolean) {
 .repo-warning {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
   background: var(--el-color-warning-light-9);
   border: 1px solid var(--el-color-warning-light-5);
-  border-radius: 6px;
-  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.875rem;
   color: var(--el-color-warning-dark-2);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -2277,32 +3463,32 @@ async function onToggleSystemTitleBar(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .repo-actions-left {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 /* Sync status */
 .sync-status {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 0.375rem;
+  margin-bottom: 0.875rem;
 }
 
 .sync-status-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
 }
 
 .sync-label {
   color: var(--text-muted);
-  min-width: 70px;
+  min-width: 4.375rem;
   flex-shrink: 0;
 }
 
@@ -2311,9 +3497,9 @@ async function onToggleSystemTitleBar(v: boolean) {
 }
 
 .sync-tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
@@ -2336,32 +3522,60 @@ async function onToggleSystemTitleBar(v: boolean) {
 }
 
 .sync-actions-row {
-  margin-bottom: 14px;
+  margin-bottom: 0.875rem;
 }
 
 .sync-auto-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-top: 14px;
+  gap: 0.625rem;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
   border-top: 1px solid var(--border-subtle);
 }
 
 .sync-auto-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .sync-auto-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   flex: 1;
 }
 
+.sync-scope-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sync-scope-row :deep(.el-checkbox-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.sync-scope-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.scope-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .model-fetch-row {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   width: 100%;
 }
 .model-autocomplete {
@@ -2372,44 +3586,73 @@ async function onToggleSystemTitleBar(v: boolean) {
 .inline-add-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   width: 100%;
 }
 .inline-add-btn {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
 }
 
 .about-update-actions {
-  margin-top: 20px;
+  margin-top: 1.25rem;
 }
 .about-auto-check {
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
   font-family: var(--font-ui);
+}
+.about-update-source {
+  margin-top: 0.625rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-family: var(--font-ui);
+}
+.about-update-source-select {
+  width: 11.875rem;
 }
 
 .kb-key {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   background: var(--bg-overlay);
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  /* UI font so macOS modifier symbols (⌘⌥⇧) render with their native
+     system-font shapes instead of the thin mono fallback glyphs. */
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
   color: var(--text-primary);
 }
 
 .kb-table {
   width: 100%;
+  /* min-width keeps the columns (and the action buttons row) from being
+     squeezed on narrow panes; percentages keep the five tables aligned. */
+  min-width: 22rem;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.8125rem;
+}
+
+.kb-table th:first-child {
+  width: 30%;
+}
+
+.kb-table th:nth-child(2) {
+  width: 38%;
+}
+
+.kb-table th:nth-child(3) {
+  width: 25%;
 }
 
 .kb-table th, .kb-table td {
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   text-align: left;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -2417,7 +3660,7 @@ async function onToggleSystemTitleBar(v: boolean) {
 .kb-table th {
   color: var(--text-muted);
   font-weight: 500;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-transform: uppercase;
 }
 
@@ -2425,14 +3668,34 @@ async function onToggleSystemTitleBar(v: boolean) {
   background: var(--bg-hover);
 }
 
-.kb-actions {
-  display: flex;
-  gap: 6px;
+.kb-hint {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
-.bg-image-row { display: flex; align-items: center; gap: 8px; }
+.kb-modifier-note {
+  margin: 0 0 0.625rem;
+}
+
+/* Must stay a table-cell: display:flex on the <td> removes it from the row's
+   shared-height layout and the column drifts out of line when buttons wrap. */
+.kb-actions {
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.kb-actions .el-button {
+  margin: 0 0.375rem 0.375rem 0;
+}
+
+.kb-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.bg-image-row { display: flex; align-items: center; gap: 0.5rem; }
 .bg-thumb {
-  width: 64px; height: 40px; border-radius: 4px;
+  width: 4rem; height: 2.5rem; border-radius: var(--radius-sm);
   background-size: cover; background-position: center;
   border: 1px solid var(--border-subtle);
 }

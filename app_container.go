@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -9,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/laigcss/ai-ops-terminal/backend/container"
-	"github.com/laigcss/ai-ops-terminal/backend/k8s"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/container"
+	"github.com/ys-ll/uniterm/backend/k8s"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // K8sContextInfo 是前端可见的 context 元信息。
@@ -144,7 +145,8 @@ func (a *App) K8sExecSession(connID, namespace, pod, container string) (*session
 		return nil, err
 	}
 	id := uuid.New().String()
-	sess := session.NewK8sExecSession(id, wsConn)
+	// k8s exec 的 WS 通道适配为通用 PTYStream，与容器 exec 会话统一
+	sess := session.NewContainerExecSession(id, session.NewK8sExecStream(wsConn))
 	sess.SetOnDataCallback(func(data []byte) {
 		a.emit("session:data", map[string]interface{}{
 			"id":   sess.ID(),
@@ -158,7 +160,7 @@ func (a *App) K8sExecSession(connID, namespace, pod, container string) (*session
 		})
 	})
 	a.sessionManager.Add(sess)
-	return &session.SessionInfo{ID: id, Type: "k8s-exec", Title: pod, Status: session.StatusConnected}, nil
+	return &session.SessionInfo{ID: id, Type: "container-exec", Title: pod, Status: session.StatusConnected}, nil
 }
 
 func readKubeconfigSource(source string, sourceIsPath bool) ([]byte, error) {
@@ -177,7 +179,9 @@ func readKubeconfigSource(source string, sourceIsPath bool) ([]byte, error) {
 // ContainerConnect 打开容器连接：解析配置、按 transport 建 Local 或 SSH runner。
 // SSH 传输时若被引用连接配了跳板机（TunnelSSHConnID），先起本地转发隧道，
 // 与 CreateSession 的单层隧道行为一致。
-func (a *App) ContainerConnect(connectionID string) error {
+// sshUser/sshPassword/tunnelUser/tunnelPassword 为前端统一凭据补全弹窗
+// （useCredentials）提交的临时账密：只填空缺，不覆盖已存储或身份库解析的值。
+func (a *App) ContainerConnect(connectionID, sshUser, sshPassword, tunnelUser, tunnelPassword string) error {
 	if a.containerManager == nil || a.connectionStore == nil {
 		return fmt.Errorf("container manager not initialized")
 	}
@@ -223,6 +227,25 @@ func (a *App) ContainerConnect(connectionID string) error {
 			return err
 		}
 		sshCfg = &m
+	}
+
+	// 临时账密（凭据补全弹窗"直接连接"未保存时）：只填空缺，不覆盖
+	// 已存储或身份库解析的值，与 setupJumpHostTunnel 的内联凭据语义一致。
+	if sshCfg.AuthType != "identity" {
+		if sshUser != "" && sshCfg.User == "" {
+			sshCfg.User = sshUser
+		}
+		if sshPassword != "" && sshCfg.Password == "" {
+			sshCfg.Password = sshPassword
+		}
+	}
+
+	// 跳板机的临时账密随 sshCfg 传入，由 setupJumpHostTunnel 内部消费。
+	if tunnelUser != "" {
+		sshCfg.TunnelSSHUser = tunnelUser
+	}
+	if tunnelPassword != "" {
+		sshCfg.TunnelSSHPassword = tunnelPassword
 	}
 
 	// 跳板机：复用统一的 setupJumpHostTunnel（与其它连接类型同一段逻辑）。
@@ -330,8 +353,63 @@ func (a *App) ContainerStartLogs(connectionID, containerID string, tail int, tim
 	return a.containerManager.StartLogStream(connectionID, containerID, tail, timestamps)
 }
 
-func (a *App) ContainerStartPull(connectionID, image string) (string, error) {
-	return a.containerManager.StartPullStream(connectionID, image)
+func (a *App) ContainerStartPull(connectionID, image string, opts container.TransferOptions) (string, error) {
+	return a.containerManager.StartPullStream(connectionID, image, opts)
+}
+
+func (a *App) ContainerStartPush(connectionID, image string, opts container.TransferOptions) (string, error) {
+	return a.containerManager.StartPushStream(connectionID, image, opts)
+}
+
+func (a *App) ContainerTagImage(connectionID, image, repoTag string) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.TagImage(a.ctx, image, repoTag)
+}
+
+func (a *App) ContainerImagePrune(connectionID string) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.ImagePrune(a.ctx)
+}
+
+// ContainerImageInspect 返回镜像 inspect 原始 JSON（结构与容器 inspect 不同，不归一化）。
+func (a *App) ContainerImageInspect(connectionID, imageID string) (string, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return "", err
+	}
+	return p.ImageInspect(a.ctx, imageID)
+}
+
+// ContainerImageHistory 返回镜像的分层信息（history 输出）。
+func (a *App) ContainerImageHistory(connectionID, imageID string) ([]container.ImageLayer, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.ImageHistory(a.ctx, imageID)
+}
+
+// ContainerRuntimeInfo 返回概览页运行时信息；info/version 失败时字段为空，不阻断。
+func (a *App) ContainerRuntimeInfo(connectionID string) (container.RuntimeInfo, error) {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return container.RuntimeInfo{}, err
+	}
+	return p.Info(a.ctx)
+}
+
+func (a *App) ContainerRegistryLogin(connectionID string, opts container.LoginOptions) error {
+	p, err := a.containerManager.Provider(connectionID)
+	if err != nil {
+		return err
+	}
+	return p.Login(a.ctx, opts)
 }
 
 func (a *App) ContainerStopStream(streamID string) {
@@ -363,4 +441,50 @@ func (a *App) ContainerExecSession(connectionID, containerID, shell string) (*se
 	})
 	a.sessionManager.Add(sess)
 	return &session.SessionInfo{ID: id, Type: "container-exec", Title: containerID, Status: session.StatusConnected}, nil
+}
+
+// createContainerFileSession 建立容器文件会话（CreateSession 的 container-file
+// 分支）：通过 container.Manager 解析目标连接的 Provider，文件操作走 docker
+// exec / docker cp 通道。
+func (a *App) createContainerFileSession(config session.ConnectionConfig) (*session.SessionInfo, error) {
+	if a.containerManager == nil {
+		return nil, fmt.Errorf("container manager not initialized")
+	}
+	// 按 connID 分发：容器连接走 docker exec/cp，k8s 连接走 exec WebSocket
+	//（k8s 复用 config.ID 作为 k8s 连接 key，config.ContainerID 为 Pod 名）
+	id := uuid.New().String()
+	var sess session.Session
+	if p, err := a.containerManager.Provider(config.ID); err == nil {
+		sess = session.NewContainerFileSession(id, container.NewFileBackend(p, config.ContainerID), config.ContainerID, config.Name)
+	} else if config.ContainerNamespace != "" {
+		backend := k8s.NewFileBackend(a.k8sManager, config.ID, config.ContainerNamespace, config.ContainerID, "")
+		sess = session.NewContainerFileSession(id, backend, config.ContainerID, config.Name)
+	} else {
+		return nil, fmt.Errorf("connection %q not found", config.ID)
+	}
+	// 与标准 CreateSession 尾部一致：接上数据/状态回调，前端的"已连接"
+	// 状态靠 session:status 事件驱动。
+	sess.SetOnDataCallback(func(data []byte) {
+		a.emit("session:data", map[string]interface{}{
+			"id":   sess.ID(),
+			"data": string(data),
+		})
+	})
+	sess.SetOnBinaryCallback(func(data []byte) {
+		a.emit("session:binary", map[string]interface{}{
+			"id":   sess.ID(),
+			"data": base64.StdEncoding.EncodeToString(data),
+		})
+	})
+	sess.SetOnStatusChangeCallback(func(status session.SessionStatus) {
+		a.emit("session:status", map[string]interface{}{
+			"id":     sess.ID(),
+			"status": status,
+		})
+	})
+	if err := sess.Connect(config); err != nil {
+		return nil, err
+	}
+	a.sessionManager.Add(sess)
+	return &session.SessionInfo{ID: id, Type: "container-file", Title: config.Name, Status: session.StatusConnected}, nil
 }

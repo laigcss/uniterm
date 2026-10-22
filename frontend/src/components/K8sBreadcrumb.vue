@@ -1,5 +1,6 @@
 <template>
   <div class="db-breadcrumb">
+    <slot name="toggle" />
     <el-select
       v-if="showNsSelect"
       :model-value="namespace"
@@ -76,9 +77,9 @@ const crumbs = computed<Crumb[]>(() => {
 .db-breadcrumb {
   display: flex;
   align-items: center;
-  padding: 4px 12px;
+  padding: 0.25rem 0.75rem;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-subtle);
@@ -87,12 +88,11 @@ const crumbs = computed<Crumb[]>(() => {
   overflow: hidden;
 }
 .crumb {
-  padding: 2px 6px;
+  padding: 0.125rem 0.375rem;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .crumb.clickable {
-  cursor: pointer;
   transition: all 0.1s ease;
 }
 .crumb.clickable:hover {
@@ -105,8 +105,8 @@ const crumbs = computed<Crumb[]>(() => {
 }
 .crumb-sep {
   color: var(--text-disabled);
-  margin: 0 2px;
+  margin: 0 0.125rem;
   flex-shrink: 0;
 }
-.k8s-ns-select { width: 180px; margin-right: 8px; }
+.k8s-ns-select { width: 11.25rem; margin-right: 0.5rem; }
 </style>

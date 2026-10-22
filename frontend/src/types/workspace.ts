@@ -1,4 +1,4 @@
-export type PanelType = 'ssh' | 'telnet' | 'mosh' | 'sftp' | 'settings' | 'rdp' | 'vnc' | 'spice' | 'local' | 'wsl' | 'database' | 'monitor' | 'serial' | 'tcp' | 'k8s' | 'k8s-exec' | 'container' | 'container-exec' | 'x11-desktop' | 'other'
+export type PanelType = 'ssh' | 'telnet' | 'mosh' | 'sftp' | 'settings' | 'rdp' | 'vnc' | 'spice' | 'local' | 'wsl' | 'database' | 'monitor' | 'serial' | 'tcp' | 'k8s' | 'container' | 'container-exec' | 'x11-desktop' | 'other'
 export type PanelStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 import type { ConnectionConfig } from './session'
@@ -56,7 +56,11 @@ export interface WorkspaceTab {
   panelIds: string[]
   layout: PanelLayout
   activePanelId: string | null
+  maximizedPanelId?: string | null
   locked?: boolean
+  // Connection id of the saved-workspace record this tab was saved to / opened
+  // from. Set after the first save so the next save updates in place.
+  savedWorkspaceId?: string
 }
 
 export interface SFTPTab {

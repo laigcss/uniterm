@@ -1,0 +1,6 @@
+{
+  "name": "libaiops_native.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "NAPI module for native process management (fork+execve, chmod, health check)"
+}

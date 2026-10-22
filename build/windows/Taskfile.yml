@@ -48,7 +48,7 @@ tasks:
             ref: .OBFUSCATED
           DEV:
             ref: .DEV
-      # NOTE: no common:generate:icons dependency here — ai-ops-terminal ships a
+      # NOTE: no common:generate:icons dependency here — uniTerm ships a
       # committed build/windows/icon.ico (used by generate:syso) and has no
       # build/appicon.icon / build/darwin asset dir, so regenerating icons
       # (which writes darwin/icons.icns) would fail and is unnecessary for the

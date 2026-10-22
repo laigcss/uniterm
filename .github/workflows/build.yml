@@ -26,10 +26,10 @@ jobs:
             slug: linux-amd64
           - os: ubuntu-24.04-arm
             slug: linux-arm64
-          # Kylin/RHEL webkit40+glibc2.28 builds: use workflow build-linux-webkit40.yml
-          # (Ubuntu runners link glibc 2.34 and will not run on Kylin V10.)
           - os: macos-latest
             slug: darwin
+          - os: ubuntu-latest
+            slug: android
 
     runs-on: ${{ matrix.os }}
 
@@ -80,15 +80,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev upx pkg-config
 
+      - name: Install dependencies (Android)
+        if: matrix.slug == 'android'
+        run: |
+          # Same GTK packages as the desktop Linux build: only needed to
+          # compile the wails3 CLI (it just orchestrates the gradle/NDK build).
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config \
+            openjdk-21-jdk-headless
+          # Gradle needs JAVA_HOME; resolve it from the javac we just installed.
+          JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+          java -version
+          # GitHub runners ship the Android SDK with cmdline-tools; accept the
+          # licenses and add the components the gradle/NDK build needs.
+          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager --version
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;26.3.11579264"
+
       - name: Install Wails CLI (wails3)
         shell: bash
         run: |
+          # setup-go does not add GOPATH/bin to PATH; wails3 (and the
+          # overlay:gen / generate bindings calls inside the tasks) live there.
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           # On Linux, wails3 defaults to the WebKitGTK 6.0 (GTK4) pkg-config
           # stack, which ubuntu-24.04 does not ship. Build the CLI (and later the
-          # app) with the legacy -tags gtk3 contract (WebKit2GTK 4.1).
+          # app) with the legacy -tags gtk3 contract (WebKit2GTK 4.1). The CLI
+          # only orchestrates the gradle/NDK android build, so the tag choice
+          # does not affect the APK.
           TAGS=""
-          if [[ "${{ matrix.slug }}" == linux* ]]; then TAGS="-tags gtk3"; fi
-          go install $TAGS github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+          if [[ "${{ matrix.slug }}" == linux* || "${{ matrix.slug }}" == "android" ]]; then TAGS="-tags gtk3"; fi
+          go install $TAGS github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
 
       - name: Set version
         shell: bash
@@ -102,9 +128,10 @@ jobs:
 
       # Regenerate the gitignored build assets (build/windows/info.json +
       # manifest, darwin Info.plist, linux nfpm.yaml) from build/config.yml.
-      # A fresh checkout has only icon.ico/ai-ops-terminal.desktop committed, and
+      # A fresh checkout has only icon.ico/org.wails.uniterm.desktop committed, and
       # generate:syso + app-bundle/nfpm all need these.
       - name: Update build assets
+        if: matrix.slug != 'android'
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
@@ -117,10 +144,10 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          wails3 build VERSION="$VERSION"                 # bin/ai-ops-terminal.exe (amd64)
-          mv bin/ai-ops-terminal.exe bin/ai-ops-terminal-amd64.exe
-          wails3 build VERSION="$VERSION" ARCH=arm64      # bin/ai-ops-terminal.exe (arm64)
-          mv bin/ai-ops-terminal.exe bin/ai-ops-terminal-arm64.exe
+          wails3 build VERSION="$VERSION"                 # bin/uniTerm.exe (amd64)
+          mv bin/uniTerm.exe bin/uniTerm-amd64.exe
+          wails3 build VERSION="$VERSION" ARCH=arm64      # bin/uniTerm.exe (arm64)
+          mv bin/uniTerm.exe bin/uniTerm-arm64.exe
           echo "AMD64|ARM64 built:"; ls -la bin/
 
       - name: Build (Linux)
@@ -128,12 +155,12 @@ jobs:
         shell: bash
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          # Native CGO build on the matching-arch runner → bin/ai-ops-terminal.
+          # Native CGO build on the matching-arch runner → bin/uniTerm.
           # gtk3 = legacy WebKit2GTK 4.1 stack (the only one ubuntu-24.04 provides).
           pkg-config --modversion webkit2gtk-4.1
           wails3 build GOOS=linux VERSION="$VERSION" EXTRA_TAGS=gtk3
-          chmod +x bin/ai-ops-terminal
-          echo "Linux binary:"; ls -la bin/ai-ops-terminal
+          chmod +x bin/uniTerm
+          echo "Linux binary:"; ls -la bin/uniTerm
 
       - name: Build (macOS)
         if: matrix.slug == 'darwin'
@@ -145,11 +172,58 @@ jobs:
           # into its own dmg below (matches the v1.8.0 single-arch dmgs).
           wails3 task darwin:build:universal VERSION="$VERSION"
           for arch in amd64 arm64; do
-            cp "bin/ai-ops-terminal-$arch" bin/ai-ops-terminal
+            cp "bin/uniTerm-$arch" bin/uniTerm
             wails3 task darwin:create:app:bundle
-            mv bin/ai-ops-terminal.app "bin/ai-ops-terminal-$arch.app"
+            mv bin/uniTerm.app "bin/uniTerm-$arch.app"
           done
-          ls -la bin/ai-ops-terminal-amd64.app/Contents/MacOS bin/ai-ops-terminal-arm64.app/Contents/MacOS
+          ls -la bin/uniTerm-amd64.app/Contents/MacOS bin/uniTerm-arm64.app/Contents/MacOS
+
+          # Self-update payloads: bare app-bundle binary per arch, matching
+          # what the in-app updater downloads, verifies and ad-hoc re-signs.
+          # -j junk-paths so the zip root holds just the "uniTerm" executable.
+          for arch in amd64 arm64; do
+            zip -q -j "uniterm-darwin-${arch}-${VERSION}.zip" \
+              "bin/uniTerm-${arch}.app/Contents/MacOS/uniTerm"
+          done
+          ls -la uniterm-darwin-*.zip
+
+      - name: Build (Android)
+        if: matrix.slug == 'android'
+        shell: bash
+        env:
+          # Release keystore as base64; decoded below. Without it gradle
+          # signs with the per-runner debug keystore, whose signature is
+          # different on every ephemeral runner and blocks upgrade installs.
+          ANDROID_KEYSTORE_FILE_B64: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # main.go embeds all:frontend/dist; neither dist nor the generated
+          # bindings are committed, so build the frontend first (this also
+          # covers the embed needed by android:package below).
+          wails3 task common:build:frontend
+          # arm64 covers virtually all real devices; amd64 is only useful for
+          # local emulator builds, so CI always packages arm64.
+          # PRODUCTION must be passed explicitly: android:package declares
+          # PRODUCTION=true on its internal build dep, but the value is lost
+          # on the build -> compile:go:shared hop, silently producing a
+          # -tags android,debug library (broken WebView asset serving).
+          if [ -n "${ANDROID_KEYSTORE_FILE_B64:-}" ]; then
+            KS="$GITHUB_WORKSPACE/uniterm-release.keystore"
+            echo "$ANDROID_KEYSTORE_FILE_B64" | base64 -d > "$KS"
+            export ANDROID_KEYSTORE_FILE="$KS"
+            echo "Signing with release keystore (alias: $ANDROID_KEY_ALIAS)"
+          else
+            echo "WARNING: no ANDROID_KEYSTORE_FILE secret — falling back to the runner debug keystore"
+          fi
+          wails3 task android:package PRODUCTION=true
+          # Match the desktop convention: uniterm-<os>-<arch>-<version>.apk.
+          # Stage at the workspace root: the Upload artifact step globs
+          # uniterm-*.apk there, so a copy left under bin/ matches nothing
+          # and no artifact gets uploaded (only a warning is emitted).
+          mv bin/uniTerm.apk "uniterm-android-arm64-${VERSION}.apk"
+          ls -la uniterm-android-*.apk
 
       - name: Package (macOS)
         if: matrix.slug == 'darwin'
@@ -159,19 +233,23 @@ jobs:
           # separate volume and hdiutil regularly ran out of space there for a
           # large .app. Fall back to a zipped .app when hdiutil still fails.
           for arch in amd64 arm64; do
-            APP="bin/ai-ops-terminal-$arch.app"
-            chmod +x "$APP/Contents/MacOS/ai-ops-terminal"
+            APP="bin/uniTerm-$arch.app"
+            chmod +x "$APP/Contents/MacOS/uniTerm"
 
             STAGE="${{ github.workspace }}/dmg_staging_${arch}"
             mkdir -p "$STAGE"
-            cp -R "$APP" "$STAGE/ai-ops-terminal.app"
+            cp -R "$APP" "$STAGE/uniTerm.app"
             ln -s /Applications "$STAGE/Applications"
-            if hdiutil create -volname ai-ops-terminal -srcfolder "$STAGE" -ov -format UDZO "ai-ops-terminal-darwin-${arch}-${VERSION}.dmg"; then
+            if hdiutil create -volname uniTerm -srcfolder "$STAGE" -ov -format UDZO "uniterm-darwin-${arch}-${VERSION}.dmg"; then
               echo "dmg created ($arch)"
             else
+              # Same filename as the bare-binary zip above — the fallback
+              # overwrites it with a full .app, which is both manually
+              # installable and a valid in-app update payload (the updater
+              # picks the executable out of the bundle by name).
               echo "hdiutil dmg failed ($arch) — shipping zipped .app instead"
-              rm -f "ai-ops-terminal-darwin-${arch}-${VERSION}.dmg"
-              ditto -c -k --sequesterRsrc --keepParent "$APP" "ai-ops-terminal-darwin-${arch}-${VERSION}.zip"
+              rm -f "uniterm-darwin-${arch}-${VERSION}.zip"
+              ditto -c -k --sequesterRsrc --keepParent "$APP" "uniterm-darwin-${arch}-${VERSION}.zip"
             fi
             rm -rf "$STAGE"
           done
@@ -184,10 +262,10 @@ jobs:
         env:
           VCXSRV_VERSION: v1.0.0
         run: |
-          $VCXSRV_DIR = Join-Path $env:GITHUB_WORKSPACE 'build\windows\installer\plugins\vcxsrv'
+          $VCXSRV_DIR = Join-Path $env:GITHUB_WORKSPACE 'build\windows\installer\pluginscxsrv'
           New-Item -ItemType Directory -Force -Path $VCXSRV_DIR | Out-Null
           $zip = Join-Path $env:TEMP 'vcxsrv.zip'
-          Invoke-WebRequest -Uri "https://github.com/laigcss/ai-ops-terminal-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
+          Invoke-WebRequest -Uri "https://github.com/ys-ll/uniterm-vcxsrv/releases/download/$env:VCXSRV_VERSION/vcxsrv.zip" -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath $VCXSRV_DIR -Force
           Get-ChildItem $VCXSRV_DIR
 
@@ -198,8 +276,8 @@ jobs:
           $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
           $ROOT = $env:GITHUB_WORKSPACE
-          $AMD64_BIN = Join-Path $ROOT 'bin\ai-ops-terminal-amd64.exe'
-          $ARM64_BIN = Join-Path $ROOT 'bin\ai-ops-terminal-arm64.exe'
+          $AMD64_BIN = Join-Path $ROOT 'bin niTerm-amd64.exe'
+          $ARM64_BIN = Join-Path $ROOT 'bin niTerm-arm64.exe'
           $NSI = Join-Path $ROOT 'build\windows\installer\project.nsi'
 
           # compress amd64 with upx; arm64 is left uncompressed because
@@ -207,28 +285,28 @@ jobs:
           # WebView2Loader produces for windows/arm64
           upx --best --lzma $AMD64_BIN
 
-          $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\plugins\vcxsrv'
+          $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\pluginscxsrv'
 
-          # project.nsi's OutFile is ..\..\bin\... installers into build\bin,
+          # project.nsi's OutFile is ..\..in\... installers into buildin,
           # which v3 never creates (it outputs to bin/). Ensure it exists.
-          New-Item -ItemType Directory -Force -Path (Join-Path $ROOT 'build\bin') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $ROOT 'buildin') | Out-Null
 
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
-            $srcExe = Join-Path $ROOT "bin\ai-ops-terminal-$arch.exe"
-            $srcInstaller = Join-Path $ROOT "build\bin\ai-ops-terminal-$arch-installer.exe"
+            $srcExe = Join-Path $ROOT "bin niTerm-$arch.exe"
+            $srcInstaller = Join-Path $ROOT "buildin niTerm-$arch-installer.exe"
 
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
-            Copy-Item $srcExe "dist_tmp\ai-ops-terminal.exe"
-            Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\plugins\vcxsrv"
-            Compress-Archive -Path dist_tmp\* -DestinationPath "ai-ops-terminal-windows-$arch-portable-$VERSION.zip" -Force
+            Copy-Item $srcExe "dist_tmp niTerm.exe"
+            Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\pluginscxsrv"
+            Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp
 
             # rename NSIS installer
-            Move-Item $srcInstaller "ai-ops-terminal-windows-$arch-installer-$VERSION.exe"
+            Move-Item $srcInstaller "uniterm-windows-$arch-installer-$VERSION.exe"
           }
 
       - name: Package (Linux, nfpm)
@@ -236,10 +314,10 @@ jobs:
         run: |
           ARCH=${{ matrix.slug == 'linux-amd64' && 'amd64' || 'arm64' }}
           NFPM_ARCH=${{ matrix.slug == 'linux-amd64' && 'x86_64' || 'arm64' }}
-          upx --best --lzma bin/ai-ops-terminal
+          upx --best --lzma bin/uniTerm
 
           cd bin
-          tar czf ../ai-ops-terminal-linux-${ARCH}-${VERSION}.tar.gz ai-ops-terminal
+          tar czf ../uniterm-linux-${ARCH}-${VERSION}.tar.gz uniTerm
           cd ..
 
           NFPM_VER="2.46.3"
@@ -249,13 +327,13 @@ jobs:
           chmod +x /usr/local/bin/nfpm
 
           cat > nfpm.yaml << EOF
-          name: ai-ops-terminal
+          name: uniterm
           arch: ${ARCH}
           platform: linux
           version: ${VERSION}
-          maintainer: ai-ops-terminal <ai-ops-terminal@github.com/laigcss/ai-ops-terminal>
+          maintainer: uniTerm <uniTerm@uniterm.net>
           description: Lightweight all-in-one terminal emulator with built-in AI Agent
-          homepage: https://github.com/laigcss/ai-ops-terminal
+          homepage: https://uniterm.net
           license: Proprietary
           depends:
             - libgtk-3-0
@@ -266,30 +344,34 @@ jobs:
                 - gtk3
                 - webkit2gtk4.1
           contents:
-            - src: bin/ai-ops-terminal
-              dst: /usr/bin/ai-ops-terminal
-            - src: build/linux/ai-ops-terminal.desktop
-              dst: /usr/share/applications/ai-ops-terminal.desktop
+            - src: bin/uniTerm
+              dst: /usr/bin/uniterm
+            - src: build/linux/org.wails.uniterm.desktop
+              dst: /usr/share/applications/org.wails.uniterm.desktop
             - src: build/linux/icons/hicolor
               dst: /usr/share/icons/hicolor
           EOF
 
           nfpm package --config nfpm.yaml --packager deb \
-            --target "ai-ops-terminal-linux-${ARCH}-${VERSION}.deb"
+            --target "uniterm-linux-${ARCH}-${VERSION}.deb"
           nfpm package --config nfpm.yaml --packager rpm \
-            --target "ai-ops-terminal-linux-${ARCH}-${VERSION}.rpm"
+            --target "uniterm-linux-${ARCH}-${VERSION}.rpm"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ai-ops-terminal-${{ matrix.slug }}
+          name: uniTerm-${{ matrix.slug }}
+          # Fail loudly instead of silently uploading nothing when the
+          # globs below miss (an empty artifact previously hid a lost APK).
+          if-no-files-found: error
           path: |
-            ai-ops-terminal-*.zip
-            ai-ops-terminal-*.tar.gz
-            ai-ops-terminal-*.exe
-            ai-ops-terminal-*.dmg
-            ai-ops-terminal-*.deb
-            ai-ops-terminal-*.rpm
+            uniterm-*.zip
+            uniterm-*.tar.gz
+            uniterm-*.exe
+            uniterm-*.dmg
+            uniterm-*.deb
+            uniterm-*.rpm
+            uniterm-*.apk
 
   release:
     needs: build
@@ -309,8 +391,12 @@ jobs:
 
       - name: Collect release files
         run: |
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \) -exec mv {} . \;
-          ls -la ai-ops-terminal-*
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.apk' \) -exec mv {} . \;
+          ls -la uniterm-*
+          # checksums.txt powers the in-app updater's SHA256 verification.
+          # sync-gitee.yml mirrors it to Gitee together with the assets.
+          sha256sum uniterm-* > checksums.txt
+          cat checksums.txt
 
       - name: Determine release mode
         run: |
@@ -365,11 +451,13 @@ jobs:
           prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: release_body.md
           files: |
-            ai-ops-terminal-*.zip
-            ai-ops-terminal-*.tar.gz
-            ai-ops-terminal-*.exe
-            ai-ops-terminal-*.dmg
-            ai-ops-terminal-*.deb
-            ai-ops-terminal-*.rpm
+            uniterm-*.zip
+            uniterm-*.tar.gz
+            uniterm-*.exe
+            uniterm-*.dmg
+            uniterm-*.deb
+            uniterm-*.rpm
+            uniterm-*.apk
+            checksums.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT }}

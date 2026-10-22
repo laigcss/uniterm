@@ -19,14 +19,14 @@
       </span>
     </div>
 
-    <div v-if="listError" class="k8s-list-err">{{ listError }}</div>
+    <div v-if="listError" class="k8s-list-err">{{ listErrorText }}</div>
 
     <!-- CRD 实例列表：动态列 -->
     <el-table
       v-if="frame.kind === 'custom'"
       :data="crdFiltered"
       size="small"
-      height="calc(100% - 40px)"
+      height="calc(100% - 2.5rem)"
       class="k8s-list-table"
       border
       v-loading="isLoading"
@@ -37,13 +37,13 @@
         <template #default="{ row }">{{ evalJsonPath(row, pc.jsonPath) }}</template>
       </el-table-column>
       <el-table-column label="Age"><template #default="{ row }">{{ age(row.metadata?.creationTimestamp) }}</template></el-table-column>
-      <el-table-column :label="t('k8s.actions')" width="66" fixed="right" class-name="k8s-action-cell">
+      <el-table-column :label="t('k8s.actions')" :width="uiPx(66)" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
           <button class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', row)">
-            <Pencil :size="14" />
+            <Pencil :size="'0.875rem'" />
           </button>
           <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onDeleteCr(row)">
-            <Trash2 :size="14" />
+            <Trash2 :size="'0.875rem'" />
           </button>
         </template>
       </el-table-column>
@@ -54,7 +54,7 @@
       v-else
       :data="filtered"
       size="small"
-      height="calc(100% - 40px)"
+      height="calc(100% - 2.5rem)"
       class="k8s-list-table"
       border
       v-loading="isLoading"
@@ -65,7 +65,7 @@
         v-for="col in desc?.columns || []"
         :key="col.header"
         :label="col.header"
-        :width="col.width"
+        :width="col.width ? uiPx(col.width) : undefined"
         sortable
         show-overflow-tooltip
         :sort-method="(a, b) => compareCells(col, a, b)"
@@ -75,34 +75,17 @@
         <template #default="{ row }">{{ cellText(col.value(row, usageOf(row))) }}</template>
       </el-table-column>
 
-      <el-table-column v-if="actionColWidth" :label="t('k8s.actions')" :width="actionColWidth" fixed="right" class-name="k8s-action-cell">
+      <el-table-column v-if="actionColWidth" :label="t('k8s.actions')" :width="uiPx(actionColWidth)" fixed="right" class-name="k8s-action-cell">
         <template #default="{ row }">
-          <button v-if="has('detail')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', row)">
-            <Pencil :size="14" />
-          </button>
-          <button v-if="has('logs')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionLogs')" @click.stop="emit('open-logs', row)">
-            <ScrollText :size="14" />
-          </button>
-          <button v-if="has('terminal')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionTerminal')" @click.stop="emit('open-terminal', row)">
-            <SquareTerminal :size="14" />
-          </button>
-          <button v-if="has('viewPods')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionViewPods')" @click.stop="onViewPods(row)">
-            <Box :size="14" />
-          </button>
-          <button v-if="has('restart')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionRestart')" @click.stop="onCommand('restart', row)">
-            <Repeat :size="14" />
-          </button>
-          <button v-if="has('scale')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionScale')" @click.stop="onCommand('scale', row)">
-            <ArrowUpDown :size="14" />
-          </button>
-          <button v-if="has('cordon')" class="btn btn-ghost btn-icon btn-sm" :title="row.spec?.unschedulable ? t('k8s.actionUncordon') : t('k8s.actionCordon')" @click.stop="onCommand('cordon', row)">
-            <component :is="row.spec?.unschedulable ? CircleCheck : Ban" :size="14" />
-          </button>
-          <button v-if="has('drain')" class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionDrain')" @click.stop="onCommand('drain', row)">
-            <CirclePower :size="14" />
-          </button>
-          <button v-if="has('delete')" class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onCommand('delete', row)">
-            <Trash2 :size="14" />
+          <button
+            v-for="a in rowActions(row)"
+            :key="a"
+            class="btn btn-ghost btn-icon btn-sm"
+            :class="{ danger: actionMeta[a].danger }"
+            :title="actionMeta[a].title(row)"
+            @click.stop="actionMeta[a].run(row, $event)"
+          >
+            <component :is="actionMeta[a].icon(row)" :size="'0.875rem'" />
           </button>
         </template>
       </el-table-column>
@@ -121,14 +104,14 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, h } from 'vue'
+import { uiPx } from '../utils/uiScale'
 import {
   ElTable, ElTableColumn, ElInput, ElButton,
   ElMessageBox, ElMessage, ElCheckbox,
 } from 'element-plus'
 import { Refresh, Plus } from '@element-plus/icons-vue'
 import {
-  Pencil, ScrollText, SquareTerminal, Box, Repeat, ArrowUpDown, Ban, CircleCheck, CirclePower, Trash2,
-} from '@lucide/vue'
+  Pencil, ScrollText, SquareTerminal, Box, Repeat, ArrowUpDown, Ban, CircleCheck, CirclePower, Trash2, FolderOpen } from '@lucide/vue'
 import { useK8sStore } from '../stores/k8sStore'
 import { useI18n } from '../i18n'
 import K8sCreateDialog from './K8sCreateDialog.vue'
@@ -142,14 +125,15 @@ import {
 } from '../services/k8sActions'
 import type { NavFrame } from '../types/k8s'
 
-const props = defineProps<{ connId: string; frame: NavFrame; namespaceOptions: string[] }>()
+const props = defineProps<{ connId: string; frame: Exclude<NavFrame, { kind: 'overview' }>; namespaceOptions: string[] }>()
 const emit = defineEmits<{
   (e: 'open-detail', obj: any): void
   (e: 'open-yaml', obj: any): void
   (e: 'open-logs', pod: any): void
   (e: 'view-pods', owner: { kind: string; name: string; uid: string; namespace: string }): void
   (e: 'open-crd', crdObj: any): void
-  (e: 'open-terminal', pod: any): void
+  (e: 'open-terminal', pod: any, ev?: MouseEvent): void
+  (e: 'open-files', pod: any, ev?: MouseEvent): void
   (e: 'changed'): void
 }>()
 
@@ -166,7 +150,7 @@ const isLoading = computed(() => {
 const resourceKey = computed(() => props.frame.kind === 'custom' ? '__crd__' : props.frame.resourceKey)
 const desc = computed(() => props.frame.kind === 'custom' ? undefined : getResource(props.frame.resourceKey))
 const localNs = computed(() => props.frame.namespace || '')
-const filter = ref('')
+const filter = ref(props.frame.kind === 'list' ? (props.frame.nameFilter || '') : '')
 
 const isNamespaceList = computed(() => props.frame.kind === 'list' && props.frame.resourceKey === 'namespaces')
 const isCrdList = computed(() => props.frame.kind === 'list' && props.frame.resourceKey === 'customresourcedefinitions')
@@ -194,6 +178,10 @@ const listError = computed(() => {
   if (f.kind === 'owned') return store.getError(props.connId, 'pods', f.namespace)
   return store.getError(props.connId, f.resourceKey, f.namespace)
 })
+
+// CRD 类资源（如 Gateway API）在未安装的集群上列表 404，翻译成人话
+const listErrorText = computed(() =>
+  listError.value && /404|not found/i.test(listError.value) ? t('k8s.crdMissing') : listError.value)
 
 const filtered = computed(() => {
   const f = filter.value.trim().toLowerCase()
@@ -299,13 +287,47 @@ function rowClassName({ row }: { row: any }): string {
 
 // ── action column ──────────────────────────────────────────────
 function has(a: string) { return (desc.value?.actions || []).includes(a as any) }
+
+// 每行的 action 列表：与资源定义一致（files 的 Running 校验在点击时做）。
+function rowActions(_row: any): string[] {
+  return (desc.value?.actions || []) as string[]
+}
+
+const actionMeta: Record<string, { icon: (row: any) => any; title: (row: any) => string; danger?: boolean; run: (row: any, ev?: MouseEvent) => void }> = {
+  detail:   { icon: () => Pencil,          title: () => t('k8s.actionEdit'),     run: (row) => emit('open-yaml', row) },
+  logs:     { icon: () => ScrollText,      title: () => t('k8s.actionLogs'),     run: (row) => emit('open-logs', row) },
+  terminal: { icon: () => SquareTerminal,  title: () => t('k8s.actionTerminal'), run: (row, ev?) => emit('open-terminal', row, ev) },
+  files:    {
+    icon: () => FolderOpen,
+    title: () => t('container.openFiles'),
+    run: (row, ev?) => {
+      if (row.status?.phase !== 'Running') {
+        ElMessage.warning(t('container.filesRequireRunning'))
+        return
+      }
+      emit('open-files', row, ev)
+    },
+  },
+  viewPods: { icon: () => Box,             title: () => t('k8s.actionViewPods'), run: (row) => onViewPods(row) },
+  restart:  { icon: () => Repeat,          title: () => t('k8s.actionRestart'),  run: (row) => onCommand('restart', row) },
+  scale:    { icon: () => ArrowUpDown,     title: () => t('k8s.actionScale'),    run: (row) => onCommand('scale', row) },
+  cordon:   {
+    icon: (row) => (row.spec?.unschedulable ? CircleCheck : Ban),
+    title: (row) => (row.spec?.unschedulable ? t('k8s.actionUncordon') : t('k8s.actionCordon')),
+    run: (row) => onCommand('cordon', row),
+  },
+  drain:    { icon: () => CirclePower,     title: () => t('k8s.actionDrain'),    run: (row) => onCommand('drain', row) },
+  delete:   { icon: () => Trash2,          title: () => t('k8s.actionDelete'), danger: true, run: (row) => onCommand('delete', row) },
+}
+
 const actionColWidth = computed(() => {
   const iconCount =
     (has('detail') ? 1 : 0) + (has('logs') ? 1 : 0) + (has('terminal') ? 1 : 0) +
     (has('viewPods') ? 1 : 0) + (has('restart') ? 1 : 0) + (has('scale') ? 1 : 0) +
+    (has('files') ? 1 : 0) +
     (has('cordon') ? 1 : 0) + (has('drain') ? 1 : 0) + (has('delete') ? 1 : 0)
   if (!iconCount) return 0
-  return 16 + iconCount * 28
+  return 20 + iconCount * 30
 })
 
 function onViewPods(row: any) {
@@ -335,7 +357,7 @@ async function confirmDelete(kind: string, name: string): Promise<boolean> {
     confirmButtonText: t('common.confirm'),
     cancelButtonText: t('common.cancel'),
     message: () => h('div', [
-      h('p', { style: 'margin: 0 0 8px' }, t('k8s.deleteConfirm', { kind, name })),
+      h('p', { style: 'margin: 0 0 0.5rem' }, t('k8s.deleteConfirm', { kind, name })),
       h(ElCheckbox, {
         modelValue: force.value,
         'onUpdate:modelValue': (v: any) => { force.value = !!v },
@@ -471,7 +493,7 @@ function usageOf(row: any): Usage | null {
 let subs: { res: string; ns: string }[] = []
 
 function subsFor(f: NavFrame): { res: string; ns: string }[] {
-  if (f.kind === 'custom') return []
+  if (f.kind === 'overview' || f.kind === 'custom') return []
   if (f.kind === 'owned') {
     const arr = [{ res: 'pods', ns: f.namespace }]
     if (f.ownerKind === 'Deployment') arr.push({ res: 'replicasets', ns: f.namespace })
@@ -504,6 +526,8 @@ async function applySubs() {
 }
 
 watch(() => props.frame, async () => {
+  // frame 变化即视为打开新列表：按 nameFilter 预填过滤词（无则清空）
+  filter.value = props.frame.kind === 'list' ? (props.frame.nameFilter || '') : ''
   if (props.connId) await applySubs()
 })
 
@@ -533,50 +557,55 @@ onBeforeUnmount(() => {
 .k8s-list-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
   border-bottom: 1px solid var(--el-border-color-lighter, #333);
   flex-shrink: 0;
 }
 .k8s-filter {
-  width: 220px;
+  width: 13.75rem;
 }
 .k8s-list-title {
   margin-left: auto;
   color: var(--text-secondary, #888);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .k8s-list-table {
   flex: 1;
 }
+/* 行可点击（打开详情/CRD），用手型光标提示 */
+.k8s-list-table :deep(.el-table__row) {
+  cursor: pointer;
+}
 /* 行着色：非就绪/异常项高亮（对齐 k9s）。用 el-table 的 CSS 变量覆盖 hover/条纹底色。 */
 .k8s-list-table :deep(.k8s-row-warn) {
-  --el-table-tr-bg-color: var(--warning-subtle, rgba(230, 162, 60, 0.12));
+  /* 实色（与底色混合），不用半透明覆盖 */
+  --el-table-tr-bg-color: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
 }
 .k8s-list-table :deep(.k8s-row-warn td.el-table__cell) {
-  background: var(--warning-subtle, rgba(230, 162, 60, 0.12));
-  color: var(--warning, #e6a23c);
+  background: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
+  color: var(--warning);
 }
 .k8s-list-table :deep(.k8s-row-err) {
-  --el-table-tr-bg-color: rgba(245, 108, 108, 0.12);
+  --el-table-tr-bg-color: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
 }
 .k8s-list-table :deep(.k8s-row-err td.el-table__cell) {
-  background: rgba(245, 108, 108, 0.12);
-  color: var(--el-color-danger, #f56c6c);
+  background: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
+  color: var(--el-color-danger);
 }
-/* Action-column cell: tighter cell padding + fixed 4px gap between the
-   project-standard .btn-icon buttons (24px square, from style.css .btn). */
+/* Action-column cell: tighter cell padding + fixed 0.25rem gap between the
+   project-standard .btn-icon buttons (1.5rem square, from style.css .btn). */
 .k8s-list-table :deep(.k8s-action-cell .cell) {
-  padding: 0 4px;
+  padding: 0 0.25rem;
   white-space: nowrap;
 }
 .k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
-  margin-left: 4px;
+  margin-left: 0.25rem;
 }
 .k8s-list-err {
   color: var(--el-color-danger, #f56);
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
   border-bottom: 1px solid var(--el-border-color-lighter, #333);
 }
 </style>

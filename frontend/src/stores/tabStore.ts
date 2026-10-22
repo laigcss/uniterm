@@ -1,23 +1,35 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
-import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, StartTab, PanelLayout, LayoutNode, X11DesktopTab } from '../types/workspace'
-import type { K8sTab } from '../types/k8s'
-import type { ContainerTab } from '../types/container'
+import type { Tab, TerminalTab, WorkspaceTab, StartTab, PanelLayout, LayoutNode } from '../types/workspace'
+import type { IProgressState } from '@xterm/addon-progress'
 import { usePanelStore } from './panelStore'
 import { t } from '../i18n'
 
 const tabState = reactive<{
   tabs: Tab[]
   activeTabId: string | null
+  // Id of the tab currently being dragged (set at dragstart, cleared at
+  // dragend). dataTransfer.getData is unavailable outside the drop event, so
+  // dragover handlers need this to recognize the dragged tab.
+  draggingTabId: string | null
+  // Id of the workspace panel currently being dragged — same rationale as
+  // draggingTabId: dragover handlers need it to detect "over itself".
+  draggingPanelId: string | null
   aiLockedPanelIds: Set<string>
   broadcastPanelIds: Set<string>
   tabNotifications: Record<string, boolean>
+  /** OSC 9;4 progress state per tab (null = no active progress). Fed by the
+   * ProgressAddon via terminalManager; rendered as a mini bar in TabItem. */
+  tabProgress: Record<string, IProgressState | null>
 }>({
   tabs: [],
   activeTabId: null,
+  draggingTabId: null,
+  draggingPanelId: null,
   aiLockedPanelIds: new Set<string>(),
   broadcastPanelIds: new Set<string>(),
-  tabNotifications: {}
+  tabNotifications: {},
+  tabProgress: {}
 })
 
 let idCounter = 0
@@ -37,6 +49,8 @@ function generateWorkspaceName(existingTabs: Tab[]): string {
 export const useTabStore = defineStore('tab', () => {
   const tabs = computed(() => tabState.tabs)
   const activeTabId = computed(() => tabState.activeTabId)
+  const draggingTabId = computed(() => tabState.draggingTabId)
+  const draggingPanelId = computed(() => tabState.draggingPanelId)
   const activeTab = computed(() =>
     tabState.tabs.find(t => t.id === tabState.activeTabId) || null
   )
@@ -189,139 +203,13 @@ export const useTabStore = defineStore('tab', () => {
     return tab
   }
 
-
-  function createSettingsTab(name: string, panelId: string): SettingsTab {
-    const tab: SettingsTab = {
-      type: 'settings',
-      id: genId('settings-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createSFPTab(name: string, panelId: string): SFTPTab {
-    const tab: SFTPTab = {
-      type: 'sftp',
-      id: genId('sftp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createFtpTab(name: string, panelId: string): SFTPTab {
-    const tab: SFTPTab = {
-      type: 'sftp',
-      id: genId('ftp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createRDPTab(name: string, panelId: string): RDPTab {
-    const tab: RDPTab = {
-      type: 'rdp',
-      id: genId('rdp-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createVNCTab(name: string, panelId: string): VNCTab {
-    const tab: VNCTab = {
-      type: 'vnc',
-      id: genId('vnc-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createSPICETab(name: string, panelId: string): SPICETab {
-    const tab: SPICETab = {
-      type: 'spice',
-      id: genId('spice-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createX11DesktopTab(name: string, panelId: string): X11DesktopTab {
-    const tab: X11DesktopTab = {
-      type: 'x11-desktop',
-      id: genId('x11-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createDBTab(name: string, panelId: string): DBTab {
-    const tab: DBTab = {
-      type: 'database',
-      id: genId('db-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createMonitorTab(name: string, panelId: string): MonitorTab {
-    const tab: MonitorTab = {
-      type: 'monitor',
-      id: genId('monitor-tab'),
-      panelId,
-      name
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createK8sTab(name: string, panelId: string, connectionId: string, namespace: string): K8sTab {
-    const tab: K8sTab = {
-      type: 'k8s',
-      id: genId('k8s-tab'),
-      panelId,
-      name,
-      connectionId,
-      connId: null,
-      namespace,
-    }
-    tabState.tabs.push(tab)
-    tabState.activeTabId = tab.id
-    return tab
-  }
-
-  function createContainerTab(name: string, panelId: string, connectionId: string, runtime: ContainerTab['runtime']): ContainerTab {
-    const tab: ContainerTab = {
-      type: 'container',
-      id: genId('container-tab'),
-      panelId,
-      name,
-      connectionId,
-      runtime,
-    }
+  // Single factory for the uniform tab kinds — push + activate, parameterized
+  // by tab type. `extra` carries the fields only some kinds have (k8s:
+  // connectionId/namespace, container: runtime/connectionId). Terminal tabs
+  // keep dedicated creators (insert-at-index, start-tab replacement);
+  // workspace/start tabs build richer state.
+  function createTab(type: Tab['type'], name: string, panelId: string, extra?: Record<string, unknown>): Tab {
+    const tab = { type, id: genId(`${type}-tab`), panelId, name, ...extra } as Tab
     tabState.tabs.push(tab)
     tabState.activeTabId = tab.id
     return tab
@@ -387,6 +275,14 @@ export const useTabStore = defineStore('tab', () => {
 
   // ── Activate / reorder / rename ──
 
+  function setDraggingTabId(id: string | null) {
+    tabState.draggingTabId = id
+  }
+
+  function setDraggingPanelId(id: string | null) {
+    tabState.draggingPanelId = id
+  }
+
   function setActiveTab(id: string) {
     tabState.activeTabId = id
     // Clear notification dot when user switches to this tab
@@ -405,6 +301,16 @@ export const useTabStore = defineStore('tab', () => {
 
   function hasTabNotification(tabId: string): boolean {
     return !!tabState.tabNotifications[tabId]
+  }
+
+  // ── Progress indicators (OSC 9;4) ──
+
+  function setTabProgress(tabId: string, state: IProgressState | null) {
+    tabState.tabProgress[tabId] = state
+  }
+
+  function getTabProgress(tabId: string): IProgressState | null {
+    return tabState.tabProgress[tabId] ?? null
   }
 
   function nextTab() {
@@ -451,7 +357,15 @@ export const useTabStore = defineStore('tab', () => {
     const t = tabState.tabs.find(x => x.id === tabId)
     if (t && t.type === 'workspace') {
       t.activePanelId = panelId
+      if (t.maximizedPanelId) t.maximizedPanelId = panelId
     }
+  }
+
+  function toggleWorkspacePanelMaximize(tabId: string) {
+    const t = tabState.tabs.find(x => x.id === tabId)
+    if (!t || t.type !== 'workspace' || !t.activePanelId) return null
+    t.maximizedPanelId = t.maximizedPanelId ? null : t.activePanelId
+    return t.maximizedPanelId
   }
 
   function updateWorkspaceLayout(tabId: string, layout: PanelLayout) {
@@ -522,6 +436,10 @@ export const useTabStore = defineStore('tab', () => {
     tabState.tabs.splice(insertIdx, 0, workspaceTab)
     tabState.activeTabId = workspaceTab.id
 
+    // The dragged tab is gone; its source element unmounts before dragend can
+    // fire, so clear the drag tracking here.
+    tabState.draggingTabId = null
+
     return workspaceTab
   }
 
@@ -541,18 +459,81 @@ export const useTabStore = defineStore('tab', () => {
     const termTab = tabState.tabs[termIdx] as TerminalTab
     if (termTab.type !== 'terminal') return
 
+    const panelStore = usePanelStore()
     const newPanelId = termTab.panelId
 
     // Remove terminal tab
     tabState.tabs.splice(termIdx, 1)
+
+    if (wsTab.panelIds.length === 0) {
+      // Empty workspace shell (placeholder root): the panel takes the whole
+      // layout instead of splitting against a non-existent target.
+      wsTab.layout = { root: { type: 'leaf', panelId: newPanelId } }
+      wsTab.panelIds = [newPanelId]
+      wsTab.activePanelId = newPanelId
+      if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
+      panelStore.movePanelToTab(newPanelId, workspaceTabId)
+      tabState.activeTabId = workspaceTabId
+      tabState.draggingTabId = null
+      return
+    }
 
     // Add panel to workspace
     wsTab.panelIds.push(newPanelId)
     wsTab.layout = {
       root: insertPanelIntoLayout(wsTab.layout.root, targetPanelId, newPanelId, direction, insertBefore)
     }
+    wsTab.panelIds = collectPanelIds(wsTab.layout.root)
     wsTab.activePanelId = newPanelId
+    if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
+    panelStore.movePanelToTab(newPanelId, workspaceTabId)
     tabState.activeTabId = workspaceTabId
+
+    // The dragged tab is gone; its source element unmounts before dragend can
+    // fire, so clear the drag tracking here.
+    tabState.draggingTabId = null
+  }
+
+  // Add a newly-created panel directly to an existing workspace. Unlike
+  // addPanelToWorkspaceTab, there is no temporary terminal tab to remove.
+  // direction/insertBefore control where the panel splits in (defaults keep
+  // the historical beside-active horizontal behavior).
+  function addNewPanelToWorkspace(
+    workspaceTabId: string,
+    newPanelId: string,
+    targetPanelId?: string,
+    direction: 'horizontal' | 'vertical' = 'horizontal',
+    insertBefore = false,
+  ): boolean {
+    const wsTab = tabState.tabs.find(t => t.id === workspaceTabId)
+    if (!wsTab || wsTab.type !== 'workspace') return false
+
+    const target = targetPanelId && wsTab.panelIds.includes(targetPanelId)
+      ? targetPanelId
+      : wsTab.activePanelId || wsTab.panelIds[wsTab.panelIds.length - 1]
+    if (!target) {
+      // Empty workspace (shell with the placeholder root): take the whole
+      // layout instead of splitting. This is how dialog-created and restored
+      // workspaces land their first member.
+      if (wsTab.panelIds.length === 0) {
+        wsTab.layout = { root: { type: 'leaf', panelId: newPanelId } }
+        wsTab.panelIds = [newPanelId]
+        wsTab.activePanelId = newPanelId
+        if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
+        tabState.activeTabId = workspaceTabId
+        return true
+      }
+      return false
+    }
+
+    wsTab.layout = {
+      root: insertPanelIntoLayout(wsTab.layout.root, target, newPanelId, direction, insertBefore),
+    }
+    wsTab.panelIds = collectPanelIds(wsTab.layout.root)
+    wsTab.activePanelId = newPanelId
+    if (wsTab.maximizedPanelId) wsTab.maximizedPanelId = newPanelId
+    tabState.activeTabId = workspaceTabId
+    return true
   }
 
   // ── Detach: panel from workspace ──
@@ -571,6 +552,9 @@ export const useTabStore = defineStore('tab', () => {
     tabState.broadcastPanelIds.delete(panelId)
     if (wsTab.activePanelId === panelId) {
       wsTab.activePanelId = wsTab.panelIds[0] || null
+    }
+    if (wsTab.maximizedPanelId === panelId) {
+      wsTab.maximizedPanelId = null
     }
 
     // Keep AI lock when panel is detached from workspace — the
@@ -598,6 +582,88 @@ export const useTabStore = defineStore('tab', () => {
     }
 
     return panelId
+  }
+
+  // ── Dissolve: workspace tab → individual terminal tabs ──
+  // The inverse of mergeToWorkspace: every member panel returns to the top
+  // tab bar as a live terminal tab (sessions stay alive), broadcast
+  // participation is cleared, and the workspace tab is removed.
+
+  function dissolveWorkspace(workspaceTabId: string): TerminalTab[] {
+    const idx = tabState.tabs.findIndex(t => t.id === workspaceTabId)
+    if (idx === -1) return []
+    const wsTab = tabState.tabs[idx]
+    if (wsTab.type !== 'workspace') return []
+
+    const panelStore = usePanelStore()
+    // Visual order: layout tree first; append any panelIds stragglers
+    // defensively so membership state can never orphan a panel.
+    const orderedIds = collectPanelIds(wsTab.layout.root)
+    for (const id of wsTab.panelIds) {
+      if (!orderedIds.includes(id)) orderedIds.push(id)
+    }
+
+    const created: TerminalTab[] = []
+    let insertIdx = idx
+    for (const panelId of orderedIds) {
+      tabState.broadcastPanelIds.delete(panelId)
+      const panel = panelStore.getPanel(panelId)
+      const tab: TerminalTab = {
+        type: 'terminal',
+        id: genId('term-tab'),
+        panelId,
+        name: panel?.title || 'Terminal'
+      }
+      tabState.tabs.splice(insertIdx, 0, tab)
+      panelStore.movePanelToTab(panelId, tab.id)
+      created.push(tab)
+      insertIdx++
+    }
+
+    // The workspace tab has been shifted right by the inserted tabs.
+    tabState.tabs.splice(insertIdx, 1)
+    if (created.length > 0) {
+      tabState.activeTabId = created[0].id
+    } else if (tabState.tabs.length > 0) {
+      const newIdx = Math.min(idx, tabState.tabs.length - 1)
+      tabState.activeTabId = tabState.tabs[newIdx].id
+    } else {
+      tabState.activeTabId = null
+    }
+
+    // The workspace tab element unmounts; if this ran mid-drag the dragend
+    // would never fire (same rationale as mergeToWorkspace).
+    tabState.draggingTabId = null
+    return created
+  }
+
+  // Apply a complete layout to a workspace (restore flow). Leaves referencing
+  // panels that no longer exist are pruned so skipped members never render as
+  // empty panes; returns false when nothing survives (caller removes the tab).
+  function applyWorkspaceLayout(workspaceTabId: string, layout: PanelLayout): boolean {
+    const t = tabState.tabs.find(x => x.id === workspaceTabId)
+    if (!t || t.type !== 'workspace') return false
+
+    const panelStore = usePanelStore()
+    const root = pruneDeadLeaves(layout.root, id => !!panelStore.getPanel(id))
+    const ids = collectPanelIds(root)
+    if (ids.length === 0) return false
+
+    t.layout = { root }
+    t.panelIds = ids
+    if (!t.activePanelId || !ids.includes(t.activePanelId)) {
+      t.activePanelId = ids[0]
+    }
+    if (t.maximizedPanelId && !ids.includes(t.maximizedPanelId)) {
+      t.maximizedPanelId = null
+    }
+    return true
+  }
+
+  // Link/unlink a live workspace tab with its saved-workspace connection.
+  function setWorkspaceSavedId(tabId: string, savedId: string | undefined) {
+    const t = tabState.tabs.find(x => x.id === tabId)
+    if (t && t.type === 'workspace') t.savedWorkspaceId = savedId
   }
 
   // ── Workspace internal: move panel to new position ──
@@ -670,6 +736,42 @@ export const useTabStore = defineStore('tab', () => {
     return node.children.flatMap(collectPanelIds)
   }
 
+  // Drop leaves whose panels are gone (skipped restore members, closed
+  // panels), collapsing emptied splits — same collapse rules as
+  // removeFromLayout. Splits keep only sizes that match their remaining
+  // children (re-equalized after a prune).
+  function pruneDeadLeaves(node: LayoutNode, panelExists: (id: string) => boolean): LayoutNode {
+    if (node.type === 'leaf') {
+      return node.panelId && panelExists(node.panelId) ? node : { type: 'leaf', panelId: '' }
+    }
+    const children = node.children
+      .map(child => pruneDeadLeaves(child, panelExists))
+      .filter(child => !(child.type === 'leaf' && child.panelId === ''))
+    if (children.length === 0) return { type: 'leaf', panelId: '' }
+    if (children.length === 1) return children[0]
+    return { ...node, children, sizes: children.map(() => 1 / children.length) }
+  }
+
+  // Balanced grid layout for a batch of panels: pairwise splits with
+  // alternating direction and area-proportional sizes, so 4+ members don't
+  // degenerate into a long chain of thin panes.
+  function buildGridLayout(panelIds: string[]): PanelLayout {
+    if (panelIds.length === 0) return { root: { type: 'leaf', panelId: '' } }
+    if (panelIds.length === 1) return { root: { type: 'leaf', panelId: panelIds[0] } }
+    const build = (ids: string[], depth: number): LayoutNode => {
+      if (ids.length === 1) return { type: 'leaf', panelId: ids[0] }
+      const mid = Math.floor(ids.length / 2)
+      const direction = depth % 2 === 0 ? 'horizontal' : 'vertical'
+      return {
+        type: 'split',
+        direction,
+        sizes: [mid / ids.length, (ids.length - mid) / ids.length],
+        children: [build(ids.slice(0, mid), depth + 1), build(ids.slice(mid), depth + 1)]
+      }
+    }
+    return { root: build(panelIds, 0) }
+  }
+
   function hasPanelInNode(node: LayoutNode, panelId: string): boolean {
     if (node.type === 'leaf') return node.panelId === panelId
     return node.children.some(child => hasPanelInNode(child, panelId))
@@ -738,38 +840,38 @@ export const useTabStore = defineStore('tab', () => {
   return {
     tabs,
     activeTabId,
+    draggingTabId,
+    draggingPanelId,
     activeTab,
     aiLockedPanelId,
     aiLockedPanelIds,
     createTerminalTab,
     createTerminalTabAt,
     replaceStartTab,
+    createTab,
     replaceStartWithTab,
-    createSettingsTab,
-    createSFPTab,
-    createFtpTab,
-    createRDPTab,
-    createVNCTab,
-    createSPICETab,
-    createX11DesktopTab,
-    createDBTab,
-    createMonitorTab,
-    createK8sTab,
-    createContainerTab,
     createStartTab,
     createWorkspaceTab,
     closeTab,
     setActiveTab,
+    setDraggingTabId,
+    setDraggingPanelId,
     nextTab,
     prevTab,
     getActivePanelId,
     moveTab,
     renameTab,
     setActivePanel,
+    toggleWorkspacePanelMaximize,
     updateWorkspaceLayout,
     mergeToWorkspace,
     addPanelToWorkspaceTab,
+    addNewPanelToWorkspace,
     removePanelFromWorkspaceTab,
+    dissolveWorkspace,
+    applyWorkspaceLayout,
+    setWorkspaceSavedId,
+    buildGridLayout,
     movePanelInWorkspace,
     setAILockedPanel,
     getAILockedPanel,
@@ -792,7 +894,10 @@ export const useTabStore = defineStore('tab', () => {
     markTabNotification,
     clearTabNotification,
     hasTabNotification,
+    setTabProgress,
+    getTabProgress,
     // Expose helpers for components
+    generateWorkspaceName,
     collectPanelIds,
     insertPanelIntoLayout,
     removeFromLayout,

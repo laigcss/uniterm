@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"runtime/debug"
 	"strconv"
@@ -15,9 +16,10 @@ import (
 
 	"go.bug.st/serial"
 
-	"github.com/laigcss/ai-ops-terminal/backend/log"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
-	"github.com/laigcss/ai-ops-terminal/backend/store"
+	"github.com/google/uuid"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // SessionManager methods
@@ -28,16 +30,10 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	}
 	log.Writef("[CreateSession] type=%s, dbType=%s, host=%s, port=%d, user=%s, dbName=%s, name=%s",
 		sessionType, config.DBType, config.Host, config.Port, config.User, config.DBName, config.Name)
-	// Defensive credential fallback: the frontend may hold a connection
-	// snapshot taken before passwords were filled (or a stale copy from an
-	// older session). If the password is stored in the OS keychain, resolve
-	// it synchronously so the session never prompts for a password it
-	// already has. No-op when Password is already set, no store is wired,
-	// the keychain has no entry, or the config carries no connection ID.
-	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
-		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
-			config.Password = pw
-		}
+	// 容器文件会话：通道由 container.Manager 解析（App 层拦截，不走
+	// sessionManager.Create 的 config-only 构造）。
+	if sessionType == "container-file" {
+		return a.createContainerFileSession(config)
 	}
 	// Resolve an identity reference into a concrete password/key config
 	// before the session manager dials.
@@ -59,6 +55,9 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 	if err != nil {
 		log.Writef("[CreateSession] manager.Create failed: %v", err)
 		return nil, err
+	}
+	if setter, ok := s.(interface{ SetLogIdentity(string, string) }); ok {
+		setter.SetLogIdentity(config.Name, config.Host)
 	}
 	log.Writef("[CreateSession] session created, id=%s", s.ID())
 	// Record the LogOnConnect preference synchronously so the frontend's
@@ -158,6 +157,16 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		rdp.SetOnFullScreenExit(func() {
 			a.emit("rdp:fullscreen-exit", s.ID())
 		})
+		// Adaptive resize lifecycle: the frontend freezes the last frame over
+		// .rdp-area ("start", snapshot included) and restores the live window
+		// afterwards ("end"), so the disconnect/reconnect cycle doesn't flash.
+		rdp.SetOnAdaptiveEvent(func(event, snapshot string) {
+			a.emit("rdp:adaptive", map[string]interface{}{
+				"id":       s.ID(),
+				"event":    event,
+				"snapshot": snapshot,
+			})
+		})
 	}
 
 	s.SetOnDataCallback(func(data []byte) {
@@ -189,7 +198,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 				payload["clientW"] = cw
 				payload["clientH"] = ch
 				// The RDP ActiveX (and any credential/security dialog it owns) can
-				// push ai-ops-terminal behind other windows during connect. Raise the main
+				// push uniTerm behind other windows during connect. Raise the main
 				// window once the session is up so it stays visible above unrelated
 				// windows. No-op on non-Windows; harmless if already in front.
 				a.bringMainWindowToFront()
@@ -401,15 +410,6 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 		tunnelSSHConfig = &m
 	}
 
-	// Defensive credential fallback for the jump host: the freshly loaded
-	// config already has passwords filled synchronously (populatePasswords),
-	// but resolve from the keychain anyway if it is somehow still empty.
-	if tunnelSSHConfig.Password == "" && tunnelSSHConfig.ID != "" {
-		if pw, err := a.connectionStore.EnsurePassword(tunnelSSHConfig.ID); err == nil && pw != "" {
-			tunnelSSHConfig.Password = pw
-		}
-	}
-
 	// Inline tunnel credentials (ephemeral prompt "connect" without saving)
 	// only fill gaps — they never override already-resolved values, and
 	// never touch an identity-resolved config.
@@ -443,6 +443,70 @@ func (a *App) setupJumpHostTunnel(sessionID string, sessionType string, config *
 	return nil
 }
 
+// DuplicateSSHChannel opens a new session channel on an existing connected
+// SSH session's authenticated client (Xshell-style "duplicate channel",
+// issue #983). No re-dial, no re-auth — a jump-host/2FA login is not
+// repeated. The new session defers its channel attach until SessionStart,
+// like CreateSession's terminal types.
+func (a *App) DuplicateSSHChannel(sourceSessionID string, config session.ConnectionConfig) (*session.SessionInfo, error) {
+	if a.sessionManager == nil {
+		return nil, fmt.Errorf("session manager not initialized")
+	}
+	src, ok := a.sessionManager.Get(sourceSessionID)
+	if !ok {
+		return nil, fmt.Errorf("session %s not found", sourceSessionID)
+	}
+	srcSSH, ok := src.(*session.SSHSession)
+	if !ok {
+		return nil, fmt.Errorf("session %s is not an SSH session", sourceSessionID)
+	}
+	if !srcSSH.IsConnected() {
+		return nil, fmt.Errorf("source session %s is not connected", sourceSessionID)
+	}
+
+	s := session.NewSSHChannelSession(uuid.New().String(), srcSSH)
+	s.SetLogIdentity(config.Name, config.Host)
+	s.SetLogOnConnect(config.LogOnConnect)
+	if config.InitialCols > 0 && config.InitialRows > 0 {
+		s.SetPendingSize(config.InitialCols, config.InitialRows)
+	}
+	s.SetEncoding(config.Encoding)
+
+	s.SetOnDataCallback(func(data []byte) {
+		a.emit("session:data", map[string]interface{}{
+			"id":   s.ID(),
+			"data": string(data),
+		})
+	})
+	s.SetOnBinaryCallback(func(data []byte) {
+		a.emit("session:binary", map[string]interface{}{
+			"id":   s.ID(),
+			"data": base64.StdEncoding.EncodeToString(data),
+		})
+	})
+	s.SetOnStatusChangeCallback(func(status session.SessionStatus) {
+		payload := map[string]interface{}{
+			"id":     s.ID(),
+			"status": status,
+		}
+		if status == session.StatusConnected {
+			if remoteOS := s.RemoteOS(); remoteOS != "" {
+				payload["remoteOS"] = remoteOS
+			}
+		}
+		a.emit("session:status", payload)
+	})
+
+	a.sessionManager.Add(s)
+	log.Writef("[DuplicateSSHChannel] channel clone created, id=%s from=%s", s.ID(), sourceSessionID)
+	return &session.SessionInfo{
+		ID:     s.ID(),
+		Type:   s.Type(),
+		Title:  s.Title(),
+		Status: s.Status(),
+	}, nil
+}
+
 // SessionStart triggers the actual Connect() for terminal sessions
 // (ssh, local, telnet, mosh, serial) whose Connect was deferred by
 // CreateSession. The frontend calls this AFTER mounting the xterm
@@ -462,16 +526,25 @@ func (a *App) SessionStart(sessionID string, config session.ConnectionConfig) er
 	if config.InitialCols > 0 && config.InitialRows > 0 {
 		s.SetPendingSize(config.InitialCols, config.InitialRows)
 	}
-	// Terminal session types defer Connect() until SessionStart, and the
-	// frontend passes a fresh config here. If that fresh config still has
-	// an empty password (e.g. the Pinia store holds a snapshot from before
-	// keychain passwords were filled), resolve it from the OS keychain now
-	// so the user is not prompted for a password that is already stored.
-	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
-		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
-			config.Password = pw
-		}
+	// Channel clones (issue #983) attach to an already-authenticated client:
+	// skip identity/proxy resolution and jump-host tunnel setup — no dial
+	// happens, and a clone of a tunneled session would otherwise spin up a
+	// redundant second tunnel from the (unused) config.
+	if c, ok := s.(interface{ IsChannelClone() bool }); ok && c.IsChannelClone() {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Writef("session %s connect panic: %v\n%s", s.ID(), r, string(debug.Stack()))
+				}
+			}()
+			if err := s.Connect(config); err != nil {
+				a.failSessionConnect(s, err)
+			}
+		}()
+		return nil
 	}
+	// Terminal session types defer Connect() until SessionStart, and the
+	// frontend passes a fresh config here.
 	// Resolve an identity reference into a concrete password/key config
 	// before launching the connect goroutine.
 	if config.AuthType == "identity" {
@@ -520,6 +593,25 @@ func (a *App) SessionWrite(sessionID string, data string) error {
 	return s.Write([]byte(data))
 }
 
+// SessionInjectCwdHook types the OSC-7 cwd hook into a running SSH login
+// shell on demand. Used by connections with cwdHookMode "follow": the
+// frontend calls this when the user first enables directory follow for the
+// session's file panel.
+func (a *App) SessionInjectCwdHook(sessionID string) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	inj, ok := s.(session.CwdHookInjector)
+	if !ok {
+		return fmt.Errorf("session type %s does not support on-demand cwd hook injection", s.Type())
+	}
+	return inj.InjectCwdHook()
+}
+
 func (a *App) SessionResize(sessionID string, cols, rows int) error {
 	if a.sessionManager == nil {
 		return fmt.Errorf("session manager not initialized")
@@ -551,7 +643,26 @@ func (a *App) SessionEndZmodem(sessionID string) error {
 	if !ok {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
-	s.SetZmodemMode(false)
+	s.EndZmodem(nil)
+	return nil
+}
+
+// SessionEndZmodemWithTrailing leaves binary mode and emits terminal output
+// that zmodem.js found after the final handshake through the normal text path,
+// decoded as UTF-8 according to the session's configured character encoding.
+func (a *App) SessionEndZmodemWithTrailing(sessionID, base64Data string) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("decode zmodem trailing data: %w", err)
+	}
+	s.EndZmodem(data)
 	return nil
 }
 
@@ -645,8 +756,20 @@ func (a *App) AppendFileBase64(path string, base64Data string, offset int64) err
 	} else {
 		flag |= os.O_APPEND
 	}
-
-	f, err := os.OpenFile(path, flag, 0644)
+	// Resolve the final component through os.Root. Root.OpenFile guarantees
+	// that a symlink swapped in after Lstat cannot escape the parent directory.
+	dir, name := filepath.Split(path)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return fmt.Errorf("open download directory: %w", err)
+	}
+	defer root.Close()
+	if info, statErr := root.Lstat(name); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to write symbolic link: %s", path)
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return fmt.Errorf("inspect file: %w", statErr)
+	}
+	f, err := root.OpenFile(name, flag, 0644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
@@ -983,7 +1106,7 @@ func (a *App) installWriter(sessionID string, logger *session.OutputLogger) {
 // panelLogTitle picks the filename base for a panel's log. Uses the
 // current session's Title if available, otherwise a short synthetic
 // name derived from panelID.
-func (a *App) panelLogTitle(panelID string) (name, protocol string) {
+func (a *App) panelLogTitle(panelID string) (name, host, protocol string) {
 	a.panelLogMu.Lock()
 	var sessionID string
 	for sid, pid := range a.sessionToPanel {
@@ -995,14 +1118,22 @@ func (a *App) panelLogTitle(panelID string) (name, protocol string) {
 	a.panelLogMu.Unlock()
 	if sessionID != "" && a.sessionManager != nil {
 		if s, ok := a.sessionManager.Get(sessionID); ok {
-			return s.Title(), s.Type()
+			name, host = s.Title(), ""
+			if identity, ok := s.(interface{ LogIdentity() (string, string) }); ok {
+				configuredName, configuredHost := identity.LogIdentity()
+				if configuredName != "" {
+					name = configuredName
+				}
+				host = configuredHost
+			}
+			return name, host, s.Type()
 		}
 	}
 	suffix := panelID
 	if len(suffix) > 8 {
 		suffix = suffix[:8]
 	}
-	return "panel_" + suffix, "session"
+	return "panel_" + suffix, "", "session"
 }
 
 // EnableSessionOutputLog starts writing terminal output for the given
@@ -1021,11 +1152,14 @@ func (a *App) EnableSessionOutputLog(panelID, dir string) (string, error) {
 	// configured override; if that is also empty, OutputLogger.Enable
 	// will pick the OS default.
 	if dir == "" {
-		a.customLogDirMu.RLock()
+		a.sessionLogSettingsMu.RLock()
 		dir = a.customLogDir
-		a.customLogDirMu.RUnlock()
+		a.sessionLogSettingsMu.RUnlock()
 	}
-	name, protocol := a.panelLogTitle(panelID)
+	name, host, protocol := a.panelLogTitle(panelID)
+	a.sessionLogSettingsMu.RLock()
+	filenameTemplate := a.sessionLogFilename
+	a.sessionLogSettingsMu.RUnlock()
 
 	a.panelLogMu.Lock()
 	logger := a.panelLogs[panelID]
@@ -1045,7 +1179,7 @@ func (a *App) EnableSessionOutputLog(panelID, dir string) (string, error) {
 	}
 	a.panelLogMu.Unlock()
 
-	path, err := logger.Enable(dir, name, protocol)
+	path, err := logger.Enable(dir, filenameTemplate, name, host, protocol)
 	if err != nil {
 		return "", err
 	}
@@ -1102,21 +1236,36 @@ func (a *App) GetSessionOutputLogInfo(panelID string) SessionLogInfo {
 // restores the OS default. Existing log files are not migrated; the
 // change only affects logs enabled after this call.
 func (a *App) SetDefaultSessionLogDir(dir string) {
-	a.customLogDirMu.Lock()
+	a.sessionLogSettingsMu.Lock()
 	a.customLogDir = dir
-	a.customLogDirMu.Unlock()
+	a.sessionLogSettingsMu.Unlock()
+}
+
+// setSessionLogFilename installs the template used for newly created logs.
+// Empty selects session.DefaultSessionLogFilenameTemplate.
+func (a *App) setSessionLogFilename(filenameTemplate string) {
+	a.sessionLogSettingsMu.Lock()
+	a.sessionLogFilename = filenameTemplate
+	a.sessionLogSettingsMu.Unlock()
 }
 
 // GetDefaultSessionLogDir returns the directory a fresh session log
 // would land in: the user's override if set, otherwise the OS default
-// (~/Documents/ai-ops-terminal/logs on all platforms). Used by the settings UI
+// (~/Documents/uniTerm/logs on all platforms). Used by the settings UI
 // to show the current default path as a placeholder.
 func (a *App) GetDefaultSessionLogDir() string {
-	a.customLogDirMu.RLock()
+	a.sessionLogSettingsMu.RLock()
 	custom := a.customLogDir
-	a.customLogDirMu.RUnlock()
+	a.sessionLogSettingsMu.RUnlock()
 	if custom != "" {
 		return custom
 	}
 	return session.DefaultSessionLogDir()
+}
+
+// GetSupportedSSHAlgorithms returns the SSH algorithm candidate pool with
+// security levels plus the compatible/secure presets, for the connection
+// form's algorithm editor.
+func (a *App) GetSupportedSSHAlgorithms() session.SupportedSSHAlgorithms {
+	return session.GetSupportedSSHAlgorithms()
 }

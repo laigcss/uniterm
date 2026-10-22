@@ -1,0 +1,3 @@
+/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/aiops_native.dir
+/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/laigc/Documents/huawei_project/uniTerm/uniterm/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/rebuild_cache.dir

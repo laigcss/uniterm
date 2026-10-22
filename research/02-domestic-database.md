@@ -1,6 +1,6 @@
 # 国产数据库调研报告（02-domestic-database）
 
-> 调研目标：评估用国产数据库替换 ai-ops-terminal（原 uniTerm）数据库模块中 MySQL / PostgreSQL / Oracle / SQL Server / Redis / MongoDB / Elasticsearch 连接的可行性与可信性。
+> 调研目标：评估用国产数据库替换 uniTerm（原 uniTerm）数据库模块中 MySQL / PostgreSQL / Oracle / SQL Server / Redis / MongoDB / Elasticsearch 连接的可行性与可信性。
 > 调研方法：优先抓取各厂商官网 / 官方文档，所有关键结论附来源 URL；官网无法抓取的明确标注「未能核实」。
 > 调研日期：2026-10-12。网络环境受限：GitHub、Google、百度百科等国外/受限站点不可访问；可访问国内厂商官网与 `cn.bing.com` 搜索镜像。
 

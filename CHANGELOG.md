@@ -1,39 +1,413 @@
 # Changelog
 
-## [Unreleased] — v2.0.0（私有化版本）
+## v1.10.1-alpha
 
-> 本次发布将项目由 uniTerm 私有化为 **ai-ops-terminal**（仓库迁移至 github.com/laigcss/ai-ops-terminal），并完成安全加固、性能体验、架构可维护性、功能增强四方向共 17 项优化。
+### What's Changed
 
-### 品牌私有化
-- 项目品牌 `uniTerm` → `ai-ops-terminal`，仓库迁移至 `github.com/laigcss/ai-ops-terminal`。
-- README / ROADMAP / 文档站点同步更新品牌、链接与下载产物名。
+**New Features**
+- AI: image and file attachments — an image can be pasted straight from the clipboard into a conversation, and files can be attached by picking them or dragging them into the conversation; the attachments are sent to the model along with the message. (@surenwuyuwuqiu)
+- Database: local SQLite database files can be opened as connections — a new SQLite type in the database connection form carries the database file path (selected with a file picker) in the host field, the SSH tunnel control is hidden since an embedded file cannot be reached through a tunnel, and SQLite entries from Navicat / DBeaver imports are mapped to it.
+- Import: mRemoteNG connection files can be imported — the folder structure is preserved and per-connection attributes (protocol, host, port, username) are mapped; passwords are imported when the export file uses supported encryption. (@andreafunicelli)
+- Import: MobaXterm private keys can be imported, and PuTTY `.ppk` keys are supported as authentication keys — keys from PuTTY-based tools can be selected directly, without converting them to OpenSSH format first. (@chris-edstrom)
+- MCP: file tools now run through the connection's file-transfer session, following the connection's transfer protocol — SFTP or SCP — so hosts whose SSH server provides no SFTP subsystem (common on embedded devices) work by switching the connection to SCP.
+- i18n: Portuguese and Vietnamese locales — the UI now ships pt / vi translations selectable in settings.
 
-### 安全加固
-- **S1 SSH Host Key TOFU 校验**：新增 `backend/session/hostkey.go`，首次连接记录指纹（TOFU），密钥变更弹窗告警，支持 AcceptNew / Strict / Off 三种策略，替换全部 `InsecureIgnoreHostKey`。
-- **S2 AI 本地危险命令防线**：新增 `frontend/src/services/localRisk.ts`，独立于模型声明的本地命令模式检测（危险模式黑名单 + 反绕过检测），`getRisk` 取 `max(modelRisk, localRisk)`。
-- **S3 LLM baseURL scheme 校验**：`aiStore` 保存 baseURL 时校验，非 `https://` 且非本地地址弹警告；后端入参校验并留痕。
-- **S4 日志脱敏**：新增 `backend/log/redact.go`，日志写前过脱敏（密码 / DSN 密码段 / token / 私钥），K8s secret 响应不写 preview。
+**Improvements**
+- AI: starting a conversation automatically locks the AI to the currently active terminal, so replies are grounded in the right session without a manual lock step first.
+- UI: sidebar widths persist across restarts — resized sidebars no longer reset to the default width on every launch.
+- Sync: only files whose content actually changed are uploaded — a content comparison skips unchanged files, cutting sync traffic and write churn on the cloud source.
+- Terminal: the timestamp column gains a millisecond option, useful for timing fast-producing output precisely.
+- Shells: the Git Bash path is configurable in settings for non-default install locations, and scoop-installed Git Bash is detected automatically. (@chris-edstrom)
+- Workspace: a group can be selected when saving / editing a workspace so workspaces can be organized into groups, and new creation entries make saving one reachable from more places.
+- Mobile: options that only apply on desktop platforms are hidden on mobile, keeping the interface uncluttered on small screens; detail drawers no longer overflow the window bounds, and the database row dialog columns are rebalanced for narrow windows.
+- Start page: sections (favorites / recent / groups) can be hidden and reordered from the top-right menu.
+- S3: large objects download much faster with parallel ranged GETs, falling back to a single stream on endpoints that don't support ranges.
+- Tabs: the tab bar's plus button and the new-tab shortcut get a configurable default action — the start page (default) or a local terminal using the default shell.
 
-### 性能与体验
-- **P1 虚拟滚动**：引入 `vue-virtual-scroller`，`FileList.vue` / `DBResultGrid.vue` 渲染层虚拟化。⚠️ MongoDB / Elasticsearch / Redis 视图虚拟化未完成。
-- **P2 session:data 批量节流**：`BaseTerminal.vue` 改累积 + rAF 批量写出，窗口隐藏时 setTimeout 兜底，按 session id 订阅避免线性扫描。
-- **P3 Element Plus 按需引入**：配置 `unplugin-vue-components` + Auto Import resolver，移除全量注册与全量 CSS。
-- **P4 删除 useTerminal.ts 死代码**：迁移 `getXtermTheme` 后删除约 800 行死代码。
+**Bug Fixes**
+- AI: fixes requests to the OpenCode Zen Go endpoint missing the required `x-opencode-session` header — the session ID is now sent so the server can correctly track the conversation session. (@andreafunicelli)
+- Terminal: fixes pasted multi-line text inserting LF line feeds that Windows local sessions mishandle (ConPTY expects CR) — newlines are converted to CR when bracketed paste is off, so pasting a multi-line command sequence now executes correctly.
+- Terminal: fixes multi-character IME key rewrites not being delivered to the terminal — keyboards whose IME rewrites a key press into a string (such as Vietnamese Telex input) now work in the terminal. (@dungvv)
+- SSH: fixes key-based authentication failing when a stale remembered password was left on the host — the leftover password no longer breaks the key attempt.
+- SSH: fixes the cwd hook injection interfering with sessions that run post-login automation (commands or scripts started automatically at login); the injection is reworked, and WSL and SSH now share the same typed state machine.
+- SSH: fixes GSSAPI / Kerberos authentication failing when `KRB5CCNAME` points at a Windows drive path — such paths are now treated as FILE ticket caches.
+- Credentials: data-safety hardening — a recovered key is verified against the actual data before unlocking, so a bad recovery can no longer produce a half-unlocked store; the reset flow derives the affected field list from the store manifest instead of a hardcoded list; and the unlock dialog is reworded with an exit option.
+- Import: fixes `.utm` exports depending on the exporting machine's credential store — exports are now self-contained (credentials travel inside the connections) and every secret field is encrypted with the export password.
+- App: a fixed webview user-data folder is used instead of a per-process temp dir, so WebView data is no longer scattered across temp folders that accumulate; legacy per-pid temp dirs are swept at startup.
+- App: refuses to migrate the data directory into itself (nesting it under its own subfolder), which previously corrupted the directory layout.
+- Database: fixes binary Guid columns rendering as garbled bytes in the result grid — SQL Server `UNIQUEIDENTIFIER` and Oracle `RAW(16)` columns (the form EF Core / ABP write Guid keys in) now display as formatted GUID text, and other non-text binary values render as `0x`-prefixed hex. (@IBRAHIMELAMRABET)
+- Shells: scoop-installed Git Bash is labeled separately from system Git Bash, so the two entries in the shell list are distinguishable.
+- Terminal: fixes full-screen TUIs (ncurses menus, ...) rendering incorrectly under heavy load — no more corrupted output or leftover content after exiting.
+- Credentials: fixes the credential store failing to unlock after the data directory is moved or copied, and a possible lockout after switching the encryption mode or changing the master password.
+- UI: fixes a black flash at startup when a light theme is configured.
 
-### 架构可维护性
-- **A2 fileTransferSession 接口下沉**：接口迁移至 `backend/session/file_transfer.go`，各 session 加编译期断言。
-- **A3 AI 函数去重 + 工具注册表化**：后端 SSE 骨架抽取至 `app_ai_stream.go`；前端新建 `services/tools/` 注册表，runAgent 改为查表分发。
-- **A4 SSH 拨号公共函数抽取**：`dialSSH` 统一封装 ClientConfig + authMethods + host key callback，6+ 处调用统一。
-- **A5 vue-tsc 类型闸门**：新增 `build:check`（vue-tsc + vite build）与 `typecheck` 脚本，修复 panelStore 类型声明。
-- **A1 App.vue 拆分**：❌ 未完全达成，App.vue 当前 1814 行（目标 < 500），Tab 注册表化与 onConnect 工厂化待后续推进。
+Thanks to @surenwuyuwuqiu, @dungvv, @andreafunicelli, @chris-edstrom and @IBRAHIMELAMRABET for their contributions to this release.
 
-### 功能增强
-- **F1 AI 交互模式**：新增 Chat / 只读 / Agent 三种交互模式，约束 AI Agent 行为边界。
-- **F2 批量多主机执行**：连接管理器多选主机并发执行同一命令 / 脚本，结果聚合展示（`BatchExecuteDialog.vue` + `batchExecute.ts`）。
-- **F3 MCP Client**：接入外部 MCP 服务器扩展 AI 工具能力（`app_mcp.go` + `services/mcp/`）。
-- **F4 终端录制与回放**：录制为 asciinema cast 文件并回放，支持暂停 / 倍速 / 进度拖拽（`app_recorder.go` + `RecordList.vue` + `terminalRecorder.ts`）。
+### 更新内容
 
----
+**新功能**
+- AI：支持图片与文件附件——可直接从剪贴板把图片粘贴进会话，也可通过文件选择或拖拽附加文件，附件随消息一并发送给模型。(@surenwuyuwuqiu)
+- 数据库：支持直接打开本地 SQLite 数据库文件作为连接——数据库连接表单新增 SQLite 类型，主机字段承载由文件选择器选定的数据库文件路径；由于内嵌文件无法走隧道，SSH 隧道控件在该类型下隐藏；Navicat / DBeaver 导入的 SQLite 条目也会映射到该类型。
+- 导入：支持导入 mRemoteNG 连接文件——保留文件夹层级结构，映射各连接的协议、主机、端口、用户名等属性；导出文件使用受支持加密方式时密码可一并导入。(@andreafunicelli)
+- 导入：支持导入 MobaXterm 私钥，并支持使用 PuTTY `.ppk` 密钥认证——来自 PuTTY 系工具的密钥可直接选用，无需先转换为 OpenSSH 格式。(@chris-edstrom)
+- MCP：文件工具改走连接的文件传输会话，传输协议跟随连接设置——支持 SFTP 或 SCP，没有 SFTP 子系统的主机（嵌入式设备常见）把连接改为 SCP 即可使用。
+- 国际化：新增葡萄牙语、越南语——设置中现可选 pt / vi 界面语言。
+
+**改进**
+- AI：开始会话时自动将 AI 锁定到当前活动终端，回复自动关联正确的会话，无需先手动锁定。
+- 界面：侧边栏宽度在重启后保持，调整过的侧边栏不再每次启动都恢复默认宽度。
+- 同步：只上传内容真正有变化的文件——通过内容比对跳过未变化的文件，减少同步流量和对云端的写入。
+- 终端：时间戳列新增毫秒选项，可更精确地度量快速产出的输出。
+- Shell：Git Bash 路径可在设置中配置以支持非默认安装位置，并自动检测 scoop 安装的 Git Bash。(@chris-edstrom)
+- 工作区：保存 / 编辑工作区时可选择分组，便于将工作区归入分组管理；同时新增了创建入口，保存工作区更容易触达。
+- 移动端：在移动平台上隐藏仅桌面适用的选项，小屏界面更清爽；详情抽屉不再超出窗口边界，数据库行对话框列宽为窄窗口重新分配。
+- 起始页：各区块（收藏 / 最近 / 分组）可隐藏与排序，设置入口在起始页右上角。
+- S3：大对象下载提速——改为并发分段下载，不支持的端点自动回退单流。
+- 标签页：标签栏加号按钮与新标签快捷键的默认行为可配置——可选打开起始页（默认）或使用默认 Shell 的本地终端。
+
+**修复**
+- AI：修复请求 OpenCode Zen 的 Go 端点时缺少必需的 `x-opencode-session` 会话头的问题——现在会传入会话 ID，服务端可正确关联同一会话。(@andreafunicelli)
+- 终端：修复 Windows 本地会话中粘贴多行文本插入 LF 换行导致命令出错的问题（ConPTY 期望 CR）——关闭括号粘贴时换行符转换为 CR，粘贴多行命令序列可正确执行。
+- 终端：修复多字符输入法按键改写未送达终端的问题——会把单次按键改写为字符串的输入法（如越南语 Telex）现在可正常使用。(@dungvv)
+- SSH：修复主机残留旧登录密码导致密钥认证失败的问题——遗留密码不再破坏密钥认证。
+- SSH：修复 cwd 钩子注入干扰登录后自动化（登录时自动执行的命令或脚本）的问题；注入逻辑重构，WSL 与 SSH 现共用同一状态机。
+- SSH：修复 GSSAPI / Kerberos 认证在 `KRB5CCNAME` 指向 Windows 盘符路径时失败的问题——这类路径现在按 FILE 票据缓存处理。
+- 凭据：数据安全加固——恢复的密钥解锁前先对实际数据校验，错误的恢复不再产生半解锁的存储；重置流程按存储清单推导受影响字段，不再依赖硬编码列表；解锁对话框文案调整并新增退出选项。
+- 导入：修复 `.utm` 导出依赖导出机器凭据存储的问题——导出现在自包含（凭据随连接一并写入），且所有机密字段均用导出密码加密。
+- 应用：WebView 用户数据目录改为固定路径，不再按进程创建临时目录（避免临时目录不断累积）；启动时清理历史遗留的按进程临时目录。
+- 应用：拒绝将数据目录迁移到其自身内部（嵌套在自身子目录下），此前会破坏目录结构。
+- 数据库：修复二进制 Guid 列在结果网格中显示为乱码的问题——SQL Server 的 `UNIQUEIDENTIFIER` 与 Oracle 的 `RAW(16)` 列（EF Core / ABP 写入 Guid 主键的形式）现按格式化 GUID 文本显示，其他非文本二进制值以 `0x` 前缀的十六进制显示。(@IBRAHIMELAMRABET)
+- Shell：scoop 安装的 Git Bash 与系统 Git Bash 分开标注，shell 列表中两者可区分。
+- 终端：修复负载高时全屏 TUI（ncurses 菜单等）界面显示错乱、退出后残留内容的问题。
+- 凭据：修复数据目录移动或复制后凭据存储无法恢复解锁的问题，以及切换加密模式 / 修改主密码后可能锁死存储的问题。
+- 界面：修复浅色主题下启动时闪黑的问题。
+
+感谢 @surenwuyuwuqiu、@dungvv、@andreafunicelli、@chris-edstrom 和 @IBRAHIMELAMRABET 对本版本的贡献。
+
+## v1.10.0
+
+### What's Changed
+
+**New Features**
+- MCP Server: a built-in MCP (Model Context Protocol) server lets external AI agents (Claude Code, Cursor, Trae, ...) run commands on saved SSH connections and transfer files. (@surenwuyuwuqiu)
+- Android: the first Android release — touch and narrow-viewport adaptations for phone use.
+- Sync: WebDAV is now available as a sync source alongside Git — both can serve as cloud sync sources. The sync scope is now configurable.
+- Containers: a container file browser, image management and an overview page. Four runtimes are supported — Docker / Podman / nerdctl (containerd) / WSLC — with WSLC contributed by @boltomli.
+- Kubernetes: a container file browser and an overview page, with create templates completed for more resource types.
+- AI: a collapsible thinking view — the Thinking indicator is clickable and expands into a live view streaming the model's reasoning, with a status indicator and elapsed timer; completed thinking is saved with the message as a collapsed block showing duration and timestamp. (@Teejer)
+
+**Improvements**
+- UI: the dark theme palette is refreshed and corner-radius tiers unified; dialog presentation is optimized with a capped height, and hover states use native cursors.
+- Transfer: S3-compatible object storage gains streaming uploads (no whole-file buffering), listing pagination and per-file retry support.
+- Remote desktop: RDP resolution now adapts to follow the window size.
+- Connections: the login username can be overridden per connection when using identity auth, so one key works across servers with different users.
+- Terminal: tabs can be restored at startup — a prompt at launch offers to reopen the tabs from the last session, enabled by default.
+- Terminal: network-device highlighting rules — Cisco IOS / Huawei VRP interface names and config keywords are recognized in output.
+- Terminal: the right/middle click actions gain a "No action" option, so mouse-tracking apps (vim, htop, ...) keep receiving those clicks. (#1088)
+- Sync: Git sync repo history is auto-compacted to bound repo size.
+
+**Bug Fixes**
+- SSH: fixes connections failing with EOF on certain devices (dropbear on OpenWrt CPEs, for example) by detecting the shell before the shell channel opens. (@sonnartliao)
+- SSH: fixes the injected cwd hook command line occasionally flashing in the terminal after connect; injection is hardened, and a new per-connection setting can defer it until directory follow is first enabled.
+- SSH / WSL: fixes the login MOTD not displaying on SSH and WSL, and failed logins on minimal CLI-only appliances (the cwd-hook probe now uses its own short-lived connection).
+- SMB: fixes transfers plateauing around 35MB/s on a typical LAN by pipelining large concurrent chunks instead of one round trip per 64KB — the link can now be saturated.
+- FTP: fixes garbled directory listings and filenames by decoding names with the configured charset; cancelling a single-file transfer now takes effect immediately.
+- S3: fixes creating an empty file / folder failing with an error; failures now surface a clear toast instead of going unnoticed.
+- MongoDB: fixes connections failing over an SSH tunnel; a failed connect keeps the tab open with the concrete error instead of tearing it down, and the form gains default-database and extra-params fields.
+- Database: fixes the duplicated extra-params field, the unusable test-connection button (mongodb / redis / elasticsearch) and the missing API Key input in the NoSQL / Elasticsearch connection forms.
+- Containers: fixes silently failing when a container references an SSH host without saved credentials — the credential dialog now opens.
+- Terminal: fixes the app freezing when a command floods the terminal with output.
+- Terminal: fixes highlighting not applying to lines that span a soft wrap.
+- SMB: fixes a session dying silently after idle — reconnect now restores the previous directory.
+- UI: fixes progress bars and status indicators turning invisible in background-image mode.
+- Linux: fixes the running window showing as an orphan with a generic icon on GNOME Wayland — the desktop file is now named after the Wayland app_id (`org.wails.uniterm.desktop`) so the window correctly matches its launcher. (@Teejer)
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @surenwuyuwuqiu, @boltomli, @Teejer and @sonnartliao for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- MCP Server：内置 MCP（Model Context Protocol）服务器，外部 AI Agent（Claude Code、Cursor、Trae 等）可在已保存的 SSH 连接上执行命令、传输文件。(@surenwuyuwuqiu)
+- Android：新增安卓版发布——针对手机屏幕的触控与窄视口适配。
+- 同步：新增 WebDAV 作为同步源，现支持 Git、WebDAV 两种云同步源。新增支持配置同步范围。
+- 容器：新增容器文件浏览器、镜像管理和总览页。支持 Docker / Podman / nerdctl（containerd）/ WSLC 四种运行时，其中 WSLC 由 @boltomli 贡献。
+- Kubernetes：新增容器文件浏览器和总览页，补全更多资源类型的创建模板。
+- AI：新增可折叠的思考过程视图——点击"思考中"指示器可展开实时查看模型的思考内容，带状态指示与耗时计时；完成后随消息保存为可折叠的思考块，显示耗时与时间戳。(@Teejer)
+
+**改进**
+- 界面：深色主题配色焕新、圆角层级统一；对话框展示效果优化并限制最大高度，悬停使用原生光标。
+- 文件传输：S3 兼容对象存储支持流式上传（不再整文件缓冲）、列表分页和单文件重试。
+- 远程桌面：RDP 分辨率自适应窗口大小。
+- 连接：身份认证下可按连接覆盖登录用户名，一把密钥可用于多台不同用户名的服务器。
+- 终端：支持启动时恢复标签页——启动时询问是否恢复上次会话的标签，默认开启。
+- 终端：新增网络设备高亮规则——识别 Cisco IOS / 华为 VRP 的接口名与配置关键字。
+- 终端：右键、中键动作新增「无动作」选项，开启鼠标追踪的程序（vim、htop 等）可正常接收点击。(#1088)
+- 同步：Git 同步仓库历史自动压缩，避免仓库无限膨胀。
+
+**修复**
+- SSH：修复部分设备（如 OpenWrt 上的 dropbear）连接报 EOF 失败的问题，现在先探测 shell 类型再打开 shell 通道。(@sonnartliao)
+- SSH：修复连接后终端偶尔闪现 cwd 钩子注入命令行的问题；注入逻辑加固，并新增连接级设置，可选择仅在启用"目录跟随"时注入。
+- SSH / WSL：修复 SSH 和 WSL 登录 MOTD 不显示、部分 CLI-only 设备登录失败（cwd 钩子探测改走独立短连接）的问题。
+- SMB：修复传输吞吐卡在约 35MB/s 的问题，改为大块并发流水线传输、不再逐块往返等待，局域网内可跑满带宽。
+- FTP：修复服务器目录列表与文件名乱码的问题，文件名按配置的字符集解码；单文件传输的取消现在可立即生效。
+- S3：修复新建空文件 / 目录直接报错的问题，失败时也会给出明确提示，不再静默。
+- MongoDB：修复 SSH 隧道下连接失败的问题；连接失败时标签页保留并显示具体错误、不再直接关闭，表单补充默认数据库与额外参数字段。
+- 数据库：修复 NoSQL / Elasticsearch 连接表单的几处问题——额外参数字段重复显示、mongodb/redis/elasticsearch 的"测试连接"按钮不可用、API Key 输入框不出现。
+- 容器：修复引用的 SSH 主机没有保存凭据时静默失败的问题，现在会弹出凭据录入对话框。
+- 终端：修复命令大量输出时整个应用卡死的问题。
+- 终端：修复跨软换行的行高亮不生效的问题。
+- SMB：修复空闲后会话静默失效的问题——重连后恢复原目录。
+- 界面：修复背景图模式下进度条、状态指示不可见的问题。
+- Linux：修复 GNOME Wayland 下运行窗口显示为无图标孤立窗口的问题——桌面文件改为按 Wayland app_id 命名（`org.wails.uniterm.desktop`），窗口可正确关联启动器图标。(@Teejer)
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中添加排除规则放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @surenwuyuwuqiu、@boltomli、@Teejer 和 @sonnartliao 对本版本的贡献。
+
+## v1.9.5
+
+### What's Changed
+
+**New Features**
+- Tray: a system tray icon with left-click show/hide and a menu (show window, hide to tray, reset window position, open settings, about, quit), an OS-global show/hide hotkey (default Ctrl+M, configurable in the keyboard settings), and single-instance locking — launching a second instance focuses the running window instead.
+- Workspace overhaul: workspaces are now built by pointing and clicking — an "open in workspace" context-menu entry (multi-select aware) and an empty workspace with a drag-here placeholder; connections dragged onto a panel connect and split at the drop position. A workspace can be dissolved (members return to the tab bar as live tabs, broadcast and AI lock preserved) and saved as a "workspace"-type connection that rebuilds the live workspace on open. Connections can also be dragged onto the tab bar to open a tab at that position.
+- SSH: per-connection algorithm modes — **compatible** (default, full support set with security-leaning ordering), **secure** (modern algorithms only: no SHA-1 exchanges, CBC ciphers or DSA host keys) and **custom** (four editable, ordered preference lists for key exchange, ciphers, MACs and host keys, validated against a closed candidate pool). Compatible mode completes the AES-CBC family (aes192-cbc / aes256-cbc) and prefers plain RSA host keys, so legacy devices and servers with malformed ECDSA P-521 keys still connect; negotiation failures carry mode-specific guidance.
+- SSH: "duplicate channel" — open a new tab as a fresh session channel on the source session's already-authenticated connection: no re-dial, no re-authentication (handy behind a jump host with 2FA). (@surenwuyuwuqiu)
+- Terminal: sixel and iTerm2 (OSC 1337) image support for remote terminals — images render directly in the terminal.
+- Terminal: remote programs (vim, tmux, multi-hop SSH chains) can write to the local clipboard via OSC 52, and applications can drive a tab progress indicator via OSC 9;4, rendered as a thin bar along the tab's bottom edge (percentage / error / indeterminate / paused).
+- Terminal: the text highlighting engine is rewritten — SGR re-injection is upgraded to overlay highlighting that recolors cells directly in the xterm buffer without touching the output stream, completely fixing cases where highlighting did not take effect and the garbled output caused by injection errors; highlighting also now applies to all terminal types (local, WSL, serial, k8s, container, telnet, SSH) instead of SSH only.
+- Terminal: "reset terminal output" and "clear terminal scrollback" actions in the terminal / tab / panel context menus. Reset wipes the screen and the scrollback history and redraws the prompt (like MobaXterm's screen-cleaning); clear-scrollback drops only the rows above the viewport, leaving the screen and any half-typed command intact. Line numbers restart after either action. (@surenwuyuwuqiu)
+- Terminal search: the first match is anchored at the bottom of the buffer (closest to the prompt) instead of the top of scrollback; Enter searches upward and Shift+Enter downward; the search bar gains case-sensitive, regex and whole-word toggles that persist across open/close.
+- Import: SPICE/VNC `.vv` connection files used by Virt-Viewer (the one-shot desktop-session files downloaded from hypervisor VM console pages) can be imported, mapping type, host, port, username and password.
+
+**Improvements**
+- SSH: the silent cwd-reporting hook is now always injected invisibly after the shell starts, sessions start as plain shells again (sshd prints its own MOTD), and the per-connection toggle is removed — "follow terminal path" is a display-side switch.
+- SFTP / SCP transfers are now pipelined — concurrent offset-addressed requests overlap round trips instead of stop-and-wait. A 4 MiB transfer over an 80 ms link drops from ~10.7 s to ~0.6 s (upload) and ~6.1 s to ~1.2 s (download); progress, pause and cancel semantics are unchanged.
+- SFTP / SCP: standalone SFTP and SCP tabs gain an "open terminal" tab-context action, and SSH-derived file tabs gain it too — a file tab can now reach a shell on the same host and vice versa. (@surenwuyuwuqiu)
+- Monitor: the process list now includes every process (previously the top 30 by CPU) with progressive loading as you scroll, so search finds all of them.
+- Monitor: polling is robust against hosts whose script output leaves a variable empty (each numeric field defaults, raw output is logged on parse failure), df is guarded with a timeout so stale NFS mounts cannot wedge the poll loop, the disk list now includes every mounted filesystem (overlay, tmpfs, bind mounts) alongside block devices, and monitor table columns are drag-resizable.
+- Native file pickers now open at a useful directory: the private-key picker starts at ~/.ssh, kubeconfig at ~/.kube, SFTP upload / "download to" at the local pane's directory — and hidden files are shown so dot-directories are reachable. (@surenwuyuwuqiu)
+- Settings: the settings category sidebar is collapsible (auto-collapses on narrow windows) and setting cards stack vertically below phone widths, so settings are usable on small screens.
+- New settings for the host list menu style (button or right-click only) and tab shortcut hints; the tab tooltip always shows the shortcut.
+- Themes: a terminal theme submenu in the main menu (follow-app, built-in themes grouped dark/light, custom themes) applied live on click. The app theme now defaults to "system" (follows the OS color scheme) instead of dark, and theme / language / terminal-theme picks no longer close the menu, so options can be flipped through and previewed in place.
+- Element-plus scrollbars stay visible and are styled like the native ones (no pointer cursor, instant hover highlight).
+- UI: the app window gained a 1px outer frame with divider lines under the title bar and along both sidebar edges, staying visible on fractional-DPI displays; decorative gradient lines were removed from the title bar and sidebar, and the keyboard-settings table columns are unified.
+
+**Bug Fixes**
+- Terminal: pressing Enter in local sessions no longer resets mouse tracking, fixing wheel scrolling in fullscreen TUIs like vim. (@sonnartliao)
+- Terminal: device query responses (cursor position, device status, window ops) are now passed through to the PTY. Apps that query the terminal and block on the answer — any `docker compose` confirmation prompt built on the survey library — previously froze the terminal completely, with no echo and a dead Ctrl-C.
+- Terminal: select-copy and right-click paste are self-healing — clipboard writes pick the best path per platform with a timeout and fall back to the other path, reads retry once to ride out transient clipboard locks, and re-selecting the same text copies again after a failed copy.
+- Terminal: MAC addresses no longer highlight as clock times (the HH:MM:SS rule now requires time-like boundaries), and the keyword rules gained fatal / critical / exception / panic / abort (error) and bare warn / caution (warning).
+- SSH: wrong-password failures surface faster — a rejected password reaches the interactive prompt in a single handshake, each re-challenge prints a denial line (matching the OpenSSH client), and auth-type failures open the credential dialog immediately instead of after two more reconnects.
+- AI: command output from background panels is read correctly. Keep-alive-frozen panels previously returned stale or empty output and timed out; a headless mirror terminal now parses the session stream continuously and serves as the read source while the panel is inactive.
+- AI: a command confirmed by the user is replayed on the panel the model targeted — in multi-panel mode it could previously run on the wrong terminal — and the confirmation card shows the target panel. (@surenwuyuwuqiu)
+- AI: fixed a compatibility issue where the AI sidebar composer could not be clicked or typed into on WebKit shipped with older macOS versions. (@zhangsir1211)
+- UI: AI lock is signalled by turning the tab and panel icons warning-coloured instead of tinting the whole tab surface, which read muddy on dark themes.
+- Tabs: dragging to reorder no longer steals the selection to the neighbouring tab, and the tab merge drop-zone indicator matches the workspace split style.
+- WSL: sessions start in the distro user's home directory instead of a /mnt/c path under the app's own working directory.
+- Windows: the WebView2 autofill-wallet feature is disabled — WebView2 152/153 runtimes call LogonUser with an invalid password once per environment creation at startup (a Chromium regression), producing a 4625 failed-logon event per launch that can trip account lockout policies.
+- Settings: tab shortcut hints and host list menu style persist across restarts (they silently reset before), and the system title bar choice survives a relaunch.
+- Linux: the .desktop launcher path matches the packaged binary, so launching from the application menu works after installing the deb/rpm package. (@surenwuyuwuqiu)
+- SFTP: the max concurrent transfers setting is shown for standalone SFTP connections (the backend applied it, but the form hid the field).
+- UI: the connection form resets only after the dialog's close transition finishes, so default values no longer flash while the dialog fades out.
+- UI: batch fixes — custom window controls stay drawn until the native title bar setting takes effect after a relaunch, the chmod octal input is a plain text field again, multi-file SFTP drags show a drag ghost, and the tab strip end-drop indicator no longer pushes the add button to the far right.
+- SSH: `~` in private key paths is expanded at import and connect time.
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @surenwuyuwuqiu, @zhangsir1211 and @sonnartliao for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- 托盘：新增系统托盘图标，左键单击显示/隐藏窗口，菜单包含 显示窗口、隐藏到托盘、重置窗口位置、打开设置、关于、退出；支持系统级全局显隐快捷键（默认 Ctrl+M，可在键盘设置中修改）；应用单实例锁定——再次启动会唤起已运行的窗口而不是开新进程。
+- 工作区大改版：工作区支持点选创建——右键菜单「在工作区中打开」（支持多选）以及带拖放占位的空工作区；连接拖入面板即连接并按落点位置分屏。工作区可解散（成员以实时终端标签回到标签栏，广播与 AI 锁定保留），也可保存为「工作区」类型连接，再次打开即重建整个工作区。连接还可拖到标签栏的任意位置直接在该处打开标签。
+- SSH：连接级算法模式——**兼容**（默认，完整支持集、安全优先排序）、**安全**（仅现代算法：不含 SHA-1 交换、CBC 密码套件与 DSA 主机密钥）与**自定义**（密钥交换 / 密码套件 / MAC / 主机密钥四组可编辑的有序优先列表，限定封闭候选池）。兼容模式补全 AES-CBC 家族（aes192-cbc / aes256-cbc），并优先使用普通 RSA 主机密钥，老旧设备与 ECDSA P-521 主机密钥异常的服务器也能连上；协商失败时给出按模式定制的提示。
+- SSH：新增「复制通道」——在已认证的源会话连接上开一个新的会话通道：无需重新拨号、无需重新认证（经 2FA 跳板机时尤其方便）。（@surenwuyuwuqiu）
+- 终端：远程终端支持 sixel 与 iTerm2（OSC 1337）图片，图像直接在终端中渲染。
+- 终端：远程程序（vim、tmux、多跳 SSH 链）可通过 OSC 52 写入本地剪贴板；应用可通过 OSC 9;4 驱动标签进度指示，沿标签底边渲染一条细进度条（百分比 / 错误 / 不定进度 / 暂停）。
+- 终端：文本高亮方案重构——SGR 重注入升级为覆盖式高亮，直接对 xterm 缓冲区单元格重新着色，不触碰输出流，彻底解决部分场景高亮不生效以及注入错误导致的乱码问题；同时高亮从仅 SSH 扩展到所有终端类型（本地、WSL、串口、k8s、容器、telnet、SSH）。
+- 终端：终端 / 标签 / 面板右键菜单新增「重置终端输出」与「清空终端回滚」。重置会清空屏幕与回滚历史并重绘提示符（类似 MobaXterm 的清屏）；清空回滚只删除视口上方的行，屏幕与正在输入的命令保持不动。两种操作后行号都从 1 重新开始。（@surenwuyuwuqiu）
+- 终端搜索：首个匹配定位到缓冲区底部（紧邻提示符）而不是回滚区顶部；Enter 向上搜索，Shift+Enter 向下搜索；搜索栏新增 区分大小写、正则、全字匹配 三个开关，开关状态在关闭再打开后保留。
+- 导入：支持导入 Virt-Viewer 的 SPICE/VNC `.vv` 连接文件（从虚拟化管理台控制台页下载的一次性桌面会话文件），映射类型、主机、端口、用户名与密码。
+
+**改进**
+- SSH：静默的 cwd 上报钩子改为 shell 启动后始终无感注入，会话恢复为普通 shell 启动（sshd 自行打印 MOTD 欢迎信息）；移除按连接开关，「跟随终端路径」变为纯显示侧开关。
+- SFTP / SCP 传输改为流水线式——并发的按偏移寻址请求重叠往返，替代停止等待。80ms 时延链路上传输 4 MiB：上传从约 10.7s 降到约 0.6s，下载从约 6.1s 降到约 1.2s；进度、暂停与取消语义不变。
+- SFTP / SCP：独立的 SFTP 与 SCP 标签页新增「打开终端」标签右键菜单项，SSH 衍生的文件标签页同样支持——文件页签与同一主机的 shell 互通。（@surenwuyuwuqiu）
+- 监控：进程列表改为全量进程（原先只有 CPU 前 30），随滚动渐进加载，搜索可找到全部进程。
+- 监控：脚本输出变量为空不再导致整个 JSON 失效（数值字段逐一兜底，解析失败时记录原始输出）；df 加了超时保护，陈旧的 NFS 挂载不再卡死轮询；磁盘列表涵盖所有挂载文件系统（overlay、tmpfs、bind 挂载）及块设备；监控表格支持拖拽调整列宽。
+- 原生文件选择器从有用的目录打开：私钥选择器从 ~/.ssh、kubeconfig 从 ~/.kube、SFTP 上传 /「下载到」从本地面板当前目录开始，并显示隐藏文件，点目录可达。（@surenwuyuwuqiu）
+- 设置：设置分类侧栏可折叠（窄窗口自动折叠），窄屏下设置卡片改为纵向堆叠，小屏幕上设置页也可正常使用。
+- 新增 主机列表菜单样式（按钮或仅右键）与 标签快捷键提示 两个设置；标签 tooltip 始终显示快捷键。
+- 主题：主菜单新增终端主题子菜单（跟随应用、内置主题按深浅色分组、自定义主题），点击即时生效。应用默认主题改为「跟随系统」（跟随操作系统配色，原为深色）；主题 / 语言 / 终端主题选择后不再关闭菜单，可连续切换预览。
+- Element-plus 滚动条常驻显示，样式与原生滚动条一致（无 pointer 光标、悬停即时高亮）。
+- 界面：应用窗口新增 1px 外边框，标题栏下方与两侧边栏带分隔线，分数缩放（高 DPI）下边框保持可见；移除标题栏与侧栏的装饰性渐变线，键盘设置表格列样式统一。
+
+**Bug 修复**
+- 终端：本地会话中按 Enter 不再重置鼠标追踪，修复 vim 等全屏 TUI 中滚轮退化为方向键的问题。（@sonnartliao）
+- 终端：设备查询应答（光标位置、设备状态、窗口操作）现在会透传给 PTY。此前凡是查询终端并阻塞等待应答的程序——所有基于 survey 库的 `docker compose` 确认提示——都会把终端彻底卡死：无回显、Ctrl-C 失效。
+- 终端：选中即复制与右键粘贴可自愈——剪贴板写入按平台选择最优路径并带超时，失败回退另一条路径；读取在空结果/出错后重试一次以渡过其他进程的瞬时剪贴板锁；复制失败后重新选中同一段文本也能再次复制。
+- 终端：MAC 地址不再被当作时间高亮（HH:MM:SS 规则增加时间样式边界判定），关键词新增 fatal / critical / exception / panic / abort（错误级）与 warn / caution（警告级）。
+- SSH：错误密码更快得到反馈——被拒绝的密码一次握手即到达交互提示；每次重新质询前先打印一条拒绝提示（与 OpenSSH 客户端一致）；认证方式类失败立即弹出凭据对话框，而不是再重连两次后才出现。
+- AI：后台面板的命令输出读取正确。此前被 KeepAlive 冻结的面板会返回过期或空输出并超时；现在每个会话有一个持续解析会话流的无头镜像终端，面板不活跃时以它为读取来源。
+- AI：用户确认的命令会回放到模型指定的面板——多面板模式下此前可能在错误的终端上执行——确认卡片上显示目标面板。（@surenwuyuwuqiu）
+- AI：修复 AI 侧栏输入框在老版本 macOS 的 WebKit 上无法点击定位光标与输入的兼容性问题。（@zhangsir1211）
+- 界面：AI 锁定改为将标签与面板图标染成警示色，取代原先将整个标签表面着色的方式（深色主题下显得浑浊）。
+- 标签：拖拽排序不再把选中抢到相邻标签；标签合并的落区指示样式与工作区分屏保持一致。
+- WSL：会话从发行版用户的主目录启动，而不是落到应用自身工作目录对应的 /mnt/c 路径。
+- Windows：禁用 WebView2 自动填充钱包特性——WebView2 152/153 运行时在启动创建环境时会用当前账户和错误密码调用一次 LogonUser（Chromium 回归），每次启动产生一条 4625 失败登录事件，可能触发账户锁定策略。
+- 设置：标签快捷键提示与主机列表菜单样式在重启后保留（此前每次重启静默重置）；系统标题栏选择在重启后生效。
+- Linux：.desktop 启动器路径与安装的二进制一致，安装 deb/rpm 包后可从应用菜单正常启动。（@surenwuyuwuqiu）
+- SFTP：独立 SFTP 连接显示最大并发传输数设置（后端已生效，但表单未显示该字段）。
+- 界面：连接表单在对话框关闭过渡动画结束后才重置，淡出过程中不再闪烁默认值。
+- 界面：批量修复——重启后原生标题栏设置生效前保留自绘窗口控件；chmod 八进制输入恢复为纯文本框；SFTP 多文件拖拽显示拖拽幻影；标签栏末尾落区指示不再把新增按钮挤到最右侧。
+- SSH：私钥路径中的 `~` 在导入与连接时展开。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报。这是 Go/Wails 应用的已知问题（见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中添加排除规则放行。请仅从官方开源渠道 GitHub 与 Gitee 下载。如仍有顾虑，可下载源码自行构建运行。
+
+感谢 @surenwuyuwuqiu、@zhangsir1211、@sonnartliao 在本版本的贡献。
+
+## v1.9.4
+
+### What's Changed
+
+**New Features**
+- Connections: favorites. Star any connection; a pinned Favorites group sits above the sidebar groups with drag-to-reorder, and the start page gains a favorites section. Synced across devices.
+- SSH: Kerberos (GSSAPI) authentication, SSH agent authentication, and SSH agent forwarding. (@windtear)
+- SCP: a new SCP protocol transfer type; SSH connections can set their file-transfer protocol to SFTP or SCP, compatible with hosts without an SFTP subsystem (embedded devices, minimal systems, etc.).
+- SFTP overhaul:
+  - File panes: back / forward / up navigation history, Explorer-style rubber-band selection (Ctrl-drag adds to the selection), a selection stats bar, a grouped flat toolbar, and copy-path context-menu actions.
+  - Open with: a context-menu action that hands the file to the OS file-association picker; remote files reuse the external editor's temp copy and auto-upload watcher, so saves made in the picked app push back to the remote path.
+  - Built-in editor: search/replace with match count, regex / case / whole-word toggles and `$N` group replacement, undo/redo, font size adjustment, and a toolbar (cut/copy/paste, wrap toggle).
+  - Transfers: unified transfer tasks with retry (already-completed files are skipped), expandable per-file detail for directory transfers, dismiss, failed tasks marked on disconnect, auto-show on new tasks and a collapsible panel bar; SCP recursive transfers reach full parity.
+  - Sidebar: a follow-terminal-path toggle — the file sidebar follows the active SSH/WSL terminal's cwd, reported via OSC-7.
+  - Symbolic links: create links from the context menu, navigate directory links to their targets (SFTP / SCP / WSL).
+- WSL (Windows): WSL file sidebar support — browse and manage distro files over the //wsl.localhost share; `/mnt/<drive>/...` paths map directly onto local Windows drives.
+- Local shells (Windows): a "Command Prompt (Clink)" shell and administrator Command Prompt / PowerShell terminals launched through a UAC broker, embedded as ordinary tabs. (@kxn)
+- Workspace: duplicate sessions within the current workspace and open SSH sessions into existing workspaces. (@windtear)
+- Workspace: panels can be maximized to fill the workspace, with a configurable maximize shortcut. (@windtear)
+- Shortcuts: numbered tab switching (Ctrl+1–9) and workspace panel switching (Alt+1–9), and a quick-commands shortcut. (@windtear, @kxn)
+- Monitor: new Services, Hardware Devices and IPMI tabs; the system info tab gains a clock section showing host clock skew.
+- Auto-update: in-app updates with GitHub/Gitee dual-source failover, streaming download progress, SHA256 verification and one-click install; the update source is selectable in Settings → About; release notes render as localized markdown. (@Sunshow)
+- UI: a major display overhaul, especially on macOS — the entire interface now scales on a rem baseline, with a new "UI font size" setting that takes effect immediately (platform-aware defaults; the macOS baseline is raised to 14px), and the forced grayscale font smoothing is removed. This fixes text rendering too small and looking blurry on macOS.
+- Zmodem: a default download directory setting, so received files land there without asking each time. (@windtear)
+
+**Improvements**
+- Connection form: RDP smart sizing defaults to off, the shell resets when switching local/WSL, credentials clear when switching auth type, identity auth is listed first, and validation errors surface instead of being swallowed.
+- Connection form (SSH): a one-click "use default key" action for the key-path field — fills the first standard OpenSSH key that actually exists (`id_ed25519`/`id_rsa`/`id_ecdsa`/`id_dsa`), and repeated clicks cycle through the ones present. (@Sunshow)
+- Terminal: the search bar follows the app theme colors.
+- Terminal: input broadcast now works across all tabs and workspaces, not just within one workspace — right-click a terminal or workspace tab to add it as a broadcast target.
+- Local shells (Windows): auto-detection of Cygwin, MSYS2 and Nushell.
+- SSH keepalive for SFTP and SCP sessions, so idle transfer connections are no longer dropped by servers or NAT/firewall timeouts.
+- Redis: keys grouped into a folder tree by a configurable separator, with a flat-list toggle. (@surenwuyuwuqiu)
+- Database: "Run SQL File" against a database and "Copy Table" from the database tree context menus; script feedback shows failure details and affected rows. (@surenwuyuwuqiu)
+- Shortcuts: the keyboard settings page is regrouped into titled sections, with a unified shortcut display.
+- Shortcuts (macOS): shortcut hints now render with the UI font so modifier symbols keep their native shapes.
+- Panel headers gain a right-click menu aligned with the tab menu (reconnect, copy address, AI lock, broadcast, close).
+- AI: the syncable AI config is split into a dedicated `ai.json` (model catalog and agent turn limit); app personalization settings (theme, paths, shells, keybindings, etc.) are now device-local and no longer participate in cloud sync.
+- Session logs: improved file naming, and charset escape sequences no longer pollute the log. (@windtear)
+- UI: a connection locked by AI now tints the whole tab body and panel header with a warning colour, instead of a thin edge marker that competed with the selection ring. (@surenwuyuwuqiu)
+- SFTP: the footer status bar is always visible (selection stats replace the entry count while a selection exists), select-all (Ctrl/Cmd+A) and Ctrl/Cmd+X/C/V clipboard shortcuts are added, and file-list column widths now follow the designed per-column sizes with single-line headers.
+- Tunnels: starting a tunnel whose exit SSH connection has no saved credentials now prompts for them instead of failing the handshake.
+- K8s: the inline kubeconfig field is now revealed on demand (like the private-key text field), and kubeconfig can be imported from file.
+- SFTP: file entries are told apart at a glance by icon color — folders render as Finder-style light-blue filled glyphs, symlinks violet (name text stays neutral) — and non-name list columns (Type / Modified / Size / Permission / Owner / Group) can be hidden via a header right-click check menu, shared across panels and remembered across restarts. (@surenwuyuwuqiu)
+
+**Bug Fixes**
+- macOS IME: committed keystrokes are delivered directly to the terminal (no more dropped or duplicated characters under fast typing), duplicate input is prevented, and an IME-committed Enter no longer triggers app shortcuts (AI send, search jump, dialog confirm, ~25 handlers). (@surenwuyuwuqiu)
+- Terminal: fixed copy-on-select writing to the clipboard when WKWebView lacks focus. (@surenwuyuwuqiu)
+- Terminal: fixed terminal device attribute queries (DA) being swallowed, so remote TUI apps' capability probing now gets a response. (@windtear)
+- Windows: rounded corners are restored on first launch, and the startup background matches the theme so it no longer flashes a black background.
+- Local shells (Windows): opening a WSL terminal or browsing WSL files no longer flashes console windows; one-shot child process spawns go through a single hidden-window entry point.
+- zsh now starts as a login shell so `.zprofile` is sourced before `.zshrc`. (@boltomli)
+- Tunnel: start failures are surfaced with actionable hints, a config test and an SSH example; error toasts include the tunnel name and a localized prefix.
+- SSH: the server's actual error is reported when keyboard-interactive auth is rejected cold. (@kxn)
+- AI: markdown rendering escapes quotes and closes an XSS vector in slash-separated attributes. (@kxn)
+- Shortcuts: rebinding no longer fires runtime handlers mid-capture; digit-shortcut conflicts between tabs and panels are resolved with fixed platform bindings. (@kxn)
+- File transfer: fixed recursive directory retry, SCP fetch completion and the zmodem cancel path; file panels auto-reconnect when a refresh hits a dead session.
+- File transfers: fixed transfer task lists breaking on terminal switches — background transfers now keep updating (no more frozen progress or un-cancellable tasks), and terminal tabs show a transfer indicator while their companion file panel has active transfers.
+- Sync / update: automatic update check logic fixed; OSC-7 payloads terminate at the first terminator so crafted output can't pollute cwd reporting.
+- Zmodem: the shell prompt returns on its own after an rz/sz transfer (no more pressing Enter), cancelling an in-flight sz download recovers cleanly instead of leaving the terminal swallowing all subsequent output, and stalled rz/sz transfers are prevented. (@windtear)
+- macOS IME: fixed uppercase letters being dropped when the IME swallows the keypress (e.g. Doubao in English mode). (@surenwuyuwuqiu)
+- AI: the model dropdown populated by "Fetch Models" now shows each model's display name but stores the actual model ID — previously the display name itself was saved as the model, so requests used the wrong model name. (@feuvan)
+- UI: the "download to" overwrite/rename conflict prompt works again, and the AI sidebar search highlight no longer throws on every keystroke.
+- Internal editor: saving files containing Chinese or other non-Latin1 characters no longer fails with a base64 encoding error; switching the encoding no longer discards unsaved edits — the encoding selector is now a two-level menu that separates "reopen with encoding" (re-decode from disk, with a confirmation when unsaved edits exist) from "save with encoding" (affects saving only).
+
+**Notes**
+- As this open-source software has not purchased a code-signing certificate, the unsigned executable may trigger false positives in some antivirus engines (e.g. Windows Defender). This is a known issue with Go/Wails applications (see [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)). You can add an exclusion rule in your antivirus to allow it. Please download only from the official open-source channels — GitHub and Gitee. If you are still concerned about malware, you can download the source code and build and run it locally yourself.
+
+Thanks to @windtear, @kxn, @surenwuyuwuqiu, @boltomli, @Sunshow, and @feuvan for their contributions to this release.
+
+### 更新内容
+
+**新功能**
+- 连接：新增收藏功能。任意连接可加星标；侧边栏顶部出现可拖拽排序的「收藏」固定分组，起始页新增收藏区。收藏跨设备同步。
+- SSH：新增 Kerberos（GSSAPI）认证、SSH agent 认证与 SSH agent 转发。（@windtear）
+- SCP：新增 SCP 协议传输类型；SSH 连接可将文件传输协议配置为 sftp 或 scp，兼容无 SFTP 子系统的主机（嵌入式设备、精简系统等）。
+- SFTP 全面改版：
+  - 文件面板：新增 后退 / 前进 / 上级 导航历史、资源管理器式橡皮筋框选（Ctrl 拖拽为追加选择）、选中统计条、分组式扁平工具栏与复制路径右键菜单。
+  - 打开方式：右键菜单项调用系统文件关联选择器打开文件；远程文件复用外部编辑器的临时副本与自动回传监听，在所选应用中保存后自动推回远端路径。
+  - 内置编辑器：新增 查找/替换（匹配计数、正则 / 忽略大小写 / 全字匹配、`$N` 分组替换）、撤销/重做、字号调节与工具栏（剪切/复制/粘贴、换行开关）。
+  - 传输：统一的传输任务支持失败重试（自动跳过已完成文件）、目录传输可展开查看每个文件明细、可移除、断线时任务标记失败、新任务自动展开、面板条可折叠；SCP 递归传输能力对齐 SFTP。
+  - 文件边栏：新增「跟随终端路径」开关——跟随当前 SSH/WSL 终端的 cwd（通过 OSC-7 上报）。
+  - 符号链接：右键菜单可创建链接，目录链接可点入并落到真实目标（SFTP / SCP / WSL）。
+- WSL（Windows）：支持 WSL 文件边栏，通过 //wsl.localhost 共享浏览与管理发行版文件；`/mnt/<盘>/...` 路径直接映射到本地 Windows 盘符。
+- 本地终端（Windows）：新增「命令提示符（Clink）」与管理员命令提示符 / PowerShell 终端，经 UAC broker 提权后以普通标签页嵌入。（@kxn）
+- 工作区：支持在当前工作区内复制会话、将 SSH 会话打开到已有工作区。（@windtear）
+- 工作区：支持面板最大化铺满工作区，最大化快捷键可配置。（@windtear）
+- 快捷键：新增 数字键切换标签（Ctrl+1–9）与切换工作区面板（Alt+1–9）、快捷命令快捷键。（@windtear、@kxn）
+- 监控：新增 服务、硬件设备、IPMI 三个标签页；系统信息新增时钟区，展示主机时钟与本机偏差。
+- 自动更新：应用内更新，GitHub/Gitee 双源自动切换，流式下载进度、SHA256 校验与一键安装；设置 → 关于中可选择更新源；更新说明按语言渲染为 Markdown。（@Sunshow）
+- 界面：界面显示整体优化（重点针对 macOS）——整个界面改为基于 rem 基准缩放，新增「界面字号」设置（即时生效，默认值随平台；macOS 默认基准字号提升为 14px），并移除强制灰度字体平滑，解决 macOS 下文本偏小、字体发虚的问题。
+- Zmodem：新增默认下载目录设置，接收的文件直接保存到该目录，不再每次询问。（@windtear）
+
+**改进**
+- 连接表单：RDP 智能缩放默认关闭；切换 本地/WSL 时重置 Shell；切换认证方式时清除凭据；身份认证排到认证方式首位；表单校验错误如实提示不再吞掉。
+- 连接表单（SSH）：密钥路径新增一键「使用默认密钥」——自动填入本机实际存在的标准 OpenSSH 密钥（`id_ed25519`/`id_rsa`/`id_ecdsa`/`id_dsa`），再次点击在存在的密钥间轮换。（@Sunshow）
+- 终端：搜索栏颜色跟随应用主题。
+- 终端：输入广播不再局限于单个工作区——右键任意终端或工作区标签即可加入广播目标，全应用内广播。
+- 本地终端（Windows）：自动检测 Cygwin、MSYS2、Nushell。
+- SFTP / SCP 会话增加 SSH 保活，空闲的传输连接不再被服务端或 NAT/防火墙超时断开。
+- Redis：键名按可配置分隔符组装为文件夹树，可切换回平铺列表。（@surenwuyuwuqiu）
+- 数据库：数据库树右键菜单新增「运行 SQL 文件」与「复制表」；脚本执行反馈显示失败详情与影响行数。（@surenwuyuwuqiu）
+- 快捷键：键盘设置页重新分组，快捷键展示样式统一。
+- 快捷键（macOS）：快捷键提示改用界面字体渲染，修饰键符号显示为系统原生字形。
+- 面板标题栏新增右键菜单，与标签右键菜单保持一致（重连、复制地址、AI 锁定、广播、关闭）。
+- AI：AI 配置拆分为独立的 `ai.json`（模型目录与 agent 轮次上限，跨设备同步）；应用个性化配置（主题、路径、Shell、快捷键等）改为仅本机生效，不再参与云同步。
+- 会话日志：文件名更规范，不再混入字符集转义序列。（@windtear）
+- 界面：AI 锁定的连接现在将整个标签与面板标题栏染上警示色背景，取代原先与选中高亮相互竞争的细边框标记。（@surenwuyuwuqiu）
+- SFTP：底部状态栏常驻显示（有选中时改为显示选中统计与总大小）；新增全选（Ctrl/Cmd+A）与 Ctrl/Cmd+X/C/V 剪贴板快捷键；文件列表列宽按设计值生效，表头与排序箭头不再折行。
+- 隧道：启动出口 SSH 连接未保存凭据的隧道时，改为提示输入凭据，而不是直接握手失败。
+- K8s：内联 kubeconfig 改为按需展开显示（与私钥文本一致），并支持从文件导入。
+
+**Bug 修复**
+- macOS 输入法：提交后的按键直接送达终端（快速输入不再丢字/重复）、不再产生重复输入；输入法回车上屏不再触发应用快捷键（AI 发送、搜索跳转、对话框确认等约 25 处）。（@surenwuyuwuqiu）
+- 终端：修复 WKWebView 失焦时选中文本即写入剪贴板的问题。（@surenwuyuwuqiu）
+- 终端：修复终端设备属性查询（DA）应答被拦截的问题，远程 TUI 程序的能力探测现在能正常得到回应。（@windtear）
+- Windows：首次启动恢复 Win11 圆角；启动背景与主题一致，不再闪黑色背景。
+- zsh 改为以登录 shell 启动，`.zprofile` 在 `.zshrc` 之前生效。（@boltomli）
+- 隧道：启动失败如实提示，附配置测试与 SSH 示例；错误提示包含隧道名与本地化前缀。
+- SSH：keyboard-interactive 认证被服务端直接拒绝时，如实上报服务端错误。（@kxn）
+- AI：Markdown 渲染转义引号，修复斜杠分隔属性处的 XSS 注入。（@kxn）
+- 快捷键：录制改绑时不再误触发运行时快捷键；数字键在标签/面板间的冲突以固定平台绑定方式解决。（@kxn）
+- 文件传输：修复递归目录重试、SCP 拉取完成判断与 zmodem 取消路径；刷新遇到已断开会话时自动重连。
+- 文件传输：修复切换终端后传输任务列表失效的问题——后台传输继续更新（进度不再冻结、任务不再无法取消）；终端标签页在其文件面板有进行中的传输时显示传输指示。
+- Zmodem：rz/sz 传输完成后 shell 提示符自动恢复，不再需要手动按回车；取消进行中的 sz 下载后终端干净恢复，不再吞掉后续所有输出；并防止 rz/sz 传输停滞。（@windtear）
+- macOS 输入法：修复输入法吞掉按键时大写字母丢失的问题（如豆包英文模式）。（@surenwuyuwuqiu）
+- AI：「拉取模型列表」后的模型下拉框改为显示模型展示名、保存真实模型 ID——此前会把展示名当作模型值保存，导致请求时模型名不正确。（@feuvan）
+- 界面：恢复「下载到」覆盖/重命名冲突提示；修复 AI 边栏搜索高亮每次按键报错的问题。
+- 内置编辑器：修复保存含中文等非 Latin1 字符的文件时报 base64 编码错误的问题；切换编码不再丢失未保存的修改——编码选择改为两级菜单，拆分「以此编码重新打开」（重读磁盘文件，有未保存修改时先确认）与「以此编码保存」（仅影响保存编码）。
+
+**说明**
+- 由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
+
+感谢 @windtear、@kxn、@surenwuyuwuqiu、@boltomli、@Sunshow 和 @feuvan 对本版本的贡献。
 
 ## v1.9.2
 
@@ -1199,10 +1573,10 @@ Thanks to @yuwei5380 and @surenwuyuwuqiu for their contributions to this release
 - **bugfix** Fixed Enter key not triggering reconnect after SSH disconnect occurred while tab was in background. `session:status` event was dropped by `isActive` guard, so `retryOnEnter` never got set. Sync from `sessionStore.getStatus()` on reactivation.
 - **bugfix** Fixed suggestion popup stuck at top-left after SSH reconnect. `terminalInput` held stale reference to disposed terminal, cursor tracking returned `{0,0}`. Recreate `terminalInput` when session ID changes.
 - **bugfix** Fixed terminal content being cleared after reconnect. Release + acquire created a new xterm.js instance. Use `transferTerminal()` to move the existing terminal entry to the new session ID, preserving scrollback.
-- **bugfix** Fixed pressing Ctrl+G / Shift+G / PageDown in vim leaving rendering residue. `\x1b[2J` replacement with scrollClear was also applied in alternate screen buffer, corrupting vim's screen state. Now only applies to main buffer.
+- **bugfix** Fixed pressing Ctrl+G / Shift+G / PageDown in vim leaving rendering residue. `[2J` replacement with scrollClear was also applied in alternate screen buffer, corrupting vim's screen state. Now only applies to main buffer.
 - **bugfix** Fixed sidebar resize handle blocking the connection list scrollbar. Moved activation area outside the sidebar edge via negative `right` offset.
 - **improve** Text highlighting overhaul:
-  - Highlight only resets foreground color (`\x1b[39m`) instead of all SGR (`\x1b[0m`), preserving vim's reverse video selection
+  - Highlight only resets foreground color (`[39m`) instead of all SGR (`[0m`), preserving vim's reverse video selection
   - Lines with display attributes (reverse video, bold, etc.) skip highlighting to avoid color mixup
   - File path regex now matches directories and files without extensions, anchored by `(^|\s)` to avoid false positives inside words
   - Added datetime formats: `HH:MM` without seconds, ISO 8601 `Z` suffix, syslog `Mon DD HH:MM:SS`, weekday+year `Wed Jan 21 HH:MM:SS YYYY`
@@ -1220,10 +1594,10 @@ Thanks to @yuwei5380 and @surenwuyuwuqiu for their contributions to this release
 - **bugfix** 修复后台 tab 中 SSH 断开后按 Enter 无法重连。`session:status` 事件被 `isActive` 守卫丢弃，`retryOnEnter` 从未设置。切回时从 `sessionStore.getStatus()` 同步。
 - **bugfix** 修复重连后智能提示框定位在左上角。`terminalInput` 持有已销毁终端引用，光标追踪返回 `{0,0}`。sessionId 变更时重建 `terminalInput`。
 - **bugfix** 修复重连后终端内容被清空。release + acquire 创建了全新 xterm.js 实例。改用 `transferTerminal()` 迁移终端条目到新 sessionId，保留 scrollback。
-- **bugfix** 修复 vim 中按 Ctrl+G / Shift+G / PageDown 出现渲染残留。`\x1b[2J` 替换为 scrollClear 在交替屏幕中也会执行，破坏 vim 的屏幕状态。现在仅主屏生效。
+- **bugfix** 修复 vim 中按 Ctrl+G / Shift+G / PageDown 出现渲染残留。`[2J` 替换为 scrollClear 在交替屏幕中也会执行，破坏 vim 的屏幕状态。现在仅主屏生效。
 - **bugfix** 修复 sidebar 分隔栏挡住连接列表滚动条。激活区域通过负 `right` 偏移移到 sidebar 外部。
 - **improve** 文本高亮全面优化：
-  - 高亮结束只用 `\x1b[39m` 重置前景色，不取消 vim 的反转视频
+  - 高亮结束只用 `[39m` 重置前景色，不取消 vim 的反转视频
   - 有显示属性（反转视频、加粗等）的行跳过，避免颜色混叠
   - 文件路径正则匹配支持无扩展名文件和目录，用 `(^|\s)` 锚定避免词内误匹配
   - 新增日期格式：`HH:MM`（无秒）、ISO 8601 `Z` 后缀、syslog `Mon DD HH:MM:SS`、`Wed Jan 21 HH:MM:SS YYYY`
@@ -1427,7 +1801,8 @@ Thanks to @yuwei5380 and @surenwuyuwuqiu for their contributions to this release
 - **improve** AI sidebar maximize button now shows a shrink icon when expanded for clearer indication.
 - **improve** Added transparent padding around window edges so the terminal can still be resized by dragging even when it fills the edge.
 - **improve** Workspace tabs now display the LayoutDashboard icon.
-- **bugfix** Fixed garbled text appearing when switching tabs. Session buffer truncation could fall in the middle of escape sequences (DA2, OSC color queries, etc.), leaving fragments without the \x1b prefix that xterm.js rendered as garbage. Fix: scan for \x1b before the first \n to determine a safe restart boundary.
+- **bugfix** Fixed garbled text appearing when switching tabs. Session buffer truncation could fall in the middle of escape sequences (DA2, OSC color queries, etc.), leaving fragments without the  prefix that xterm.js rendered as garbage. Fix: scan for  before the first 
+ to determine a safe restart boundary.
 
 ---
 
@@ -1438,7 +1813,8 @@ Thanks to @yuwei5380 and @surenwuyuwuqiu for their contributions to this release
 - **improve** AI 侧边栏最大化按钮在展开时显示缩回图标（Shrink），更直观。
 - **improve** 窗口边缘增加透明内边距，终端填充边缘时仍可拖拽调整窗口大小。
 - **improve** 工作区标签页增加 LayoutDashboard 图标。
-- **bugfix** 修复标签页切换时终端出现乱码的问题。会话数据缓冲区裁剪点可能落在转义序列中间（DA2、OSC 颜色查询等），残缺片段缺少 \x1b 前缀被 xterm.js 渲染为乱码。修复方案：在第一个 \n 前扫描 \x1b 确定安全重启边界。
+- **bugfix** 修复标签页切换时终端出现乱码的问题。会话数据缓冲区裁剪点可能落在转义序列中间（DA2、OSC 颜色查询等），残缺片段缺少  前缀被 xterm.js 渲染为乱码。修复方案：在第一个 
+ 前扫描  确定安全重启边界。
 
 ## v2026.05.25-alpha
 

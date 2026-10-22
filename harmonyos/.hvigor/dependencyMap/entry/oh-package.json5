@@ -1,0 +1,1 @@
+{"name":"entry","version":"1.0.0","description":"uniTerm entry 模块","main":"","author":"ai-ops-team","license":"Apache-2.0","dependencies":{"libaiops_native.so":"file:./src/main/cpp/types/libaiops_native"}}

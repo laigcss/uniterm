@@ -250,7 +250,7 @@ func vcxsrvCandidates() []string {
 // --- SSH X11 forwarding shared VcXsrv ---
 //
 // SSH X11 forwarding sessions share a single dedicated VcXsrv instance.
-// This isolates ai-ops-terminal's X11 forwarding from external X servers (e.g.
+// This isolates uniTerm's X11 forwarding from external X servers (e.g.
 // MobaXterm on :0) and keeps the X server running across multiple SSH
 // sessions. The process is killed on application shutdown.
 

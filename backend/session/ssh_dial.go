@@ -5,31 +5,42 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
 type sshConnDialer func() (net.Conn, error)
+type sshClientConfigFactory func() (*ssh.ClientConfig, func(), error)
 
 // dialSSHWithCipherFallback keeps modern AEAD preference, but retries a
 // handshake EOF once with CTR first for servers that falsely advertise GCM.
-func dialSSHWithCipherFallback(addr string, config *ssh.ClientConfig, dial sshConnDialer) (*ssh.Client, error) {
-	algorithms := []ssh.Config{sshAlgorithms(), sshAlgorithmsCTRFirst()}
+// The algorithm sets are resolved per connection (see resolveSSHAlgorithms)
+// and tried in order; only a first-attempt EOF advances to the next set.
+func dialSSHWithCipherFallback(addr string, sets []sshAlgoSet, newConfig sshClientConfigFactory, dial sshConnDialer) (*ssh.Client, error) {
 	var lastErr error
-	for i, algorithms := range algorithms {
+	for i, set := range sets {
 		conn, err := dial()
 		if err != nil {
 			return nil, fmt.Errorf("tcp dial: %w", err)
+		}
+		config, cleanup, err := newConfig()
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("ssh auth: %w", err)
 		}
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			tcpConn.SetKeepAlive(true)
 			tcpConn.SetKeepAlivePeriod(sshKeepAliveInterval)
 		}
 		attempt := *config
-		attempt.Config = algorithms
+		attempt.Config = set.config()
+		attempt.HostKeyAlgorithms = set.HostKeys
 		sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, &attempt)
+		cleanup()
 		if err == nil {
 			return ssh.NewClient(sshConn, chans, reqs), nil
 		}
@@ -43,97 +54,112 @@ func dialSSHWithCipherFallback(addr string, config *ssh.ClientConfig, dial sshCo
 	return nil, fmt.Errorf("ssh handshake: %w", lastErr)
 }
 
-// DialSSHOptions 聚合 SSH 拨号所需的全部参数。零值字段按默认安全策略处理。
+// Markers within x/crypto's error strings. The library returns both as plain
+// fmt.Errorf values with no typed sentinel, so the message is the only
+// stable handle.
+const (
+	authExhaustedMarker  = "unable to authenticate"
+	kbdIntColdFailMarker = "unexpected message type 51 (expected 60)"
+)
+
+// dialSSHWithAuthRetry offers keyboard-interactive alongside the primary
+// methods (password/key) on the FIRST handshake, and retries once without it.
 //
-// 各 session 的 Connect 与 test_connection 共享 dialSSH，避免 ClientConfig
-// 构造、主机密钥回调和算法列表在 6+ 处重复。差异点（超时、cipher 回退、
-// 自定义 dial）通过本结构以显式参数传入。
-type DialSSHOptions struct {
-	Host string // 远端主机名或 IP
-	Port int    // 远端端口
-	User string // 登录用户名
-
-	// AuthMethods 是已构造好的 ssh.AuthMethod 列表。调用方负责选择
-	// buildAuthMethods（非交互）或 makeSSHAuthMethods（含键盘交互回调）。
-	AuthMethods []ssh.AuthMethod
-
-	// HostKeyStrategy 控制主机密钥校验："" / "tofu" / "accept-new" 走 TOFU，
-	// "strict" 严格校验，"off"/"insecure" 关闭校验。空串回退到全局默认策略。
-	HostKeyStrategy string
-
-	// Timeout 是 SSH 握手超时。零值=30s。
-	Timeout time.Duration
-
-	// Proxy 是第一跳上游 SOCKS5/HTTP 代理；nil 表示直连。仅当 Dial 为 nil 时生效。
-	Proxy *SocksProxy
-
-	// CipherFallback 启用 CTR-first cipher 回退：当首选 AEAD 握手返回 io.EOF
-	// 时，重试一次 CTR 优先列表。用于旧服务器错误广播 GCM 但实际不支持的场合。
-	// 交互式 SSH 会话与连接测试启用；SFTP/SCP/monitor/tunnel 不启用。
-	CipherFallback bool
-
-	// Dial 覆盖默认底层 TCP dial（含代理）。当非 nil 时，Proxy 被忽略。
-	// tunnel_forward.go 的链式拨号用此参数在上一跳的 ssh.Client 上 Dial。
-	Dial func() (net.Conn, error)
+// Keeping keyboard-interactive in the first handshake means prompt-based
+// logins (OTP/2FA, keyboard-interactive-only servers) and a password rejection
+// followed by an interactive prompt complete in a single TCP handshake — with
+// one handshake per failed attempt, every wrong password paid a full extra
+// dial plus a second server-side fail delay before the user got to retype
+// (issue #949).
+//
+// x/crypto surfaces a server that answers the keyboard-interactive initiation
+// with USERAUTH_FAILURE before any info request as "ssh: unexpected message
+// type 51 (expected 60)". RFC 4252 allows that reply and OpenSSH's own client
+// treats it as a plain rejection, but the library aborts the handshake with
+// that cryptic protocol error. Servers that fail keyboard-interactive cold are
+// common (root login restricted to keys, dropbear without PAM), so the retry
+// drops keyboard-interactive; its plain rejection is the honest auth failure
+// the user should see.
+func dialSSHWithAuthRetry(addr string, sets []sshAlgoSet, authConfig, fallbackConfig sshClientConfigFactory, dial sshConnDialer) (*ssh.Client, error) {
+	if authConfig == nil {
+		authConfig = fallbackConfig
+	}
+	client, err := dialSSHWithCipherFallback(addr, sets, authConfig, dial)
+	if err == nil || !strings.Contains(err.Error(), kbdIntColdFailMarker) {
+		return client, err
+	}
+	client, retryErr := dialSSHWithCipherFallback(addr, sets, fallbackConfig, dial)
+	if retryErr == nil {
+		return client, nil
+	}
+	return nil, retryErr
 }
 
-// dialSSH 统一封装 SSH ClientConfig 构造、主机密钥校验、cipher 回退与代理拨号。
-//
-// 行为契约：
-//   - 构造 ClientConfig{User, Auth, Timeout, HostKeyCallback, Config: sshAlgorithms()}
-//   - 主机密钥回调走 HostKeyCallback → ResolveHostKeyStrategy，保留 S1 的 TOFU 逻辑
-//   - Dial 非 nil 时用它；否则用 dialFirstHop(addr, Proxy)
-//   - CipherFallback=true 走 dialSSHWithCipherFallback（含 TCP keepalive 与 CTR 重试）
-//   - CipherFallback=false 走单次握手（与原 dialSSHTCP 行为一致）
-func dialSSH(opts DialSSHOptions) (*ssh.Client, error) {
-	if opts.Timeout == 0 {
-		opts.Timeout = 30 * time.Second
-	}
-	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
-	clientConfig := &ssh.ClientConfig{
-		User:            opts.User,
-		Auth:            opts.AuthMethods,
-		Timeout:         opts.Timeout,
-		HostKeyCallback: HostKeyCallback(opts.Host, strconv.Itoa(opts.Port), ResolveHostKeyStrategy(opts.HostKeyStrategy)),
-		Config:          sshAlgorithms(),
-	}
-
-	dial := opts.Dial
-	if dial == nil {
-		proxy := opts.Proxy
-		dial = func() (net.Conn, error) { return dialFirstHop(addr, proxy) }
-	}
-
-	if opts.CipherFallback {
-		return dialSSHWithCipherFallback(addr, clientConfig, dial)
-	}
-
-	raw, err := dial()
+// dialSSHTCP dials addr (through the upstream proxy when non-nil), performs the
+// SSH handshake, and returns a *ssh.Client. Used by the SFTP and monitor
+// sessions, which previously dialed directly via ssh.Dial.
+func dialSSHTCP(addr string, clientConfig *ssh.ClientConfig, upstream *SocksProxy) (*ssh.Client, error) {
+	raw, err := dialFirstHop(addr, upstream)
 	if err != nil {
 		return nil, fmt.Errorf("tcp dial: %w", err)
 	}
-	sshConn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
+	conn, chans, reqs, err := ssh.NewClientConn(raw, addr, clientConfig)
 	if err != nil {
 		raw.Close()
 		return nil, fmt.Errorf("ssh handshake: %w", err)
 	}
-	return ssh.NewClient(sshConn, chans, reqs), nil
+	return ssh.NewClient(conn, chans, reqs), nil
 }
 
 // DialSSHClient 建立非交互 SSH 连接（容器 runner 用，无 PTY、无键盘交互回显）。
-// 与 ssh_session 的交互式拨号共享认证与密钥交换配置。
+// 与 ssh_session 的交互式拨号共享认证与密钥交换配置。不提供 keyboard-interactive：
+// 此上下文中无法应答 challenge，提供它只会让普通密码拒绝被回调自身的错误掩盖。
 func DialSSHClient(config ConnectionConfig) (*ssh.Client, error) {
-	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-		return nil, fmt.Errorf("keyboard-interactive not supported in this context")
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	newConfig := func(challenge ssh.KeyboardInteractiveChallenge) sshClientConfigFactory {
+		return func() (*ssh.ClientConfig, func(), error) {
+			authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, challenge)
+			if err != nil {
+				return nil, nil, err
+			}
+			return &ssh.ClientConfig{
+				User:            config.User,
+				Auth:            authMethods,
+				Timeout:         30 * time.Second,
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			}, cleanup, nil
+		}
 	}
-	return dialSSH(DialSSHOptions{
-		Host:            config.Host,
-		Port:            config.Port,
-		User:            config.User,
-		AuthMethods:     makeSSHAuthMethods(config, kb),
-		HostKeyStrategy: config.HostKeyStrategy,
-		Timeout:         30 * time.Second,
-		Proxy:           config.Proxy,
-		CipherFallback:  true,
+	sets, err := resolveSSHDialAlgorithms(config.SSHAlgorithms)
+	if err != nil {
+		return nil, err
+	}
+	factory := newConfig(nil)
+	return dialSSHWithAuthRetry(addr, sets, factory, factory, func() (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, 30*time.Second)
 	})
+}
+
+// sshAlgoModeOf reports the effective mode of a connection's algorithm
+// preferences, used for error annotation.
+func sshAlgoModeOf(p *SSHAlgoConfig) string {
+	if p == nil || p.Mode == "" {
+		return SSHAlgoModeCompatible
+	}
+	return p.Mode
+}
+
+// resolveSSHDialAlgorithms returns the algorithm sets tried in order on a
+// dial path: the connection's resolved base set, followed by the EOF-retry
+// set when it differs from the base.
+func resolveSSHDialAlgorithms(p *SSHAlgoConfig) ([]sshAlgoSet, error) {
+	base, retry, err := resolveSSHAlgorithms(p)
+	if err != nil {
+		return nil, err
+	}
+	if slices.Equal(base.Ciphers, retry.Ciphers) && slices.Equal(base.KeyExchanges, retry.KeyExchanges) &&
+		slices.Equal(base.MACs, retry.MACs) && slices.Equal(base.HostKeys, retry.HostKeys) {
+		return []sshAlgoSet{base}, nil
+	}
+	return []sshAlgoSet{base, retry}, nil
 }

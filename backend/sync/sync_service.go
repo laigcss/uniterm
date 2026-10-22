@@ -1,11 +1,14 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,7 +16,9 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	ggittransport "github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/laigcss/ai-ops-terminal/backend/utils"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/utils"
 )
 
 var ErrWrongSyncPassword = errors.New("WRONG_SYNC_PASSWORD")
@@ -24,7 +29,7 @@ type SyncService struct {
 	// independent of the migratable data directory.
 	configDir string
 	// dataDir is the resolved config data directory whose config files
-	// (connections.json, settings.json, …) are encrypted to / decrypted
+	// (connections.json, ai.json, …) are encrypted to / decrypted
 	// from the sync repo.
 	dataDir     string
 	repoPath    string
@@ -35,7 +40,11 @@ type SyncService struct {
 	// wired in after startup. nil until set; sync degrades to carrying fields
 	// through opaque (best-effort) when it is absent.
 	passwordStore PasswordStore
-	mu            sync.Mutex
+	// stores holds the config-exchange registry (SyncableStore), wired in
+	// at startup. nil until set; sync then moves each store's blob through
+	// ExportPlain/ImportPlain instead of touching per-file enc/dec itself.
+	stores []SyncableStore
+	mu     sync.Mutex
 
 	// ready is closed by NewSyncService() once the disk-touching
 	// init (UserConfigDir → MkdirAll → NewKeychain → NewSyncConfigStore)
@@ -57,12 +66,8 @@ type ConflictInfo struct {
 }
 
 func NewSyncService(dataDir string) (*SyncService, error) {
-	cfgDir, err := os.UserConfigDir()
+	metaDir, err := syncMetaDir()
 	if err != nil {
-		return nil, err
-	}
-	metaDir := filepath.Join(cfgDir, "ai-ops-terminal")
-	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		return nil, err
 	}
 
@@ -93,12 +98,8 @@ func NewSyncServiceAsync(dataDir string) (*SyncService, context.Context) {
 	initDone, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer s.readyOnce.Do(func() { close(s.ready) })
-		cfg, err := os.UserConfigDir()
+		metaDir, err := syncMetaDir()
 		if err != nil {
-			return
-		}
-		metaDir := filepath.Join(cfg, "ai-ops-terminal")
-		if err := os.MkdirAll(metaDir, 0755); err != nil {
 			return
 		}
 		s.configDir = metaDir
@@ -117,12 +118,65 @@ func (s *SyncService) Ready() <-chan struct{} {
 	return s.ready
 }
 
-// SetPasswordStore wires the credential store so sync can normalize enc:v1:
-// fields to plaintext on upload and back on download.
+// SetPasswordStore wires the credential store so sync can refuse to run on a
+// locked vault. Field-level encryption is the stores' job now.
 func (s *SyncService) SetPasswordStore(ps PasswordStore) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.passwordStore = ps
+}
+
+// SetStores wires the config-exchange registry (SyncableStore). Assembled
+// in app.go — the only place that imports both sync and store. nil until
+// set; sync then skips config exchange instead of touching files itself.
+func (s *SyncService) SetStores(stores []SyncableStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stores = stores
+}
+
+// newRemoteBackend builds the backend for a snapshot sync: one dedicated
+// session per call (never the user's interactive one, never via the
+// SessionManager), wrapped in the shared snapshot engine. The sessionFS
+// provider parameters exist for tests; production passes the real
+// constructors.
+func (s *SyncService) newRemoteBackend(backend string, remote RemoteConfig, secret string, files []string) (SnapshotBackend, error) {
+	switch backend {
+	case "webdav", "":
+		return newWebDAVSessionBackend(remote, secret, files, func() sessionFS { return session.NewWebDAVSession("sync-webdav") })
+	case "sftp":
+		return newSFTPBackend(remote, secret, files, func() sessionFS { return session.NewSFTPSession("sync-sftp") })
+	case "s3":
+		return newS3Backend(remote, secret, files, func() sessionFS { return session.NewS3Session("sync-s3") })
+	case "smb":
+		return newSMBBackend(remote, secret, files, func() sessionFS { return session.NewSMBSession("sync-smb") })
+	default:
+		return nil, fmt.Errorf("sync: unsupported backend %q", backend)
+	}
+}
+
+// snapshotConfigured reports whether config carries a usable snapshot
+// remote for its backend: webdav/sftp/smb need Server, s3 needs both
+// Server (endpoint) and Bucket.
+func snapshotConfigured(config SyncConfig) bool {
+	switch config.Backend {
+	case "webdav", "sftp", "smb":
+		return config.Remote.Server != ""
+	case "s3":
+		return config.Remote.Server != "" && config.Remote.Bucket != ""
+	default:
+		return false
+	}
+}
+
+// closeBackend disconnects a session-built remote backend. The session
+// constructors dial eagerly and hold an open connection (SSH/SMB), so
+// every call site that builds one through newRemoteBackend must defer
+// this.
+func closeBackend(b SnapshotBackend) {
+	if c, ok := b.(io.Closer); ok {
+		_ = c.Close()
+	}
 }
 
 // requireUnlocked refuses sync when the credential store is wired but locked.
@@ -159,6 +213,22 @@ func (s *SyncService) getToken() string {
 	return token
 }
 
+// effectiveFiles returns this device's resolved sync file scope.
+// A saved scope that resolves to nothing (e.g. all-invalid names from a
+// stale build) falls back to the legacy default so a broken scope list
+// can never turn sync into a silent no-op or a wholesale wipe.
+func (s *SyncService) effectiveFiles() []string {
+	config, err := s.configStore.Load()
+	if err != nil {
+		return EffectiveSyncFiles(nil)
+	}
+	files := EffectiveSyncFiles(config.SyncScope)
+	if len(files) == 0 {
+		return EffectiveSyncFiles(nil)
+	}
+	return files
+}
+
 // Sync runs a full sync cycle: clone/open → fetch → three-way content
 // analysis → commit/pull/push → decrypt.
 //
@@ -181,6 +251,18 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
+	if config.Backend != "" && config.Backend != "git" {
+		if !snapshotConfigured(config) {
+			return nil, fmt.Errorf("sync not configured: %s remote not set", config.Backend)
+		}
+		secret, _ := s.keychain.GetRemoteSecret(config.Backend)
+		backend, err := s.newRemoteBackend(config.Backend, config.Remote, secret, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer closeBackend(backend)
+		return s.syncSnapshot(backend)
+	}
 	if config.RepoURL == "" {
 		return nil, fmt.Errorf("sync not configured: repo URL not set")
 	}
@@ -192,6 +274,7 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 
 	username := config.Username
 	token := s.getToken()
+	files := s.effectiveFiles()
 
 	// 1. Clone or open repo.
 	repo, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token)
@@ -236,7 +319,7 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 			s.updateLastSyncResult("failed", fmt.Sprintf("reset: %v", err))
 			return nil, fmt.Errorf("reset: %w", err)
 		}
-		if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+		if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 			s.updateLastSyncResult("failed", fmt.Sprintf("decrypt files: %v", err))
 			return nil, fmt.Errorf("decrypt files: %w", err)
 		}
@@ -251,7 +334,7 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 
 	// 4. Heads in sync — only local data drift can require a push.
 	if *heads.Local == *heads.Remote {
-		same, err := s.dataMatchesCommit(repo, encKey, *heads.Local)
+		same, err := s.dataMatchesCommit(files, repo, encKey, *heads.Local)
 		if err != nil {
 			s.updateLastSyncResult("failed", err.Error())
 			return nil, err
@@ -272,25 +355,70 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 		return nil, fmt.Errorf("merge base: %w", err)
 	}
 
-	baseDir, cleanupBase, err := s.decryptCommitToDir(repo, encKey, base)
+	// History rewritten on another device (compaction force-push, manual
+	// rewrite): no common ancestor exists. Compare the two sides' contents
+	// directly — identical → silently re-anchor on the remote head;
+	// different → the conflict dialog. Either way the device re-anchors
+	// and shares history again afterwards.
+	if base == nil {
+		remoteDir, cleanupRemote, err := s.decryptCommitToDir(files, repo, encKey, heads.Remote)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		defer cleanupRemote()
+		same, err := storesMatchDir(s.stores, files, remoteDir)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		if same {
+			if err := repo.ResetToRemote(config.Branch); err != nil {
+				s.updateLastSyncResult("failed", fmt.Sprintf("reset: %v", err))
+				return nil, fmt.Errorf("reset: %w", err)
+			}
+			s.updateLastSyncResult("success", "")
+			return &SyncResult{Message: "已是最新"}, nil
+		}
+		localTime, err := repo.CommitTime(*heads.Local)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		remoteTime, err := repo.CommitTime(*heads.Remote)
+		if err != nil {
+			s.updateLastSyncResult("failed", err.Error())
+			return nil, err
+		}
+		s.updateLastSyncResult("conflict", "")
+		return &SyncResult{
+			Direction: SyncConflict,
+			Conflict:  &ConflictInfo{LocalTime: localTime, RemoteTime: remoteTime},
+		}, nil
+	}
+
+	baseDir, cleanupBase, err := s.decryptCommitToDir(files, repo, encKey, base)
 	if err != nil {
 		s.updateLastSyncResult("failed", err.Error())
 		return nil, err
 	}
 	defer cleanupBase()
-	remoteDir, cleanupRemote, err := s.decryptCommitToDir(repo, encKey, heads.Remote)
+	remoteDir, cleanupRemote, err := s.decryptCommitToDir(files, repo, encKey, heads.Remote)
 	if err != nil {
 		s.updateLastSyncResult("failed", err.Error())
 		return nil, err
 	}
 	defer cleanupRemote()
 
-	localChanged, err := dirsDiffer(s.dataDir, baseDir, s.keychain, s.passwordStore)
+	// The local side is the store's canonical export; base/remote are
+	// decrypted commit copies, so both sides are plaintext here.
+	localSame, err := storesMatchDir(s.stores, files, baseDir)
 	if err != nil {
 		s.updateLastSyncResult("failed", err.Error())
 		return nil, err
 	}
-	remoteChanged, err := dirsDiffer(remoteDir, baseDir, nil, nil)
+	localChanged := !localSame
+	remoteChanged, err := dirsDiffer(files, remoteDir, baseDir)
 	if err != nil {
 		s.updateLastSyncResult("failed", err.Error())
 		return nil, err
@@ -325,7 +453,7 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 			s.updateLastSyncResult("failed", fmt.Sprintf("reset: %v", err))
 			return nil, fmt.Errorf("reset: %w", err)
 		}
-		if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+		if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 			s.updateLastSyncResult("failed", fmt.Sprintf("decrypt files: %v", err))
 			return nil, fmt.Errorf("decrypt files: %w", err)
 		}
@@ -356,14 +484,105 @@ func (s *SyncService) Sync() (*SyncResult, error) {
 	}
 }
 
+const (
+	// compactionThreshold is the first-parent depth at which sync history
+	// is rewritten down to compactionKeep commits. Encrypted config blobs
+	// do not delta-compress, so every commit stores a near-full copy of
+	// all files and repo size grows as ≈ commits × full-size.
+	compactionThreshold = 50
+	// compactionKeep is how many recent commits survive a rewrite.
+	compactionKeep = 10
+)
+
+// maybeCompactHistory bounds the sync repo size: once the first-parent
+// depth reaches compactionThreshold, the remote history is rewritten down
+// to the most recent compactionKeep commits, force-pushed, and the local
+// clone is rebuilt (go-git cannot gc old objects, so only a fresh clone
+// sheds them).
+//
+// Best-effort by contract: any failure logs and skips the round —
+// compaction never fails or blocks the sync that triggered it. Callers
+// must hold s.mu.
+func (s *SyncService) maybeCompactHistory() {
+	config, err := s.configStore.Load()
+	if err != nil || config.RepoURL == "" {
+		return
+	}
+	username := config.Username
+	token := s.getToken()
+
+	repo, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token)
+	if err != nil {
+		log.Writef("sync compaction: open repo: %v", err)
+		return
+	}
+	depth, err := repo.CommitDepth()
+	if err != nil {
+		log.Writef("sync compaction: depth: %v", err)
+		return
+	}
+	if depth < compactionThreshold {
+		return
+	}
+	// The force-push below replaces remote history wholesale. If another
+	// device pushed between our own push and this rewrite, force-pushing
+	// would silently orphan its commit and surface a spurious conflict
+	// there. Right after a successful push the two heads must be equal —
+	// anything else means the remote moved, so skip the round.
+	if err := repo.Fetch(username, token); err != nil && !errors.Is(err, ggittransport.ErrEmptyRemoteRepository) {
+		log.Writef("sync compaction: fetch: %v", err)
+		return
+	}
+	heads, err := repo.ResolveBranchHeads(config.Branch)
+	if err != nil {
+		log.Writef("sync compaction: resolve heads: %v", err)
+		return
+	}
+	if heads.Local == nil || heads.Remote == nil || *heads.Local != *heads.Remote {
+		log.Writef("sync compaction: remote head moved since push, skipping round")
+		return
+	}
+	// Remember the pre-rewrite head: if the force-push below fails, the
+	// branch must be restored, or local and remote are half-rewritten —
+	// no common ancestor — and the next sync surfaces a spurious conflict.
+	prevHead, err := repo.HeadRef()
+	if err != nil {
+		log.Writef("sync compaction: head: %v", err)
+		return
+	}
+	if err := repo.RewriteHistory(compactionKeep); err != nil {
+		log.Writef("sync compaction: rewrite: %v", err)
+		return
+	}
+	if err := repo.PushForce(username, token); err != nil {
+		log.Writef("sync compaction: force push: %v", err)
+		if refErr := repo.RestoreHead(prevHead.Name(), prevHead.Hash()); refErr != nil {
+			log.Writef("sync compaction: restore head: %v", refErr)
+		}
+		return
+	}
+	// Rebuild the clone from scratch — the only way to shed the old
+	// objects; go-git cannot prune them.
+	if err := os.RemoveAll(s.repoPath); err != nil {
+		log.Writef("sync compaction: remove clone: %v", err)
+		return
+	}
+	if _, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token); err != nil {
+		log.Writef("sync compaction: re-clone: %v", err)
+		return
+	}
+	log.Writef("sync compaction: depth %d → %d commits", depth, compactionKeep)
+}
+
 // pushLocalConfig encrypts the local config into the repo, commits it on
 // top of the current HEAD and pushes.
 func (s *SyncService) pushLocalConfig(repo *GitRepo, encKey []byte, username, token string) (*SyncResult, error) {
-	if err := EncryptConfigFiles(s.dataDir, s.repoPath, encKey, s.keychain, s.passwordStore); err != nil {
+	files := s.effectiveFiles()
+	if err := encryptStoresScoped(s.stores, files, s.repoPath, encKey, nil); err != nil {
 		s.updateLastSyncResult("failed", fmt.Sprintf("encrypt files: %v", err))
 		return nil, fmt.Errorf("encrypt files: %w", err)
 	}
-	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync")); err != nil {
+	if _, err := repo.StageAndCommitFiles(commitMsg("uniTerm config sync"), files); err != nil {
 		s.updateLastSyncResult("failed", fmt.Sprintf("commit: %v", err))
 		return nil, fmt.Errorf("commit: %w", err)
 	}
@@ -372,30 +591,31 @@ func (s *SyncService) pushLocalConfig(repo *GitRepo, encKey []byte, username, to
 		return nil, fmt.Errorf("push: %w", err)
 	}
 	s.updateLastSyncResult("success", "")
+	s.maybeCompactHistory()
 	return &SyncResult{Direction: SyncPush, Message: "配置已上传"}, nil
 }
 
 // dataMatchesCommit compares the local config dir with the config as
-// committed at hash. A decrypt error is surfaced, not swallowed
-// (SYNC-P1-11).
-func (s *SyncService) dataMatchesCommit(repo *GitRepo, encKey []byte, hash plumbing.Hash) (bool, error) {
-	dir, cleanup, err := s.decryptCommitToDir(repo, encKey, &hash)
+// committed at hash over the given files. A decrypt error is surfaced, not
+// swallowed (SYNC-P1-11).
+func (s *SyncService) dataMatchesCommit(files []string, repo *GitRepo, encKey []byte, hash plumbing.Hash) (bool, error) {
+	dir, cleanup, err := s.decryptCommitToDir(files, repo, encKey, &hash)
 	if err != nil {
 		return false, err
 	}
 	defer cleanup()
-	same, err := compareConfigDirs(s.dataDir, dir, s.keychain, s.passwordStore)
+	same, err := storesMatchDir(s.stores, files, dir)
 	if err != nil {
 		return false, err
 	}
 	return same, nil
 }
 
-// decryptCommitToDir extracts the synced files as committed at hash and
+// decryptCommitToDir extracts the given files as committed at hash and
 // decrypts them into a fresh temp dir. A nil hash yields an empty dir
 // (nothing committed at that side). The caller owns cleanup via the
 // returned function.
-func (s *SyncService) decryptCommitToDir(repo *GitRepo, encKey []byte, hash *plumbing.Hash) (string, func(), error) {
+func (s *SyncService) decryptCommitToDir(files []string, repo *GitRepo, encKey []byte, hash *plumbing.Hash) (string, func(), error) {
 	cipherDir, err := os.MkdirTemp("", "sync-cipher-")
 	if err != nil {
 		return "", nil, err
@@ -410,11 +630,11 @@ func (s *SyncService) decryptCommitToDir(repo *GitRepo, encKey []byte, hash *plu
 		os.RemoveAll(plainDir)
 	}
 	if hash != nil {
-		if err := repo.ExtractCommitFiles(*hash, cipherDir); err != nil {
+		if err := repo.ExtractCommitFilesIn(*hash, files, cipherDir); err != nil {
 			cleanup()
 			return "", nil, err
 		}
-		if err := DecryptConfigFiles(cipherDir, plainDir, encKey, nil); err != nil {
+		if err := DecryptConfigFilesScoped(files, cipherDir, plainDir, encKey); err != nil {
 			cleanup()
 			return "", nil, fmt.Errorf("decrypt commit: %w", err)
 		}
@@ -422,9 +642,10 @@ func (s *SyncService) decryptCommitToDir(repo *GitRepo, encKey []byte, hash *plu
 	return plainDir, cleanup, nil
 }
 
-// dirsDiffer reports whether the two decrypted config directories differ.
-func dirsDiffer(a, b string, kc *Keychain, ps PasswordStore) (bool, error) {
-	same, err := compareConfigDirs(a, b, kc, ps)
+// dirsDiffer reports whether the two decrypted config directories differ
+// over the given files.
+func dirsDiffer(files []string, a, b string) (bool, error) {
+	same, err := compareConfigDirs(files, a, b)
 	if err != nil {
 		return false, err
 	}
@@ -444,8 +665,21 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
+	if config.Backend != "" && config.Backend != "git" {
+		if !snapshotConfigured(config) {
+			return nil, fmt.Errorf("sync not configured: %s remote not set", config.Backend)
+		}
+		secret, _ := s.keychain.GetRemoteSecret(config.Backend)
+		backend, err := s.newRemoteBackend(config.Backend, config.Remote, secret, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer closeBackend(backend)
+		return s.resolveConflictSnapshot(backend, useLocal)
+	}
 	username := config.Username
 	token := s.getToken()
+	files := s.effectiveFiles()
 
 	repo, err := CloneOrOpen(s.repoPath, config.RepoURL, config.Branch, username, token)
 	if err != nil {
@@ -488,16 +722,17 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 				return nil, fmt.Errorf("reset: %w", err)
 			}
 		}
-		if err := EncryptConfigFiles(s.dataDir, s.repoPath, encKey, s.keychain, s.passwordStore); err != nil {
+		if err := encryptStoresScoped(s.stores, files, s.repoPath, encKey, nil); err != nil {
 			return nil, fmt.Errorf("encrypt files: %w", err)
 		}
-		if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync (resolve conflict)")); err != nil {
+		if _, err := repo.StageAndCommitFiles(commitMsg("uniTerm config sync (resolve conflict)"), files); err != nil {
 			return nil, fmt.Errorf("commit: %w", err)
 		}
 		if err := repo.Push(username, token); err != nil {
 			return nil, fmt.Errorf("push: %w", err)
 		}
 		s.updateLastSyncResult("success", "")
+		s.maybeCompactHistory()
 		return &SyncResult{Direction: SyncPush, Message: "已用本地配置覆盖远端"}, nil
 	}
 
@@ -506,7 +741,7 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 			return nil, fmt.Errorf("reset: %w", err)
 		}
 	}
-	if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+	if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 		return nil, fmt.Errorf("decrypt files: %w", err)
 	}
 
@@ -514,11 +749,23 @@ func (s *SyncService) ResolveConflict(useLocal bool) (*SyncResult, error) {
 	return &SyncResult{Direction: SyncPull, Message: "已用远端配置覆盖本地"}, nil
 }
 
-// TestConnection verifies the repo is reachable with stored credentials.
+// TestConnection verifies the sync backend is reachable with stored credentials.
 func (s *SyncService) TestConnection() error {
 	config, err := s.configStore.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+	if config.Backend != "" && config.Backend != "git" {
+		if !snapshotConfigured(config) {
+			return utils.UserErr("repo_not_configured")
+		}
+		secret, _ := s.keychain.GetRemoteSecret(config.Backend)
+		backend, err := s.newRemoteBackend(config.Backend, config.Remote, secret, nil)
+		if err != nil {
+			return err
+		}
+		defer closeBackend(backend)
+		return backend.Probe()
 	}
 	if config.RepoURL == "" {
 		return utils.UserErr("repo_not_configured")
@@ -526,6 +773,19 @@ func (s *SyncService) TestConnection() error {
 	username := config.Username
 	token := s.getToken()
 	return TestConnection(config.RepoURL, username, token)
+}
+
+// TestRemote probes a snapshot remote with form-provided values, without
+// touching the stored configuration — the add-repo dialog's test button.
+// Unlike TestConnection it never reads sync-config.json, so it can verify
+// a candidate remote before the user commits to it.
+func (s *SyncService) TestRemote(backend string, remote RemoteConfig, secret string) error {
+	b, err := s.newRemoteBackend(backend, remote, secret, nil)
+	if err != nil {
+		return err
+	}
+	defer closeBackend(b)
+	return b.Probe()
 }
 
 func (s *SyncService) updateLastSyncResult(status string, errMsg string) {
@@ -536,10 +796,11 @@ func (s *SyncService) updateLastSyncResult(status string, errMsg string) {
 	_ = s.configStore.Save(config)
 }
 
-// IsAutoSyncEnabled returns whether auto sync is enabled and configured.
+// IsAutoSyncEnabled returns whether auto sync is enabled and configured
+// for the active backend (git repo URL, or a WebDAV server in webdav mode).
 func (s *SyncService) IsAutoSyncEnabled() bool {
 	config, _ := s.configStore.Load()
-	return config.AutoSync && config.RepoURL != ""
+	return config.AutoSync && (config.RepoURL != "" || snapshotConfigured(config))
 }
 
 // RepoPath returns the local git repo path.
@@ -565,6 +826,7 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 	if err != nil {
 		return nil, fmt.Errorf("clone/open repo: %w", err)
 	}
+	files := s.effectiveFiles()
 
 	// Check if remote has .sync-salt
 	salt, err := ReadSaltFile(s.repoPath)
@@ -591,22 +853,27 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 		}
 		defer os.RemoveAll(tmpDir)
 
-		if err := DecryptConfigFiles(s.repoPath, tmpDir, encKey, nil); err != nil {
+		if err := DecryptConfigFilesScoped(files, s.repoPath, tmpDir, encKey); err != nil {
 			return nil, fmt.Errorf("decrypt remote for comparison: %w", err)
 		}
 
-		localEmpty := isConfigDirEmpty(s.dataDir)
-		remoteEmpty := isConfigDirEmpty(tmpDir)
+		localEmpty := isConfigDirEmpty(files, s.dataDir)
+		remoteEmpty := isConfigDirEmpty(files, tmpDir)
 
 		if localEmpty {
 			// Local has no config — pull remote to local
-			if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+			if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 				return nil, fmt.Errorf("decrypt files: %w", err)
 			}
+			// Carry over device-local fields: re-configuring the repo must
+			// not wipe this device's sync scope or auto-sync setting.
+			prev, _ := s.configStore.Load()
 			cfg := SyncConfig{
-				RepoURL:  repoURL,
-				Branch:   "main",
-				Username: username,
+				RepoURL:   repoURL,
+				Branch:    "main",
+				Username:  username,
+				AutoSync:  prev.AutoSync,
+				SyncScope: prev.SyncScope,
 			}
 			if token != "" {
 				_ = s.keychain.SetGitToken(token)
@@ -617,15 +884,20 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 		}
 		if !remoteEmpty {
 			// Both have data — compare
-			same, err := compareConfigDirs(s.dataDir, tmpDir, s.keychain, s.passwordStore)
+			same, err := storesMatchDir(s.stores, files, tmpDir)
 			if err != nil {
 				return nil, fmt.Errorf("compare configs: %w", err)
 			}
 			if !same {
+				// Carry over device-local fields: re-configuring the repo
+				// must not wipe this device's sync scope or auto-sync setting.
+				prev, _ := s.configStore.Load()
 				cfg := SyncConfig{
-					RepoURL:  repoURL,
-					Branch:   "main",
-					Username: username,
+					RepoURL:   repoURL,
+					Branch:    "main",
+					Username:  username,
+					AutoSync:  prev.AutoSync,
+					SyncScope: prev.SyncScope,
 				}
 				if token != "" {
 					_ = s.keychain.SetGitToken(token)
@@ -644,16 +916,21 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 				}, nil
 			}
 			// Same — save config then return, no need to re-encrypt/push
+			// Carry over device-local fields: re-configuring the repo must
+			// not wipe this device's sync scope or auto-sync setting.
+			prev, _ := s.configStore.Load()
 			cfg := SyncConfig{
-				RepoURL:  repoURL,
-				Branch:   "main",
-				Username: username,
+				RepoURL:   repoURL,
+				Branch:    "main",
+				Username:  username,
+				AutoSync:  prev.AutoSync,
+				SyncScope: prev.SyncScope,
 			}
 			if token != "" {
 				_ = s.keychain.SetGitToken(token)
 			}
 			_ = s.configStore.Save(cfg)
-			if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+			if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 				return nil, fmt.Errorf("decrypt files: %w", err)
 			}
 			s.updateLastSyncResult("success", "")
@@ -677,11 +954,11 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 	}
 
 	// Encrypt and push local config
-	if err := EncryptConfigFiles(s.dataDir, s.repoPath, encKey, s.keychain, s.passwordStore); err != nil {
+	if err := encryptStoresScoped(s.stores, files, s.repoPath, encKey, nil); err != nil {
 		return nil, fmt.Errorf("encrypt files: %w", err)
 	}
 
-	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync")); err != nil {
+	if _, err := repo.StageAndCommitFiles(commitMsg("uniTerm config sync"), files); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
@@ -696,10 +973,15 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 		}
 	}
 
+	// Carry over device-local fields: re-configuring the repo must not
+	// wipe this device's sync scope or auto-sync setting.
+	prev, _ := s.configStore.Load()
 	cfg := SyncConfig{
-		RepoURL:  repoURL,
-		Branch:   "main",
-		Username: username,
+		RepoURL:   repoURL,
+		Branch:    "main",
+		Username:  username,
+		AutoSync:  prev.AutoSync,
+		SyncScope: prev.SyncScope,
 	}
 	if token != "" {
 		if err := s.keychain.SetGitToken(token); err != nil {
@@ -711,9 +993,13 @@ func (s *SyncService) ConfigureRepo(repoURL, username, token, masterPassword str
 	}
 
 	// Decrypt remote files to local
-	if err := DecryptConfigFiles(s.repoPath, s.dataDir, encKey, s.passwordStore); err != nil {
+	if err := decryptStoresScoped(s.stores, files, s.repoPath, encKey); err != nil {
 		return nil, fmt.Errorf("decrypt files: %w", err)
 	}
+
+	// Compaction deletes and re-clones s.repoPath best-effort, so it must
+	// run after the last use of that directory in this function.
+	s.maybeCompactHistory()
 
 	s.updateLastSyncResult("success", "")
 	return &SyncResult{Direction: SyncPush, Message: "仓库配置成功"}, nil
@@ -734,46 +1020,37 @@ func getConfigModTime(dir string) time.Time {
 	return latest
 }
 
-// isConfigDirEmpty returns true if the config dir has no meaningful data.
-// Counts every synced JSON — not only connections — so a user with settings
+// isConfigDirEmpty returns true if the config dir has no meaningful data
+// over the given files. Counts every file in the list — not only connections —
+// so a user with settings
 // / quick-commands but no connections is not treated as "empty" and silently
-// overwritten on first sync (SYNC-P0-1). Uses syncedFiles rather than every
-// persisted JSON: ai-sessions.json / skills.json are local-only and never
-// synced, so their presence must not block a first-sync pull (their files
-// are not touched by decrypt either).
-func isConfigDirEmpty(dir string) bool {
-	for _, name := range syncedFiles {
-		path := filepath.Join(dir, name)
-		data, err := os.ReadFile(path)
+// overwritten on first sync (SYNC-P0-1). Uses the given file list rather than
+// every persisted JSON: ai-sessions.json / skills.json are local-only and never
+// synced, so their presence must not block a first-sync add-and-pull
+// (their files are not touched by decrypt either). favorites.json is an
+// array file: only a non-empty array counts as data.
+func isConfigDirEmpty(files []string, dir string) bool {
+	for _, name := range files {
+		v, err := readJSONValue(filepath.Join(dir, name))
 		if err != nil {
-			continue
-		}
-		if len(data) == 0 {
-			continue
-		}
-		// Treat as non-empty if the file parses to anything other than
-		// an explicitly empty wrapper.
-		var probe map[string]json.RawMessage
-		if err := json.Unmarshal(data, &probe); err != nil {
-			// Unparseable — still treat as non-empty so the user's data
-			// is never silently nuked.
+			// Unparseable or unreadable — treat as non-empty so the
+			// user's data is never silently nuked.
 			return false
 		}
-		if len(probe) > 0 {
+		if v != nil {
 			return false
 		}
 	}
 	return true
 }
 
-// compareConfigDirs compares two decrypted config directories.
-// localDir is the local config directory; remoteDir is the decrypted remote copy.
-// Legacy empty passwords are backfilled from keychain and enc:v1: fields are
-// normalized to plaintext on the local side before comparison so both sides
-// are comparable.
-func compareConfigDirs(localDir, remoteDir string, kc *Keychain, ps PasswordStore) (bool, error) {
-	for _, name := range syncedFiles {
-		same, err := compareConfigFiles(filepath.Join(localDir, name), filepath.Join(remoteDir, name), kc, ps)
+// compareConfigDirs compares two decrypted config directories over the given
+// files. Both sides are already plaintext (a decrypted remote copy against
+// another), so no field-level normalization applies; the local store's
+// plaintext is compared through storesMatchDir instead.
+func compareConfigDirs(files []string, a, b string) (bool, error) {
+	for _, name := range files {
+		same, err := compareConfigFiles(filepath.Join(a, name), filepath.Join(b, name))
 		if err != nil {
 			return false, err
 		}
@@ -784,84 +1061,137 @@ func compareConfigDirs(localDir, remoteDir string, kc *Keychain, ps PasswordStor
 	return true, nil
 }
 
-// compareConfigFiles compares two config files after normalizing the local side
-// (backfill legacy keychain passwords, decrypt enc:v1: fields) so both sides
-// are plaintext. JSON is re-marshaled via json.MarshalIndent so Go's
-// encoding/json sorts map keys deterministically before byte comparison —
-// prevents spurious diffs from non-deterministic key ordering.
-func compareConfigFiles(localPath, remotePath string, kc *Keychain, ps PasswordStore) (bool, error) {
-	localData, err := os.ReadFile(localPath)
+// readJSONValue decodes a config file into a generic JSON value. Most synced
+// files are objects, but favorites.json is a top-level array, so the value
+// must not be assumed to be a map. A missing file and explicitly empty
+// wrappers ({}, [], null) all normalize to nil — they all mean "no data" and
+// must compare equal to each other.
+func readJSONValue(path string) (interface{}, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		localData = []byte("{}")
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	remoteData, err := os.ReadFile(remotePath)
-	if err != nil {
-		remoteData = []byte("{}")
-	}
-
-	var localObj, remoteObj map[string]interface{}
-	if err := json.Unmarshal(localData, &localObj); err != nil {
-		return false, fmt.Errorf("parse local %s: %w", localPath, err)
-	}
-	if err := json.Unmarshal(remoteData, &remoteObj); err != nil {
-		return false, fmt.Errorf("parse remote %s: %w", remotePath, err)
-	}
-
-	// Backfill legacy empty passwords from keychain, then decrypt any enc:v1:
-	// fields to plaintext, so the local side is comparable to the remote copy.
-	backfillFromKeychain(localObj, kc)
-	decryptFieldsInPlace(localObj, ps)
-
-	localNorm, err := json.MarshalIndent(localObj, "", "  ")
-	if err != nil {
-		return false, fmt.Errorf("marshal local: %w", err)
-	}
-	remoteNorm, err := json.MarshalIndent(remoteObj, "", "  ")
-	if err != nil {
-		return false, fmt.Errorf("marshal remote: %w", err)
-	}
-	return string(localNorm) == string(remoteNorm), nil
+	return jsonValue(data)
 }
 
-func backfillFromKeychain(obj map[string]interface{}, kc *Keychain) {
-	if kc == nil {
-		return
+// jsonValue normalizes a JSON document to a comparable value: blank input
+// and the explicitly empty wrappers ({}, [], null) all mean "no data" and
+// must compare equal to each other.
+func jsonValue(raw []byte) (interface{}, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, nil
 	}
-	// Backfill connection passwords
-	if conns, ok := obj["connections"].([]interface{}); ok {
-		for _, c := range conns {
-			if cm, ok := c.(map[string]interface{}); ok {
-				if cm["authType"] != "password" {
-					continue
-				}
-				pw, _ := cm["password"].(string)
-				if pw == "" {
-					if id, ok := cm["id"].(string); ok {
-						if kcPw, err := kc.GetPassword(id); err == nil && kcPw != "" {
-							cm["password"] = kcPw
-						}
-					}
-				}
-			}
+	var v interface{}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	switch t := v.(type) {
+	case map[string]interface{}:
+		if len(t) == 0 {
+			return nil, nil
+		}
+	case []interface{}:
+		if len(t) == 0 {
+			return nil, nil
 		}
 	}
-	// Backfill model apiKeys from keychain (settings.json: ai.models[].apiKey)
-	if ai, ok := obj["ai"].(map[string]interface{}); ok {
-		if models, ok := ai["models"].([]interface{}); ok {
-			for _, m := range models {
-				if mm, ok := m.(map[string]interface{}); ok {
-					ak, _ := mm["apiKey"].(string)
-					if ak == "" {
-						if id, ok := mm["id"].(string); ok {
-							if kcAk, err := kc.GetModelAPIKey(id); err == nil && kcAk != "" {
-								mm["apiKey"] = kcAk
-							}
-						}
-					}
-				}
-			}
+	return v, nil
+}
+
+// canonicalJSON renders raw JSON in the canonical comparable form: empty
+// wrappers collapse to null and encoding/json sorts map keys, so a store's
+// struct-order marshal and a remote blob's map-order marshal produce
+// identical bytes for equal content.
+func canonicalJSON(raw []byte) (string, error) {
+	v, err := jsonValue(raw)
+	if err != nil {
+		return "", err
+	}
+	out, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// compareConfigFiles compares two config files as canonical JSON. Array
+// files (favorites.json) keep their order, which is meaningful. Both sides
+// are decrypted plaintext by the time they get here — the local store's
+// plaintext never enters this path; storesMatchDir covers the
+// local-store-vs-remote direction.
+func compareConfigFiles(aPath, bPath string) (bool, error) {
+	aVal, err := readJSONValue(aPath)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", aPath, err)
+	}
+	bVal, err := readJSONValue(bPath)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", bPath, err)
+	}
+	aNorm, err := json.MarshalIndent(aVal, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("marshal %s: %w", aPath, err)
+	}
+	bNorm, err := json.MarshalIndent(bVal, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("marshal %s: %w", bPath, err)
+	}
+	return string(aNorm) == string(bNorm), nil
+}
+
+// storesMatchDir reports whether every registry store (restricted to files)
+// exports content equal to the decrypted remote blob in dir. This is the
+// local-vs-remote comparison: the store is the single source of truth for
+// the local side, so no keychain backfill or enc:v1: normalization happens
+// here — ExportPlain already applied the store's full semantics. A store
+// whose backing file was never written and a blob the remote never carried
+// both read as absent, and absent matches absent.
+func storesMatchDir(stores []SyncableStore, files []string, dir string) (bool, error) {
+	if err := requireStores(stores, files); err != nil {
+		return false, err
+	}
+	wanted := make(map[string]bool, len(files))
+	for _, name := range files {
+		wanted[name] = true
+	}
+	for _, st := range stores {
+		name := st.BlobName()
+		if !wanted[name] {
+			continue
+		}
+		var local []byte
+		plain, err := st.ExportPlain()
+		switch {
+		case err == nil:
+			local = plain
+		case errors.Is(err, fs.ErrNotExist):
+			// Never persisted: compares as absent.
+		default:
+			return false, fmt.Errorf("export %s: %w", name, err)
+		}
+		remote, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil && !os.IsNotExist(err) {
+			return false, fmt.Errorf("read %s: %w", name, err)
+		}
+		if os.IsNotExist(err) {
+			remote = nil
+		}
+		localNorm, err := canonicalJSON(local)
+		if err != nil {
+			return false, fmt.Errorf("parse local %s: %w", name, err)
+		}
+		remoteNorm, err := canonicalJSON(remote)
+		if err != nil {
+			return false, fmt.Errorf("parse remote %s: %w", name, err)
+		}
+		if localNorm != remoteNorm {
+			return false, nil
 		}
 	}
+	return true, nil
 }
 
 // VerifySyncPassword validates credentials against the remote and verifies the
@@ -911,12 +1241,30 @@ func (s *SyncService) VerifySyncPassword(password, username, token string) error
 		key = DeriveKey(password, salt)
 	}
 
-	encrypted, err := repo.ReadRemoteFile(config.Branch, "connections.json")
-	if err != nil {
-		encrypted, err = os.ReadFile(filepath.Join(s.repoPath, "connections.json"))
-		if err != nil {
-			return ErrWrongSyncPassword
+	// Try each scoped file on the remote, then the local mirror — the
+	// scope may legitimately exclude any specific file.
+	files := s.effectiveFiles()
+	var encrypted []byte
+	for _, name := range files {
+		data, rerr := repo.ReadRemoteFile(config.Branch, name)
+		if rerr == nil && len(data) > 0 {
+			encrypted = data
+			break
 		}
+	}
+	if encrypted == nil {
+		for _, name := range files {
+			data, rerr := os.ReadFile(filepath.Join(s.repoPath, name))
+			if rerr == nil && len(data) > 0 {
+				encrypted = data
+				break
+			}
+		}
+	}
+	if encrypted == nil {
+		// No scoped ciphertext on the remote or local mirror — an empty
+		// repo also lands here (pre-existing semantics).
+		return ErrWrongSyncPassword
 	}
 
 	if _, err := decryptBytes(string(encrypted), key); err != nil {
@@ -925,8 +1273,11 @@ func (s *SyncService) VerifySyncPassword(password, username, token string) error
 	return nil
 }
 
-// ChangePassword re-encrypts all synced files with a new master password
-// and a fresh random salt. A new salt is required so PBKDF2 work cannot be
+// ChangePassword re-encrypts every ciphertext file present in the repo
+// with a new master password and a fresh random salt. The rotation is
+// repo-global because the salt is repo-global: every device derives its
+// key from the same salt, so no ciphertext may survive under the old key.
+// A new salt is required so PBKDF2 work cannot be
 // amortized across old and new passwords (SYNC-P1-6). The repo's existing
 // ciphertext is decrypted with the old key and re-encrypted with the new
 // key via a temp-then-rename pattern, so a crash mid-rotation leaves the
@@ -938,6 +1289,9 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 	config, err := s.configStore.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+	if config.Backend == "webdav" {
+		return s.changePasswordSnapshot(oldPassword, newPassword)
 	}
 	if config.RepoURL == "" {
 		return fmt.Errorf("no repo configured")
@@ -967,10 +1321,20 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 		return fmt.Errorf("store new encryption key: %w", err)
 	}
 
+	// Rotate every ciphertext present in the repo, not just the local
+	// scope: the new salt changes every device's derived key, so any
+	// file left under the old key would permanently break their sync.
+	var files []string
+	for _, name := range syncableFiles {
+		if _, err := os.Stat(filepath.Join(s.repoPath, name)); err == nil {
+			files = append(files, name)
+		}
+	}
+
 	// Re-encrypt every existing repo ciphertext: decrypt with oldKey,
 	// re-encrypt with newKey, atomic rename. A crash before the rename
 	// leaves the original ciphertext intact and decryptable with oldKey.
-	for _, name := range syncedFiles {
+	for _, name := range files {
 		srcPath := filepath.Join(s.repoPath, name)
 		ciphertext, err := os.ReadFile(srcPath)
 		if err != nil {
@@ -1018,13 +1382,15 @@ func (s *SyncService) ChangePassword(oldPassword, newPassword string) error {
 		return fmt.Errorf("open repo: %w", err)
 	}
 
-	if _, err := repo.StageAndCommit(commitMsg("ai-ops-terminal config sync (change password)")); err != nil {
+	if _, err := repo.StageAndCommitFiles(commitMsg("uniTerm config sync (change password)"), files); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 
 	if err := repo.Push(username, token); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
+
+	s.maybeCompactHistory()
 
 	return nil
 }
@@ -1040,6 +1406,10 @@ func (s *SyncService) DeleteRepo() error {
 
 	_ = s.keychain.Delete("encryption-key")
 	_ = s.keychain.Delete("git-token")
+	_ = s.keychain.Delete("webdav-password")
+	_ = s.keychain.DeleteRemoteSecret("sftp")
+	_ = s.keychain.DeleteRemoteSecret("s3")
+	_ = s.keychain.DeleteRemoteSecret("smb")
 
 	return s.configStore.Save(SyncConfig{Branch: "main"})
 }
@@ -1052,20 +1422,25 @@ func commitMsg(action string) string {
 	return fmt.Sprintf("%s | %s", action, time.Now().Format(time.RFC3339))
 }
 
-// repoHasFiles returns true if the repo directory contains encrypted config files.
+// repoHasFiles reports whether the repo carries any encrypted config blob.
+// It is the "is there a remote copy to protect" heuristic, so ANY blob
+// counts: sync skips a store whose backing file was never written, so a real
+// repo routinely carries a subset of the synced files. Requiring all of them
+// would silently disable the wrong-key guard below on most repos.
 func repoHasFiles(repoPath string) bool {
-	for _, name := range syncedFiles {
-		if _, err := os.Stat(filepath.Join(repoPath, name)); os.IsNotExist(err) {
-			return false
+	for _, name := range defaultSyncedFiles {
+		if _, err := os.Stat(filepath.Join(repoPath, name)); err == nil {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
-// verifyDecryption checks that the given key can decrypt the remote config files.
+// verifyDecryption checks that the given key can decrypt every config blob
+// the repo carries — not just connections.json, which a scoped repo may
+// legitimately lack. DecryptConfigFiles skips blobs that are absent.
 func verifyDecryption(repoPath string, key []byte) error {
-	connPath := filepath.Join(repoPath, "connections.json")
-	if _, err := os.Stat(connPath); os.IsNotExist(err) {
+	if !repoHasFiles(repoPath) {
 		return nil
 	}
 	tmpDir, err := os.MkdirTemp("", "sync-verify")
@@ -1073,5 +1448,5 @@ func verifyDecryption(repoPath string, key []byte) error {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
-	return DecryptConfigFiles(repoPath, tmpDir, key, nil)
+	return DecryptConfigFiles(repoPath, tmpDir, key)
 }

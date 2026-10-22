@@ -6,10 +6,16 @@
     draggable="true"
     @dragstart="emit('dragstart', $event)"
   >
-    <div v-if="showHeader" class="panel-header" :class="{ 'ai-locked': isAILocked }" @dblclick.stop>
+    <div
+      v-if="showHeader"
+      class="panel-header"
+      :class="{ 'ai-locked': isAILocked }"
+      @dblclick.stop
+      @contextmenu="onHeaderContextMenu"
+    >
       <div class="panel-header-left">
         <span class="panel-icon-wrapper">
-          <component :is="panelIcon" class="panel-type-icon" />
+          <component :is="panelIcon" class="panel-type-icon" :class="{ 'ai-locked-icon': isAILocked }" />
           <span
             v-if="isOutputLogOn"
             class="panel-log-dot"
@@ -26,9 +32,20 @@
           @keydown.escape="cancelEdit"
           @blur="confirmEdit"
           @click.stop
+          @contextmenu.stop
         />
+        <span v-if="panelShortcut" class="panel-shortcut">{{ panelShortcut }}</span>
       </div>
       <div class="panel-header-actions">
+        <button
+          v-if="workspaceId"
+          class="panel-maximize"
+          @click.stop="toggleMaximize"
+          :title="maximizeTitle"
+        >
+          <Minimize2 v-if="isMaximized" :size="'0.875rem'" />
+          <Maximize2 v-else :size="'0.875rem'" />
+        </button>
         <button
           v-if="(panel.type === 'ssh' || panel.type === 'local' || panel.type === 'wsl') && workspaceId"
           class="panel-broadcast"
@@ -36,7 +53,7 @@
           @click.stop="onBroadcastClick"
           :title="broadcastTitle"
         >
-          <Radio :size="14" />
+          <Radio :size="'0.875rem'" />
         </button>
         <button
           class="panel-ai-lock"
@@ -44,7 +61,7 @@
           @click.stop="emit('toggleAiLock', panel.id)"
           :title="isAILocked ? t('terminal.aiLockedToPanel') : t('terminal.lockAIToPanel')"
         >
-          <Sparkles :size="14" />
+          <Sparkles :size="'0.875rem'" />
         </button>
         <div class="panel-more-wrapper">
           <button
@@ -52,15 +69,29 @@
             @click.stop="toggleMoreMenu($event)"
             :title="t('terminal.more')"
           >
-            <MoreHorizontal :size="14" />
+            <MoreHorizontal :size="'0.875rem'" />
           </button>
-          <Menu ref="moreMenuRef" align="end" root-class="right-shortcuts" v-model:visible="moreMenuVisible">
+          <Menu ref="moreMenuRef" align="end" v-model:visible="moreMenuVisible">
             <!-- ① 面板操作 -->
             <MenuItem :shortcut="menuShortcut('duplicateSession')" @click="emit('duplicate', panel.id); moreMenuVisible = false">
               {{ t('tab.duplicate') }}
             </MenuItem>
+            <MenuItem v-if="canDuplicateChannel" @click="onDuplicateChannel(); moreMenuVisible = false">
+              {{ t('tab.duplicateChannel') }}
+            </MenuItem>
+            <MenuItem @click="forceReconnect(); moreMenuVisible = false">{{ t('tab.reconnect') }}</MenuItem>
+            <MenuItem v-if="serverHost" @click="copyHostAddress">{{ t('tab.copyHostAddress') }}</MenuItem>
+            <MenuItem :shortcut="menuShortcut('lockAI')" @click="toggleAiLockFromMenu">
+              {{ isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI') }}
+            </MenuItem>
             <MenuItem @click="renamePanel">{{ t('tab.rename') }}</MenuItem>
             <MenuItem v-if="panel.config?.id" @click="locateConnection">{{ t('tab.locate') }}</MenuItem>
+            <MenuItem
+              v-if="(panel.type === 'ssh' || panel.type === 'local' || panel.type === 'wsl') && workspaceId"
+              @click="toggleBroadcastTarget"
+            >
+              {{ isPanelBroadcastTarget ? t('tab.unbroadcast') : t('tab.broadcast') }}
+            </MenuItem>
 
             <!-- ② 会话文本操作 -->
             <MenuDivider />
@@ -68,6 +99,8 @@
               {{ t('terminal.searchText') }}
             </MenuItem>
             <MenuItem @click="triggerExport(); moreMenuVisible = false">{{ t('terminal.export') }}</MenuItem>
+            <MenuItem @click="triggerResetOutput(); moreMenuVisible = false">{{ t('terminal.resetOutput') }}</MenuItem>
+            <MenuItem @click="triggerClearScrollback(); moreMenuVisible = false">{{ t('terminal.clearScrollback') }}</MenuItem>
             <MenuItem @click="toggleOutputLog(); moreMenuVisible = false">
               {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
             </MenuItem>
@@ -80,9 +113,15 @@
             <MenuItem v-if="panel.type === 'ssh'" @click="connectSftp(); moreMenuVisible = false">{{ t(connectFileMenuKey(panel.config)) }}</MenuItem>
             <MenuItem v-if="panel.type === 'ssh'" @click="uploadFileRz(); moreMenuVisible = false">{{ t('terminal.uploadFileRz') }}</MenuItem>
             <MenuItem v-if="panel.type === 'ssh'" @click="connectMonitor(); moreMenuVisible = false">{{ t('sidebar.connectMonitor') }}</MenuItem>
+
+            <!-- ④ 关闭 -->
+            <MenuDivider />
+            <MenuItem :shortcut="menuShortcut('closePanel')" @click="emit('close', panel.id); moreMenuVisible = false">
+              {{ t('tab.close') }}
+            </MenuItem>
           </Menu>
         </div>
-        <button class="panel-close" @click.stop="emit('close', panel.id)"><X :size="14" /></button>
+        <button class="panel-close" @click.stop="emit('close', panel.id)"><X :size="'0.875rem'" /></button>
       </div>
     </div>
     <BaseTerminal
@@ -99,7 +138,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onUnmounted, inject } from 'vue'
-import { Radio, Sparkles, MoreHorizontal, X, SquareTerminal, Laptop, LaptopMinimal, Cable, Terminal, Zap } from '@lucide/vue'
+import { Radio, Sparkles, MoreHorizontal, X, SquareTerminal, Laptop, LaptopMinimal, Cable, Terminal, Zap, Maximize2, Minimize2 } from '@lucide/vue'
 import BaseTerminal from './BaseTerminal.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -108,7 +147,8 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { formatKeyBinding } from '../composables/useKeyboardShortcuts'
+import { formatKeyBinding, panelDigitShortcutsSuppressed, panelDigitShortcutPrefix, formatDigitShortcut } from '../composables/useKeyboardShortcuts'
+import { useDuplicateSession } from '../composables/useDuplicateSession'
 import type { ShortcutAction } from '../types/settings'
 import {
   CreateSession,
@@ -120,14 +160,16 @@ import {
   GetSessionOutputLogInfo,
   OpenPathInExplorer,
   SessionStart,
-} from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+} from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { useI18n } from '../i18n'
-import type { Panel } from '../types/workspace'
+import type { Panel, WorkspaceTab } from '../types/workspace'
 import { waitForTerminalSize } from '../services/terminalManager'
 import { connectFileMenuKey } from '../utils/fileTransferUtils'
+import { isMobilePlatform } from '../utils/platform'
 import type { ConnectionConfig } from '../types/session'
 import type { CredentialResult } from './CredentialPrompt.vue'
+import { Clipboard } from '@wailsio/runtime'
 
 // Escape sequences to disable all xterm mouse tracking modes.
 // When a terminal app (e.g. opencode, vim, tmux) enables mouse tracking
@@ -145,6 +187,7 @@ const props = defineProps<{
   showHeader: boolean
   isActive: boolean
   workspaceId?: string
+  shortcutIndex?: number
 }>()
 
 const emit = defineEmits<{
@@ -163,6 +206,40 @@ const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const panelShortcut = computed(() => {
+  // Hidden on mobile (no hardware keyboard), by the "show shortcut hints"
+  // toggle, same as the tab badges.
+  if (isMobilePlatform()) return ''
+  if (!settingsStore.settings.showTabShortcutHints) return ''
+  if (!props.shortcutIndex || props.shortcutIndex > 9) return ''
+  // Option+N on macOS / Alt+N elsewhere by default, or the user-configured
+  // keyboard.panelSwitchModifier combo — hidden while the tab-switch modifier
+  // claims the same combo or the user cleared the panel modifier, so a badge
+  // never advertises a binding that does nothing.
+  const kb = settingsStore.settings.keyboard
+  if (panelDigitShortcutsSuppressed(kb.tabSwitchModifier, kb.panelSwitchModifier)) return ''
+  const prefix = panelDigitShortcutPrefix(isMac, kb.panelSwitchModifier)
+  return formatDigitShortcut(prefix, props.shortcutIndex, isMac)
+})
+const workspaceTab = computed(() =>
+  props.workspaceId ? tabStore.tabs.find((tab): tab is WorkspaceTab => tab.id === props.workspaceId && tab.type === 'workspace') : undefined
+)
+const isMaximized = computed(() => workspaceTab.value?.maximizedPanelId === props.panel.id)
+const maximizeTitle = computed(() => {
+  const label = t(isMaximized.value ? 'workspace.restorePanel' : 'workspace.maximizePanel')
+  if (isMobilePlatform()) return label
+  // Reactive via settingsStore, so the hint follows the user's rebind.
+  const b = settingsStore.settings.keyboard.maximizePanel
+  const shortcut = b ? formatKeyBinding(b, isMac) : ''
+  return shortcut ? `${label} (${shortcut})` : label
+})
+
+function toggleMaximize() {
+  if (!props.workspaceId) return
+  tabStore.setActivePanel(props.workspaceId, props.panel.id)
+  tabStore.toggleWorkspacePanelMaximize(props.workspaceId)
+  nextTick(() => baseTerminalRef.value?.focus())
+}
 
 // Human-readable keybinding for a shortcut action ('' when unset), shown as a
 // hint in the panel "..." menu. Reactive via settingsStore, so the hint updates
@@ -223,6 +300,48 @@ function toggleMoreMenu(e: MouseEvent) {
   const opening = !moreMenuVisible.value
   moreMenuRef.value?.toggle(e.currentTarget as HTMLElement)
   if (opening) refreshOutputLogState()
+}
+
+// Right-click on the panel header opens the SAME menu as the "..." button
+// (one shared Menu instance), so the two entry points can never drift apart.
+function onHeaderContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  moreMenuRef.value?.openAt(e.clientX, e.clientY)
+  refreshOutputLogState()
+}
+
+// Connection host (IP or hostname) — empty for local/wsl/serial panels.
+const serverHost = computed(() => props.panel.config?.host || '')
+
+const isPanelBroadcastTarget = computed(() =>
+  tabStore.isPanelBroadcasting(props.panel.id)
+)
+
+function toggleAiLockFromMenu() {
+  emit('toggleAiLock', props.panel.id)
+  moreMenuVisible.value = false
+}
+
+// Equivalent to Ctrl+click on the header broadcast button: toggle THIS panel
+// (not the whole workspace) as a broadcast target.
+function toggleBroadcastTarget() {
+  tabStore.toggleBroadcastPanel(props.panel.id)
+  moreMenuVisible.value = false
+}
+
+async function copyHostAddress() {
+  moreMenuVisible.value = false
+  const host = serverHost.value
+  if (!host) return
+  // Wails clipboard, falling back to the browser API when the runtime is
+  // absent (plain dev in a browser) or the call fails.
+  let ok = false
+  try { await Clipboard.SetText(host); ok = true } catch { ok = false }
+  if (!ok) {
+    try { await navigator.clipboard.writeText(host) } catch { /* no clipboard */ }
+  }
+  msg.success(t('tab.hostCopied', { host }))
 }
 
 async function refreshOutputLogState() {
@@ -291,6 +410,14 @@ function triggerExport() {
   window.dispatchEvent(new CustomEvent('terminal:export', { detail: { panelId: props.panel.id } }))
 }
 
+function triggerResetOutput() {
+  window.dispatchEvent(new CustomEvent('terminal:reset-output', { detail: { panelId: props.panel.id } }))
+}
+
+function triggerClearScrollback() {
+  window.dispatchEvent(new CustomEvent('terminal:clear-scrollback', { detail: { panelId: props.panel.id } }))
+}
+
 function startEdit() {
   editName.value = props.panel.title
   editing.value = true
@@ -331,6 +458,11 @@ function onSessionStatus(status: string) {
   if (status === 'retry') {
     // Manual retry — user pressed Enter
     retryConnection()
+  } else if (status === 'auth_failed') {
+    // Issue #949: credentials were rejected — re-open the credential dialog
+    // right away instead of making the user press Enter through two full
+    // reconnect attempts before it appears.
+    repromptCredentials()
   } else if (status === 'connected') {
     retryAttempt = 0
   }
@@ -339,6 +471,29 @@ function onSessionStatus(status: string) {
   // That raced the "Press Enter to restart" prompt and left users unable to
   // tell a dead shell from a live one, so a dead local shell now just waits
   // for Enter like every other session type.
+}
+
+// Password-auth SSH-family sessions: prompt for fresh credentials on an auth
+// rejection. Key/identity authTypes are excluded — a new user/password pair
+// cannot fix a rejected key, passphrase or identity-store reference.
+async function repromptCredentials() {
+  const config = props.panel.config
+  if (!config) return
+  const credTypes = ['ssh', 'mosh', 'sftp', 'scp', 'ftp', 'telnet']
+  if (!credTypes.includes(props.panel.type)) return
+  if (['key', 'keyText', 'kerberos', 'agent', 'identity'].includes(config.authType)) return
+  const result = await showCredentialDialog(
+    t('credential.title'),
+    t('credential.authFailedSubtitle'),
+    ['user', 'password'],
+    config.user || '',
+    ''
+  )
+  if (!result) return
+  config.user = result.user || config.user
+  config.password = result.password
+  retryAttempt = 0
+  await retryConnection()
 }
 
 async function retryConnection() {
@@ -378,7 +533,7 @@ async function retryConnection() {
   // Exec panels (k8s-exec / container-exec): rebuild the exec stream via the
   // dedicated wails method — CreateSession has no such type. The original
   // params live on the config from open time.
-  if (props.panel.type === 'k8s-exec' || props.panel.type === 'container-exec') {
+  if (props.panel.type === 'container-exec') {
     const c = props.panel.config
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -386,9 +541,10 @@ async function retryConnection() {
     baseTerminalRef.value?.write(RESET_MOUSE_MODES + `\r\n\x1b[33mReconnecting... (${at})\x1b[0m\r\n`)
     try {
       let info
-      if (props.panel.type === 'k8s-exec') {
-        if (!c.k8sExecConnId || !c.k8sExecPod || !c.k8sExecContainer) throw new Error('exec session parameters missing')
-        info = await K8sExecSession(c.k8sExecConnId, c.k8sNamespace || '', c.k8sExecPod, c.k8sExecContainer)
+      if (c.containerExecNamespace) {
+        // k8s 连接：containerExecContainerId 为 Pod 名
+        if (!c.containerExecConnId || !c.containerExecContainerId || !c.containerExecContainerName) throw new Error('exec session parameters missing')
+        info = await K8sExecSession(c.containerExecConnId, c.containerExecNamespace, c.containerExecContainerId, c.containerExecContainerName)
       } else {
         if (!c.containerExecConnId || !c.containerExecContainerId) throw new Error('exec session parameters missing')
         info = await ContainerExecSession(c.containerExecConnId, c.containerExecContainerId, c.containerExecShell || 'sh')
@@ -405,7 +561,7 @@ async function retryConnection() {
 
   // On first retry, try with existing credentials; on subsequent retries, re-prompt
   const credTypes = ['ssh', 'mosh', 'sftp', 'scp', 'ftp', 'telnet']
-  if (credTypes.includes(props.panel.type) && props.panel.config.authType !== 'key' && props.panel.config.authType !== 'keyText' && retryAttempt > 1) {
+  if (credTypes.includes(props.panel.type) && !['key', 'keyText', 'kerberos'].includes(props.panel.config.authType) && retryAttempt > 1) {
     const result = await showCredentialDialog(
       t('credential.title'),
       props.panel.config.user || props.panel.config.host ? `${props.panel.config.user}@${props.panel.config.host}` : '',
@@ -463,6 +619,20 @@ async function forceReconnect() {
   }
   retryAttempt = 0
   await retryConnection()
+}
+
+// Channel clone (issue #983): only meaningful for a connected SSH panel.
+const canDuplicateChannel = computed(() =>
+  props.panel.type === 'ssh' && !!props.panel.sessionId &&
+  sessionStore.getStatus(props.panel.sessionId) === 'connected'
+)
+
+function onDuplicateChannel() {
+  const { duplicateChannel } = useDuplicateSession()
+  duplicateChannel(
+    { type: 'terminal', panelId: props.panel.id, title: props.panel.title },
+    props.workspaceId ? { workspaceId: props.workspaceId, targetPanelId: props.panel.id } : undefined,
+  )
 }
 
 // Reconnect menu in the tab right-click menu dispatches a 'panel:reconnect'
@@ -524,7 +694,7 @@ watch(() => props.panel.outputLog, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -542,42 +712,59 @@ watch(() => props.panel.outputLog, (val) => {
   background: var(--bg-elevated);
   border-bottom-color: var(--accent);
 }
-.panel-header.ai-locked {
-  border-left: 3px solid var(--warning);
-  box-shadow: inset 0 0 12px var(--warning-subtle);
-}
+/* The AI-locked panel header keeps its normal surface (issue #928: an
+   alpha-tinted warning background turns muddy on dark themes); the state is
+   carried by the Sparkles button below, which lights up solid amber. */
 .panel-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: text;
 }
+.panel-shortcut {
+  flex-shrink: 0;
+  margin-left: 0.375rem;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 500;
+  /* UI font so macOS modifier symbols (⌘⌥⇧) render with their native
+     system-font shapes instead of a mono fallback. */
+  font-family: var(--font-ui);
+}
 .panel-icon-wrapper {
   position: relative;
   display: inline-flex;
   flex-shrink: 0;
-  margin-right: 6px;
+  margin-right: 0.375rem;
 }
 .panel-type-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   color: var(--text-muted);
 }
 .panel-active .panel-type-icon {
   color: var(--accent);
 }
+/* Locked wins over the active accent: the AI state must stay visible when the
+   panel is focused (mirrors the tab icon treatment). */
+.panel-type-icon.ai-locked-icon {
+  color: var(--warning);
+}
+.panel-active .panel-type-icon.ai-locked-icon {
+  color: var(--warning);
+}
 .panel-log-dot {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 6px;
-  height: 6px;
+  right: -0.125rem;
+  bottom: -0.125rem;
+  width: 0.375rem;
+  height: 0.375rem;
   background: #e5484d;
   border-radius: 50%;
   pointer-events: auto;
@@ -586,33 +773,34 @@ watch(() => props.panel.outputLog, (val) => {
   color: var(--text-primary);
 }
 .panel-title-input {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: inherit;
   color: var(--text-primary);
   background: var(--bg-base);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  width: 120px;
+  padding: 0.125rem 0.375rem;
+  width: 7.5rem;
   outline: none;
 }
 .panel-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   flex-shrink: 0;
 }
-.panel-broadcast {
+.panel-broadcast,
+.panel-maximize {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 3px;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
   line-height: 1;
 }
-.panel-broadcast:hover {
+.panel-broadcast:hover,
+.panel-maximize:hover {
   background: var(--bg-hover);
 }
 .panel-broadcast.active {
@@ -627,9 +815,8 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }
@@ -647,9 +834,8 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }
@@ -661,15 +847,14 @@ watch(() => props.panel.outputLog, (val) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   padding: 0;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   transition: all 0.12s ease;
 }
 .panel-close:hover {
@@ -684,9 +869,8 @@ watch(() => props.panel.outputLog, (val) => {
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
 }

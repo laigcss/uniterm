@@ -1,74 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed, reactive, watch } from 'vue'
-import type { AIMessage, AIConfig, ExecutionMode, InteractionMode, AISession, AIAgentStatus } from '../types/ai'
-import { SaveAIConfig, LoadAIConfig, SaveAISessions, LoadAISessions } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import type { AIAttachment, AIMessage, ExecutionMode, AISession, AIAgentStatus } from '../types/ai'
+import { SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { buildUserContent, redactAttachmentsForLog } from '../services/attachments'
 import { useLocalStateStore } from './localStateStore'
-import { Events } from '@wailsio/runtime'
+import { useTabStore } from './tabStore'
+import { isMobilePlatform } from '../utils/platform'
 import { t } from '../i18n'
-import { ElMessage } from 'element-plus'
-
-/**
- * S3: 校验 LLM baseURL 的 URL scheme。
- *
- * 非 https:// 且非 localhost/127.0.0.1 时弹警告"明文 HTTP 将暴露 API Key，
- * 建议使用 https"。不阻断保存——尊重用户选择（本地 Ollama 等场景需要 http），
- * 但留痕提醒。返回 true 表示安全/本地，false 表示发出了不安全警告。
- *
- * 导出供 SettingsTab.vue 的 saveModel 与 aiStore.setConfig 共用。
- */
-export function warnIfInsecureBaseURL(baseURL: string): boolean {
-  if (!baseURL || typeof baseURL !== 'string') return true
-  const trimmed = baseURL.trim()
-  const lower = trimmed.toLowerCase()
-  // https 直接放行（大小写不敏感：HTTPS:// / Https:// 等均放行）
-  if (lower.startsWith('https://')) return true
-  // 非 http:// 的也放行（可能是 ws:// 或自定义协议，不归本函数管）
-  if (!lower.startsWith('http://')) return true
-  // http:// 但 host 是 localhost / 127.0.0.1 / 0.0.0.0 / [::1] 放行
-  try {
-    // 用 URL 构造器解析，正确处理 IPv6 方括号语法（http://[::1]:8080）
-    // 和大小写不敏感的 scheme。URL.hostname 对 IPv6 自动去掉方括号。
-    const u = new URL(trimmed)
-    const host = u.hostname
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '0.0.0.0' ||
-      host === '::1'
-    ) {
-      return true
-    }
-  } catch {
-    // URL 解析失败，回退到手动解析
-    try {
-      const rest = lower.slice('http://'.length)
-      const hostPort = rest.split('/')[0]
-      // IPv6 地址用方括号包裹：[::1]:8080
-      if (hostPort.startsWith('[')) {
-        const closeBracket = hostPort.indexOf(']')
-        if (closeBracket > 0) {
-          const host = hostPort.slice(1, closeBracket)
-          if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
-            return true
-          }
-        }
-      } else {
-        const host = hostPort.split(':')[0]
-        if (
-          host === 'localhost' ||
-          host === '127.0.0.1' ||
-          host === '0.0.0.0'
-        ) {
-          return true
-        }
-      }
-    } catch {
-      // 解析失败则继续弹警告
-    }
-  }
-  ElMessage.warning(t('ai.insecureBaseURLWarning'))
-  return false
-}
 
 /**
  * Estimate token count for a string using character-based heuristics.
@@ -110,7 +48,7 @@ function estimateMessageTokens(msg: AIMessage): number {
  * Static AI system rules — immutable per app version, always cacheable.
  * Dynamic shell/panel context is injected into the latest user message instead.
  */
-const SYSTEM_RULES = `You are an AI assistant inside ai-ops-terminal, a terminal emulator. You can execute shell commands in the user's active terminal to help them complete tasks.
+const SYSTEM_RULES = `You are an AI assistant inside uniTerm, a terminal emulator. You can execute shell commands in the user's active terminal to help them complete tasks.
 
 AVAILABLE TOOLS:
 1. execute_command — Run a shell command and wait for its output. Set timeout based on expected duration. Use head_lines/tail_lines to control how much output you receive.
@@ -182,12 +120,6 @@ For chained commands, classify based on the MOST risky operation in the chain.
 ❌ In PowerShell, do NOT run: bash -c "..."
 Use ONLY the current shell's native syntax.`
 
-const DEFAULT_CONFIG: AIConfig = {
-  apiKey: '',
-  baseURL: 'https://api.openai.com/v1',
-  model: 'gpt-4o'
-}
-
 async function loadSessionsFromBackend(): Promise<{ sessions: AISession[], currentSessionId: string | null }> {
   try {
     const data = await LoadAISessions() as any
@@ -200,9 +132,17 @@ async function loadSessionsFromBackend(): Promise<{ sessions: AISession[], curre
         id: m.id,
         role: m.role,
         content: m.content,
+        thinking: m.thinking || undefined,
+        // Backfill createdAt for sessions saved before timestamps existed:
+        // ids embed the creation epoch (msg-<ms>, skill-<ms>, cmd-<ms>).
+        createdAt: m.createdAt || Number(/(?:^|-)(\d{13})(?:-\d+)?$/.exec(m.id)?.[1]) || undefined,
+        thinkingDurationMs: m.thinkingDurationMs || undefined,
         tool_call_id: m.tool_call_id,
         tool_calls: m.tool_calls || [],
         pendingTools: m.pendingTools || [],
+        // Sessions written before attachments existed simply lack the field;
+        // defaulting to undefined keeps those messages working unchanged.
+        attachments: Array.isArray(m.attachments) && m.attachments.length ? m.attachments : undefined,
         _rawApiMsg: m._rawApiMsg ? JSON.parse(m._rawApiMsg) : undefined,
       }))
     }))
@@ -216,11 +156,15 @@ export const useAIStore = defineStore('ai', () => {
   const visible = ref(false)
   const messages = ref<AIMessage[]>([])
   const mode = ref<ExecutionMode>('confirm_dangerous')
-  // F1: AI 交互模式（chat/readonly/agent）。默认 'agent' 保持向后兼容。
-  const interactionMode = ref<InteractionMode>('agent')
-  const config = ref<AIConfig>({ ...DEFAULT_CONFIG })
   const isRunning = ref(false)
   const status = ref<AIAgentStatus>('thinking')
+  // Live thinking/reasoning text streamed during the current run, shown in
+  // the expandable box under the "Thinking..." status indicator.
+  const thinkingText = ref('')
+  const thinkingExpanded = ref(false)
+  // Epoch ms when the current turn's thinking stream began; drives the live
+  // elapsed timer in the thinking box. 0 = not currently thinking.
+  const thinkingStartedAt = ref<number>(0)
   const stopRequested = ref(false)
   const sessions = ref<AISession[]>([])
   const currentSessionId = ref<string | null>(null)
@@ -233,6 +177,10 @@ export const useAIStore = defineStore('ai', () => {
     command: string
     risk: string
     dangerous: boolean
+    panel?: string
+    timeout?: number
+    headLines?: number
+    tailLines?: number
   } | null>(null)
   const pendingQuestion = ref<{
     messageId: string
@@ -243,21 +191,23 @@ export const useAIStore = defineStore('ai', () => {
     multiSelect: boolean
   } | null>(null)
   const lastPanelContext = ref<{ panelId: string; shellPath: string } | null>(null)
-  const queuedMessages = ref<{ id: string; content: string; skillName?: string; skillBody?: string; commandBody?: string }[]>([])
+  const queuedMessages = ref<{ id: string; content: string; skillName?: string; skillBody?: string; commandBody?: string; attachments?: AIAttachment[] }[]>([])
 
   function setLastPanelContext(panelId: string, shellPath: string) {
     lastPanelContext.value = { panelId, shellPath }
   }
 
-  function enqueueMessage(content: string, skillName?: string, skillBody?: string, commandBody?: string) {
+  function enqueueMessage(content: string, skillName?: string, skillBody?: string, commandBody?: string, attachments?: AIAttachment[]) {
     const trimmed = content.trim()
-    if (!trimmed && !commandBody && !skillName) return
+    const hasAttachments = !!attachments?.length
+    if (!trimmed && !commandBody && !skillName && !hasAttachments) return
     queuedMessages.value.push({
       id: `q-${Date.now()}-${queuedMessages.value.length}`,
       content: trimmed,
       skillName,
       skillBody,
       commandBody,
+      attachments: hasAttachments ? attachments : undefined,
     })
   }
 
@@ -277,20 +227,6 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
-  // F1: 持久化 interactionMode 到 localStateStore
-  async function saveInteractionMode() {
-    try {
-      useLocalStateStore().update({ aiInteractionMode: interactionMode.value })
-    } catch {
-      // ignore save errors
-    }
-  }
-
-  function setInteractionMode(m: InteractionMode) {
-    interactionMode.value = m
-    saveInteractionMode()
-  }
-
   // Auto-persist AI sidebar visibility whenever it changes
   watch(visible, () => {
     saveVisible()
@@ -298,8 +234,10 @@ export const useAIStore = defineStore('ai', () => {
 
   function setDebugInfo(request: unknown, error: string) {
     try {
+      // Attachment bytes are stripped before the request is dumped: the debug
+      // panel must never hold a multi-megabyte base64 image.
       lastDebugInfo.value = {
-        request: JSON.stringify(request, null, 2),
+        request: JSON.stringify(redactAttachmentsForLog(request), null, 2),
         error
       }
     } catch {
@@ -314,7 +252,7 @@ export const useAIStore = defineStore('ai', () => {
     lastDebugInfo.value = null
   }
 
-  function setPendingCommand(cmd: { messageId: string; toolId: string; toolName: string; command: string; risk: string; dangerous: boolean }) {
+  function setPendingCommand(cmd: { messageId: string; toolId: string; toolName: string; command: string; risk: string; dangerous: boolean; panel?: string; timeout?: number; headLines?: number; tailLines?: number }) {
     pendingCommand.value = cmd
   }
 
@@ -335,7 +273,7 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   function addMessage(msg: AIMessage): AIMessage {
-    const r = reactive({ ...msg }) as AIMessage
+    const r = reactive({ createdAt: Date.now(), ...msg }) as AIMessage
     messages.value.push(r)
     if (currentSessionId.value) {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
@@ -411,7 +349,6 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   async function init() {
-    await initConfig()
     const data = await loadSessionsFromBackend()
     sessions.value = data.sessions
       .filter(s => s.messages.length > 0)
@@ -424,12 +361,10 @@ export const useAIStore = defineStore('ai', () => {
     try {
       const ls = useLocalStateStore()
       if (!ls.loaded) await ls.init()
-      visible.value = ls.state.aiSidebarVisible ?? false
-      // F1: restore interaction mode (default 'agent' for backward compat)
-      const savedMode = ls.state.aiInteractionMode
-      if (savedMode === 'chat' || savedMode === 'readonly' || savedMode === 'agent') {
-        interactionMode.value = savedMode
-      }
+      // Mobile always starts with the AI sidebar closed (see App.vue).
+      visible.value = isMobilePlatform()
+        ? false
+        : (ls.state.aiSidebarVisible ?? false)
     } catch {
       // keep default
     }
@@ -453,40 +388,6 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
-  async function initConfig() {
-    try {
-      const loaded = await LoadAIConfig()
-      if (loaded.apiKey || loaded.baseURL || loaded.model) {
-        config.value = {
-          apiKey: loaded.apiKey || DEFAULT_CONFIG.apiKey,
-          baseURL: loaded.baseURL || DEFAULT_CONFIG.baseURL,
-          model: loaded.model || DEFAULT_CONFIG.model,
-        }
-      }
-    } catch {
-      // ignore, use defaults
-    }
-  }
-
-  async function saveConfig() {
-    try {
-      await SaveAIConfig({
-        apiKey: config.value.apiKey,
-        baseURL: config.value.baseURL,
-        model: config.value.model,
-      })
-    } catch {
-      // ignore save errors
-    }
-  }
-
-  function setConfig(updates: Partial<AIConfig>) {
-    // S3: 保存 baseURL 时校验 scheme，明文 http（非本地）弹警告不阻断。
-    if (updates.baseURL !== undefined) {
-      warnIfInsecureBaseURL(updates.baseURL)
-    }
-    config.value = { ...config.value, ...updates }
-  }
 
   async function doSave() {
     try {
@@ -500,9 +401,13 @@ export const useAIStore = defineStore('ai', () => {
             id: m.id,
             role: m.role,
             content: m.content,
+            thinking: m.thinking || '',
+            createdAt: m.createdAt || 0,
+            thinkingDurationMs: m.thinkingDurationMs || 0,
             tool_call_id: m.tool_call_id || '',
             tool_calls: m.tool_calls || [],
             pendingTools: m.pendingTools || [],
+            attachments: m.attachments?.length ? m.attachments : undefined,
             _rawApiMsg: m._rawApiMsg ? JSON.stringify(m._rawApiMsg) : '',
           }))
         })),
@@ -531,6 +436,9 @@ export const useAIStore = defineStore('ai', () => {
       sessions.value = sessions.value.slice(0, 15)
     }
     clearQueue()
+    // The terminal binding is per-conversation: starting a new session drops
+    // the lock so the next conversation re-locks onto the active terminal.
+    useTabStore().clearAILockedPanels()
     // Don't save empty sessions — only persist when first message is added
   }
 
@@ -539,7 +447,13 @@ export const useAIStore = defineStore('ai', () => {
     if (!s) return
     currentSessionId.value = sessionId
     messages.value = s.messages.map(m => reactive({ ...m }) as AIMessage)
+    thinkingText.value = ''
+    thinkingExpanded.value = false
+    thinkingStartedAt.value = 0
     clearQueue()
+    // Viewing another session drops the lock so the next conversation
+    // re-locks onto the terminal active at that moment.
+    useTabStore().clearAILockedPanels()
   }
 
   function deleteSession(sessionId: string) {
@@ -595,7 +509,7 @@ export const useAIStore = defineStore('ai', () => {
     const lines: string[] = [
       `# ${s.name}`,
       '',
-      `> ${new Date(s.createdAt).toLocaleString()} · ai-ops-terminal AI Assistant`,
+      `> ${new Date(s.createdAt).toLocaleString()} · uniTerm AI Assistant`,
     ]
     for (const m of s.messages) {
       if (m.role === 'tool') continue
@@ -676,7 +590,8 @@ export const useAIStore = defineStore('ai', () => {
       // skill/command cards are UI-only markers; never send them to the API
       if ((m.skillName || m.commandName) && !m.content) continue
       // restored/legacy empty user messages produce invalid empty text blocks
-      if (m.role === 'user' && !m.content && !m._contextHeader) continue
+      // (a message carrying attachments is valid even with no text)
+      if (m.role === 'user' && !m.content && !m._contextHeader && !m.attachments?.length) continue
 
       // Tool messages: ones with tool_call_id are real tool_results for the API;
       // ones without are display-only system errors and must not be sent.
@@ -736,9 +651,12 @@ export const useAIStore = defineStore('ai', () => {
       if (m.role === 'assistant' && !m.content && !(m.pendingTools?.length || pendingCommand.value?.messageId === m.id)) continue
 
       // Inject dynamic context header into user messages for the API
-      // (hidden from UI, stored in _contextHeader)
-      if (m.role === 'user' && m._contextHeader) {
-        result.push({ role: m.role, content: m._contextHeader + '\n\n' + m.content })
+      // (hidden from UI, stored in _contextHeader). Attachments turn the
+      // message into an ordered content-block array; without them the payload
+      // stays exactly what it was before attachments existed.
+      if (m.role === 'user') {
+        const text = m._contextHeader ? `${m._contextHeader}\n\n${m.content}` : m.content
+        result.push({ role: m.role, content: buildUserContent(text, m.attachments) })
       } else {
         result.push({ role: m.role || 'user', content: m.content })
       }
@@ -809,11 +727,6 @@ export const useAIStore = defineStore('ai', () => {
 
   const systemPrompt = computed(() => SYSTEM_RULES)
 
-  // Reload AI config when settings change via sync
- Events.On('store:settings:changed', () => {
-    initConfig()
-  })
-
   return {
     visible,
     toggle,
@@ -821,14 +734,11 @@ export const useAIStore = defineStore('ai', () => {
     addMessage, addSkillCard, addCommandCard,
     clearMessages,
     mode,
-    interactionMode,
-    setInteractionMode,
-    config,
     isRunning,
     status,
-    saveConfig,
-    initConfig,
-    setConfig,
+    thinkingText,
+    thinkingExpanded,
+    thinkingStartedAt,
     conversation,
     systemPrompt,
     stopRequested,

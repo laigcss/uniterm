@@ -25,13 +25,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rhnvrm/simples3"
 	"github.com/studio-b12/gowebdav"
-
+	"golang.org/x/crypto/ssh"
 
 	"github.com/cloudsoda/go-smb2"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/laigcss/ai-ops-terminal/backend/database"
+	"github.com/ys-ll/uniterm/backend/database"
 )
 
 // ProbeConnection dispatches a connectivity probe by config.Type.
@@ -60,6 +60,8 @@ func ProbeConnection(config ConnectionConfig) (string, error) {
 		return probeRedis(config)
 	case "mongodb":
 		return probeMongo(config)
+	case "elasticsearch":
+		return probeElasticsearch(config)
 	case "database":
 		// redis/mongodb/elasticsearch are stored as type "database" with a
 		// dbType discriminator (mirroring the SQL family). Route them to their
@@ -84,17 +86,28 @@ func probeSSH(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	newConfig := func(challenge ssh.KeyboardInteractiveChallenge) sshClientConfigFactory {
+		return func() (*ssh.ClientConfig, func(), error) {
+			authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, challenge)
+			if err != nil {
+				return nil, nil, err
+			}
+			return &ssh.ClientConfig{User: config.User, Auth: authMethods, Timeout: 15 * time.Second, HostKeyCallback: ssh.InsecureIgnoreHostKey()}, cleanup, nil
+		}
+	}
 	// Honor a materialized proxy (set by App.materializeProxy) on the first hop,
 	// mirroring the terminal session's dial path.
-	client, err := dialSSH(DialSSHOptions{
-		Host:            config.Host,
-		Port:            config.Port,
-		User:            config.User,
-		AuthMethods:     makeSSHAuthMethods(config, kb),
-		HostKeyStrategy: config.HostKeyStrategy,
-		Timeout:         15 * time.Second,
-		Proxy:           config.Proxy,
-		CipherFallback:  true,
+	var keyboardConfig sshClientConfigFactory
+	if config.AuthType != "kerberos" {
+		keyboardConfig = newConfig(kb)
+	}
+	sets, err := resolveSSHDialAlgorithms(config.SSHAlgorithms)
+	if err != nil {
+		return "", err
+	}
+	client, err := dialSSHWithAuthRetry(addr, sets, newConfig(nil), keyboardConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
 	})
 	if err != nil {
 		return "", fmt.Errorf("ssh: %w", err)
@@ -110,15 +123,26 @@ func probeSFTP(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
-	client, err := dialSSH(DialSSHOptions{
-		Host:            config.Host,
-		Port:            config.Port,
-		User:            config.User,
-		AuthMethods:     makeSSHAuthMethods(config, kb),
-		HostKeyStrategy: config.HostKeyStrategy,
-		Timeout:         15 * time.Second,
-		Proxy:           config.Proxy,
-		CipherFallback:  true,
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	newConfig := func(challenge ssh.KeyboardInteractiveChallenge) sshClientConfigFactory {
+		return func() (*ssh.ClientConfig, func(), error) {
+			authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, challenge)
+			if err != nil {
+				return nil, nil, err
+			}
+			return &ssh.ClientConfig{User: config.User, Auth: authMethods, Timeout: 15 * time.Second, HostKeyCallback: ssh.InsecureIgnoreHostKey()}, cleanup, nil
+		}
+	}
+	var keyboardConfig sshClientConfigFactory
+	if config.AuthType != "kerberos" {
+		keyboardConfig = newConfig(kb)
+	}
+	sets, err := resolveSSHDialAlgorithms(config.SSHAlgorithms)
+	if err != nil {
+		return "", err
+	}
+	client, err := dialSSHWithAuthRetry(addr, sets, newConfig(nil), keyboardConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
 	})
 	if err != nil {
 		return "", fmt.Errorf("sftp: %w", err)
@@ -138,15 +162,26 @@ func probeSCP(config ConnectionConfig) (string, error) {
 	kb := func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		return nil, fmt.Errorf("interactive auth not allowed during connection test")
 	}
-	client, err := dialSSH(DialSSHOptions{
-		Host:            config.Host,
-		Port:            config.Port,
-		User:            config.User,
-		AuthMethods:     makeSSHAuthMethods(config, kb),
-		HostKeyStrategy: config.HostKeyStrategy,
-		Timeout:         15 * time.Second,
-		Proxy:           config.Proxy,
-		CipherFallback:  true,
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	newConfig := func(challenge ssh.KeyboardInteractiveChallenge) sshClientConfigFactory {
+		return func() (*ssh.ClientConfig, func(), error) {
+			authMethods, cleanup, err := makeSSHAuthMethodsForAttempt(config, challenge)
+			if err != nil {
+				return nil, nil, err
+			}
+			return &ssh.ClientConfig{User: config.User, Auth: authMethods, Timeout: 15 * time.Second, HostKeyCallback: ssh.InsecureIgnoreHostKey()}, cleanup, nil
+		}
+	}
+	var keyboardConfig sshClientConfigFactory
+	if config.AuthType != "kerberos" {
+		keyboardConfig = newConfig(kb)
+	}
+	sets, err := resolveSSHDialAlgorithms(config.SSHAlgorithms)
+	if err != nil {
+		return "", err
+	}
+	client, err := dialSSHWithAuthRetry(addr, sets, newConfig(nil), keyboardConfig, func() (net.Conn, error) {
+		return dialFirstHop(addr, config.Proxy)
 	})
 	if err != nil {
 		return "", fmt.Errorf("scp: %w", err)
@@ -410,6 +445,10 @@ func probeDatabase(config ConnectionConfig) (string, error) {
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		return "", fmt.Errorf("ping %s: %w", config.DBType, err)
+	}
+	if config.DBType == "sqlite" {
+		// A file-backed database has no host:port; report the path.
+		return fmt.Sprintf("sqlite: connected to %s", config.Host), nil
 	}
 	return fmt.Sprintf("%s: connected to %s:%d", config.DBType, config.Host, config.Port), nil
 }

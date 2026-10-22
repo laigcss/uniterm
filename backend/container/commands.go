@@ -2,6 +2,7 @@ package container
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -17,7 +18,15 @@ func withNS(rt Runtime, ns string, argv ...string) []string {
 
 const jsonFormat = "{{json .}}"
 
+// psFormatDocker：显式字段模板，刻意不引用 .Size——{{json .}} 包含 Size，
+// 会让 docker CLI 向 daemon 请求逐容器文件系统统计，容器多的节点上要几十秒；
+// 不含 Size 的自定义格式与表格输出一样快。
+const psFormatDocker = "{{.ID}}|{{.Image}}|{{.Names}}|{{.State}}|{{.Status}}|{{.Ports}}|{{.CreatedAt}}"
+
 func psArgs(rt Runtime, ns string) []string {
+	if rt == RuntimeDocker {
+		return withNS(rt, ns, "ps", "-a", "--format", psFormatDocker)
+	}
 	if rt == RuntimeWSLC {
 		argv := []string{"ps", "-a"}
 		argv = append(argv, wslcFormat()...)
@@ -53,6 +62,42 @@ func logsArgs(rt Runtime, ns, id string, tail int, follow, timestamps bool) []st
 
 func execArgs(rt Runtime, ns, id, shell string) []string {
 	return withNS(rt, ns, "exec", "-it", id, shell)
+}
+
+// execShellArgs 是文件会话的非交互 exec：无 TTY（脚本输出可安全解析），
+// stdin 版加 -i 供 tar 流导入。脚本由调用方用 posixQuote 语义拼好。
+func execShellArgs(rt Runtime, ns, cid, script string, stdin bool) []string {
+	argv := []string{"exec"}
+	if stdin {
+		argv = append(argv, "-i")
+	}
+	return withNS(rt, ns, append(argv, cid, "sh", "-c", script)...)
+}
+
+// cpArgs 构造容器文件复制的 argv。wslc 的 cp 只存在于 container 子命令组下
+// （顶层没有 cp 子命令），需要多一层。
+func cpArgs(rt Runtime, ns string, args ...string) []string {
+	if rt == RuntimeWSLC {
+		return withNS(rt, ns, append([]string{"container", "cp"}, args...)...)
+	}
+	return withNS(rt, ns, append([]string{"cp"}, args...)...)
+}
+
+// cpRawArgs 是 docker cp 的导出方向：把容器路径打成 tar 流写到 stdout，
+// 路径前缀 "cid:" 由调用方拼好（本地/SSH runner 都不解析它）。
+// wslc 的 cp 不支持该方向（dest 为 "-" 时它写出一个名为 "-" 的本地文件），
+// WSLC 请用 tarExportArgs。
+func cpRawArgs(rt Runtime, ns, cid, remotePath string) []string {
+	return cpArgs(rt, ns, cid+":"+remotePath, "-")
+}
+
+// tarExportArgs 在容器内把路径打包成 tar 写到 stdout。
+// 供不能把 cp 导出到 stdout 的运行时（WSLC）代替 cpRawArgs 使用：
+// 与 Put 的 `tar xf -` 导入同一通道（exec），镜像内需有 tar。
+// 根 entry 是路径 basename，与 ContainerFileSession 的解包约定一致。
+func tarExportArgs(rt Runtime, ns, cid, remotePath string) []string {
+	script := "tar cf - -C " + posixQuote(path.Dir(remotePath)) + " " + posixQuote(path.Base(remotePath))
+	return execShellArgs(rt, ns, cid, script, false)
 }
 
 // action ∈ start/stop/restart/rm/pause/unpause
@@ -96,8 +141,109 @@ func imagesArgs(rt Runtime, ns string) []string {
 	return withNS(rt, ns, "images", "--format", jsonFormat)
 }
 
-func pullArgs(rt Runtime, ns, image string) []string {
-	return withNS(rt, ns, "pull", image)
+func pullArgs(rt Runtime, ns, image string, o TransferOptions) []string {
+	return transferArgv(rt, ns, "pull", image, o)
+}
+
+func pushArgs(rt Runtime, ns, image string, o TransferOptions) []string {
+	return transferArgv(rt, ns, "push", image, o)
+}
+
+// transferArgv 构造 pull/push 的 argv。insecure 参数按运行时注入：
+// nerdctl 的 --insecure-registry 是全局 flag 且取 registry 地址为值，
+// 放在子命令之前；podman 用命令级 --tls-verify=false；
+// docker/wslc 的 CLI 不支持单命令级参数，直接忽略。
+func transferArgv(rt Runtime, ns, sub, ref string, o TransferOptions) []string {
+	out := withNS(rt, ns)
+	if o.Insecure && rt == RuntimeNerdctl {
+		if h := registryHost(ref); h != "" {
+			out = append(out, "--insecure-registry", h)
+		}
+	}
+	out = append(out, sub)
+	if o.Platform != "" && rt != RuntimeWSLC {
+		// wslc pull 没有 --platform（选项名未识别），只能忽略。
+		out = append(out, "--platform", o.Platform)
+	}
+	if sub == "pull" && o.AllTags {
+		out = append(out, "--all-tags")
+	}
+	if o.Insecure && rt == RuntimePodman {
+		out = append(out, "--tls-verify=false")
+	}
+	return append(out, ref)
+}
+
+// registryHost 从镜像引用里提取 registry 主机段（第一个 / 之前、
+// 含 . 或 : 或为 localhost 的部分）；没有 registry 段时返回空。
+func registryHost(ref string) string {
+	i := strings.Index(ref, "/")
+	if i <= 0 {
+		return ""
+	}
+	first := ref[:i]
+	if first == "localhost" || strings.ContainsAny(first, ".:") {
+		return first
+	}
+	return ""
+}
+
+func tagArgs(rt Runtime, ns, image, repoTag string) []string {
+	return withNS(rt, ns, "tag", image, repoTag)
+}
+
+func imagePruneArgs(rt Runtime, ns string) []string {
+	return withNS(rt, ns, "image", "prune", "-f")
+}
+
+func infoArgs(rt Runtime, ns string) []string {
+	if rt == RuntimeWSLC {
+		argv := []string{"info"}
+		argv = append(argv, wslcFormat()...)
+		return withNS(rt, ns, argv...)
+	}
+	return withNS(rt, ns, "info", "--format", jsonFormat)
+}
+
+func versionArgs(rt Runtime, ns string) []string {
+	if rt == RuntimeWSLC {
+		argv := []string{"version"}
+		argv = append(argv, wslcFormat()...)
+		return withNS(rt, ns, argv...)
+	}
+	return withNS(rt, ns, "version", "--format", jsonFormat)
+}
+
+// historyArgs 构造 history 的 argv；--no-trunc 避免 CreatedBy 被 CLI 截断。
+// wslc 没有 history 子命令，其层列表走 wslcImageInspectArgs。
+func historyArgs(rt Runtime, ns, imageID string) []string {
+	return withNS(rt, ns, "history", "--no-trunc", "--format", jsonFormat, imageID)
+}
+
+// wslcImageInspectArgs 构造 wslc 的镜像 inspect argv：wslc 的 --format 只接受
+// 固定值 json（不支持 {{json .}} 模板），输出是单行 JSON 数组。
+// 显式走 image inspect 而非顶层 inspect，避免镜像与同名容器歧义。
+func wslcImageInspectArgs(rt Runtime, ns, imageID string) []string {
+	argv := []string{"image", "inspect"}
+	argv = append(argv, wslcFormat()...)
+	return withNS(rt, ns, append(argv, imageID)...)
+}
+
+// loginArgs 构造 login 的 argv；密码由调用方通过 RunStdin 喂给 --password-stdin。
+// registry 本身就是主机地址（区别于镜像引用），nerdctl 直接作为 --insecure-registry 的值。
+func loginArgs(rt Runtime, registry, username string, insecure bool) []string {
+	out := []string{rt.Bin()}
+	if insecure && rt == RuntimeNerdctl && registry != "" {
+		out = append(out, "--insecure-registry", registry)
+	}
+	out = append(out, "login", "--password-stdin", "-u", username)
+	if insecure && rt == RuntimePodman {
+		out = append(out, "--tls-verify=false")
+	}
+	if registry != "" {
+		out = append(out, registry)
+	}
+	return out
 }
 
 func removeImageArgs(rt Runtime, ns, imageID string) []string {

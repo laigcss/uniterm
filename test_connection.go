@@ -16,21 +16,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/laigcss/ai-ops-terminal/backend/container"
-	"github.com/laigcss/ai-ops-terminal/backend/k8s"
-	"github.com/laigcss/ai-ops-terminal/backend/session"
+	"github.com/ys-ll/uniterm/backend/container"
+	"github.com/ys-ll/uniterm/backend/k8s"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 // TestConnection returns a short human-readable description on success, or a
 // readable error (never echoing the password) on failure.
 func (a *App) TestConnection(config session.ConnectionConfig) (string, error) {
-	// Defensive: a new-connection form snapshot may carry an empty password even
-	// when the OS keychain already has one (mirrors CreateSession/SessionStart).
-	if config.Password == "" && config.ID != "" && a.connectionStore != nil {
-		if pw, err := a.connectionStore.EnsurePassword(config.ID); err == nil && pw != "" {
-			config.Password = pw
-		}
-	}
 	// Resolve identity / proxy references for the protocols that consume them
 	// (ssh-family). No-ops when not configured.
 	mc, err := a.materializeIdentity(config)

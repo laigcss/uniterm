@@ -1,4 +1,4 @@
-# ai-ops-terminal 优化升级技术方案
+# uniTerm 优化升级技术方案
 
 > 版本：v1（已实施） ｜ 方案日期：2026-09-09 ｜ 实施完成：2026-10-10 ｜ 策略：先方案后实施，允许大重构 ｜ 验证环境：macOS + Go1.26 + Node20+（可 `wails3 dev`）
 > 范围：安全加固 + 性能体验 + 架构可维护性 + 功能增强（四方向）
@@ -519,3 +519,18 @@ macOS 本机可验证的：S2/S3/S4/P3/P4/A5/F1/F4 + 所有项的编译通过性
 3. **补充材料**：特别是上节"验证环境缺口"中的远程资源，以及 AI Agent 实际使用情况（用哪个模型、是否遇过 risk 误判）。
 
 你拍板后，我即按批准的项与顺序进入实施阶段。
+---
+
+# P0 Bug 修复（2026-10-20）
+
+> 状态：✅ 已完成 ｜ commit：`6ff01cbb` ｜ 分支：`feature/sync-upstream-20261016`
+
+| Issue | 标题 | 根因 | 修复 | 验证 |
+|-------|------|------|------|------|
+| #1028 | 清屏与清滚动缓冲行为互换 | `renderTerminalData` 剥离 `\x1b[3J` 并将 `\x1b[2J` 替换为换行填充（MobaXterm 风格），导致 `clear` 把内容推入滚动缓冲 | 移除 `\x1b[3J` 剥离和 `\x1b[2J` 替换，让 xterm.js 原生处理 | vite build ✅ |
+| #902 | 中文右边界显示不全 | xterm.js v6 默认 Unicode 6 宽度表对 CJK 全角字符计数错误 | Unicode 11 已加载并激活（既有修复），补充注释说明根因 | 代码审查 ✅ |
+| #814 | 退格键删除提示符 | 特定 shell（Euler OS）`stty erase` 不匹配时退格键越过行首 | `onData` 回调添加防御性检查：`cursorIndex===0` 且非 alternate screen 时抑制退格键 | vite build ✅ |
+
+**修改文件**：
+- `frontend/src/components/BaseTerminal.vue` — `renderTerminalData` 清屏修复 + `onData` 退格键防御
+- `frontend/src/services/terminalManager.ts` — Issue #902 CJK 根因注释

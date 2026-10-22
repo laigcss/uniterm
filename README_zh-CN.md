@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="build/appicon.png" alt="ai-ops-terminal" width="128" height="128" />
-  <h1>ai-ops-terminal</h1>
-  <p>一款轻量级一站式终端软件，支持 SSH、RDP、VNC、SFTP、数据库、Kubernetes 等 30 余种协议<br>内置可自主执行的 AI Agent，规划并执行多轮 Shell 命令</p>
-  <p><a href="https://github.com/laigcss/ai-ops-terminal">🌐 软件首页</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal/guide/zh/introduction">📖 用户手册</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://github.com/laigcss/ai-ops-terminal">💻 Gitee</a></p>
+  <img src="build/appicon.png" alt="uniTerm" width="128" height="128" />
+  <h1>uniTerm</h1>
+  <p>一站式终端，覆盖 SSH、RDP、VNC、SFTP、数据库、Kubernetes 等 30 余种协议<br>内置自主执行多轮命令的 AI Agent</p>
+  <p><a href="https://uniterm.net">🌐 软件首页</a> &nbsp;|&nbsp; <a href="https://uniterm.net/guide/zh/introduction">📖 用户手册</a> &nbsp;|&nbsp; <a href="https://github.com/ys-ll/uniterm">💻 GitHub</a> &nbsp;|&nbsp; <a href="https://gitee.com/ys-l/uniterm">💻 Gitee</a></p>
 </div>
 
 <div align="center">
@@ -11,11 +11,11 @@
 
 <br>
 
-<a href="https://github.com/laigcss/ai-ops-terminal/releases/latest"><img src="https://img.shields.io/github/v/release/laigcss/ai-ops-terminal" alt="GitHub release" /></a>
-<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform" /></a>
+<a href="https://github.com/ys-ll/uniterm/releases/latest"><img src="https://img.shields.io/github/v/release/ys-ll/uniterm" alt="GitHub release" /></a>
+<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue" alt="Platform" /></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
-<a href="https://github.com/laigcss/ai-ops-terminal"><img src="https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social" alt="GitHub stars" /></a>
-
+<a href="https://github.com/ys-ll/uniterm"><img src="https://img.shields.io/github/stars/ys-ll/uniterm?style=social" alt="GitHub stars" /></a>
+<a href="https://gitee.com/ys-l/uniterm"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee" alt="Gitee stars" /></a>
 
 </div>
 
@@ -42,41 +42,32 @@
 
 - **远程终端** — SSH / Telnet / Mosh / Raw TCP，密码/私钥认证；含 SSH 隧道端口转发（任意连接可经 SSH 跳板访问）
 - **本地 & 串口终端** — PowerShell / CMD / Git Bash / WSL，以及串口连接（波特率等参数、本地回显）
-- **文件传输** — SFTP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`
+- **文件传输** — SFTP / SCP / FTP / FTPS / SMB / WebDAV / S3 / Zmodem，双栏浏览、鼠标拖拽上传下载，SSH 内 `rz`/`sz`
 - **远程桌面** — RDP（Windows 远程桌面）、VNC（Linux 远程控制）、SPICE（KVM/QEMU 虚拟机）、X11（X Window 图形界面转发）
-- **数据库客户端** — MySQL / PostgreSQL / Oracle / SQL Server / rqlite / Redis / MongoDB / Elasticsearch
-- **容器** — Kubernetes / Docker / Podman / nerdctl (containerd) / WSLC
+- **数据库客户端** — MySQL / PostgreSQL / Oracle / SQL Server / SQLite / rqlite / Redis / MongoDB / Elasticsearch，支持 AI 自然语言生成查询与数据行编辑
+- **Kubernetes & 容器** — Kubernetes / Docker / Podman / nerdctl (containerd) / WSLC，集群资源与容器镜像管理、Pod 日志与 exec 终端、CPU/内存指标
 - **服务器监控** — CPU/内存/磁盘/网络、进程、端口、网卡实时监控
 
-### AI 助理
+### AI Agent
 
 自主执行的 AI Agent，独立规划并执行多轮 Shell 命令，直接在终端中完成复杂任务。
 
-- **自主多轮执行** — AI Agent 能够自主规划、执行、观察结果并迭代，在多轮 Shell 命令中无需人工干预即可完成复杂操作。
-- **大模型集成** — 侧边栏对话，兼容 Anthropic / OpenAI 协议，支持 Claude、GPT 及其他兼容模型。
+- **AI Agent 自主执行** — AI Agent 自主规划、执行、观察结果并迭代，在多轮 Shell 命令中无需人工干预即可完成复杂操作；侧边栏对话，兼容 Anthropic / OpenAI 协议，支持 Claude、GPT 及其他兼容模型。
 - **灵活的执行模式** — 提供免确认、仅高危确认、写操作确认、全部确认四种模式，自主权由你掌控。
-- **对话持久化** — 会话聊天记录按标签页保存，重新打开应用后历史记录仍然保留。
 - **终端智能协作** — AI 命令直接在当前终端标签页中执行，支持固定到指定标签页或跟随当前激活终端。分屏中人与 AI 各司其职，同屏协作互不干扰。
-- **智能补全** — SSH 终端输入时，根据历史命令和 AI 能力实时提供命令补全建议。
+- **MCP Server** — 内置 MCP 服务器，Claude Code、Codex、Gemini CLI 等外部 AI Agent 可安全地在已保存的连接上执行命令、传输文件，凭据不出应用。
 - **技能与命令** — 可复用的 Skill 工作流与 Prompt 命令模板，输入 `/` 即可挂载触发，AI 也可自行沉淀新技能。
-- **交互模式** — 在 Chat（纯对话不执行命令）、只读（仅允许执行读命令）、Agent（全自主）三种模式间切换，精确约束 AI Agent 的行为边界。
-- **MCP Client** — 接入外部 MCP（Model Context Protocol）服务器，为 AI Agent 扩展更多工具与能力。
+- **智能提示** — 输入时按历史命令与 AI 能力实时补全。
 
 ### 个性化能力
 
-连接管理、自由分屏、云端同步、主题定制 —— 你的终端由你掌控。
+连接管理、自由分屏、云端同步、主题与国际化 —— 你的终端由你掌控。
 
 - **连接管理器** — 分组管理服务器连接，快速搜索、一键新建连接，支持批量操作。
-- **自由分屏** — 将终端标签拖动到内容区即可自由分屏，任意组合成工作区，并可拖拽面板边缘调整大小与布局。
-- **云端同步** — 基于 GitHub、GitLab、Gitee 去中心化个人私有仓库加密自动同步配置，无需担心数据丢失泄露，多设备无缝衔接、随处接续工作。
+- **工作区** — 将终端标签拖动到内容区即可自由分屏，任意组合成工作区，并可拖拽面板边缘调整大小与布局。
+- **云端同步** — 支持私有 Git 仓库/WebDAV 双模式云同步，无需担心数据丢失泄露，多设备无缝衔接、随处接续工作。
 - **自定义快捷键** — 自由绑定各项操作的键盘快捷键，实现全键盘操作，双手不离键盘。
-- **主题** — 28 款终端主题、3 款界面主题（暗色 / 深蓝 / 浅色）、自定义背景图片。
-- **国际化** — 支持简中、繁中、英、日、韩、德、西、法、俄等 9 种语言界面。
-
-### 效率工具
-
-- **批量多主机执行** — 在连接管理器中多选主机，并发执行同一命令或脚本，结果聚合展示，支持每主机状态查看、输出预览与失败策略配置。
-- **终端录制与回放** — 将终端会话录制为 asciinema cast 文件，回放时支持暂停、倍速与进度拖拽。
+- **主题与国际化** — 28 款终端主题、3 款界面主题（深色 / 深蓝 / 浅色）、自定义背景图片；支持简中、繁中、英、日、韩、德、西、法、俄、葡、越等 11 种语言界面。
 
 ## 支持的协议
 
@@ -88,8 +79,9 @@
 | 终端 | Serial | 串口终端连接，支持波特率等参数配置 |
 | 终端 | Raw TCP | 原始 TCP 控制台会话，直连主机端口收发原始字节流 |
 | 终端 | Local | PowerShell、CMD、Git Bash 等本地 Shell |
-| 终端 | WSL | 通过本地终端打开已安装的 WSL 发行版 |
+| 终端 | WSL | 通过本地终端打开已安装的 WSL 发行版（仅 Windows） |
 | 文件传输 | SFTP | 服务器文件管理与传输 |
+| 文件传输 | SCP | 兼容旧版 SSH 服务器的降级方案，适用于不支持 SFTP 协议的服务器 |
 | 文件传输 | FTP / FTPS | 网站空间、NAS 文件传输 |
 | 文件传输 | SMB | Windows 共享文件夹、NAS 文件访问 |
 | 文件传输 | WebDAV | WebDAV 服务器文件管理 |
@@ -103,6 +95,7 @@
 | 数据库 | PostgreSQL | 兼容 PostgreSQL 协议：PostgreSQL、CockroachDB 等 |
 | 数据库 | Oracle Database | 通过纯 Go 驱动连接 Oracle Database |
 | 数据库 | SQL Server | 通过纯 Go 驱动连接 SQL Server |
+| 数据库 | SQLite（1.10.1-alpha） | 本地嵌入式数据库，直接打开数据库文件 |
 | 数据库 | rqlite | 基于 SQLite、Raft 共识的轻量分布式数据库 |
 | 数据库 | Redis | 内存键值数据库，可视化键值浏览与编辑 |
 | 数据库 | MongoDB | 文档数据库，树形浏览、查询编辑与行内编辑 |
@@ -111,9 +104,9 @@
 | 容器 | Docker | 容器与镜像管理，支持本机或 SSH 远程主机 |
 | 容器 | Podman | 兼容 Docker 的容器引擎，支持本机或 SSH 远程主机 |
 | 容器 | nerdctl (containerd) | containerd 容器管理，支持切换 namespace |
-| 容器 | WSLC | Windows WSL2 Container 运行时 |
+| 容器 | WSLC | Windows WSL2 Container 运行时（仅 Windows） |
 
-Oracle Database 支持基于纯 Go 驱动实现。ai-ops-terminal 不随安装包分发 Oracle Database、Oracle Instant Client、OJDBC、Wallet 文件或 Oracle 品牌素材；用户需自行确保其 Oracle 授权、凭据和数据库访问权限合规。
+Oracle Database 支持基于纯 Go 驱动实现。uniTerm 不随安装包分发 Oracle Database、Oracle Instant Client、OJDBC、Wallet 文件或 Oracle 品牌素材；用户需自行确保其 Oracle 授权、凭据和数据库访问权限合规。
 
 ## 界面截图
 
@@ -157,11 +150,12 @@ Oracle Database 支持基于纯 Go 驱动实现。ai-ops-terminal 不随安装�
 
 ## 下载安装
 
-前往 [GitHub Releases](https://github.com/laigcss/ai-ops-terminal/releases) 或 [Gitee Releases](https://github.com/laigcss/ai-ops-terminal/releases) 下载最新版本：
+前往 [GitHub Releases](https://github.com/ys-ll/uniterm/releases) 或 [Gitee Releases](https://gitee.com/ys-l/uniterm/releases) 下载最新版本：
 
-- **Windows** (amd64 / arm64): 安装包 `ai-ops-terminal-windows-*-installer-*.exe`，或便携版 `ai-ops-terminal-windows-*-portable-*.zip`
-- **macOS** (Intel / Apple Silicon): 下载 `ai-ops-terminal-darwin-*-*.dmg`
-- **Linux** (amd64 / arm64): 下载 `ai-ops-terminal-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
+- **Windows** (amd64 / arm64): 安装包 `uniterm-windows-*-installer-*.exe`，或便携版 `uniterm-windows-*-portable-*.zip`
+- **macOS** (Apple Silicon arm64 / Intel amd64): 下载 `uniterm-darwin-*-*.dmg`
+- **Linux** (amd64 / arm64): 下载 `uniterm-linux-*-*.tar.gz`、`.deb` 或 `.rpm`
+- **Android** (arm64): 下载 `uniterm-android-arm64-*.apk`
 
 > **关于 Windows 杀软误报**：由于本开源软件未购买代码签名证书，未签名的可执行文件可能被部分杀毒引擎（如 Windows Defender）误报拦截。这是 Go/Wails 应用的已知问题（参见 [wailsapp/wails#3308](https://github.com/wailsapp/wails/issues/3308)）。可在杀毒软件中为其添加排除规则以放行。请务必从 GitHub、Gitee 官方开源渠道下载软件。如仍担心存在病毒，可自行下载源代码在本地构建运行。
 
@@ -169,18 +163,18 @@ Oracle Database 支持基于纯 Go 驱动实现。ai-ops-terminal 不随安装�
 
 ```bash
 # Windows
-scoop bucket add ai-ops-terminal https://github.com/laigcss/scoop-ai-ops-terminal && scoop install ai-ops-terminal
+scoop bucket add uniterm https://github.com/ys-ll/scoop-uniterm && scoop install uniterm
 
 # macOS
-brew install --cask laigcss/ai-ops-terminal/ai-ops-terminal
+brew install --cask ys-ll/uniterm/uniterm
 
 # Linux (deb)
-curl -sLo ai-ops-terminal.deb https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.deb
-sudo dpkg -i ai-ops-terminal.deb
+curl -sLo uniterm.deb https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.deb
+sudo dpkg -i uniterm.deb
 
 # Linux (rpm)
-curl -sLo ai-ops-terminal.rpm https://github.com/laigcss/ai-ops-terminal/releases/latest/download/ai-ops-terminal-linux-amd64-*.rpm
-sudo rpm -i ai-ops-terminal.rpm
+curl -sLo uniterm.rpm https://github.com/ys-ll/uniterm/releases/latest/download/uniterm-linux-amd64-*.rpm
+sudo rpm -i uniterm.rpm
 ```
 
 ### 运行依赖
@@ -188,6 +182,7 @@ sudo rpm -i ai-ops-terminal.rpm
 - **Windows**: WebView2 运行时（Windows 10+ 已内置，更老的系统需安装）
 - **macOS**: 无需额外依赖（使用系统自带 WebKit）
 - **Linux**: `libgtk-3-0` 与 `libwebkit2gtk-4.1-0`（多数桌面发行版已自带）
+- **Android**: Android 5.0+（使用系统自带 WebView，无需额外依赖）
 
 ## 使用流程
 
@@ -197,7 +192,7 @@ sudo rpm -i ai-ops-terminal.rpm
 2. 填入主机、端口和认证信息（密码或私钥）
 3. 点击**连接**打开 SSH 终端会话
 
-### AI 助理
+### AI Agent
 
 1. 进入设置页面，配置你的 **AI 大模型**（API 地址、模型和密钥）
 2. 打开一个终端标签页（SSH 或本地）
@@ -221,11 +216,16 @@ sudo rpm -i ai-ops-terminal.rpm
 
 ## 从源码构建
 
-需要 [Go](https://go.dev/dl/) 1.26+、[Node.js](https://nodejs.org/) 20+ 和 [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.12（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12`）。此外，macOS 需 Xcode Command Line Tools，Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`。
+- [Go](https://go.dev/dl/) 1.26+
+- [Node.js](https://nodejs.org/) 20+
+- [wails3 CLI](https://wails.io/docs/) v3.0.0-beta.27（安装：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27`）
+- macOS 需 Xcode Command Line Tools
+- Linux 需 `libgtk-3-dev` 与 `libwebkit2gtk-4.1-dev`
+- Android 构建另需 JDK 21 与 Android SDK/NDK（`sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;26.3.11579264"`）
 
 ```bash
-git clone https://github.com/laigcss/ai-ops-terminal.git
-cd ai-ops-terminal
+git clone https://github.com/ys-ll/uniterm.git
+cd uniTerm
 cd frontend && npm install && cd ..
 wails3 dev                   # 开发模式运行
 wails3 build                 # 构建生产版本
@@ -234,7 +234,7 @@ wails3 build                 # 构建生产版本
 ## 项目结构
 
 ```
-ai-ops-terminal/
+uniTerm/
 ├── main.go                       # 入口文件
 ├── app.go                        # Wails 绑定、LLM API 代理、SFTP API
 ├── app_*.go                      # 平台相关实现
@@ -271,18 +271,18 @@ ai-ops-terminal/
 
 ## 欢迎 Star
 
-如果 ai-ops-terminal 对你有帮助，欢迎点一个 ⭐ Star，这是对项目最大的鼓励，也能让更多人发现它。
+如果 uniTerm 对你有帮助，欢迎点一个 ⭐ Star，这是对项目最大的鼓励，也能让更多人发现它。
 
-[![GitHub stars](https://img.shields.io/github/stars/laigcss/ai-ops-terminal?style=social)](https://github.com/laigcss/ai-ops-terminal)
-
+[![GitHub stars](https://img.shields.io/github/stars/ys-ll/uniterm?style=social)](https://github.com/ys-ll/uniterm)
+[![Gitee stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgitee.com%2Fapi%2Fv5%2Frepos%2Fys-l%2Funiterm&query=%24.stargazers_count&label=Stars&style=social&logo=gitee)](https://gitee.com/ys-l/uniterm)
 
 ## 反馈与贡献
 
 本项目为纯个人业余兴趣项目，无商业化及接收赞助计划，欢迎志同道合的朋友一起交流，参与共建。
 
-欢迎通过 [GitHub Issues](https://github.com/laigcss/ai-ops-terminal/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/laigcss/ai-ops-terminal/pulls) 贡献代码。由于终端访问场景与环境各异，作者难以覆盖所有场景的验证，如遇到相关问题，欢迎 fork 项目代码参与共建。本项目欢迎 vibe coding。
+欢迎通过 [GitHub Issues](https://github.com/ys-ll/uniterm/issues) 提交问题、建议或使用反馈，也欢迎通过 [Pull Request](https://github.com/ys-ll/uniterm/pulls) 贡献代码。由于终端访问场景与环境各异，作者难以覆盖所有场景的验证，如遇到相关问题，欢迎 fork 项目代码参与共建。本项目欢迎 vibe coding。
 
-感谢以下朋友为 ai-ops-terminal 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 ai-ops-terminal 变得更好 ❤️
+感谢以下朋友为 uniTerm 贡献代码与改进，以及每一位提交 issue 和建议的朋友，是你们让 uniTerm 变得更好 ❤️
 
 - [@yuwei5380](https://github.com/yuwei5380)
 - [@surenwuyuwuqiu](https://github.com/surenwuyuwuqiu)
@@ -291,6 +291,17 @@ ai-ops-terminal/
 - [@jiayunora](https://github.com/jiayunora)
 - [@iCarrear](https://github.com/iCarrear)
 - [@boltomli](https://github.com/boltomli)
+- [@kxn](https://github.com/kxn)
+- [@windtear](https://github.com/windtear)
+- [@Sunshow](https://github.com/Sunshow)
+- [@feuvan](https://github.com/feuvan)
+- [@zhangsir1211](https://github.com/zhangsir1211)
+- [@sonnartliao](https://github.com/sonnartliao)
+- [@Teejer](https://github.com/Teejer)
+- [@IBRAHIMELAMRABET](https://github.com/IBRAHIMELAMRABET)
+- [@chris-edstrom](https://github.com/chris-edstrom)
+- [@andreafunicelli](https://github.com/andreafunicelli)
+- [@dungvv](https://github.com/dungvv)
 
 ## 开源协议
 

@@ -5,10 +5,10 @@
       <span>{{ t('ai.title') }}</span>
       <div class="ai-actions">
         <button class="ai-action-btn" @click="onNewSession" :title="t('ai.newSession')">
-          <el-icon><MessageSquarePlus :size="14" /></el-icon>
+          <el-icon><MessageSquarePlus :size="'0.875rem'" /></el-icon>
         </button>
         <button v-if="aiStore.sessions.length > 0" class="ai-action-btn" :title="t('ai.recentSessions')" @click.stop="sessionMenuRef?.toggle($event.currentTarget as HTMLElement)" >
-          <el-icon><History :size="14" /></el-icon>
+          <el-icon><History :size="'0.875rem'" /></el-icon>
         </button>
         <Menu ref="sessionMenuRef" v-model:visible="sessionMenuVisible">
           <MenuItem
@@ -20,33 +20,21 @@
             <span class="session-item-name">{{ s.name }}</span>
             <span class="session-time">{{ formatRelativeTime(s.updatedAt) }}</span>
             <template #trailing>
-              <el-icon class="session-delete" :title="t('ai.renameSession')" @click.stop="onSessionRename(s.id); closeMenus()"><Pencil :size="14" /></el-icon>
-              <el-icon class="session-delete" @click.stop="aiStore.deleteSession(s.id); closeMenus()"><Trash2 :size="14" /></el-icon>
+              <el-icon class="session-delete" :title="t('ai.renameSession')" @click.stop="onSessionRename(s.id); closeMenus()"><Pencil :size="'0.875rem'" /></el-icon>
+              <el-icon class="session-delete" @click.stop="aiStore.deleteSession(s.id); closeMenus()"><Trash2 :size="'0.875rem'" /></el-icon>
             </template>
           </MenuItem>
         </Menu>
         <button class="ai-action-btn" @click="searchVisible = !searchVisible" :title="t('ai.search')">
-          <el-icon><Search :size="14" /></el-icon>
+          <el-icon><Search :size="'0.875rem'" /></el-icon>
         </button>
         <button class="ai-action-btn" @click="toggleMaximize" :title="isMaximized ? t('ai.restore') : t('ai.maximize')">
-          <el-icon><Shrink v-if="isMaximized" :size="14" /><Expand v-else :size="14" /></el-icon>
+          <el-icon><Shrink v-if="isMaximized" :size="'0.875rem'" /><Expand v-else :size="'0.875rem'" /></el-icon>
         </button>
         <button class="ai-action-btn" @click="onClose" :title="t('sidebar.collapse')">
-          <el-icon><X :size="14" /></el-icon>
+          <el-icon><X :size="'0.875rem'" /></el-icon>
         </button>
       </div>
-    </div>
-
-    <!-- F1: AI interaction mode switcher (Chat / Read-Only / Agent) -->
-    <div class="ai-mode-bar">
-      <button
-        v-for="opt in interactionModeOptions"
-        :key="opt.value"
-        class="mode-seg-btn"
-        :class="{ active: aiStore.interactionMode === opt.value }"
-        :title="opt.tooltip"
-        @click="onInteractionModeChange(opt.value)"
-      >{{ opt.label }}</button>
     </div>
 
     <div v-show="searchVisible" class="ai-search-bar">
@@ -62,13 +50,13 @@
       />
       <span class="search-count" v-if="searchText">{{ currentMatchIndex + 1 }}/{{ totalMatchCount || 0 }}</span>
       <button class="search-btn" @click="onSearchPrev" :title="t('terminal.searchPrev')">
-        <ChevronUp :size="14" />
+        <ChevronUp :size="'0.875rem'" />
       </button>
       <button class="search-btn" @click="onSearchNext" :title="t('terminal.searchNext')">
-        <ChevronDown :size="14" />
+        <ChevronDown :size="'0.875rem'" />
       </button>
       <button class="search-btn" @click="closeSearch" :title="t('ai.close')">
-        <el-icon><X :size="12" /></el-icon>
+        <el-icon><X :size="'0.75rem'" /></el-icon>
       </button>
     </div>
 
@@ -89,7 +77,21 @@
         />
       </div>
       <div v-if="aiStore.isRunning || aiStore.pendingCommand || aiStore.pendingQuestion" class="ai-thinking">
-        <div class="thinking-text">{{ statusText }}</div>
+        <div class="thinking-row" :title="t('ai.thinkingToggleHint')" @click="toggleThinking">
+          <div class="thinking-text">{{ statusText }}</div>
+          <ChevronDown v-if="!aiStore.thinkingExpanded" :size="'0.75rem'" class="thinking-chevron" />
+          <ChevronUp v-else :size="'0.75rem'" class="thinking-chevron" />
+        </div>
+        <div v-show="aiStore.thinkingExpanded" ref="thinkingPanelRef" class="thinking-panel">
+          <div class="thinking-panel-header">
+            <span class="thinking-dot" :class="aiStore.status === 'thinking' ? 'live' : 'done'">{{ aiStore.status === 'thinking' ? '○' : '●' }}</span>
+            <span class="thinking-panel-title">{{ t('ai.thoughtProcess') }}</span>
+            <span v-if="liveThinkingElapsed" class="thinking-panel-time">{{ liveThinkingElapsed }}</span>
+            <span v-if="thinkingStartLabel" class="thinking-panel-time">· {{ thinkingStartLabel }}</span>
+          </div>
+          <pre v-if="aiStore.thinkingText" class="thinking-body">{{ aiStore.thinkingText }}</pre>
+          <div v-else class="thinking-empty">{{ t('ai.noThinkingContent') }}</div>
+        </div>
       </div>
     </div>
 
@@ -147,7 +149,18 @@
         </div>
       </div>
 
-      <div class="input-container">
+      <div
+        :id="aiDropId"
+        class="input-container"
+        data-file-drop-target
+        @dragenter.prevent="onDropDragEnter"
+        @dragover.prevent="onDropDragOver"
+        @dragleave="onDropDragLeave"
+        @drop="onDropDragDrop"
+      >
+        <div v-if="aiDropHover" class="ai-drop-overlay">
+          <span>{{ t('ai.attachmentDropHere') }}</span>
+        </div>
         <!-- # reference dropdown -->
         <div
           v-if="hashDropdownVisible && hashMatchingPanels.length > 0"
@@ -178,7 +191,7 @@
             :class="{ highlighted: i === skillHighlightIndex }"
             @mousedown.prevent="onSelectItem(item)"
           >
-            <component :is="item.kind === 'command' ? Terminal : BookOpen" :size="13" class="skill-dropdown-kind-icon" />
+            <component :is="item.kind === 'command' ? Terminal : BookOpen" :size="'0.8125rem'" class="skill-dropdown-kind-icon" />
             <span class="skill-dropdown-name">/{{ item.name }}</span>
             <span v-if="item.kind === 'command' && item.argumentHint" class="skill-dropdown-args">{{ item.argumentHint }}</span>
             <span class="skill-dropdown-desc">{{ item.description }}</span>
@@ -189,6 +202,19 @@
           <div v-for="q in aiStore.queuedMessages" :key="q.id" class="queued-chip">
             <span class="queued-text">{{ q.content }}</span>
             <button class="queued-remove" :title="t('ai.queueRemove')" @click="aiStore.removeQueuedMessage(q.id)">
+              <X :size="'0.75rem'" />
+            </button>
+          </div>
+        </div>
+        <div v-if="attachments.length" class="attachments-row">
+          <div v-for="att in attachments" :key="att.id" class="attachment-chip" :title="`${att.name} · ${formatBytes(att.size)}`">
+            <img v-if="att.kind === 'image'" class="attachment-thumb" :src="attachmentPreviewUrl(att)" :alt="att.name" />
+            <FileText v-else :size="16" class="attachment-icon" />
+            <div class="attachment-meta">
+              <span class="attachment-name">{{ att.name }}</span>
+              <span class="attachment-size">{{ formatBytes(att.size) }}</span>
+            </div>
+            <button class="attachment-remove" :title="t('ai.attachRemove')" @click="removeAttachment(att.id)">
               <X :size="12" />
             </button>
           </div>
@@ -204,12 +230,29 @@
             @paste="onPaste"
           />
         </div>
+        <input
+          ref="fileInputRef"
+          class="attachment-file-input"
+          type="file"
+          multiple
+          :accept="ATTACHMENT_FILE_ACCEPT"
+          @change="onFileInputChange"
+        />
         <div class="input-actions">
           <div class="input-actions-left">
-            <button class="ghost-btn hash-btn" title="引用终端" @click="onHashButtonClick">
+            <button
+              v-if="!isMobile"
+              class="ghost-btn hash-btn attach-btn"
+              :title="t('ai.attachFile')"
+              :disabled="lockedPanels.length === 0 && !currentIsTerminal"
+              @click="onAttachClick"
+            >
+              <Paperclip :size="14" />
+            </button>
+            <button class="ghost-btn hash-btn" title="引用终端" :disabled="lockedPanels.length === 0 && !currentIsTerminal" @click="onHashButtonClick">
               <span class="hash-btn-icon">#</span>
             </button>
-            <button class="ghost-btn hash-btn" title="Skill / 命令" @click="onSlashButtonClick">
+            <button class="ghost-btn hash-btn" title="Skill / 命令" :disabled="lockedPanels.length === 0 && !currentIsTerminal" @click="onSlashButtonClick">
               <span class="hash-btn-icon">/</span>
             </button>
             <template v-if="settingsStore.settings.ai.models.length > 0">
@@ -230,7 +273,7 @@
               </Menu>
             </template>
             <button v-else class="ghost-btn model-btn add-model-btn" @click="onModelChange('__add_model__')">
-            <Plus :size="14" />
+            <Plus :size="'0.875rem'" />
             <span>{{ t('settings.addModel') }}</span>
           </button>
           </div>
@@ -253,14 +296,14 @@
             <button
               v-if="!(busy && !inputText.trim())"
               class="send-btn"
-              :disabled="(!inputText.trim() && !hasSkillTag && !hasCommandTag) || (lockedPanels.length === 0 && !currentIsTerminal)"
+              :disabled="(!inputText.trim() && !hasSkillTag && !hasCommandTag && !attachments.length) || (lockedPanels.length === 0 && !currentIsTerminal)"
               :title="busy ? t('ai.queue') : t('ai.send')"
               @click="onSend"
             >
-              <ArrowUp :size="18" />
+              <ArrowUp :size="'1.125rem'" />
             </button>
             <button v-else class="send-btn stop" :title="t('ai.stop')" @click="onStop">
-              <Square :size="15" :fill="'currentColor'" />
+              <Square :size="'0.9375rem'" :fill="'currentColor'" />
             </button>
           </div>
         </div>
@@ -272,7 +315,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
-import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, BookOpen, Terminal, Pencil } from '@lucide/vue'
+import { X, Trash2, Expand, Shrink, History, MessageSquarePlus, Search, ChevronDown, ChevronUp, ArrowUp, Square, Plus, BookOpen, Terminal, Pencil, Paperclip, FileText } from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -282,13 +325,31 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent, answerQuestion, dismissQuestion } from '../services/agent'
-import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64 } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
-import type { ExecutionMode, InteractionMode } from '../types/ai'
+import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64, ReadLocalAttachmentFile } from '../../bindings/github.com/ys-ll/uniterm/app'
+import type { AIAttachment, ExecutionMode } from '../types/ai'
+import {
+  ATTACHMENT_FILE_ACCEPT,
+  ATTACHMENT_LIMITS,
+  attachmentErrorMessageKey,
+  attachmentFormatsLabel,
+  attachmentPreviewUrl,
+  bytesFromBase64,
+  classifyAttachment,
+  createImageAttachmentFromDataURL,
+  formatBytes,
+  readAttachmentFile,
+  validateAttachment,
+} from '../services/attachments'
+import { useNativeFileDrop } from '../composables/useFilePanel'
+import { isMobilePlatform } from '../utils/platform'
 import AIMessage from './AIMessage.vue'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import { Clipboard } from '@wailsio/runtime'
 import MenuDivider from './MenuDivider.vue'
+import { writeClipboard } from '../composables/useClipboardWrite'
+import { formatClock, formatDuration } from '../utils/timeFormat'
+import { useLocalStateStore } from '../stores/localStateStore'
 
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
@@ -413,6 +474,224 @@ function createHashTagSpan(panelTitle: string): HTMLSpanElement {
 const inputText = ref('')
 const hasSkillTag = ref(false)
 const hasCommandTag = ref(false)
+
+// --- Attachments -----------------------------------------------------------
+// Images and text files queued for the next user turn. Validated on the way in
+// (services/attachments.ts) so nothing invalid ever reaches the input box.
+// Hidden on mobile, where the file picker and clipboard plumbing are absent.
+const isMobile = isMobilePlatform()
+const attachments = ref<AIAttachment[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function showAttachmentError(key: string, params?: Record<string, string | number>) {
+  ElMessage.error(t(key, params))
+}
+
+function removeAttachment(id: string) {
+  attachments.value = attachments.value.filter((a) => a.id !== id)
+}
+
+function clearAttachments() {
+  attachments.value = []
+}
+
+function onAttachClick() {
+  fileInputRef.value?.click()
+}
+
+/** Add one file, reporting the reason on rejection instead of dropping it. */
+async function addFile(file: File) {
+  const verdict = validateAttachment({ name: file.name, size: file.size, type: file.type }, attachments.value)
+  if (!verdict.ok) {
+    showAttachmentError(attachmentErrorMessageKey(verdict.error), verdict.error.params)
+    return
+  }
+  try {
+    attachments.value = [...attachments.value, await readAttachmentFile(file, verdict.kind, verdict.mime)]
+  } catch (e) {
+    const key = e instanceof Error && e.message === 'binary file' ? 'ai.attachmentBinary'
+      : e instanceof Error && e.message === 'image pixels too large' ? 'ai.attachmentTooLargePixels'
+      : 'ai.attachmentReadFailed'
+    showAttachmentError(key, { name: file.name, limit: ATTACHMENT_LIMITS.maxImageSide })
+  }
+}
+
+async function onFileInputChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  // Reset immediately so picking the same file twice still fires 'change'.
+  input.value = ''
+  for (const file of files) await addFile(file)
+}
+
+// --- Drag-drop attachments (native OS paths) --------------------------------
+//
+// OS file drops never carry content into the webview (the window runs with
+// EnableFileDrop, so Wails intercepts them at the native layer); the DOM
+// dragenter/leave handlers below only drive the hover overlay. The real file
+// paths arrive via the common:WindowFilesDropped event, routed here by this
+// container's data-file-drop-target id, and are read off disk by the
+// ReadLocalAttachmentFile binding.
+
+const aiDropId = 'ai-drop-' + (crypto.randomUUID?.() || Math.random().toString(36).slice(2))
+const aiDropHover = ref(false)
+let aiDropEnterCount = 0
+// Mirror the attach button's gating: no attachments on mobile or with no
+// terminal to send them with.
+const dropAllowed = computed(() => !isMobile && (lockedPanels.value.length > 0 || currentIsTerminal.value))
+
+const nativeDrop = useNativeFileDrop({
+  elementId: aiDropId,
+  isActive: () => dropAllowed.value,
+  upload: (paths) => onNativePathsDropped(paths),
+})
+
+function onDropDragEnter(e: DragEvent) {
+  if (!dropAllowed.value || !e.dataTransfer?.types.includes('Files')) return
+  aiDropEnterCount++
+  aiDropHover.value = true
+}
+
+function onDropDragOver(e: DragEvent) {
+  if (!dropAllowed.value || !e.dataTransfer?.types.includes('Files')) return
+  e.dataTransfer.dropEffect = 'copy'
+}
+
+function onDropDragLeave() {
+  if (--aiDropEnterCount <= 0) {
+    aiDropEnterCount = 0
+    aiDropHover.value = false
+  }
+}
+
+function onDropDragDrop() {
+  // The native layer consumes the drop; here we only retire the overlay.
+  aiDropEnterCount = 0
+  aiDropHover.value = false
+}
+
+/** Add files dropped as absolute OS paths. The whitelist is checked before
+ *  reading (unsupported files never touch disk reads); everything else reuses
+ *  addFile, so per-kind caps, count limits, the pixel check and the binary
+ *  probe all behave exactly like the file picker. */
+async function onNativePathsDropped(paths: string[]) {
+  for (const p of paths) {
+    const name = p.replace(/\\/g, '/').split('/').pop() || p
+    if (!classifyAttachment(name, '')) {
+      showAttachmentError('ai.attachmentUnsupportedType', { name, formats: attachmentFormatsLabel })
+      continue
+    }
+    try {
+      const f = await ReadLocalAttachmentFile(p)
+      await addFile(new File([bytesFromBase64(f.dataB64)], f.name || name))
+    } catch (e) {
+      const detail = (e as any)?.toString?.() || String(e)
+      if (detail.includes('AI_ATTACHMENT_IS_DIRECTORY')) {
+        showAttachmentError('ai.attachmentIsDirectory', { name })
+      } else if (detail.includes('AI_ATTACHMENT_TOO_LARGE')) {
+        showAttachmentError('ai.attachmentTooLarge', { name, limit: formatBytes(ATTACHMENT_LIMITS.maxImageBytes) })
+      } else if (detail.includes('AI_ATTACHMENT_EMPTY')) {
+        showAttachmentError('ai.attachmentEmpty', { name })
+      } else {
+        showAttachmentError('ai.attachmentReadFailed', { name })
+      }
+    }
+  }
+}
+
+/**
+ * Take an image off the clipboard. Returns true when an image was consumed so
+ * the caller can stop the plain-text path.
+ */
+function attachClipboardImage(blob: Blob | null | undefined, fallbackMime = ''): boolean {
+  if (!blob || !blob.size) return false
+  const name = t('ai.attachPastedImage')
+  const verdict = validateAttachment({ name, size: blob.size, type: blob.type || fallbackMime }, attachments.value)
+  if (!verdict.ok) {
+    showAttachmentError(attachmentErrorMessageKey(verdict.error), verdict.error.params)
+    return true
+  }
+  const reader = new FileReader()
+  reader.onerror = () => showAttachmentError('ai.attachmentReadFailed', { name })
+  reader.onload = () => {
+    createImageAttachmentFromDataURL(typeof reader.result === 'string' ? reader.result : '', name, blob.size, verdict.mime)
+      .then((att) => {
+        attachments.value = [...attachments.value, att]
+      })
+      .catch((e: unknown) => {
+        const key = e instanceof Error && e.message === 'image pixels too large' ? 'ai.attachmentTooLargePixels' : 'ai.attachmentReadFailed'
+        showAttachmentError(key, { name, limit: ATTACHMENT_LIMITS.maxImageSide })
+      })
+  }
+  reader.readAsDataURL(blob)
+  return true
+}
+
+/** Pull an image out of a DOM paste event's clipboard data, if any. */
+function clipboardImageFromEvent(e: ClipboardEvent): Blob | null {
+  const items = e.clipboardData?.items
+  if (items) {
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) return file
+      }
+    }
+  }
+  const files = e.clipboardData?.files
+  if (files) {
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) return file
+    }
+  }
+  return null
+}
+
+/**
+ * Read a clipboard image through the async Clipboard API. Resolves to null
+ * whenever the API is missing or denied (WebKitGTK and WKWebView both refuse
+ * it without an explicit permission delegate), which is why the DOM paste
+ * event is the primary source and this is only the fallback.
+ */
+async function readClipboardImage(): Promise<Blob | null> {
+  const clipboard = navigator.clipboard
+  if (!clipboard || typeof clipboard.read !== 'function') return null
+  const items = await clipboard.read()
+  for (const item of items) {
+    const type = item.types.find((tp) => tp.startsWith('image/'))
+    if (type) return await item.getType(type)
+  }
+  return null
+}
+
+/**
+ * Last-resort clipboard read for paste events that carried no data. Prefers an
+ * image from the async Clipboard API, then the Wails clipboard for text. The
+ * read is raced against a short deadline so a slow or permission-gated call
+ * can never leave paste hanging — once the text fallback has run, a late image
+ * is ignored.
+ */
+function pasteFromClipboard() {
+  let settled = false
+  const pasteText = () => {
+    if (settled) return
+    settled = true
+    Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+  }
+  const timer = window.setTimeout(pasteText, 500)
+  void readClipboardImage()
+    .then(blob => {
+      if (settled) return
+      window.clearTimeout(timer)
+      settled = true
+      if (!attachClipboardImage(blob)) pasteText()
+    })
+    .catch(() => {
+      window.clearTimeout(timer)
+      pasteText()
+    })
+}
+
 function syncInputText() {
   inputText.value = getEditableText()
   hasSkillTag.value = extractSkillFromInput() !== null
@@ -507,11 +786,68 @@ const statusText = computed(() => {
   return t(key) || t('ai.thinking')
 })
 
+// ── Live thinking box (click the status text to expand/collapse) ──
+const thinkingPanelRef = ref<HTMLDivElement>()
+
+function scrollThinkingToBottom() {
+  const el = thinkingPanelRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+function toggleThinking() {
+  aiStore.thinkingExpanded = !aiStore.thinkingExpanded
+  if (aiStore.thinkingExpanded) nextTick(scrollThinkingToBottom)
+}
+
+watch(() => aiStore.thinkingText, () => {
+  if (aiStore.thinkingExpanded) nextTick(scrollThinkingToBottom)
+})
+
+// 1s tick feeding the live elapsed counter while the model is thinking.
+const thinkingTick = ref(0)
+let thinkingTickTimer: ReturnType<typeof setInterval> | null = null
+watch(
+  () => aiStore.thinkingExpanded && aiStore.isRunning && aiStore.status === 'thinking',
+  (on) => {
+    if (on && thinkingTickTimer === null) {
+      thinkingTick.value = Date.now()
+      thinkingTickTimer = setInterval(() => { thinkingTick.value = Date.now() }, 1000)
+    } else if (!on && thinkingTickTimer !== null) {
+      clearInterval(thinkingTickTimer)
+      thinkingTickTimer = null
+    }
+  },
+  { immediate: true }
+)
+onUnmounted(() => { if (thinkingTickTimer !== null) clearInterval(thinkingTickTimer) })
+
+const liveThinkingElapsed = computed(() => {
+  if (aiStore.status !== 'thinking' || !aiStore.thinkingStartedAt) return ''
+  return formatDuration(Math.max(0, thinkingTick.value - aiStore.thinkingStartedAt))
+})
+
+const thinkingStartLabel = computed(() => formatClock(aiStore.thinkingStartedAt))
+
 const messagesRef = ref<HTMLDivElement>()
+const AI_SIDEBAR_MIN_WIDTH = 300
+const AI_SIDEBAR_MAX_WIDTH = 800
 const sidebarWidth = ref(360)
 const isResizing = ref(false)
 const isMaximized = ref(false)
 const preMaxWidth = ref(360)
+
+// Restore the persisted width once LocalState is loaded (App.vue awaits
+// init() on mount; children mount first, so re-init here — it is idempotent).
+onMounted(async () => {
+  try {
+    const ls = useLocalStateStore()
+    if (!ls.loaded) await ls.init()
+    const w = ls.state.aiSidebarWidth
+    if (w > 0) sidebarWidth.value = Math.min(Math.max(w, AI_SIDEBAR_MIN_WIDTH), AI_SIDEBAR_MAX_WIDTH)
+  } catch {
+    // keep the default width
+  }
+})
 
 function toggleMaximize() {
   if (isMaximized.value) {
@@ -572,9 +908,8 @@ async function onSessionRename(id: string) {
 async function onMsgCtxExport() {
   msgCtxMenuVisible.value = false
   const id = aiStore.currentSessionId
-  if (!id) return
   const s = aiStore.sessions.find(x => x.id === id)
-  if (!s) return
+  if (!id || !s) return
   try {
     const md = aiStore.exportSessionMarkdown(id)
     const safe = s.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)
@@ -595,9 +930,15 @@ const msgCtxMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const msgCtxMenuVisible = ref(false)
 const msgCtxId = ref('')
 const msgCtxHasSelection = ref(false)
+const aiSelectionText = ref('')
+
+function captureAISelection() {
+  aiSelectionText.value = window.getSelection()?.toString() || ''
+}
 
 function onMessageContextMenu(e: MouseEvent, id: string) {
   e.preventDefault()
+  captureAISelection()
   msgCtxId.value = id
   msgCtxHasSelection.value = !!(window.getSelection()?.toString())
   msgCtxMenuRef.value?.openAt(e.clientX, e.clientY, id)
@@ -625,32 +966,6 @@ const modeLabel = computed(() => {
     default: return t('ai.confirmDangerous')
   }
 })
-
-// F1: AI interaction mode switcher options (Chat / Read-Only / Agent)
-const interactionModeOptions = computed(() => [
-  { value: 'chat' as InteractionMode, label: t('ai.modeChat'), tooltip: t('ai.modeChatTooltip') },
-  { value: 'readonly' as InteractionMode, label: t('ai.modeReadonly'), tooltip: t('ai.modeReadonlyTooltip') },
-  { value: 'agent' as InteractionMode, label: t('ai.modeAgent'), tooltip: t('ai.modeAgentTooltip') },
-])
-
-// F1: switch interaction mode. Confirm when switching to a MORE restrictive mode
-// (agent → readonly/chat, readonly → chat) to avoid surprising the user.
-async function onInteractionModeChange(mode: InteractionMode) {
-  if (mode === aiStore.interactionMode) return
-  const restrictOrder: Record<InteractionMode, number> = { chat: 0, readonly: 1, agent: 2 }
-  if (restrictOrder[mode] < restrictOrder[aiStore.interactionMode]) {
-    try {
-      await ElMessageBox.confirm(
-        t('ai.modeSwitchConfirm'),
-        t('ai.modeSwitchTitle'),
-        { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
-      )
-    } catch {
-      return // user cancelled
-    }
-  }
-  aiStore.setInteractionMode(mode)
-}
 
 const currentModelName = computed(() => {
   const m = settingsStore.settings.ai.models.find(m => m.id === settingsStore.settings.ai.activeModelId)
@@ -753,7 +1068,6 @@ const hashHighlightIndex = ref(0)
 const skillQuery = ref('')
 const skillDropdownVisible = ref(false)
 const skillHighlightIndex = ref(0)
-
 
 const hashMatchingPanels = computed(() => {
   const src = hashDropdownVisible.value && !hashQuery.value
@@ -966,7 +1280,6 @@ function onSelectItem(item: SlashItem) {
   onSelectCommand(item.name)
 }
 
-
 // Detect an active #query at the caret. Works on the DOM text node the caret
 // sits in, so an adjacent hash-tag span never interferes with the check.
 function detectHashQuery(): string | null {
@@ -1159,14 +1472,6 @@ function onModelChange(modelId: string) {
     return
   }
   settingsStore.setActiveModel(modelId)
-  const model = settingsStore.settings.ai.models.find(m => m.id === modelId)
-  if (model) {
-    aiStore.setConfig({
-      apiKey: model.apiKey,
-      baseURL: model.baseURL,
-      model: model.model,
-    })
-  }
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -1217,24 +1522,21 @@ function closeMenus() {
 
 function onAIContextMenu(e: MouseEvent) {
   e.preventDefault()
+  captureAISelection()
   // Position at the pointer; Menu.openAt is viewport-clamped + single-open.
   aiMenuRef.value?.openAt(e.clientX, e.clientY)
 }
 
 function aiCopySelection() {
-  const selection = window.getSelection()
-  if (selection && selection.toString()) {
-    navigator.clipboard.writeText(selection.toString())
-  }
+  if (aiSelectionText.value) void writeClipboard(aiSelectionText.value)
   aiMenuVisible.value = false
   msgCtxMenuVisible.value = false
 }
 
 function aiAskSelection() {
-  const selection = window.getSelection()
-  if (selection && selection.toString()) {
+  if (aiSelectionText.value) {
     const el = editableRef.value
-    if (el) el.textContent = selection.toString()
+    if (el) el.textContent = aiSelectionText.value
     syncInputText(); refreshHashDropdown()
     if (!aiStore.visible) {
       aiStore.visible = true
@@ -1321,10 +1623,15 @@ function onKeydown(e: KeyboardEvent) {
     }
   }
 
-  // Cmd/Ctrl+V: paste via Wails clipboard (DOM paste unreliable in WKWebView)
+  // Cmd/Ctrl+V is deliberately NOT preventDefault-ed: letting the browser run
+  // its default action is the only way to receive a paste event carrying image
+  // data, and onPaste() handles both the image and the text case. Mobile keeps
+  // the old Wails-clipboard path (no clipboard events on touch keyboards).
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
-    e.preventDefault()
-    Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+    if (isMobile) {
+      e.preventDefault()
+      Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+    }
     return
   }
 
@@ -1335,9 +1642,37 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+/**
+ * Paste handler. Order matters:
+ *   1. an image in the clipboard event becomes an attachment;
+ *   2. text from the event is inserted (plain-text paste, unchanged);
+ *   3. an event with nothing usable (some webviews hand over an empty
+ *      clipboardData) falls back to the async Clipboard API for an image and
+ *      then to the Wails clipboard for text — the pre-existing behaviour.
+ */
 function onPaste(e: ClipboardEvent) {
+  if (!isMobile) {
+    const image = clipboardImageFromEvent(e)
+    if (image) {
+      e.preventDefault()
+      attachClipboardImage(image)
+      return
+    }
+  }
+
+  const text = e.clipboardData?.getData('text/plain')
+  if (text) {
+    e.preventDefault()
+    insertTextAtCursor(text)
+    return
+  }
+
   e.preventDefault()
-  Clipboard.Text().then(text => { if (text) insertTextAtCursor(text) }).catch(() => {})
+  if (isMobile) {
+    Clipboard.Text().then(t => { if (t) insertTextAtCursor(t) }).catch(() => {})
+    return
+  }
+  pasteFromClipboard()
 }
 
 function insertTextAtCursor(text: string) {
@@ -1367,12 +1702,14 @@ function clearInput() {
 
 async function onSend() {
   const text = getEditableText().trim()
+  // Attachments ride along with whatever text / skill / command is sent.
+  const pending = attachments.value
 
   // F6: command tag —— 取 tag 后参数,后台组装正文作为 user 消息
   const cmd = extractCommandFromInput()
   // F5: 显式调用 skill —— 输入框里挂了 skill tag 则注入其 L2 正文
   const skillName = extractSkillFromInput()
-  if (!text && !skillName && !cmd) return
+  if (!text && !skillName && !cmd && pending.length === 0) return
   let skillBody = ''
   if (skillName) {
     try {
@@ -1404,15 +1741,17 @@ async function onSend() {
   }
 
   if (busy.value) {
-  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args ?? undefined)
-    aiStore.enqueueMessage(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined)
+    if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
+    aiStore.enqueueMessage(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined, pending)
     clearInput()
+    clearAttachments()
     return
   }
   clearInput()
+  clearAttachments()
   scrollToBottom()
-  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args ?? undefined)
-  await runAgent(cmd ? '' : (final ?? ''), skillName ?? undefined, skillBody ?? undefined, cmd ? (final ?? undefined) : undefined)
+  if (cmd) aiStore.addCommandCard(cmd.name, cmd.args)
+  await runAgent(cmd ? '' : final, skillName || undefined, skillBody || undefined, cmd ? final : undefined, pending)
   scrollToBottom()
 }
 
@@ -1475,13 +1814,18 @@ function onResizeStart(e: MouseEvent) {
   function onMouseMove(ev: MouseEvent) {
     if (!isResizing.value) return
     const delta = startX - ev.clientX
-    const newWidth = Math.min(Math.max(startWidth + delta, 300), 800)
+    const newWidth = Math.min(Math.max(startWidth + delta, AI_SIDEBAR_MIN_WIDTH), AI_SIDEBAR_MAX_WIDTH)
     if (el) el.style.width = newWidth + 'px'
   }
 
   function onMouseUp() {
     isResizing.value = false
-    sidebarWidth.value = el!.offsetWidth
+    sidebarWidth.value = el?.offsetWidth ?? sidebarWidth.value
+    // Skip while maximised — the CSS forces 100% width, so offsetWidth is
+    // the full window width and must not overwrite the persisted value.
+    if (!isMaximized.value) {
+      useLocalStateStore().update({ aiSidebarWidth: sidebarWidth.value })
+    }
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
     window.dispatchEvent(new CustomEvent('split:resize-end'))
@@ -1507,6 +1851,7 @@ onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
   skillStore.load()
   commandStore.load()
+  nativeDrop.bind()
 
   if (messagesRef.value) {
     messagesRef.value.addEventListener('scroll', onMessagesScroll)
@@ -1522,6 +1867,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('ai:ask', onAskAI)
+  nativeDrop.unbind()
 
   if (messagesRef.value) {
     messagesRef.value.removeEventListener('scroll', onMessagesScroll)
@@ -1536,6 +1882,7 @@ defineExpose({ focusInput })
 <style scoped>
 .ai-sidebar {
   background: var(--bg-elevated);
+  border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -1543,6 +1890,7 @@ defineExpose({ focusInput })
 }
 .ai-sidebar.collapsed {
   width: 0 !important;
+  border-left: none;
   overflow: hidden;
 }
 .ai-sidebar.maximized {
@@ -1552,6 +1900,7 @@ defineExpose({ focusInput })
   right: 0;
   bottom: 0;
   width: 100% !important;
+  border-left: none;
   z-index: 100;
 }
 .ai-sidebar.resizing {
@@ -1562,29 +1911,11 @@ defineExpose({ focusInput })
   left: 0;
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 0.375rem;
   cursor: col-resize;
   z-index: 10;
   background: transparent;
   transition: background 0.15s ease;
-}
-
-.resize-handle::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    var(--accent-subtle) 20%,
-    var(--accent-glow) 50%,
-    var(--accent-subtle) 80%,
-    transparent 100%
-  );
-  transition: opacity 0.15s;
 }
 
 .resize-handle:hover::after {
@@ -1593,9 +1924,9 @@ defineExpose({ focusInput })
   top: 0;
   bottom: 0;
   left: 0;
-  width: 3px;
+  width: 0.1875rem;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
+  box-shadow: 0 0 0.375rem var(--accent-glow);
 }
 
 .resize-handle:hover::before {
@@ -1605,62 +1936,28 @@ defineExpose({ focusInput })
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  font-size: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
-}
-/* F1: AI interaction mode segmented switcher */
-.ai-mode-bar {
-  display: flex;
-  gap: 2px;
-  padding: 4px 10px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.mode-seg-btn {
-  flex: 1;
-  height: 22px;
-  padding: 0 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
-}
-.mode-seg-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.mode-seg-btn.active {
-  background: var(--bg-accent-soft, var(--bg-hover));
-  border-color: var(--accent, var(--border-hover));
-  color: var(--text-primary);
-  font-weight: 600;
 }
 .ai-actions {
   display: flex;
-  gap: 2px;
+  gap: 0.125rem;
 }
 .ai-action-btn {
+  font-size: 0.875rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   padding: 0;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
   transition: all 0.12s ease;
 }
 .ai-action-btn:hover {
@@ -1668,7 +1965,7 @@ defineExpose({ focusInput })
   color: var(--text-primary);
 }
 .ai-session-bar {
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1677,13 +1974,12 @@ defineExpose({ focusInput })
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 28px;
-  padding: 0 10px;
+  height: 1.75rem;
+  padding: 0 0.625rem;
   box-sizing: border-box;
   background: var(--bg-surface);
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
@@ -1706,14 +2002,14 @@ defineExpose({ focusInput })
   white-space: nowrap;
 }
 .session-time {
-  margin-left: 8px;
-  font-size: 10px;
+  margin-left: 0.5rem;
+  font-size: 0.625rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
   white-space: nowrap;
 }
 .session-delete {
-  margin-left: 8px;
+  margin-left: 0.5rem;
   color: var(--text-muted);
 }
 .session-delete:hover {
@@ -1724,8 +2020,8 @@ defineExpose({ focusInput })
 .ai-search-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -1734,29 +2030,29 @@ defineExpose({ focusInput })
   background: var(--bg-base);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
 }
 .ai-search-bar .search-input:focus {
   border-color: var(--accent);
 }
 .ai-search-bar .search-count {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 .ai-search-bar .search-btn {
+  font-size: 0.875rem;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px;
+  padding: 0.125rem;
 }
 .ai-search-bar .search-btn:hover {
   color: var(--text-primary);
@@ -1764,21 +2060,92 @@ defineExpose({ focusInput })
 .ai-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: 0.5rem 0;
   user-select: text;
   -webkit-user-select: text;
 }
 .ai-thinking {
   display: flex;
+  flex-direction: column;
+  padding: 0.625rem 0.875rem;
+}
+.thinking-row {
+  display: flex;
   align-items: center;
-  padding: 10px 14px;
+  gap: 0.25rem;
+  align-self: flex-start;
+  cursor: pointer;
+}
+.thinking-row:hover .thinking-text {
+  color: var(--text-secondary);
 }
 .thinking-text {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--font-ui);
   color: var(--text-muted);
   font-style: italic;
   animation: status-pulse 1.2s ease-in-out infinite;
+}
+.thinking-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.thinking-panel {
+  margin-top: 0.375rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  border-left: 2px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 0.375rem 0.625rem;
+}
+.thinking-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+}
+.thinking-dot {
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+.thinking-dot.live {
+  color: var(--accent);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+.thinking-dot.done {
+  color: var(--success);
+}
+.thinking-panel-title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.thinking-panel-time {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+.thinking-body {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.thinking-empty {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 @keyframes status-pulse {
@@ -1786,14 +2153,13 @@ defineExpose({ focusInput })
   50% { opacity: 0.5; }
 }
 .ai-input {
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   flex-shrink: 0;
   position: relative;
 }
 .input-container {
   border: 1px solid var(--border-subtle);
-  border-top-color: transparent;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   background: var(--bg-elevated);
   transition: border-color 0.15s ease;
   position: relative;
@@ -1802,23 +2168,116 @@ defineExpose({ focusInput })
   border-color: var(--accent);
   border-top-color: var(--accent);
 }
+/* Hover feedback while an OS file drag is over the composer */
+.ai-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.ai-drop-overlay span {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  padding: 0.75rem 1.5rem;
+  border: 0.125rem dashed var(--border-hover);
+  border-radius: var(--radius-sm);
+}
 .textarea-wrap {
   position: relative;
 }
+/* Attachment chips sit above the input, inside the same bordered container */
+.attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem 0;
+}
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.25rem 0.375rem;
+  background: var(--bg-tertiary, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+.attachment-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.attachment-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.attachment-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.attachment-name {
+  font-size: 0.6875rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 11rem;
+}
+.attachment-size {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+.attachment-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.attachment-remove:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.18));
+}
+/* The real <input type=file> is driven by the paperclip button */
+.attachment-file-input {
+  display: none;
+}
 .ai-editable {
-  padding: 12px 16px;
-  font-size: 13px;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-primary);
   background: transparent;
   border: none;
   outline: none;
-  min-height: 60px;
-  max-height: 220px;
+  min-height: 3.75rem;
+  max-height: 13.75rem;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
+  /* WebKit/WKWebView (macOS): body sets -webkit-user-select: none, which makes
+     a contenteditable div impossible to focus/position the caret with the
+     mouse — clicks land but no cursor appears and no typing happens. Native
+     <input>/<textarea> are exempt via the UA stylesheet, but contenteditable
+     is not, so restore text selection explicitly here. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 .ai-editable:empty::before {
   content: attr(data-placeholder);
@@ -1829,80 +2288,82 @@ defineExpose({ focusInput })
   display: inline;
   background: var(--accent);
   color: var(--on-accent);
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  padding: 1px 0.3125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
   user-select: none;
-  margin: 0 2px;
+  margin: 0 0.125rem;
 }
 .input-actions {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
-  padding: 0 8px 8px 8px;
+  padding: 0 0.5rem 0.5rem 0.5rem;
 }
 .input-actions-left {
   display: flex;
-  gap: 2px;
+  gap: 0.125rem;
   align-items: center;
 }
 .input-actions-right {
   display: flex;
-  gap: 6px;
+  gap: 0.375rem;
   align-items: center;
 }
 /* Ghost buttons: no border/background by default, reveal on hover */
 .ghost-btn {
   display: inline-block;
   box-sizing: border-box;
-  height: 24px;
-  line-height: 24px;
-  padding: 0 6px;
+  height: 1.5rem;
+  line-height: 1.5rem;
+  padding: 0 0.375rem;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 .ghost-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.ghost-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
 .model-btn {
-  max-width: 96px;
+  max-width: 6rem;
 }
 .add-model-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   max-width: none;
 }
 .mode-btn {
-  max-width: 108px;
+  max-width: 6.75rem;
 }
 /* Send / Stop icon button */
 .send-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   padding: 0;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
-  cursor: pointer;
   transition: background 0.12s ease, opacity 0.12s ease;
 }
 .send-btn:hover:not(:disabled) {
@@ -1922,7 +2383,7 @@ defineExpose({ focusInput })
   opacity: 0.85;
 }
 .mode-option {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   font-family: var(--font-ui);
 }
@@ -1940,23 +2401,23 @@ defineExpose({ focusInput })
 }
 
 .ai-panel-tags {
-  padding: 4px 12px;
+  padding: 0.25rem 0.75rem;
   background: var(--bg-overlay);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 .panel-tags-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   flex-wrap: wrap;
-  min-height: 22px;
+  min-height: 1.375rem;
 }
 .panel-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  font-size: 11px;
+  gap: 0.1875rem;
+  padding: 1px 0.375rem;
+  font-size: 0.6875rem;
   background: var(--accent-subtle);
   color: var(--accent);
   border: 1px solid var(--accent-glow);
@@ -1974,9 +2435,8 @@ defineExpose({ focusInput })
 .panel-tag-close {
   background: none;
   border: none;
-  cursor: pointer;
   padding: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   color: var(--text-muted);
   transition: color 0.15s;
@@ -1989,13 +2449,12 @@ defineExpose({ focusInput })
   border: 1px dashed var(--border-hover);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  cursor: pointer;
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   padding: 0;
   transition: border-color 0.15s, color 0.15s;
@@ -2005,12 +2464,12 @@ defineExpose({ focusInput })
   color: var(--accent);
 }
 .no-terminal-hint {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 .panel-shell-hint {
-  margin-left: 8px;
-  font-size: 10px;
+  margin-left: 0.5rem;
+  font-size: 0.625rem;
   color: var(--text-muted);
 }
 .hash-dropdown {
@@ -2018,22 +2477,21 @@ defineExpose({ focusInput })
   bottom: 100%;
   left: -1px;
   right: -1px;
-  max-height: 180px;
+  max-height: 11.25rem;
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--accent-glow);
   border-radius: var(--radius-sm);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -0.25rem 0.75rem rgba(0, 0, 0, 0.4);
   z-index: 100;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .hash-dropdown-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 12px;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
   transition: background 0.1s;
 }
 .hash-dropdown-item:hover,
@@ -2045,23 +2503,30 @@ defineExpose({ focusInput })
   font-weight: 500;
 }
 .hash-panel-hint {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted);
   margin-left: auto;
 }
 .hash-associated-badge {
-  font-size: 9px;
+  font-size: 0.5625rem;
   color: var(--accent);
   background: var(--accent-subtle);
-  padding: 0 4px;
-  border-radius: 2px;
-  margin-left: 4px;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-sm);
+  margin-left: 0.25rem;
   flex-shrink: 0;
 }
 .hash-btn-icon {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
+}
+
+/* 附件按钮内是 SVG 图标（基线对齐），改用 flex 垂直居中以与 # / 按钮对齐 */
+.attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Skill dropdown (紧凑单行，仿 TRAE) */
@@ -2070,22 +2535,21 @@ defineExpose({ focusInput })
   bottom: 100%;
   left: -1px;
   right: -1px;
-  max-height: 220px;
+  max-height: 13.75rem;
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--accent-glow);
   border-radius: var(--radius-sm);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -0.25rem 0.75rem rgba(0, 0, 0, 0.4);
   z-index: 100;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .skill-dropdown-item {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 12px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
   transition: background 0.1s;
 }
 .skill-dropdown-item:hover,
@@ -2105,7 +2569,7 @@ defineExpose({ focusInput })
 }
 .skill-dropdown-args {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--font-mono);
   flex-shrink: 0;
 }
@@ -2113,7 +2577,7 @@ defineExpose({ focusInput })
   flex: 1;
   min-width: 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2122,18 +2586,18 @@ defineExpose({ focusInput })
 .queued-area {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 8px 0 8px;
+  gap: 0.25rem;
+  padding: 0.5rem 0.5rem 0 0.5rem;
 }
 .queued-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-secondary);
 }
@@ -2151,7 +2615,6 @@ defineExpose({ focusInput })
   background: none;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
   padding: 0;
 }
 .queued-remove:hover {

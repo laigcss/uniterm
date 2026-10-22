@@ -1,0 +1,31 @@
+diff --git a/node_modules/@wailsio/runtime/dist/clipboard.js b/node_modules/@wailsio/runtime/dist/clipboard.js
+index d579d4b..fc48567 100644
+--- a/node_modules/@wailsio/runtime/dist/clipboard.js
++++ b/node_modules/@wailsio/runtime/dist/clipboard.js
+@@ -18,6 +18,14 @@ const ClipboardText = 1;
+  * @return A Promise that resolves when the operation is successful.
+  */
+ export function SetText(text) {
++    // HarmonyOS: route through JSBridge (Go subprocess cannot access system clipboard).
++    // __unitermBridgeInvoke is the callback-mode entry (ArkWeb asyncMethodList
++    // Promise results are broken); registered by src/utils/harmonyos-bridge.ts.
++    if (typeof window !== 'undefined' && window.harmonyBridge) {
++        const invoke = window.__unitermBridgeInvoke || ((m, p) => window.harmonyBridge.invoke(m, p));
++        return invoke('clipboard.writeText', JSON.stringify({ text }))
++            .then(resp => { const r = JSON.parse(resp); if (!r.success) throw new Error(r.error?.message || 'write failed'); return r.data; });
++    }
+     return call(ClipboardSetText, { text });
+ }
+ /**
+@@ -26,5 +34,11 @@ export function SetText(text) {
+  * @returns A promise that resolves with the text from the Clipboard.
+  */
+ export function Text() {
++    // HarmonyOS: route through JSBridge (callback mode, see SetText note).
++    if (typeof window !== 'undefined' && window.harmonyBridge) {
++        const invoke = window.__unitermBridgeInvoke || ((m, p) => window.harmonyBridge.invoke(m, p));
++        return invoke('clipboard.readText', '{}')
++            .then(resp => { const r = JSON.parse(resp); if (!r.success) throw new Error(r.error?.message || 'read failed'); return r.data || ''; });
++    }
+     return call(ClipboardText);
+ }

@@ -8,7 +8,7 @@ const sidebarZh = [
   {
     text: '软件介绍',
     items: [
-      { text: '关于 ai-ops-terminal', link: '/zh/introduction' },
+      { text: '关于 uniTerm', link: '/zh/introduction' },
       { text: '支持协议', link: '/zh/protocols' }
     ]
   },
@@ -26,19 +26,22 @@ const sidebarZh = [
       { text: '本地和串口连接', link: '/zh/connections/local' },
       { text: '文件传输', link: '/zh/connections/file-transfer' },
       { text: '远程桌面', link: '/zh/connections/remote-desktop' },
-      { text: '服务器监控', link: '/zh/connections/server-monitor' },
       { text: '数据库', link: '/zh/connections/databases' },
-      { text: '容器', link: '/zh/connections/containers' }
+      { text: '容器', link: '/zh/connections/containers' },
+      { text: '服务器监控', link: '/zh/connections/server-monitor' },
+      { text: '工作区', link: '/zh/connections/workspace' }
     ]
   },
   {
     text: '功能指南',
     items: [
       { text: 'AI 助理', link: '/zh/features/ai-assistant' },
-      { text: '标签和工作区', link: '/zh/features/workspace' },
+      { text: 'MCP 服务器', link: '/zh/features/mcp-server' },
+      { text: '边栏', link: '/zh/features/sidebar' },
       { text: 'SSH 隧道', link: '/zh/features/ssh-tunnel' },
+      { text: '密钥库', link: '/zh/features/keystore' },
+      { text: '代理', link: '/zh/features/proxy' },
       { text: '云同步', link: '/zh/features/sync' },
-      { text: '智能提示', link: '/zh/features/smart-suggest' },
       { text: '个性化', link: '/zh/features/personalization' }
     ]
   },
@@ -55,7 +58,7 @@ const sidebarEn = [
   {
     text: 'Introduction',
     items: [
-      { text: 'About ai-ops-terminal', link: '/en/introduction' },
+      { text: 'About uniTerm', link: '/en/introduction' },
       { text: 'Supported Protocols', link: '/en/protocols' }
     ]
   },
@@ -72,19 +75,22 @@ const sidebarEn = [
       { text: 'Local', link: '/en/connections/local' },
       { text: 'File Transfer', link: '/en/connections/file-transfer' },
       { text: 'Remote Desktop', link: '/en/connections/remote-desktop' },
-      { text: 'Server Monitor', link: '/en/connections/server-monitor' },
       { text: 'Databases', link: '/en/connections/databases' },
-      { text: 'Containers', link: '/en/connections/containers' }
+      { text: 'Containers', link: '/en/connections/containers' },
+      { text: 'Server Monitor', link: '/en/connections/server-monitor' },
+      { text: 'Workspace', link: '/en/connections/workspace' }
     ]
   },
   {
     text: 'Features',
     items: [
       { text: 'AI Assistant', link: '/en/features/ai-assistant' },
-      { text: 'Workspace', link: '/en/features/workspace' },
+      { text: 'MCP Server', link: '/en/features/mcp-server' },
+      { text: 'Sidebar', link: '/en/features/sidebar' },
       { text: 'SSH Tunnel', link: '/en/features/ssh-tunnel' },
+      { text: 'Keystore', link: '/en/features/keystore' },
+      { text: 'Proxy', link: '/en/features/proxy' },
       { text: 'Cloud Sync', link: '/en/features/sync' },
-      { text: 'Smart Suggestions', link: '/en/features/smart-suggest' },
       { text: 'Personalization', link: '/en/features/personalization' }
     ]
   },
@@ -99,8 +105,8 @@ const sidebarEn = [
 
 export default defineConfig({
   base: '/guide/',
-  title: 'ai-ops-terminal User Guide',
-  description: 'ai-ops-terminal — All-in-One Terminal User Manual',
+  title: 'uniTerm User Guide',
+  description: 'uniTerm — All-in-One Terminal User Manual',
   head: [
     ['link', { rel: 'icon', href: '/imgs/appicon.png' }],
     ['meta', { name: 'baidu-site-verification', content: 'codeva-xKnncJaXe8' }],
@@ -117,11 +123,11 @@ export default defineConfig({
       label: '简体中文',
       lang: 'zh-CN',
       link: '/zh/',
-      title: 'ai-ops-terminal 用户手册',
-      description: 'ai-ops-terminal 全能终端用户手册',
+      title: 'uniTerm 用户手册',
+      description: 'uniTerm 全能终端用户手册',
       themeConfig: {
         nav: [
-          { text: '← ai-ops-terminal 首页', link: 'https://github.com/laigcss/ai-ops-terminal' },
+          { text: '← uniTerm 首页', link: 'https://github.com/laigcss/uniTerm' },
           { text: '软件介绍', link: '/zh/introduction' },
           { text: '快速开始', link: '/zh/getting-started' },
           { text: '连接协议', link: '/zh/connections/remote-terminal' },
@@ -141,11 +147,11 @@ export default defineConfig({
       label: 'English',
       lang: 'en-US',
       link: '/en/',
-      title: 'ai-ops-terminal User Guide',
-      description: 'ai-ops-terminal All-in-One Terminal User Manual',
+      title: 'uniTerm User Guide',
+      description: 'uniTerm All-in-One Terminal User Manual',
       themeConfig: {
         nav: [
-          { text: '← ai-ops-terminal Home', link: 'https://github.com/laigcss/ai-ops-terminal' },
+          { text: '← uniTerm Home', link: 'https://github.com/laigcss/uniTerm' },
           { text: 'Introduction', link: '/en/introduction' },
           { text: 'Getting Started', link: '/en/getting-started' },
           { text: 'Connections', link: '/en/connections/remote-terminal' },

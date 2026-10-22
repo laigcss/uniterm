@@ -15,7 +15,7 @@
 //
 // 不改现有单连接逻辑：本服务独立创建/关闭 session，不经过 panelStore/
 // tabStore，不影响 UI 中的 tab/panel 状态。
-import { CreateSession, CloseSession, SessionStart, SessionWrite } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { CreateSession, CloseSession, SessionStart, SessionWrite } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { Events } from '@wailsio/runtime'
 import type { ConnectionConfig } from '../types/session'
 import { useBatchStore, type BatchConfig } from '../stores/batchStore'

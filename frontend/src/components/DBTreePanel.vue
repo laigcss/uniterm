@@ -1,6 +1,7 @@
 <template>
   <div class="db-tree-panel">
 
+
     <div class="search-wrap">
       <input
         v-model="searchQuery"
@@ -8,10 +9,10 @@
         :placeholder="t('db.searchTables')"
       />
       <button class="btn btn-ghost btn-icon btn-sm" :title="t('db.refreshDatabases')" @click="refreshAll">
-        <RefreshCw :size="14" />
+        <RefreshCw :size="'0.875rem'" />
       </button>
       <button class="btn btn-ghost btn-icon btn-sm" :title="t('common.more')" @click.stop="moreMenuRef?.toggle($event.currentTarget as HTMLElement)">
-        <MoreHorizontal :size="14" />
+        <MoreHorizontal :size="'0.875rem'" />
       </button>
       <Menu ref="moreMenuRef" v-model:visible="moreMenuVisible" align="end">
         <MenuItem :class="{ disabled: !canCreateDatabase }" @click="onMoreNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
@@ -32,9 +33,9 @@
           @contextmenu.prevent="onDbContextMenu($event, db.name)"
         >
           <span class="db-arrow" @click.stop="onToggleDb(db.name)">
-            <component :is="expandedDbs.has(db.name) ? ChevronDown : ChevronRight" :size="12" />
+            <component :is="expandedDbs.has(db.name) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
           </span>
-          <Database class="db-icon" :size="14" />
+          <Database class="db-icon" :size="'0.875rem'" />
           <span class="db-name">{{ db.name }}</span>
         </div>
         <template v-if="expandedDbs.has(db.name)">
@@ -49,7 +50,7 @@
             @contextmenu.prevent="onTableContextMenu($event, db.name, t)"
           >
             <span class="table-icon-spacer" />
-            <component :is="t.type === 'view' ? Eye : Table2" class="table-icon" :size="14" />
+            <component :is="t.type === 'view' ? Eye : Table2" class="table-icon" :size="'0.875rem'" />
             <span class="table-name">{{ t.name }}</span>
           </div>
           <div v-if="db.tables.length === 0" class="empty-hint">
@@ -64,7 +65,7 @@
       v-model:visible="ctxMenuVisible"
       v-slot="{ current }"
     >
-      <template v-if="current && current.type === 'db'">
+      <template v-if="current && (current as DbMenuCtx).type === 'db'">
         <MenuItem @click="onCtxListDatabase">{{ t('db.tableList') }}</MenuItem>
         <MenuItem @click="onCtxNewQuery">{{ t('db.newQuery') }}</MenuItem>
         <MenuItem @click="onCtxRunSqlFile">{{ t('db.runSqlFile') }}</MenuItem>
@@ -75,18 +76,18 @@
         <MenuDivider />
         <MenuItem @click="onCtxRefresh">{{ t('db.refreshTables') }}</MenuItem>
       </template>
-      <template v-else-if="current && current.type === 'table'">
+      <template v-else-if="current && (current as DbMenuCtx).type === 'table'">
         <MenuItem @click="onCtxViewData">{{ t('db.openData') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxViewStructure">{{ t('db.tableStructure') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxCopyName">{{ t('db.copyName') }}</MenuItem>
         <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxCopyTable">{{ t('db.copyTable') }}</MenuItem>
         <MenuDivider />
         <MenuItem @click="onCtxExportStructure">{{ t('db.exportStructure') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxExportData">{{ t('db.exportData') }}</MenuItem>
-        <MenuItem v-if="current.tableType !== 'view'" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxExportData">{{ t('db.exportData') }}</MenuItem>
+        <MenuItem v-if="(current as DbMenuCtx).tableType !== 'view'" @click="onCtxExportStructureData">{{ t('db.exportStructureData') }}</MenuItem>
         <MenuDivider />
-        <template v-if="current.tableType === 'view'">
+        <template v-if="(current as DbMenuCtx).tableType === 'view'">
           <MenuItem class="danger" @click="onCtxDropView">{{ t('db.dropView') }}</MenuItem>
         </template>
         <template v-else>
@@ -94,7 +95,7 @@
           <MenuItem class="danger" @click="onCtxDropTable">{{ t('db.dropTable') }}</MenuItem>
         </template>
       </template>
-      <template v-else-if="current && current.type === 'blank'">
+      <template v-else-if="current && (current as DbMenuCtx).type === 'blank'">
         <MenuItem @click="onCtxNewQueryBlank">{{ t('db.newQuery') }}</MenuItem>
         <MenuItem v-if="canCreateDatabase" @click="onCtxNewDatabase">{{ t('db.newDatabase') }}</MenuItem>
         <MenuItem @click="onCtxRefreshDatabases">{{ t('db.refreshDatabases') }}</MenuItem>
@@ -105,7 +106,7 @@
     <el-dialog append-to-body
       v-model="confirmVisible"
       :title="confirmTitle"
-      width="420px"
+      width="26.25rem"
     >
       <div class="confirm-body">
         <p class="confirm-text">{{ confirmText }}</p>
@@ -121,8 +122,8 @@
     </el-dialog>
 
     <!-- New Database dialog -->
-    <el-dialog append-to-body v-model="newDbVisible" :title="t('db.newDatabase')" width="380px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="newDbVisible" :title="t('db.newDatabase')" width="23.75rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('db.dbName')">
           <el-input v-model="newDbName" />
         </el-form-item>
@@ -136,8 +137,8 @@
     </el-dialog>
 
     <!-- New Table dialog -->
-    <el-dialog append-to-body v-model="newTableVisible" :title="t('db.newTable')" width="380px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="newTableVisible" :title="t('db.newTable')" width="23.75rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('db.tableName')">
           <el-input v-model="newTableName" />
         </el-form-item>
@@ -156,8 +157,8 @@
     </el-dialog>
 
     <!-- Copy Table dialog -->
-    <el-dialog append-to-body v-model="copyTableVisible" :title="t('db.copyTable')" width="380px">
-      <el-form label-width="80px">
+    <el-dialog append-to-body v-model="copyTableVisible" :title="t('db.copyTable')" width="23.75rem">
+      <el-form label-width="5rem">
         <el-form-item :label="t('db.sourceTable')">
           <el-input :model-value="copySourceTable" disabled />
         </el-form-item>
@@ -180,7 +181,7 @@ import { ref, watch, computed, nextTick, h } from 'vue'
 import { Database, Table2, Eye, ChevronRight, ChevronDown, RefreshCw, MoreHorizontal } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { ElMessageBox } from 'element-plus'
-import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, CopyTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64, OpenFileDialogFiltered, ReadFileBase64, ExecuteSQLScript } from '../../bindings/github.com/laigcss/ai-ops-terminal/app'
+import { GetDatabases, GetTables, CreateDatabase, DropDatabase, CreateTable, DropTable, DropView, TruncateTable, CopyTable, GetDBCapabilities, DumpTable, SaveFileDialogFiltered, WriteFileBase64, OpenFileDialogFiltered, ReadFileBase64, ExecuteSQLScript } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
@@ -245,7 +246,13 @@ async function loadTree() {
     let autoOpen = ''
     if (props.defaultDbName && dbs.includes(props.defaultDbName)) {
       const tables = await GetTables(props.sessionId, props.defaultDbName)
-      databases.value = [{ name: props.defaultDbName, tables, loaded: true }]
+      // 默认库置顶并展开（已加载表），其余可访问的数据库折叠显示，
+      // 点击展开时再懒加载表（见 ensureDbExpanded）。
+      const otherDbs = dbs.filter((d: string) => d !== props.defaultDbName)
+      databases.value = [
+        { name: props.defaultDbName, tables, loaded: true },
+        ...otherDbs.map((d: string) => ({ name: d, tables: [] as TableInfo[], loaded: false }))
+      ]
       expandedDbs.value = new Set([props.defaultDbName])
       autoOpen = props.defaultDbName
     } else if (dbs.length === 1) {
@@ -272,6 +279,7 @@ async function loadTree() {
 }
 
 watch(() => props.sessionId, (newId) => {
+
   if (newId) loadTree()
 }, { immediate: true })
 
@@ -368,8 +376,8 @@ watch(searchQuery, (q) => {
     const all = new Set(databases.value.map(d => d.name))
     for (const db of databases.value) {
       if (!db.loaded) {
-        GetTables(props.sessionId, db.name).then((tables: string[]) => {
-          db.tables = tables.map(name => ({ name }))
+        GetTables(props.sessionId, db.name).then((tables: TableInfo[]) => {
+          db.tables = tables
           db.loaded = true
         }).catch(() => {})
       }
@@ -540,12 +548,12 @@ function showScriptFailure(result: { failedLine: number; failedSql?: string; err
     children.push(h('p', { style: 'margin:6px 0 0;color:var(--el-color-error);word-break:break-word;font-family:var(--font-mono,monospace);font-size:12px' }, result.error))
   }
   if (result.failedSql) {
-    children.push(h('pre', { style: 'margin:8px 0 0;padding:8px;background:var(--bg-base,#f5f5f5);border-radius:4px;font-family:var(--font-mono,monospace);font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto' }, result.failedSql))
+    children.push(h('pre', { style: 'margin:8px 0 0;padding:8px;background:var(--bg-base,#f5f5f5);border-radius: var(--radius-sm);font-family:var(--font-mono,monospace);font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto' }, result.failedSql))
   }
   ElMessageBox.alert(h('div', { style: 'display:flex;flex-direction:column' }, children), t('db.runSqlFile'), {
     confirmButtonText: t('common.confirm'),
     type: 'error',
-    customStyle: { maxWidth: '560px', width: '560px' },
+    customStyle: { maxWidth: '35rem', width: '35rem' },
   }).catch(() => {})
 }
 
@@ -786,32 +794,31 @@ async function onCreateTable() {
   overflow: hidden;
 }
 .panel-header {
-  padding: 8px 12px 4px;
+  padding: 0.5rem 0.75rem 0.25rem;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   flex-shrink: 0;
 }
 .search-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   flex-shrink: 0;
 }
 .search-input {
   flex: 1;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -826,18 +833,17 @@ async function onCreateTable() {
   overflow: auto;
 }
 .tree-loading {
-  padding: 12px;
+  padding: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 .db-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -848,12 +854,11 @@ async function onCreateTable() {
   background: var(--bg-hover);
 }
 .db-arrow {
-  width: 12px;
+  width: 0.75rem;
   flex-shrink: 0;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  cursor: pointer;
 }
 .db-arrow:hover {
   color: var(--text-primary);
@@ -864,7 +869,7 @@ async function onCreateTable() {
 }
 .db-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -874,9 +879,8 @@ async function onCreateTable() {
 .table-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   user-select: none;
   transition: background 0.12s ease;
 }
@@ -887,7 +891,7 @@ async function onCreateTable() {
   background: var(--bg-hover);
 }
 .table-icon-spacer {
-  width: 30px;
+  width: 1.875rem;
   flex-shrink: 0;
 }
 .table-icon {
@@ -896,16 +900,16 @@ async function onCreateTable() {
 }
 .table-name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .empty-hint {
-  padding: 4px 8px 4px 28px;
+  padding: 0.25rem 0.5rem 0.25rem 1.75rem;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -913,17 +917,17 @@ async function onCreateTable() {
 .confirm-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .confirm-text {
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   margin: 0;
 }
 .confirm-hint {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin: 0;
 }

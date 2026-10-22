@@ -49,6 +49,7 @@ vi.mock('../stores/settingsStore', () => ({
 }))
 
 import { useTerminalMenu } from './useTerminalMenu'
+import { Clipboard } from '@wailsio/runtime'
 
 function buildMenu(getSelection: () => string) {
   return useTerminalMenu({ getSelection, onPaste: vi.fn() })
@@ -61,6 +62,16 @@ function stubNavigatorWrite(writeText: ReturnType<typeof vi.fn>) {
   })
 }
 
+// These tests pin the Wails-first write contract, which is the macOS ordering
+// (WKWebView's navigator.clipboard silently fails when unfocused). Stub a Mac
+// user agent so the ordering doesn't depend on the OS running the tests.
+function stubMacUserAgent() {
+  Object.defineProperty(globalThis.navigator, 'userAgent', {
+    configurable: true,
+    value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
+  })
+}
+
 describe('useTerminalMenu.writeClipboard', () => {
   let writeText: ReturnType<typeof vi.fn>
 
@@ -69,6 +80,7 @@ describe('useTerminalMenu.writeClipboard', () => {
     mockSettingsStore.settings.terminal.rightClickAction = 'menu'
     writeText = vi.fn().mockResolvedValue(undefined)
     stubNavigatorWrite(writeText)
+    stubMacUserAgent()
   })
 
   it('falls back to navigator.clipboard.writeText when Wails resolves false', async () => {
@@ -111,6 +123,41 @@ describe('useTerminalMenu.writeClipboard', () => {
     expect(m.menuVisible.value).toBe(false)
   })
 
+  // Regression: the Wails Clipboard import was dropped from useTerminalMenu,
+  // so the bare `Clipboard` reference resolved to the DOM global (the Clipboard
+  // API interface) and Clipboard.Text() threw inside the swallowed try/catch —
+  // right-click paste did nothing while every test still stayed green. The
+  // paste dispatch must actually reach onPaste through the Wails runtime.
+  it('pastes clipboard text via onPaste when rightClickAction is "paste"', async () => {
+    mockSettingsStore.settings.terminal.rightClickAction = 'paste'
+    const paste = vi.fn()
+    const m = useTerminalMenu({ getSelection: () => '', onPaste: paste })
+    vi.mocked(Clipboard.Text).mockResolvedValueOnce('clipboard-content')
+    m.onContextMenu(new FakeMouseEvent() as any)
+    await flushAsync()
+    expect(Clipboard.Text).toHaveBeenCalled()
+    expect(paste).toHaveBeenCalledWith('clipboard-content')
+    expect(m.menuVisible.value).toBe(false)
+  })
+
+  it('does nothing when rightClickAction is "none" (issue #1088)', () => {
+    mockSettingsStore.settings.terminal.rightClickAction = 'none'
+    const paste = vi.fn()
+    const m = useTerminalMenu({ getSelection: () => 'selected-text', onPaste: paste })
+    m.onContextMenu(new FakeMouseEvent() as any)
+    expect(m.menuVisible.value).toBe(false)
+    expect(paste).not.toHaveBeenCalled()
+  })
+
+  it('opens the menu on Ctrl + right-click even when rightClickAction is "none"', () => {
+    mockSettingsStore.settings.terminal.rightClickAction = 'none'
+    const m = buildMenu(() => 'selected-text')
+    const ev = new FakeMouseEvent()
+    ev.ctrlKey = true
+    m.onContextMenu(ev as any)
+    expect(m.menuVisible.value).toBe(true)
+  })
+
   // Ctrl/Cmd + right-click is the escape hatch when right-click is bound to
   // paste: either modifier forces the context menu open.
   it.each([
@@ -136,6 +183,16 @@ describe('useTerminalMenu.writeClipboard', () => {
     expect(m.menuVisible.value).toBe(true)
     expect(paste).not.toHaveBeenCalled()
   })
+
+  it('selectAll invokes onSelectAll and closes the menu', () => {
+    const onSelectAll = vi.fn()
+    const m = useTerminalMenu({ getSelection: () => '', onPaste: vi.fn(), onSelectAll })
+    m.onContextMenu(new FakeMouseEvent() as any)
+    expect(m.menuVisible.value).toBe(true)
+    m.selectAll()
+    expect(onSelectAll).toHaveBeenCalledOnce()
+    expect(m.menuVisible.value).toBe(false)
+  })
 })
 
 describe('useTerminalMenu.copySelection re-reads selection at click time', () => {
@@ -145,6 +202,7 @@ describe('useTerminalMenu.copySelection re-reads selection at click time', () =>
     mockSettingsStore.settings.terminal.rightClickAction = 'menu'
     writeText = vi.fn().mockResolvedValue(undefined)
     stubNavigatorWrite(writeText)
+    stubMacUserAgent()
   })
 
   // WKWebView race: right-click mousedown can clear xterm selection between
