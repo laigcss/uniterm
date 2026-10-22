@@ -986,9 +986,38 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
   // macOS Cmd+V stays hardcoded — it is not one of the configurable shortcuts.
   // On Windows/Linux, Ctrl+Shift+V is handled by the configurable shortcut
-  // system (see the terminal:paste event below). Plain Ctrl+V is never
-  // intercepted, so it passes through to the terminal app (vim visual block,
-  // bash literal-next…) on every platform.
+  // system (see the terminal:paste event below).
+  //
+  // Non-mac desktop platforms (Windows/Linux/HarmonyOS 2in1) additionally map
+  // plain Ctrl+V to paste, mirroring Windows Terminal / VS Code's integrated
+  // terminal: on keyboard-first desktops that's the natural expectation, and
+  // quoted-insert remains available via Ctrl+Q in readline. Mac keeps its
+  // Cmd+V path and the untouched Ctrl+V literal-next for power users.
+  if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+    e.preventDefault()
+    if (props.mode === 'ssh' || props.mode === 'local') {
+      readClipboardText().then(text => {
+        if (text) pasteToSession(text)
+      })
+    }
+    return false
+  }
+
+  // Non-mac Ctrl+C with an active selection copies and clears the selection
+  // (Windows Terminal / VS Code semantics); with no selection it falls
+  // through untouched so SIGINT keeps working. Mac's Cmd+C path is below.
+  if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
+    const sel = terminal?.getSelection()
+    if (sel) {
+      e.preventDefault()
+      writeClipboard(sel)
+      terminal?.clearSelection()
+      return false
+    }
+    // No selection: pass through so the shell receives SIGINT.
+    return true
+  }
+
   if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
     e.preventDefault()
     if (props.mode === 'ssh' || props.mode === 'local') {
