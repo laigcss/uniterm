@@ -42,6 +42,14 @@ export interface LaunchOptions {
   wasEdit?: boolean
   // Start tab to close and reposition the new tab after.
   prevStart?: any
+  // Anchor tab: the new tab is inserted right after this one (companion views
+  // opened from a context menu land beside their source tab) instead of beside
+  // the currently active tab.
+  afterTabId?: string
+  // Initial remote directory for file-browser kinds (terminal cwd from the
+  // "open SFTP" context menu, or the sidebar's current directory). Stashed on
+  // the panel; the file tab content consumes it on first load.
+  initialPath?: string
   // Fallback for types without a spec: the generic terminal path in App.vue.
   // Returns the created panel id + status when the caller is workspace
   // orchestration (create-from-selection / open-saved); plain connects ignore it.
@@ -251,6 +259,7 @@ async function runSpec(key: string, config: ConnectionConfig, spec: ConnectSpec,
   const displayTitle = (spec.title ?? userHost)(config)
   const panelKind = (spec.uiType ?? spec.panelType ?? key) as Parameters<typeof panelStore.createPanel>[1]
   const panel = panelStore.createPanel(config, panelKind)
+  if (opts.initialPath) panel.initialPath = opts.initialPath
   panelStore.updateTitle(panel.id, displayTitle)
   const reposition = opts.prevStart && deps ? deps.closeStartAndReposition(opts.prevStart) : null
 

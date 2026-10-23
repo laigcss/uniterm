@@ -1042,6 +1042,13 @@ onMounted(async () => {
     }
   })
 
+  // Remember every terminal session's last reported cwd (OSC 7) regardless of
+  // the file sidebar's follow toggle — enabling follow or opening an SFTP view
+  // jumps straight to this directory.
+  unsubTerminalCwd = Events.On('terminal:cwd', (ev) => {
+    const p = ev?.data as { sessionId?: string; cwd?: string } | undefined
+    if (p?.sessionId && p.cwd) companionStore.recordSessionCwd(p.sessionId, p.cwd)
+  })
   // Panel/Tab/StartTab menu actions
   // Sidebar connection dropped onto a workspace panel: connect it and split
   // in at the drop position (see WorkspaceContent.onPanelDrop Case 0).
@@ -1057,16 +1064,23 @@ onMounted(async () => {
     if (c) void openConnectionAtIndex(c, typeof index === 'number' ? index : tabStore.tabs.length)
   }) as EventListener)
   window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openFileBrowser(c, prev?.type === 'start' ? prev : undefined) }
+    const d = e.detail; const c = d?.config || d
+    if (c) {
+      const prev = tabStore.activeTab
+      // Explicit initialPath (sidebar "open standalone tab") wins; otherwise
+      // fall back to the terminal's last recorded cwd (right-click "open SFTP").
+      const initialPath = d?.initialPath || (d?.sessionId ? companionStore.sessionCwd[d.sessionId] : '')
+      openFileBrowser(c, prev?.type === 'start' ? prev : undefined, d?.sourceTabId, initialPath)
+    }
   }) as EventListener)
   window.addEventListener('app:connect-terminal', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) onConnect(c)
   }) as EventListener)
   window.addEventListener('app:connect-wsl-file', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchWslFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchWslFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined, afterTabId: d?.sourceTabId, initialPath: d?.initialPath }) }
   }) as EventListener)
   window.addEventListener('app:connect-container-file', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchContainerFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchContainerFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined, afterTabId: d?.sourceTabId, initialPath: d?.initialPath }) }
   }) as EventListener)
   window.addEventListener('app:connect-monitor', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openMonitorPanel(c, prev?.type === 'start' ? prev : undefined) }
@@ -1300,6 +1314,7 @@ onUnmounted(() => {
   unsubMcpApproval?.()
   unsubMcpSessionCreated?.()
   rdpAreaObserver?.disconnect()
+  unsubTerminalCwd?.()
   settingsStore.dispose?.()
   connectionStore.dispose?.()
   syncStore.dispose?.()
@@ -1580,8 +1595,8 @@ function onSidebarConnect(config: ConnectionConfig, kind?: 'file' | 'wsl-file' |
   return onConnect(config)
 }
 
-function openFileBrowser(config: ConnectionConfig, prevStart?: any) {
-  return launchFileBrowser(config, { prevStart })
+function openFileBrowser(config: ConnectionConfig, prevStart?: any, afterTabId?: string, initialPath?: string) {
+  return launchFileBrowser(config, { prevStart, afterTabId, initialPath })
 }
 
 function openMonitorPanel(config: ConnectionConfig, prevStart?: any) {
