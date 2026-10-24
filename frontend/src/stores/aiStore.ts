@@ -286,10 +286,11 @@ export const useAIStore = defineStore('ai', () => {
           sessions.value.splice(idx, 1)
           sessions.value.unshift(s)
         }
-        if (msg.role === 'user' && s.name === t('ai.newSession')) {
+        if (msg.role === 'user' && isAutoNamed(s)) {
           const trimmed = msg.content.trim()
           if (trimmed) {
-            s.name = trimmed.length > 20 ? trimmed.slice(0, 20) + '...' : trimmed
+            s.name = composeSessionName(terminalLabelForActiveTerminal(), trimmed)
+            s.autoNamed = false
           }
         }
         doSave()
@@ -419,14 +420,55 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  // Default name for a new session (issue #1036): the active terminal's
+  // connection — the AI-locked panel first, then the active tab's panel —
+  // named after its connection name (falling back to user@host, then to the
+  // tab's own name). Without an identifiable terminal the generic label
+  // stays. The first-message auto-naming appends the message's first
+  // sentence to this label (issue: session naming should pair the terminal
+  // with the topic), and only touches auto-named sessions so a manual
+  // rename survives.
+  function terminalLabelForActiveTerminal(): string | null {
+    const tabStore = useTabStore()
+    const panelId = tabStore.getAILockedPanel() || tabStore.getActivePanelId()
+    if (!panelId) return null
+    const cfg = usePanelStore().getPanel(panelId)?.config ?? null
+    if (cfg?.name) return cfg.name
+    if (cfg?.host) return cfg.user ? `${cfg.user}@${cfg.host}` : cfg.host
+    // No connection info — fall back to the tab's own name.
+    const tab = tabStore.tabs.find(
+      x =>
+        (x.type === 'terminal' && 'panelId' in x && x.panelId === panelId) ||
+        (x.type === 'workspace' && x.panelIds.includes(panelId))
+    )
+    return tab?.name || null
+  }
+
+  // Terminal label + first sentence, e.g. "prod-web: fix the login bug".
+  // The sentence keeps the old 20-char cap and the whole name caps at 40.
+  function composeSessionName(label: string | null, text: string): string {
+    const base = text.length > 20 ? text.slice(0, 20) + '...' : text
+    const full = label ? `${label}: ${base}` : base
+    return full.length > 40 ? full.slice(0, 40) + '...' : full
+  }
+
+  // Auto-named sessions may still be renamed by the first user message.
+  // Sessions persisted before the flag existed are auto-named only when they
+  // still carry the generic label, so a legacy host-derived name is preserved.
+  function isAutoNamed(s: AISession): boolean {
+    return s.autoNamed ?? s.name === t('ai.newSession')
+  }
+
   function createSession(name?: string) {
     const now = Date.now()
+    const auto = !name
     const session: AISession = {
       id: `session-${now}`,
-      name: name || t('ai.newSession'),
+      name: name || terminalLabelForActiveTerminal() || t('ai.newSession'),
       createdAt: now,
       updatedAt: now,
-      messages: []
+      messages: [],
+      autoNamed: auto
     }
     sessions.value.unshift(session)
     currentSessionId.value = session.id
@@ -528,6 +570,7 @@ export const useAIStore = defineStore('ai', () => {
     const s = sessions.value.find(s => s.id === sessionId)
     if (s) {
       s.name = name
+      s.autoNamed = false
       doSave()
     }
   }

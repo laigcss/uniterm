@@ -78,4 +78,16 @@ export interface AISession {
   createdAt: number
   updatedAt: number
   messages: AIMessage[]
+  contextSummary?: AIContextSummary
+  // True while the name is still the auto-derived default (terminal label,
+  // optionally combined with the first message) and may be re-composed by
+  // the first user message. Cleared by manual rename or explicit naming.
+  autoNamed?: boolean
+}
+
+export interface AIContextSummary {
+  version: 1
+  content: string
+  throughMessageId: string
+  createdAt: number
 }
