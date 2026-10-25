@@ -6,6 +6,7 @@
       @toggle-ai="aiStore.toggle"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
       @open-settings="openSettings"
+      @open-netscan="openNetscan"
       @close-tab="closeTab"
       @close-tab-batch="closeTabBatch"
       @toggle-ai-lock="onToggleAiLock"
@@ -156,6 +157,7 @@
     <EncryptionModeDialog v-model:visible="encryptVisible" :existing-secrets="credStore.status.existingSecrets" @done="onEncryptDone" />
     <CredentialUnlockDialog v-model:visible="unlockVisible" @done="onUnlockDone" @reset="onReset" />
     <MobileKeyBar v-if="keyBarSessionId" :session-id="keyBarSessionId" />
+    <NetworkScanTabContent v-model:visible="netscanVisible" />
   </div>
   </el-config-provider>
 </template>
@@ -179,6 +181,7 @@ import { isMobilePlatform } from './utils/platform'
 import { startAndroidKeepAlive, stopAndroidKeepAlive } from './utils/androidKeepAlive'
 import { writeClipboard } from './composables/useClipboardWrite'
 import SettingsTabContent from './components/SettingsTabContent.vue'
+import NetworkScanTabContent from './components/netscan/NetworkScanTabContent.vue'
 import WorkspaceContent from './components/WorkspaceContent.vue'
 import FileTabContent from './components/FileTabContent.vue'
 import RDPTabContent from './components/RDPTabContent.vue'
@@ -376,6 +379,9 @@ let unsubRdpAdaptive: (() => void) | null = null
 // Tray menu → open the settings tab (Go shows the window first).
 let unsubTrayOpenSettings: (() => void) | null = null
 let unsubTrayOpenAbout: (() => void) | null = null
+let unsubTrayOpenNetscan: (() => void) | null = null
+// Records every terminal's cwd reports app-wide (see companionStore.sessionCwd).
+let unsubTerminalCwd: (() => void) | null = null
 const { t, locale } = useI18n()
 const EL_LOCALE_MAP: Record<string, typeof enUs> = {
   'zh-CN': zhCn, 'zh-TW': zhTw, en: enUs, ja, ko, de, es, fr, ru,
@@ -387,6 +393,7 @@ const credStore = useCredentialStore()
 const dataDirVisible = ref(false)
 const encryptVisible = ref(false)
 const unlockVisible = ref(false)
+const netscanVisible = ref(false)
 
 // Determine which credential dialog (recovery-unlock / setup) to show based
 // on the current store status. Shared by startup and by the first-run
@@ -972,6 +979,7 @@ onMounted(async () => {
   // Tray menu: "Settings" / "About" show the window (Go side) then land here.
   unsubTrayOpenSettings = Events.On('app:open-settings', () => openSettings())
   unsubTrayOpenAbout = Events.On('app:open-about', () => openSettings('about'))
+  unsubTrayOpenNetscan = Events.On('app:open-netscan', () => openNetscan())
   // MCP (external AI agents): approval dialogs + session takeover.
   unsubMcpApproval = Events.On('mcp:approval-request', (ev) => {
     mcpApprovalRequest.value = ev.data as MCPApprovalRequest
@@ -1288,6 +1296,7 @@ onUnmounted(() => {
   unsubRdpAdaptive?.()
   unsubTrayOpenSettings?.()
   unsubTrayOpenAbout?.()
+  unsubTrayOpenNetscan?.()
   unsubMcpApproval?.()
   unsubMcpSessionCreated?.()
   rdpAreaObserver?.disconnect()
@@ -1316,6 +1325,10 @@ function openSettings(category?: string) {
   }
 }
 
+function openNetscan() {
+  netscanVisible.value = true
+}
+
 async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
   // Close session before removing panel to clean up Go-side resources
   const tab = tabStore.tabs.find(t => t.id === tabId)
@@ -1330,7 +1343,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
     return
   }
   // Confirm before closing connected sessions to prevent accidental disconnect
-  if (tab && tab.type !== 'settings' && !opts.skipConfirm) {
+  if (tab && tab.type !== 'settings' && tab.type !== 'netscan' && !opts.skipConfirm) {
     const panelIds = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
     const hasConnected = panelIds.some(pid => {
       const p = panelStore.getPanel(pid)
@@ -1470,7 +1483,7 @@ async function closeTabBatch(tabIds: string[]) {
   if (!targets.length) return
 
   const connectedCount = targets.reduce((n, tab) => {
-    if (tab.type === 'settings' || tab.type === 'start') return n
+    if (tab.type === 'settings' || tab.type === 'start' || tab.type === 'netscan') return n
     const panelIds = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
     const hit = panelIds.some(pid => {
       const p = panelStore.getPanel(pid)

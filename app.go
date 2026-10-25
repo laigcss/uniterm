@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"io"
 	"net"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"github.com/ys-ll/uniterm/backend/mcp"
 	"github.com/ys-ll/uniterm/backend/mcpclient"
 	"github.com/ys-ll/uniterm/backend/mcpjob"
+	"github.com/ys-ll/uniterm/backend/netscan"
 	"github.com/ys-ll/uniterm/backend/platform"
 	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/ys-ll/uniterm/backend/store"
@@ -48,6 +50,7 @@ type App struct {
 	notifier             *notifications.NotificationService // system notifications (MCP approval prompts)
 	sessionManager       *session.SessionManager
 	k8sManager           *k8s.Manager
+	netscanManager       *netscan.Manager
 	containerManager     *container.Manager
 	connectionStore      *store.ConnectionStore
 	aiSessionStore       *store.AISessionStore
@@ -175,6 +178,7 @@ func NewApp(webviewDataPath string) *App {
 		mcpFileSessions:    make(map[string]string),
 		mcpTransferWaiters: make(map[string]chan mcpTransferOutcome),
 		k8sManager:         k8s.NewManager(),
+		netscanManager:     netscan.NewManager(),
 		containerManager:   container.NewManager(),
 		errCh:              make(chan error, 16),
 	}
@@ -218,6 +222,9 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.ctx = ctx
 
 	a.k8sManager.SetEventEmitter(func(name string, payload any) {
+		a.emit(name, payload)
+	})
+	a.netscanManager.SetEventEmitter(func(name string, payload any) {
 		a.emit(name, payload)
 	})
 	a.containerManager.SetEventEmitter(func(name string, payload any) {
@@ -816,6 +823,7 @@ func (a *App) shutdown() {
 	if a.sessionManager != nil {
 		a.sessionManager.CloseAll()
 	}
+	a.netscanManager.StopAll()
 	cleanupExtEditsOnExit()
 	session.CleanupSSHX11Server()
 	if a.terminalHistoryStore != nil {
