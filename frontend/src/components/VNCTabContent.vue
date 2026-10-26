@@ -125,6 +125,12 @@ let currentProxyAddr = ''
 let everConnected = false
 let rfb33Retried = false
 
+// Clipboard sync: intercept Cmd+V / Ctrl+V to sync local clipboard → VNC
+// server before the keypress reaches the remote. noVNC's canvas captures
+// the keydown and sends Ctrl+V directly, but doesn't sync the local
+// clipboard first — so the remote pastes stale content.
+let clipboardKeydownHandler: ((e: KeyboardEvent) => void) | null = null
+
 async function connect() {
   if (!props.config) return
   if (status.value === 'connecting' || status.value === 'connected') return
@@ -181,6 +187,10 @@ function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
   if (rfb) {
     try { rfb.disconnect() } catch (_) {}
     rfb = null
+  }
+  if (clipboardKeydownHandler && vncContainer.value) {
+    vncContainer.value.removeEventListener('keydown', clipboardKeydownHandler, true)
+    clipboardKeydownHandler = null
   }
   if (vncContainer.value) {
     vncContainer.value.innerHTML = ''
@@ -310,6 +320,35 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
     const text = e.detail.text
     Clipboard.SetText(text).catch(() => {})
   })
+
+  // Clipboard sync: intercept paste shortcut in capture phase (before noVNC's
+  // canvas processes it). Read local clipboard, send via RFB clipboard message
+  // to set the remote clipboard, then manually send Ctrl+V keypress to trigger
+  // paste on the remote side.
+  if (vncContainer.value) {
+    clipboardKeydownHandler = (e: KeyboardEvent) => {
+      // Mac: Cmd+V (metaKey), Windows/Linux: Ctrl+V (ctrlKey)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey && !e.altKey && rfb) {
+        e.preventDefault()
+        e.stopPropagation()
+        Clipboard.Text().then((text: string) => {
+          if (text) rfb.clipboardPasteFrom(text)
+          // XK_Control_L = 0xffe3, XK_v = 0x0076
+          rfb.sendKey(0xffe3, 'ControlLeft', true)
+          rfb.sendKey(0x0076, 'KeyV', true)
+          rfb.sendKey(0x0076, 'KeyV', false)
+          rfb.sendKey(0xffe3, 'ControlLeft', false)
+        }).catch(() => {
+          // Clipboard read failed — still send Ctrl+V
+          rfb.sendKey(0xffe3, 'ControlLeft', true)
+          rfb.sendKey(0x0076, 'KeyV', true)
+          rfb.sendKey(0x0076, 'KeyV', false)
+          rfb.sendKey(0xffe3, 'ControlLeft', false)
+        })
+      }
+    }
+    vncContainer.value.addEventListener('keydown', clipboardKeydownHandler, true)
+  }
 
   isIniting = false
 }
