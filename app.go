@@ -8,6 +8,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
+	"strconv"
+	"strings"
+	stdsync "sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/ys-ll/uniterm/backend/container"
@@ -25,19 +39,6 @@ import (
 	"github.com/ys-ll/uniterm/backend/update"
 	"github.com/ys-ll/uniterm/backend/utils"
 	"golang.org/x/crypto/ssh"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
-	goruntime "runtime"
-	"strconv"
-	"strings"
-	stdsync "sync"
-	"sync/atomic"
-	"time"
 )
 
 type App struct {
@@ -87,6 +88,7 @@ type App struct {
 	// fire visibilitychange (e.g. app hidden via Cmd+H on macOS).
 	foreground   atomic.Bool
 	foregroundMu stdsync.RWMutex
+
 	// F-212: last seen connections snapshot so emitConnDelta (F-204) can
 	// compute upsert/remove deltas without re-shipping the full store on
 	// every save.

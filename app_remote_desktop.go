@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"os"
+	"path"
 	"strings"
+	"time"
 
+	"github.com/cloudsoda/go-smb2"
 	"github.com/ys-ll/uniterm/backend/session"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -189,4 +195,90 @@ func (a *App) X11DesktopConnect(connectionID string, sessionID string) error {
 		return err
 	}
 	return nil
+}
+
+// UploadFileViaSMB copies a local file to the remote Windows machine via SMB
+// (forward connection Mac → Windows:445).  SMB natively handles binary files
+// so Word docs, images, archives all work without encoding issues.  The file
+// is placed in the user's Downloads folder and the Windows path is returned
+// (suitable for Win+R).
+func (a *App) UploadFileViaSMB(filepath, host, username, password string) (string, error) {
+	addr := net.JoinHostPort(host, "445")
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		return "", fmt.Errorf("smb dial: %w", err)
+	}
+	defer conn.Close()
+
+	d := &smb2.Dialer{
+		Initiator: &smb2.NTLMInitiator{
+			User:     username,
+			Password: password,
+		},
+	}
+	smbConn, err := d.DialConn(context.Background(), conn, addr)
+	if err != nil {
+		// Friendly hint for the common case: Windows rejects blank-password
+		// network logons by default security policy.
+		if strings.Contains(err.Error(), "auth") || strings.Contains(err.Error(), "Authentication") {
+			return "", fmt.Errorf("SMB 认证失败。Windows 空密码不支持网络登录，请在远程桌面执行: net user %s <密码> 设置密码", username)
+		}
+		return "", fmt.Errorf("smb auth: %w", err)
+	}
+	defer smbConn.Logoff()
+
+	share, err := smbConn.Mount("C$")
+	if err != nil {
+		return "", fmt.Errorf("smb mount C$: %w", err)
+	}
+	defer share.Umount()
+
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("read local file: %w", err)
+	}
+	filename := path.Base(filepath)
+
+	// Ensure Downloads directory exists (ignore errors — dirs may already exist)
+	share.Mkdir("Users", 0755)
+	share.Mkdir("Users/"+username, 0755)
+	share.Mkdir("Users/"+username+"/Downloads", 0755)
+
+	remotePath := "Users/" + username + "/Downloads/" + filename
+	f, err := share.Create(remotePath)
+	if err != nil {
+		return "", fmt.Errorf("smb create file: %w", err)
+	}
+
+	// Write in 64 KB chunks, emitting a progress event after each chunk so
+	// the frontend can show a percentage.
+	const chunkSize = 64 * 1024
+	total := len(data)
+	written := 0
+	for written < total {
+		end := written + chunkSize
+		if end > total {
+			end = total
+		}
+		n, werr := f.Write(data[written:end])
+		if werr != nil {
+			f.Close()
+			return "", fmt.Errorf("smb write: %w", werr)
+		}
+		written += n
+		percent := 0
+		if total > 0 {
+			percent = written * 100 / total
+		}
+		a.emit("vnc:smb-progress", map[string]any{
+			"filename": filename,
+			"written":  written,
+			"total":    total,
+			"percent":  percent,
+		})
+	}
+	f.Close()
+
+	winPath := fmt.Sprintf(`C:\Users\%s\Downloads\%s`, username, filename)
+	return winPath, nil
 }

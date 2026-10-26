@@ -25,8 +25,20 @@
       ref="vncContainer"
       class="vnc-area"
       tabindex="0"
+      data-file-drop-target="vnc-drop-target"
       @paste="onPaste"
     />
+
+    <!-- Drag-and-drop overlay: shown while dragging files over the VNC area -->
+    <div v-if="isDragging" class="vnc-drop-overlay">
+      <el-icon :size="'3rem'"><Upload /></el-icon>
+      <p>{{ t('vnc.dropFileHint', '拖拽文件将上传到远程桌面') }}</p>
+    </div>
+
+    <!-- Upload status toast -->
+    <div v-if="uploadStatus" class="vnc-upload-status">
+      {{ uploadStatus }}
+    </div>
 
     <!-- Status bar -->
     <div v-show="status === 'connected'" class="vnc-statusbar">
@@ -67,13 +79,14 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Loader } from '@lucide/vue'
+import { Loader, Upload } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
+import { useNativeFileDrop } from '../composables/useFilePanel'
 import type { ConnectionConfig } from '../types/session'
 import { Clipboard, Events } from '@wailsio/runtime'
-import { CreateSession, CloseSession, EncodeClipboardText } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, EncodeClipboardText, UploadFileViaSMB } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
@@ -92,6 +105,11 @@ const savedPassword = ref<string>('')
 const scaleViewport = ref(true)
 const viewOnly = ref(false)
 const showDotCursor = ref(false)
+
+// File drag-and-drop state (scheme D-2): isDragging toggles the overlay,
+// uploadStatus shows the current transfer progress message.
+const isDragging = ref(false)
+const uploadStatus = ref('')
 
 function readThemeBackground(): string {
   // Pull the resolved --bg-base CSS variable, which the global theme
@@ -131,6 +149,14 @@ let rfb33Retried = false
 // clipboard first — so the remote pastes stale content.
 let clipboardKeydownHandler: ((e: KeyboardEvent) => void) | null = null
 let clipboardFocusHandler: (() => void) | null = null
+// Native file drag-and-drop via Wails' WindowFilesDropped event. EnableFileDrop
+// in the window config intercepts OS file drops at the native layer, so HTML5
+// dragover/drop events never fire — we must use the Wails event pipe instead.
+const nativeDrop = useNativeFileDrop({
+  elementId: 'vnc-drop-target',
+  isActive: () => status.value === 'connected' && !!rfb,
+  upload: (paths: string[]) => { onNativeFileDrop(paths) },
+})
 
 async function connect() {
   if (!props.config) return
@@ -197,6 +223,7 @@ function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
     vncContainer.value.removeEventListener('focus', clipboardFocusHandler, true)
     clipboardFocusHandler = null
   }
+
   if (vncContainer.value) {
     vncContainer.value.innerHTML = ''
   }
@@ -355,6 +382,7 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
       if (rfb && status.value === 'connected') sendClipboardGBK()
     }
     vncContainer.value.addEventListener('focus', clipboardFocusHandler, true)
+
   }
 
   isIniting = false
@@ -400,6 +428,120 @@ function onPaste(e: ClipboardEvent) {
     rfb.clipboardPasteFrom(text)
   }
 }
+
+// ── File drag-and-drop (scheme D-2) ──────────────────────────────────────
+// Wails' EnableFileDrop intercepts OS file drops at the native layer and
+// delivers absolute file paths via the common:WindowFilesDropped event.
+// We upload each file to the backend HTTP file server → the server returns
+// a LAN-reachable download URL → we sync that URL to the Windows clipboard
+// and drive Win+R, Ctrl+V, Enter so Windows opens the URL in its default
+// browser and downloads the file.
+
+// --- VNC file drag-and-drop: SMB forward push ---
+// Mac connects to the remote Windows SMB share (forward connection, works
+// across subnets) and copies the file directly.  SMB natively handles
+// binary files (Word, images, archives) without encoding issues.
+
+// SMB credentials for the remote Windows machine.  The password is set
+// once on the Windows side via `net user zj 1234` in a cmd window.
+const SMB_USER = 'zj'
+const SMB_PASS = '1234'
+
+async function onNativeFileDrop(paths: string[]) {
+  if (!rfb || status.value !== 'connected') return
+  const remoteHost = props.config?.host || ''
+  if (!remoteHost) {
+    uploadStatus.value = '无法确定远程主机地址'
+    setTimeout(() => { uploadStatus.value = '' }, 3000)
+    return
+  }
+
+  // SMB credentials: prefer connection config, fall back to defaults
+  const smbUser = props.config?.user || SMB_USER
+  const smbPass = props.config?.password || SMB_PASS
+
+  for (const p of paths) {
+    const filename = p.split('/').pop() || p
+    uploadStatus.value = `正在上传: ${filename} (0%)`
+    try {
+      const remotePath = await UploadFileViaSMB(p, remoteHost, smbUser, smbPass)
+      uploadStatus.value = `已上传到 ${remotePath}`
+      await sleep(800)
+      await openURLOnRemote(remotePath)
+      await sleep(500)
+      uploadStatus.value = ''
+    } catch (err: any) {
+      console.error('File drop failed:', err)
+      uploadStatus.value = `上传失败: ${err?.message || err}`
+      setTimeout(() => { uploadStatus.value = '' }, 5000)
+    }
+  }
+}
+
+
+// Send a text string to the VNC server clipboard. URLs are ASCII so no GBK
+// encoding is needed — we use UTF-8 / TextEncoder directly.
+async function sendTextToVNCClipboard(text: string) {
+  if (!rfb) return
+  // Extended clipboard supports UTF-8 natively
+  if (rfb._clipboardServerCapabilitiesFormats?.[1] &&
+      rfb._clipboardServerCapabilitiesActions?.[2]) {
+    rfb.clipboardPasteFrom(text)
+    return
+  }
+  // Basic mode: TightVNC on Chinese Windows decodes ClientCutText as GBK,
+  // so we must encode the text as GBK (not UTF-8) to avoid mojibake for
+  // non-ASCII file paths (e.g. Chinese filenames).
+  const base64Bytes = await EncodeClipboardText(text, 'gbk')
+  const bytes = Uint8Array.from(atob(base64Bytes), c => c.charCodeAt(0))
+  const sock = rfb._sock
+  if (!sock) return
+  sock.sQpush8(6)              // msg-type: ClientCutText
+  sock.sQpush8(0); sock.sQpush8(0); sock.sQpush8(0)  // padding
+  sock.sQpush32(bytes.length)  // length
+  sock.sQpushBytes(bytes)      // text bytes
+  sock.flush()
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Drive the remote Windows desktop to open a URL: Win+R → wait → Ctrl+V →
+// wait → Enter. This makes Windows open the download URL in the default
+// browser, which downloads the file to the remote desktop.
+async function openURLOnRemote(url: string) {
+  if (!rfb) return
+
+  // 1. Sync the URL to the Windows clipboard
+  await sendTextToVNCClipboard(url)
+  await sleep(200)
+
+  // 2. Win+R opens the Run dialog
+  //    XK_Super_L = 0xffeb, XK_r = 0x0072
+  rfb.sendKey(0xffeb, 'MetaLeft', true)
+  rfb.sendKey(0x0072, 'KeyR', true)
+  rfb.sendKey(0x0072, 'KeyR', false)
+  rfb.sendKey(0xffeb, 'MetaLeft', false)
+
+  await sleep(800)  // wait for the Run dialog to open
+
+  // 3. Ctrl+V pastes the URL
+  //    XK_Control_L = 0xffe3, XK_v = 0x0076
+  rfb.sendKey(0xffe3, 'ControlLeft', true)
+  rfb.sendKey(0x0076, 'KeyV', true)
+  rfb.sendKey(0x0076, 'KeyV', false)
+  rfb.sendKey(0xffe3, 'ControlLeft', false)
+
+  await sleep(300)  // wait for the paste to complete
+
+  // 4. Enter executes the URL
+  //    XK_Return = 0xff0d
+  rfb.sendKey(0xff0d, 'Enter', true)
+  rfb.sendKey(0xff0d, 'Enter', false)
+}
+
+let smbProgressUnlisten: (() => void) | null = null
 
 function onReconnectEvent(e: Event) {
   const panelId = (e as CustomEvent)?.detail?.panelId
@@ -469,14 +611,26 @@ onMounted(() => {
 
   watchThemeBackground()
 
+  // Bind native file-drop listener (Wails WindowFilesDropped event).
+  nativeDrop.bind()
+
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
   window.addEventListener('panel:reconnect', onReconnectEvent)
+
+  // SMB upload progress events from the backend
+  smbProgressUnlisten = Events.On('vnc:smb-progress', (data: any) => {
+    if (data?.filename && data?.percent !== undefined) {
+      uploadStatus.value = `正在上传: ${data.filename} (${data.percent}%)`
+    }
+  })
 })
 
 onBeforeUnmount(() => {
+  smbProgressUnlisten?.()
   themeObserver?.disconnect()
   themeObserver = null
   unsubStatus?.()
+  nativeDrop.unbind()
   window.removeEventListener('panel:reconnect', onReconnectEvent)
 
   if (rfb && vncContainer.value && vncContainer.value.childElementCount > 0) {
@@ -574,4 +728,35 @@ watch(showDotCursor, (val) => {
 }
 .vnc-status-sep { color: var(--text-disabled); }
 .vnc-status-label { font-size: 0.6875rem; }
+
+/* File drag-and-drop overlay (scheme D-2) */
+.vnc-drop-overlay {
+  position: absolute;
+  inset: 0;
+  bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--primary, #409eff);
+  z-index: 20;
+  pointer-events: none;
+  border: 2px dashed var(--primary, #409eff);
+  border-radius: 4px;
+}
+.vnc-upload-status {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  z-index: 15;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
 </style>
