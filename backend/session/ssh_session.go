@@ -1248,3 +1248,17 @@ func encodingByName(name string) encoding.Encoding {
 		return nil
 	}
 }
+
+// CurrentCwd returns the last OSC-7 reported cwd for this SSH session.
+// Local implementation uses the shell-integration OSC-7 sink (see
+// shell_integration.go) rather than upstream's auxiliary-channel tracking.
+func (s *SSHSession) CurrentCwd() (string, error) {
+	return GetSessionCwd(s.id), nil
+}
+
+// SetCwdTracking enables/disables cwd polling. The local cwd-hook approach
+// (typedCwdHookState) does not use auxiliary-channel polling, so this is a
+// no-op that satisfies the App-layer API contract.
+func (s *SSHSession) SetCwdTracking(enabled bool) error {
+	return nil
+}
