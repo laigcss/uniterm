@@ -802,8 +802,24 @@ export function SessionEndZmodem(arg1) {
   return window['go']['main']['App']['SessionEndZmodem'](arg1);
 }
 
+export function SessionEndZmodemWithTrailing(arg1, arg2) {
+  return window['go']['main']['App']['SessionEndZmodemWithTrailing'](arg1, arg2);
+}
+
+export function SessionGetCwd(arg1) {
+  return window['go']['main']['App']['SessionGetCwd'](arg1);
+}
+
+export function SessionInjectCwdHook(arg1) {
+  return window['go']['main']['App']['SessionInjectCwdHook'](arg1);
+}
+
 export function SessionResize(arg1, arg2, arg3) {
   return window['go']['main']['App']['SessionResize'](arg1, arg2, arg3);
+}
+
+export function SessionSetCwdTracking(arg1, arg2) {
+  return window['go']['main']['App']['SessionSetCwdTracking'](arg1, arg2);
 }
 
 export function SessionStart(arg1, arg2) {

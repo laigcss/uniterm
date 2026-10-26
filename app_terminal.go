@@ -625,6 +625,24 @@ func (a *App) SessionSetCwdTracking(sessionID string, enabled bool) error {
 	return terminal.SetCwdTracking(enabled)
 }
 
+// SessionInjectCwdHook types the OSC-7 cwd hook into the running shell on
+// demand. This is used by the file sidebar to enable directory-following for
+// SSH sessions where the startup injection was skipped or needs re-arming.
+func (a *App) SessionInjectCwdHook(sessionID string) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	injector, ok := s.(session.CwdHookInjector)
+	if !ok {
+		return nil // session type does not support cwd hook injection
+	}
+	return injector.InjectCwdHook()
+}
+
 func (a *App) SessionResize(sessionID string, cols, rows int) error {
 	if a.sessionManager == nil {
 		return fmt.Errorf("session manager not initialized")

@@ -411,7 +411,15 @@ export function SaveWindowState(arg1:number,arg2:number,arg3:number,arg4:number,
 
 export function SessionEndZmodem(arg1:string):Promise<void>;
 
+export function SessionEndZmodemWithTrailing(arg1:string,arg2:string):Promise<void>;
+
+export function SessionGetCwd(arg1:string):Promise<string>;
+
+export function SessionInjectCwdHook(arg1:string):Promise<void>;
+
 export function SessionResize(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function SessionSetCwdTracking(arg1:string,arg2:boolean):Promise<void>;
 
 export function SessionStart(arg1:string,arg2:session.ConnectionConfig):Promise<void>;
 
