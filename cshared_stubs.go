@@ -10,8 +10,8 @@
 package main
 
 import (
-	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // devBuild is always false in cshared mode (production shared library).
@@ -32,3 +32,9 @@ func applyGlobalShowHideHotkey(w3app *application.App, window *application.Webvi
 func trayHotkeyBinding(s *store.AppSettings) *store.KeyBinding {
 	return nil
 }
+
+// refreshTrayLanguage is a no-op in cshared mode (no tray icon to rebuild).
+// The real implementation lives in main.go (excluded via //go:build !cshared);
+// this stub satisfies the call from App.SaveSettings (issue #1215) so the
+// c-shared HarmonyOS build compiles.
+func (a *App) refreshTrayLanguage(lang string) {}
