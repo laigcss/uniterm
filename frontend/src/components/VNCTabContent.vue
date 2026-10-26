@@ -73,7 +73,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import type { ConnectionConfig } from '../types/session'
 import { Clipboard, Events } from '@wailsio/runtime'
-import { CreateSession, CloseSession } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, EncodeClipboardText } from '../../bindings/github.com/ys-ll/uniterm/app'
 const { t } = useI18n()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
@@ -130,6 +130,7 @@ let rfb33Retried = false
 // the keydown and sends Ctrl+V directly, but doesn't sync the local
 // clipboard first — so the remote pastes stale content.
 let clipboardKeydownHandler: ((e: KeyboardEvent) => void) | null = null
+let clipboardFocusHandler: (() => void) | null = null
 
 async function connect() {
   if (!props.config) return
@@ -191,6 +192,10 @@ function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
   if (clipboardKeydownHandler && vncContainer.value) {
     vncContainer.value.removeEventListener('keydown', clipboardKeydownHandler, true)
     clipboardKeydownHandler = null
+  }
+  if (clipboardFocusHandler && vncContainer.value) {
+    vncContainer.value.removeEventListener('focus', clipboardFocusHandler, true)
+    clipboardFocusHandler = null
   }
   if (vncContainer.value) {
     vncContainer.value.innerHTML = ''
@@ -269,6 +274,7 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
     }
   }
 
+
   applyRFBOptions()
 
   // issue #95: only flip to 'connected' on the noVNC connect event.
@@ -323,23 +329,16 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
 
   // Clipboard sync: intercept paste shortcut in capture phase (before noVNC's
   // canvas processes it). Read local clipboard, send via RFB clipboard message
-  // to set the remote clipboard, then manually send Ctrl+V keypress to trigger
-  // paste on the remote side.
+  // with GBK encoding (TightVNC on Chinese Windows uses ACP/GBK to decode
+  // ClientCutText), then manually send Ctrl+V keypress to trigger paste.
   if (vncContainer.value) {
     clipboardKeydownHandler = (e: KeyboardEvent) => {
       // Mac: Cmd+V (metaKey), Windows/Linux: Ctrl+V (ctrlKey)
       if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey && !e.altKey && rfb) {
         e.preventDefault()
         e.stopPropagation()
-        Clipboard.Text().then((text: string) => {
-          if (text) rfb.clipboardPasteFrom(text)
+        sendClipboardGBK().finally(() => {
           // XK_Control_L = 0xffe3, XK_v = 0x0076
-          rfb.sendKey(0xffe3, 'ControlLeft', true)
-          rfb.sendKey(0x0076, 'KeyV', true)
-          rfb.sendKey(0x0076, 'KeyV', false)
-          rfb.sendKey(0xffe3, 'ControlLeft', false)
-        }).catch(() => {
-          // Clipboard read failed — still send Ctrl+V
           rfb.sendKey(0xffe3, 'ControlLeft', true)
           rfb.sendKey(0x0076, 'KeyV', true)
           rfb.sendKey(0x0076, 'KeyV', false)
@@ -348,9 +347,51 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
       }
     }
     vncContainer.value.addEventListener('keydown', clipboardKeydownHandler, true)
+
+    // Auto-sync Mac clipboard → VNC server on focus. This makes right-click
+    // paste work (Windows clipboard already has the correct content by the
+    // time the user right-clicks → Paste).
+    clipboardFocusHandler = () => {
+      if (rfb && status.value === 'connected') sendClipboardGBK()
+    }
+    vncContainer.value.addEventListener('focus', clipboardFocusHandler, true)
   }
 
   isIniting = false
+}
+
+// Send local clipboard text to VNC server with correct encoding.
+// - Extended clipboard supported → use noVNC's native clipboardPasteFrom (UTF-8)
+// - Not supported (TightVNC basic mode) → encode as GBK via backend, send
+//   ClientCutText directly. TightVNC on Chinese Windows decodes with ACP (GBK).
+async function sendClipboardGBK() {
+  if (!rfb) return
+  try {
+    const text = await Clipboard.Text()
+    if (!text) return
+    // Extended clipboard supports UTF-8 natively
+    if (rfb._clipboardServerCapabilitiesFormats?.[1] &&
+        rfb._clipboardServerCapabilitiesActions?.[2]) {
+      rfb.clipboardPasteFrom(text)
+      return
+    }
+    // Basic mode: encode as GBK via backend
+    const base64 = await EncodeClipboardText(text, 'gbk')
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+    const sock = rfb._sock
+    if (!sock) return
+    sock.sQpush8(6)              // msg-type: ClientCutText
+    sock.sQpush8(0); sock.sQpush8(0); sock.sQpush8(0)  // padding
+    sock.sQpush32(bytes.length)  // length (big-endian)
+    sock.sQpushBytes(bytes)      // GBK-encoded text
+    sock.flush()
+  } catch {
+    // Fallback: try original clipboardPasteFrom
+    try {
+      const text = await Clipboard.Text()
+      if (text) rfb.clipboardPasteFrom(text)
+    } catch {}
+  }
 }
 
 function onPaste(e: ClipboardEvent) {

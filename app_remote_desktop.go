@@ -1,10 +1,43 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/ys-ll/uniterm/backend/session"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
+
+// EncodeClipboardText encodes a UTF-8 string to the specified encoding for
+// VNC ClientCutText messages. TightVNC on Chinese Windows uses the system
+// ANSI code page (GBK/936) to decode clipboard bytes, not UTF-8 or Latin-1.
+// Returns base64-encoded bytes for easy transport to the frontend.
+func (a *App) EncodeClipboardText(text string, encoding string) (string, error) {
+	switch strings.ToLower(encoding) {
+	case "utf-8", "utf8", "":
+		return base64.StdEncoding.EncodeToString([]byte(text)), nil
+	case "gbk", "gb2312", "gb18030":
+		encoder := simplifiedchinese.GBK.NewEncoder()
+		encoded, err := encoder.Bytes([]byte(text))
+		if err != nil {
+			return "", fmt.Errorf("gbk encode: %w", err)
+		}
+		return base64.StdEncoding.EncodeToString(encoded), nil
+	case "latin-1", "latin1", "iso-8859-1":
+		result := make([]byte, 0, len(text))
+		for _, r := range text {
+			if r > 0xFF {
+				result = append(result, '?')
+			} else {
+				result = append(result, byte(r))
+			}
+		}
+		return base64.StdEncoding.EncodeToString(result), nil
+	default:
+		return base64.StdEncoding.EncodeToString([]byte(text)), nil
+	}
+}
 
 func (a *App) RDPSetPosition(sessionID string, x, y, w, h int) error {
 	if a.sessionManager == nil {
