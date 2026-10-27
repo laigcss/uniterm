@@ -110,3 +110,13 @@ harmonyos/screenshot.jpeg
 vendor/
 harmonyos/.hvigor/
 harmonyos/entry/build/
+
+# HarmonyOS build artifacts (large binaries)
+harmonyos/entry/libs/arm64-v8a/libaiops.so
+harmonyos/entry/libs/arm64-v8a/libaiops.a
+cmd/harmonyos/libaiops.so
+libaiops_android.so
+harmonyos/entry/.cxx/
+harmonyos/screenshot.jpeg
+harmonyos/.hvigor/
+harmonyos/entry/build/
