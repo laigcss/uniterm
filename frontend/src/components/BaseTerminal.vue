@@ -268,6 +268,8 @@ const keyHandler = useTerminalKeyHandler({
   suggestions,
 
   applySuggestion,
+
+  isPasswordMode: () => terminalInput?.isPasswordMode() ?? false,
 })
 
 // Output log recording + export/reset/clear buffer operations

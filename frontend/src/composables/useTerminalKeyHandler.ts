@@ -7,11 +7,13 @@ import type { SuggestionItem } from './useSuggestions'
 import { queuedSessionWrite } from '../services/sessionWriter'
 import { filterTerminalInput } from '../utils/terminalInputFilter'
 import { applyBackspaceKey } from '../utils/terminalOptions'
+import { handleTerminalWordDelete } from '../utils/terminalWordDelete'
 import { normalizePastedText, pasteWithScroll } from '../utils/terminalPaste'
 import { readClipboardText, writeClipboard } from './useClipboardWrite'
 import { getManagedTerminal } from '../services/terminalManager'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useSessionStore } from '../stores/sessionStore'
 
 type SuggestionsApi = ReturnType<typeof useSuggestions>
 
@@ -26,6 +28,9 @@ export interface UseTerminalKeyHandlerOptions {
   suggestions: SuggestionsApi
 
   applySuggestion: (item: SuggestionItem | null) => void | Promise<void>
+
+  /** Whether the terminal input is in password (hidden) mode. */
+  isPasswordMode?: () => boolean
 }
 
 /**
@@ -48,10 +53,13 @@ export function useTerminalKeyHandler(options: UseTerminalKeyHandlerOptions) {
     suggestions,
 
     applySuggestion,
+
+    isPasswordMode,
   } = options
 
   const tabStore = useTabStore()
   const panelStore = usePanelStore()
+  const sessionStore = useSessionStore()
 
   // ── Smart copy/paste + Backspace guard (composable) ──
   // 非 Mac Ctrl+C/V 智能复制粘贴（PR #1194）和 Backspace 行首防护（issue #814）
@@ -152,6 +160,23 @@ export function useTerminalKeyHandler(options: UseTerminalKeyHandlerOptions) {
       e.preventDefault()
       getTerminal()?.input('\x1b[3~')
       return false
+    }
+
+    // Ctrl+Backspace → Ctrl+W (delete previous word) on Unix-style shells.
+    // (PR #1271) Only active in connected non-Windows SSH/Mosh/local/WSL paths;
+    // alternate-screen apps, password prompts, and Windows SSH keep native behavior.
+    {
+      const terminal = getTerminal()
+      const sid = getSessionId()
+      const panel = getPanelId() ? panelStore.getPanel(getPanelId()!) : undefined
+      if (terminal && handleTerminalWordDelete(e, {
+        connectionType: panel?.config?.type ?? getMode(),
+        connected: !!sid && sessionStore.getStatus(sid) === 'connected',
+        alternateScreen: terminal.buffer.active.type === 'alternate',
+        passwordPrompt: isPasswordMode?.() ?? false,
+        remoteOS: sid ? sessionStore.getRemoteOS(sid) : undefined,
+        hostPlatform: document.documentElement.dataset.platform,
+      }, data => terminal?.input(data))) return false
     }
 
     // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
