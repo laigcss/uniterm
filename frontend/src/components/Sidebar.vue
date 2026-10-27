@@ -27,13 +27,13 @@
           @keydown="onListKeydown"
         >
           <template #suffix>
-            <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget as HTMLElement)">
+            <span class="filter-trigger" :class="{ active: selectedTypeFilter !== 'all' }" @click.stop="filterMenuRef?.toggle($event.currentTarget)">
               <el-icon><Filter :size="'0.875rem'" /></el-icon>
             </span>
             <TypeFilterMenu ref="filterMenuRef" align="end" v-model="selectedTypeFilter" />
           </template>
         </el-input>
-        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget as HTMLElement)">
+        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget)">
           <Plus :size="'0.9375rem'" />
         </button>
         <!-- New-connection menu — Menu.vue, teleported + anchored right-edge (align=end). -->
@@ -185,6 +185,7 @@
               <span class="host">{{ getSubtitle(conn) }}</span>
             </span>
           </div>
+          <button v-if="showHostRowButtons" class="conn-fav-btn" :class="{ on: favoriteStore.isFavorite(conn.id) }" :title="favoriteStore.isFavorite(conn.id) ? t('sidebar.removeFromFavorites') : t('sidebar.addToFavorites')" @click.stop="favoriteStore.toggle(conn.id)"><Star :size="12" /></button>
           <button v-if="showHostRowButtons" class="conn-more-btn" @click.stop="onConnMoreClick($event, conn)" :title="t('terminal.more')"><MoreHorizontal :size="'0.875rem'" /></button>
         </div>
       </template>
@@ -492,7 +493,8 @@ const showForm = ref(false)
 const showExportDialog = ref(false)
 const showImportDialog = ref(false)
 const editConfig = ref<ConnectionConfig | undefined>(undefined)
-const activeView = ref<'connections' | 'quickCommands' | 'history' | 'personalization' | 'files' | 'monitor' | 'tunnels'>('connections')
+type SidebarView = 'connections' | 'quickCommands' | 'history' | 'personalization' | 'files' | 'monitor' | 'tunnels'
+const activeView = ref<SidebarView>('connections')
 const quickCommandsRef = ref<InstanceType<typeof QuickCommandsPanel> | null>(null)
 
 function openQuickCommands() {
@@ -501,6 +503,15 @@ function openQuickCommands() {
 }
 
 // ── SSH companion: files / monitor folded into this sidebar ──
+// Generic tab-switch entry mirroring a manual tab click: files/monitor route
+// through their click handlers (flag + companion session), the rest just
+// switch the view. Used by the App.vue sidebar shortcuts.
+function openTab(view: SidebarView) {
+  if (view === 'files') return onFilesTabClick()
+  if (view === 'monitor') return onMonitorTabClick()
+  activeView.value = view
+  if (view === 'connections') nextTick(() => focusSearch())
+}
 function onFilesTabClick() {
   activeView.value = 'files'
   // Always open the files view (shows an idle/"need SSH" empty state when no
@@ -580,10 +591,6 @@ function openThemeEditor(sourceThemeId?: string) {
   themeEditorVisible.value = true
 }
 
-// Notify App.vue to hide native RDP window when edit dialog opens
-watch(showForm, (val) => {
-  window.dispatchEvent(new CustomEvent(val ? 'rdp:overlay-push' : 'rdp:overlay-pop'))
-})
 
 const searchQuery = ref('')
 const searchInputRef = ref<any>(null)
@@ -1701,7 +1708,7 @@ function openChangeGroupForGroup(groupId: string) {
   showChangeGroupDialog.value = true
 }
 
-defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGroupForGroup })
+defineExpose({ focusSearch, openQuickCommands, openTab, openChangeGroupFor, openChangeGroupForGroup, activeView })
 </script>
 
 <style scoped>
@@ -2006,6 +2013,7 @@ defineExpose({ focusSearch, openQuickCommands, openChangeGroupFor, openChangeGro
 .conn-details {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 0.125rem;
   min-width: 0;
 }

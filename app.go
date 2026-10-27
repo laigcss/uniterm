@@ -2115,6 +2115,26 @@ func (a *App) GetDesktopPath() (string, error) {
 // ~/.ssh are listed in preference order (id_ed25519, id_rsa, id_ecdsa,
 // id_dsa), and only the ones that exist are returned — the frontend cycles
 // through them on repeated clicks. When none exist it returns the
+// GetSaveTempPath returns a unique path inside a "save" subdirectory of the
+// system temp dir. Used by the Android save-to-picker flow (androidSave.ts)
+// to stage a file before handing it to the system share intent.
+func (a *App) GetSaveTempPath(fileName string) (string, error) {
+	name := filepath.Base(strings.ReplaceAll(fileName, "\\", "/"))
+	if name == "" || name == "." || name == ".." {
+		name = "export.bin"
+	}
+	dir := filepath.Join(os.TempDir(), "save")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), name)), nil
+}
+
+// GetDefaultSSHKeyPaths returns the local default SSH private-key paths for
+// the connection form's "use default" button. The standard OpenSSH names under
+// ~/.ssh are listed in preference order (id_ed25519, id_rsa, id_ecdsa,
+// id_dsa), and only the ones that exist are returned — the frontend cycles
+// through them on repeated clicks. When none exist it returns the
 // conventional ~/.ssh/id_rsa so the field still gets filled. Paths are always
 // absolute — "~" is never expanded at connect time, so a bare "~/.ssh/id_rsa"
 // would fail to read.

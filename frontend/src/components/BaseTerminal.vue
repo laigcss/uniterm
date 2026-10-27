@@ -1,6 +1,7 @@
 <template>
   <div
     class="base-terminal"
+    :data-terminal-session-id="props.sessionId"
     :id="terminalDropId"
     data-file-drop-target
     @dragover.prevent="onDragOver"
@@ -144,6 +145,7 @@ import { WriteFileBase64, SaveFileDialog, FrontendLog, EnableSessionOutputLog, D
 import { useNativeFileDrop } from '../composables/useFilePanel'
 import { connectFileMenuKey } from '../utils/fileTransferUtils'
 import { isMobilePlatform } from '../utils/platform'
+import { tryAndroidSave } from '../utils/androidSave'
 import { applyMobileCtrl } from '../utils/mobileCtrlKey'
 import { msg } from '../services/message'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -156,6 +158,7 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
 import { writeClipboard, readClipboardText } from '../composables/useClipboardWrite'
+import { useSmartCopyPaste } from '../composables/useSmartCopyPaste'
 import { filterTerminalInput, stripDeviceReplies } from '../utils/terminalInputFilter'
 import { isAuthFailureError } from '../utils/authError'
 import { DcsReassembler } from '../utils/dcsReassembler'
@@ -207,6 +210,18 @@ const props = defineProps<{
 }>()
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+// ── Smart copy/paste + Backspace guard (composable) ──
+// 非 Mac Ctrl+C/V 智能复制粘贴（PR #1194）和 Backspace 行首防护（issue #814）
+// 提取到 composable，使 BaseTerminal.vue 可采用上游版本而保持本地行为不变。
+const smartCopyPaste = useSmartCopyPaste({
+  isMac,
+  getTerminal: () => terminal ?? null,
+  getMode: () => props.mode,
+  readClipboardText,
+  writeClipboard,
+  pasteToSession,
+})
 
 const settingsStore = useSettingsStore()
 
@@ -354,7 +369,7 @@ function resetIMEState(): boolean {
 function resetIMEComposition() {
   if (!resetIMEState()) return
   // Clear the textarea and end the OS-level composition via blur.
-  if (terminal?.textarea) {
+  if (terminal.textarea) {
     terminal.textarea.value = ''
     terminal.textarea.blur()
   }
@@ -816,9 +831,14 @@ async function exportContent() {
       return
     }
     try {
+      const b64 = toBase64(content)
+      // Android: save through the system "save to" picker instead of the
+      // (unsupported) native save dialog.
+      const androidOutcome = await tryAndroidSave('terminal.txt', 'text/plain', b64)
+      if (androidOutcome !== 'fallback') return
       const filePath = await SaveFileDialog('terminal.txt')
       if (!filePath) return
-      await WriteFileBase64(filePath, toBase64(content))
+      await WriteFileBase64(filePath, b64)
     } catch (e) {
       console.error('Export failed:', e)
     }
@@ -992,36 +1012,16 @@ function handleTerminalKey(e: KeyboardEvent): boolean {
   // Paste via Wails clipboard (xterm's DOM paste is unreliable in WKWebView).
   // macOS Cmd+V stays hardcoded — it is not one of the configurable shortcuts.
   // On Windows/Linux, Ctrl+Shift+V is handled by the configurable shortcut
-  // system (see the terminal:paste event below).
-  //
-  // Non-mac desktop platforms (Windows/Linux/HarmonyOS 2in1) additionally map
-  // plain Ctrl+V to paste, mirroring Windows Terminal / VS Code's integrated
-  // terminal: on keyboard-first desktops that's the natural expectation, and
-  // quoted-insert remains available via Ctrl+Q in readline. Mac keeps its
-  // Cmd+V path and the untouched Ctrl+V literal-next for power users.
-  if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
-    e.preventDefault()
-    if (props.mode === 'ssh' || props.mode === 'local') {
-      readClipboardText().then(text => {
-        if (text) pasteToSession(text)
-      })
-    }
-    return false
-  }
+  // system (see the terminal:paste event below). Plain Ctrl+V is never
+  // intercepted, so it passes through to the terminal app (vim visual block,
+  // bash literal-next…) on every platform.
 
-  // Non-mac Ctrl+C with an active selection copies and clears the selection
-  // (Windows Terminal / VS Code semantics); with no selection it falls
-  // through untouched so SIGINT keeps working. Mac's Cmd+C path is below.
-  if (!isMac && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-    const sel = terminal?.getSelection()
-    if (sel) {
-      e.preventDefault()
-      writeClipboard(sel)
-      terminal?.clearSelection()
-      return false
-    }
-    // No selection: pass through so the shell receives SIGINT.
-    return true
+  // ── 非 Mac Ctrl+C/V 智能复制粘贴（本地独有，PR #1194）──
+  // Windows/Linux/HarmonyOS 2in1 桌面端映射 plain Ctrl+V 到粘贴、Ctrl+C 有选区时复制。
+  // 上游不拦截 plain Ctrl+V/C，本地保留此行为。
+  {
+    const r = smartCopyPaste.handleSmartCopyPaste(e)
+    if (r !== null) return r
   }
 
   if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
@@ -1351,11 +1351,10 @@ onMounted(() => {
     const sidNow = props.sessionId
     const gen = sidNow ? bumpOnDataGeneration(sidNow) : 0
 
-    terminal!.attachCustomKeyEventHandler(handleTerminalKey)
-    keyHandlerDispose = null
+    keyHandlerDispose = terminal.attachCustomKeyEventHandler(handleTerminalKey)
 
     // Input handling
-    onDataDispose = terminal!.onData((data) => {
+    onDataDispose = terminal.onData((data) => {
       // ── Stale callback guard (terminal-shared) ──
       // Check against the MANAGED terminal's current generation.
       // If another component (e.g. KeepAlive-cached) has registered
@@ -1419,14 +1418,14 @@ onMounted(() => {
           // Recreate the zmodem service so on_detect sees the new direction.
           if (props.sessionId) {
             disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId!)
+              initZmodemService(props.sessionId)
             })
           }
         } else if (/^(?:sudo\s+)?sz\b/.test(line)) {
           zmodemDirection = 'download'
           if (props.sessionId) {
             disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId!)
+              initZmodemService(props.sessionId)
             })
           }
         }
@@ -1489,21 +1488,19 @@ onMounted(() => {
       const sid = props.sessionId
       const inAlt = terminalInput?.isInAlternateScreen() ?? false
       if (sid) {
-        // Defensive guard (issue #814): suppress backspace at the line start
-        // so it cannot eat into the shell prompt. Only applies to the normal
-        // screen (not full-screen apps like vim) and when the local line
-        // buffer's cursor is already at position 0. handleInput() above has
-        // already updated cursorIndex, so if it stayed at 0 the backspace
-        // would move the cursor into the prompt on certain shells (e.g.
-        // Euler OS where stty erase may not match the sent byte).
+        // ── Backspace 行首防护（issue #814，本地独有）──
+        // 在某些 shell（如 Euler OS）上 stty erase 可能不匹配发送的字节，
+        // 导致 Backspace 在行首时会吃掉 shell prompt。上游移除此防护，
+        // 本地保留以修复 Euler OS 上的 bug。
         if (
-          !inAlt &&
           terminalInput &&
-          data === '\x7f' &&
-          terminalInput.cursorIndex.value === 0
+          smartCopyPaste.shouldSuppressBackspace(data, inAlt, terminalInput.cursorIndex.value)
         ) {
           return
         }
+        // The suggestion buffer is only an estimate: native paste, shell
+        // completion/history, and interactive programs can bypass it. Always
+        // deliver Backspace and let the remote line editor enforce its bounds.
         writeTerminalInput(data, inAlt)
       }
     } else {
@@ -2287,7 +2284,7 @@ async function pasteToSession(text: string) {
             pasteWithScroll(
               {
                 bracketedPasteMode: managed.terminal.modes.bracketedPasteMode,
-                write: (payload) => queuedSessionWrite(p.sessionId!, payload),
+                write: (payload) => queuedSessionWrite(p.sessionId, payload),
                 scrollToBottom: () => managed.terminal.scrollToBottom(),
               },
               normalized,
@@ -2409,7 +2406,8 @@ function openSftp() {
   menu.closeMenu()
   const p = panel.value
   if (p) {
-    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: p }))
+    // sourceTabId anchors the new SFTP tab beside the owning terminal tab
+    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: { ...p, sourceTabId: p.tabId } }))
   }
 }
 
@@ -2422,7 +2420,8 @@ function openMonitor() {
   menu.closeMenu()
   const p = panel.value
   if (p) {
-    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: p }))
+    // sourceTabId anchors the new monitor tab beside the owning terminal tab
+    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: { ...p, sourceTabId: p.tabId } }))
   }
 }
 

@@ -125,7 +125,7 @@
       </div>
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
-    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig ?? undefined" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
+    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
 
     <CredentialPrompt
       v-model:visible="credentialVisible"
@@ -156,7 +156,7 @@
     <DataDirDialog v-model:visible="dataDirVisible" :first-run="credStore.firstRun || credStore.dataDirInfo.firstRun" @done="onDataDirDone" />
     <EncryptionModeDialog v-model:visible="encryptVisible" :existing-secrets="credStore.status.existingSecrets" @done="onEncryptDone" />
     <CredentialUnlockDialog v-model:visible="unlockVisible" @done="onUnlockDone" @reset="onReset" />
-    <MobileKeyBar v-if="keyBarSessionId" :session-id="keyBarSessionId" />
+    <MobileKeyBar v-if="keyBarSessionId" :key="keyBarSessionId" :session-id="keyBarSessionId" />
     <NetworkScanTabContent v-model:visible="netscanVisible" @new-connection="onNetscanNewConnection" />
   </div>
   </el-config-provider>
@@ -164,6 +164,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, provide, h } from 'vue'
+import { remoteDesktopOwnsKey } from './utils/remoteKeyboard'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import enUs from 'element-plus/es/locale/lang/en'
@@ -232,9 +233,10 @@ import { loadKeybindings, installGlobalListener, uninstallGlobalListener, matchD
 import { focusPanelTerminal, installTerminalFocusRestore } from './composables/useFocusTerminal'
 import { useDuplicateSession } from './composables/useDuplicateSession'
 import { useTunnelCredentials } from './composables/useTunnelCredentials'
+import { useRdpEmbedding } from './composables/useRdpEmbedding'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RDPHide, RDPShow, RDPInvalidate, RDPSnapshot, RDPSetPosition, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval } from '../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval, SessionGetCwd } from '../bindings/github.com/ys-ll/uniterm/app'
 import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import { unregisterTransferRoute } from './services/transferTaskCenter'
@@ -294,24 +296,33 @@ const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 
+// ── RDP ActiveX embedding (composable) ──
+// RDP 位置同步 / overlay 跟踪 / 全屏 / 快照背景逻辑提取到 composable，
+// 使 App.vue 可采用上游版本而保持本地 RDP 嵌入功能不变。
+const rdpEmbedding = useRdpEmbedding({ activeTab, panelStore })
+
 // ── Mobile key bar (app-level) ──
 // Soft keyboards lack Esc/Tab/arrows/Ctrl combos. The bar floats at the bottom
 // of .app-container — directly above the soft keyboard, because MainActivity
 // pads the app root by the IME inset. It shows only while the keyboard is up
-// from a terminal textarea focus and an SSH-family session is connected.
+// from a terminal textarea focus and its session is connected.
 const isMobile = isMobilePlatform()
-const terminalFocusActive = ref(false)
+const focusedTerminalSessionId = ref<string | null>(null)
+
+function updateFocusedTerminal(el: HTMLElement | null) {
+  focusedTerminalSessionId.value = el?.classList?.contains('xterm-helper-textarea')
+    ? el.closest<HTMLElement>('[data-terminal-session-id]')?.dataset.terminalSessionId || null
+    : null
+}
 
 function onDocFocusIn(e: FocusEvent) {
-  const el = e.target as HTMLElement | null
-  terminalFocusActive.value = !!el?.classList?.contains('xterm-helper-textarea')
+  updateFocusedTerminal(e.target as HTMLElement | null)
 }
 function onDocFocusOut() {
   // Focus may move between xterm instances or to nothing; re-check after the
   // focusin/focusout pair settles.
   requestAnimationFrame(() => {
-    const el = document.activeElement as HTMLElement | null
-    terminalFocusActive.value = !!el?.classList?.contains('xterm-helper-textarea')
+    updateFocusedTerminal(document.activeElement as HTMLElement | null)
   })
 }
 if (isMobile) {
@@ -351,15 +362,10 @@ onUnmounted(() => {
 })
 
 const keyBarSessionId = computed(() => {
-  if (!isMobile || !terminalFocusActive.value) return null
-  const tab = activeTab.value
-  if (!tab || tab.type !== 'terminal') return null
-  const panel = panelStore.getPanel(tab.panelId)
-  if (!panel?.sessionId) return null
-  // local/wsl panels have no need for the escape-sequence bar
-  if (panel.type === 'local' || panel.type === 'wsl') return null
-  if (sessionStore.getStatus(panel.sessionId) !== 'connected') return null
-  return panel.sessionId
+  const sessionId = focusedTerminalSessionId.value
+  if (!isMobile || !sessionId) return null
+  if (sessionStore.getStatus(sessionId) !== 'connected') return null
+  return sessionId
 })
 const { duplicateSession } = useDuplicateSession()
 const aiStore = useAIStore()
@@ -372,10 +378,6 @@ const tunnelStore = useTunnelStore()
 const updateCheck = useUpdateCheck()
 let uninstallFocusRestore: (() => void) | null = null
 // Unsubscribers for module-level Wails EventsOn listeners (FE-03).
-let unsubRdpFullscreenExit: (() => void) | null = null
-let unsubRdpMoveResizeStart: (() => void) | null = null
-let unsubRdpMoveResizeEnd: (() => void) | null = null
-let unsubRdpAdaptive: (() => void) | null = null
 // Tray menu → open the settings tab (Go shows the window first).
 let unsubTrayOpenSettings: (() => void) | null = null
 let unsubTrayOpenAbout: (() => void) | null = null
@@ -462,141 +464,6 @@ async function checkCredentials() {
   }
   resolveCredentialDialog()
 }
-// ── RDP position sync ──
-// Called explicitly on tab switch and overlay restore; no polling needed.
-
-function getActiveRdpSessionId(): string | null {
-  const tab = activeTab.value
-  if (!tab || tab.type !== 'rdp') return null
-  return panelStore.getPanel(tab.panelId)?.sessionId ?? null
-}
-
-function rdpSyncPosition() {
-  if (rdpOverlayCount.value > 0) return
-  // While in native ActiveX full screen, don't fight it with SetPosition.
-  if (rdpFullScreen.value) return
-  const area = document.querySelector('.rdp-area') as HTMLElement | null
-  if (!area) return
-  const sid = getActiveRdpSessionId()
-  if (!sid) return
-  const rect = area.getBoundingClientRect()
-  if (rect.width <= 0) return
-  const dpr = window.devicePixelRatio || 1
-  // Parent-client-relative offset: the RDP window is a WS_CHILD of the main
-  // window, so rect.left/top (webview viewport coords == client-area coords)
-  // are used directly by the backend's placeAtChild. No window.screenLeft/screenTop
-  // — those are top-level window coords and were the cause of the RDP popup
-  // lagging behind / sticking on a moved main window.
-  const x = Math.round(rect.left * dpr)
-  const y = Math.round(rect.top * dpr)
-
-  const w = Math.round(rect.width * dpr)
-  const h = Math.round(rect.height * dpr)
-  RDPSetPosition(sid, x, y, w, h)
-}
-
-function rdpResetTracking() {
-  nextTick(() => rdpSyncPosition())
-}
-
-// Native ActiveX full-screen: pause position sync while active, restore on exit.
-function onRdpFullScreenEnter() {
-  rdpFullScreen.value = true
-}
-function onRdpFullScreenExit() {
-  rdpFullScreen.value = false
-  nextTick(() => rdpSyncPosition())
-}
-
-
-// ── RDP overlay tracking: unified show/hide entry points ──
-// ALL triggers (context menus, dialogs, drag, resize, external events)
-// MUST call RDPHideForOverlay() to hide and RDPShowForOverlay() to restore.
-// Reference-counted: nesting works correctly across multiple concurrent triggers.
-const rdpOverlayCount = ref(0)
-// Set while a native ActiveX full-screen session is active.
-const rdpFullScreen = ref(false)
-let rdpRestoreTimer: ReturnType<typeof setTimeout> | null = null
-let rdpAreaObserver: ResizeObserver | null = null
-
-function setRdpSnapshotBg(url: string) {
-	const area = document.querySelector('.rdp-area') as HTMLElement | null
-	if (area) {
-		area.style.backgroundImage = `url(${url})`
-		area.style.backgroundSize = '100% 100%'
-		area.style.backgroundRepeat = 'no-repeat'
-	}
-}
-
-function clearRdpSnapshotBg() {
-	const area = document.querySelector('.rdp-area') as HTMLElement | null
-	if (area) {
-		area.style.backgroundImage = ''
-		area.style.backgroundSize = ''
-		area.style.backgroundRepeat = ''
-	}
-}
-
-function RDPHideForOverlay() {
-	rdpOverlayCount.value++
-	if (rdpOverlayCount.value === 1) {
-		const sid = getActiveRdpSessionId()
-		if (sid) {
-			// Capture the current RDP frame while the window is still visible,
-			// show it as a frozen .rdp-area background, THEN hide the live window
-			// — so the area shows a snapshot instead of a black placeholder while
-			// a menu/dialog is open. The image is pre-decoded via <img> so the
-			// frozen frame is available the instant the live window drops away
-			// (avoids a decode gap → dark flash).
-			RDPSnapshot(sid)
-				.then((snap: string) => {
-					if (!snap) { RDPHide(sid); return }
-					const url = `data:image/png;base64,${snap}`
-					const img = new Image()
-					img.onload = () => {
-						setRdpSnapshotBg(url)
-						RDPHide(sid)
-					}
-					img.onerror = () => { RDPHide(sid) }
-					img.src = url
-				})
-				.catch(() => { RDPHide(sid) })
-		}
-	}
-}
-
-function RDPShowForOverlay() {
-	if (rdpOverlayCount.value > 0) rdpOverlayCount.value--
-	if (rdpRestoreTimer) clearTimeout(rdpRestoreTimer)
-	rdpRestoreTimer = setTimeout(() => {
-		rdpRestoreTimer = null
-		if (rdpOverlayCount.value === 0) {
-			const tab = activeTab.value
-			if (!tab || tab.type !== 'rdp') return
-			const sid = panelStore.getPanel(tab.panelId)?.sessionId
-			if (sid) {
-				// Restore the live window FIRST (it covers .rdp-area), then clear
-				// the frozen snapshot only after it is confirmed back on top —
-				// clearing while the live frame is visible is invisible, so there
-				// is no dark gap between the snapshot and the live frame.
-				rdpResetTracking()
-				nextTick(() => {
-					RDPShow(sid)
-					// Kick a repaint: Show() early-returns on the re-show path (the
-					// position sync already set the window visible), so this is what
-					// forces mstscax to present its frame and avoids a black flash.
-					RDPInvalidate(sid)
-					setTimeout(() => {
-						rdpSyncPosition()
-						clearRdpSnapshotBg()
-					}, 200)
-				})
-			}
-		}
-	}, 150)
-}
-
-
 const showConnectionForm = ref(false)
 const sidebarVisible = ref(false)
 const sidebarRef = ref<any>(null)
@@ -660,16 +527,11 @@ function onMcpApprovalResolve(approved: boolean, reason: string) {
   if (req) ResolveMCPApproval(req.id, approved, reason).catch(() => {})
 }
 
-// backend mcp:session-created: an agent opened a new SSH session; mount a
-// visible terminal tab for it so the user can watch and control it.
-function onMcpSessionCreated(payload: { sessionId: string; name?: string; host?: string }) {
-  const cfg: Partial<ConnectionConfig> = {
-    type: 'ssh',
-    name: payload.name || payload.host || 'MCP',
-    host: payload.host || '',
-  }
-  const panel = panelStore.createPanel(cfg as ConnectionConfig, 'ssh')
-  const title = payload.name || payload.host || 'MCP'
+// MCP-created sessions follow the same terminal mounting and sizing flow as UI sessions.
+async function onMcpSessionCreated(payload: { sessionId: string; type: string; name?: string; host?: string; config: ConnectionConfig }) {
+  const cfg = payload.config
+  const panel = panelStore.createPanel(cfg, payload.type as PanelType)
+  const title = payload.name || payload.host || payload.type
   panelStore.updateTitle(panel.id, title)
   panelStore.bindSession(panel.id, payload.sessionId)
   sessionStore.initSession(payload.sessionId)
@@ -678,7 +540,20 @@ function onMcpSessionCreated(payload: { sessionId: string; name?: string; host?:
     ? tabStore.replaceStartTab(tabStore.activeTab.id, title, panel.id)
     : tabStore.createTerminalTab(title, panel.id)
   panelStore.movePanelToTab(panel.id, tab.id)
+  // TCP sessions already connect during CreateSession; other text terminals
+  // wait for measured dimensions before starting their PTY.
+  if (payload.type === 'tcp') return
+  try {
+    const size = await waitForTerminalSize(payload.sessionId)
+    cfg.initialCols = size.cols
+    cfg.initialRows = size.rows
+    await SessionStart(payload.sessionId, cfg)
+  } catch (e) {
+    console.error('Failed to start MCP terminal:', e)
+    CloseSession(payload.sessionId).catch(() => {})
+  }
 }
+
 
 // 凭据补全统一在 composables/useTunnelCredentials.ts：终端连接、容器、K8s 等
 // 入口共用同一实现。App.vue 自身的 showCredentialDialog 无法被本组件
@@ -876,7 +751,7 @@ let isMac = false
 function onPlatformSystemShortcut(e: KeyboardEvent) {
   // Stand down while the settings page captures a rebind — otherwise
   // recording e.g. Ctrl+1 would switch tabs (and Cmd+Q would quit on mac).
-  if (e.defaultPrevented || isRebinding()) return
+  if (e.defaultPrevented || isRebinding() || remoteDesktopOwnsKey(e)) return
   const digitMatch = e.code.match(/^Digit([1-9])$/)
   if (digitMatch) {
     const kb = settingsStore.settings.keyboard
@@ -966,16 +841,9 @@ onMounted(async () => {
   // (issue #285) — see composables/useFocusTerminal.ts for the policy.
   uninstallFocusRestore = installTerminalFocusRestore()
 
-  // RDP overlay tracking
-  window.addEventListener('rdp:overlay-push', RDPHideForOverlay)
-  window.addEventListener('rdp:overlay-pop', RDPShowForOverlay)
-  window.addEventListener('split:resize-start', RDPHideForOverlay)
-  window.addEventListener('split:resize-end', RDPShowForOverlay)
-  window.addEventListener('rdp:sync-position', rdpResetTracking)
-  // RDP native full-screen enter/exit
-  window.addEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
-  // Exit is emitted from Go when the user uses the connection bar's restore button.
-  unsubRdpFullscreenExit =Events.On('rdp:fullscreen-exit', () => onRdpFullScreenExit())
+  // RDP ActiveX embedding: position sync, overlay tracking, fullscreen, snapshot
+  rdpEmbedding.setup()
+
   // Tray menu: "Settings" / "About" show the window (Go side) then land here.
   unsubTrayOpenSettings = Events.On('app:open-settings', () => openSettings())
   unsubTrayOpenAbout = Events.On('app:open-about', () => openSettings('about'))
@@ -986,62 +854,8 @@ onMounted(async () => {
     mcpApprovalVisible.value = true
   })
   unsubMcpSessionCreated = Events.On('mcp:session-created', (ev) => {
-    onMcpSessionCreated(ev.data)
+    void onMcpSessionCreated(ev.data)
   })
-  // Go-side WndProc events: window move/resize start/end. The RDP window is a
-  // WS_CHILD, so it moves with the main window automatically; only a resize of
-  // the .rdp-area (or a re-show after an overlay) needs a position sync.
-  unsubRdpMoveResizeStart =Events.On('rdp:move-resize-start', () => {}) // no-op: child follows; don't hide it mid-drag
-  unsubRdpMoveResizeEnd =Events.On('rdp:move-resize-end', () => {
-    setTimeout(() => {
-      rdpSyncPosition()
-      const tab = activeTab.value
-      if (tab?.type === 'rdp') {
-        const sid = panelStore.getPanel(tab.panelId)?.sessionId
-        if (sid) nextTick(() => RDPShow(sid))
-      }
-    }, 100)
-  })
-
-  // Keep native RDP window position in sync when the .rdp-area changes size
-  rdpAreaObserver = new ResizeObserver(() => rdpSyncPosition())
-  const observeRdpArea = () => {
-    const area = document.querySelector('.rdp-area')
-    if (area) rdpAreaObserver!.observe(area)
-  }
-  observeRdpArea()
-  watch(() => activeTab.value, () => nextTick(observeRdpArea))
-
-  // Adaptive resize lifecycle: freeze the last good frame over .rdp-area for
-  // the disconnect/reconnect cycle, restore the live window at the end.
-  unsubRdpAdaptive = Events.On('rdp:adaptive', (ev: any) => {
-    const d = ev?.data as { id: string; event: string; snapshot?: string }
-    if (!d?.id || d.id !== getActiveRdpSessionId()) return
-    if (d.event === 'start') {
-      if (rdpOverlayCount.value > 0 || !d.snapshot) return
-      const url = `data:image/png;base64,${d.snapshot}`
-      const img = new Image()
-      img.onload = () => {
-        const sid = getActiveRdpSessionId()
-        if (!sid) return
-        setRdpSnapshotBg(url)
-        RDPHide(sid)
-      }
-      img.src = url
-    } else if (d.event === 'end') {
-      if (rdpOverlayCount.value > 0) return
-      const sid = getActiveRdpSessionId()
-      if (sid) {
-        RDPShow(sid)
-        RDPInvalidate(sid)
-      }
-      setTimeout(() => {
-        rdpSyncPosition()
-        clearRdpSnapshotBg()
-      }, 300)
-    }
-  })
-
   // Remember every terminal session's last reported cwd (OSC 7) regardless of
   // the file sidebar's follow toggle — enabling follow or opening an SFTP view
   // jumps straight to this directory.
@@ -1063,13 +877,22 @@ onMounted(async () => {
     const c = connId ? connectionStore.connections.find(x => x.id === connId) : undefined
     if (c) void openConnectionAtIndex(c, typeof index === 'number' ? index : tabStore.tabs.length)
   }) as EventListener)
-  window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
+  window.addEventListener('app:connect-sftp', (async (e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d
     if (c) {
       const prev = tabStore.activeTab
       // Explicit initialPath (sidebar "open standalone tab") wins; otherwise
       // fall back to the terminal's last recorded cwd (right-click "open SFTP").
-      const initialPath = d?.initialPath || (d?.sessionId ? companionStore.sessionCwd[d.sessionId] : '')
+      let initialPath = d?.initialPath || (d?.sessionId ? companionStore.sessionCwd[d.sessionId] : '')
+      if (!d?.initialPath && d?.sessionId) {
+        try {
+          const current = await SessionGetCwd(d.sessionId)
+          if (current) {
+            initialPath = current
+            companionStore.recordSessionCwd(d.sessionId, current)
+          }
+        } catch { /* The recorded directory remains the fallback. */ }
+      }
       openFileBrowser(c, prev?.type === 'start' ? prev : undefined, d?.sourceTabId, initialPath)
     }
   }) as EventListener)
@@ -1083,7 +906,7 @@ onMounted(async () => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchContainerFileBrowser(c, { prevStart: prev?.type === 'start' ? prev : undefined, afterTabId: d?.sourceTabId, initialPath: d?.initialPath }) }
   }) as EventListener)
   window.addEventListener('app:connect-monitor', ((e: CustomEvent) => {
-    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openMonitorPanel(c, prev?.type === 'start' ? prev : undefined) }
+    const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; openMonitorPanel(c, prev?.type === 'start' ? prev : undefined, d?.sourceTabId) }
   }) as EventListener)
   window.addEventListener('app:connect-rdp', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) { const prev = tabStore.activeTab; launchConnection(c, { prevStart: prev?.type === 'start' ? prev : undefined }) }
@@ -1153,28 +976,44 @@ function createNewTab() {
 }
 
 // ── Keyboard shortcut handlers (module-level so watch can access them) ──
+
+// Shared semantics for the three sidebar shortcuts (connections/files/monitor):
+// when the target view is not in the foreground (sidebar hidden, or open on a
+// different view) open the sidebar on it; when it already is, collapse the
+// whole sidebar and hand focus back to the terminal. Foreground detection
+// reads the sidebar's real activeView, not the companionStore flags — those
+// only control whether the files/monitor content is loaded and can drift from
+// the view actually shown.
+type SidebarTabView = 'connections' | 'files' | 'monitor'
+
+// Collapse the left sidebar and hand focus back to the current panel's
+// terminal. The files/monitor load flags are left to Sidebar's own view logic.
+function closeSidebar() {
+  sidebarVisible.value = false
+  const pid = tabStore.getActivePanelId()
+  if (pid) nextTick(() => focusPanelTerminal(pid))
+}
+
+// Open the left sidebar with its visible tab switched to the given view,
+// exactly like clicking that tab (Sidebar.openTab routes to each tab's own
+// open logic).
+function openSidebarToTab(view: SidebarTabView) {
+  sidebarVisible.value = true
+  nextTick(() => sidebarRef.value?.openTab(view))
+}
+
+function sidebarViewShortcut(view: SidebarTabView) {
+  if (sidebarVisible.value && sidebarRef.value?.activeView === view) closeSidebar()
+  else openSidebarToTab(view)
+}
+
 const actionHandlers: Record<ShortcutAction, () => void> = {
   nextTab: () => tabStore.nextTab(),
   prevTab: () => tabStore.prevTab(),
   newConnection: () => { createNewTab() },
-  toggleSidebar: () => {
-    if (sidebarVisible.value) {
-      sidebarVisible.value = false
-      const pid = tabStore.getActivePanelId()
-      if (pid) nextTick(() => focusPanelTerminal(pid))
-    } else {
-      sidebarVisible.value = true
-      nextTick(() => sidebarRef.value?.focusSearch())
-    }
-  },
-  toggleFilePanel: () => {
-    // 切换文件边栏（需当前面板支持，如 SSH/WSL/容器 exec 终端）
-    companionStore.toggleFiles()
-  },
-  toggleMonitor: () => {
-    // 切换资源监控边栏（需当前面板支持，如 SSH 终端）
-    companionStore.toggleMonitor()
-  },
+  toggleSidebar: () => sidebarViewShortcut('connections'),
+  toggleFilePanel: () => sidebarViewShortcut('files'),
+  toggleMonitor: () => sidebarViewShortcut('monitor'),
   openQuickCommands: () => {
     sidebarVisible.value = true
     nextTick(() => sidebarRef.value?.openQuickCommands())
@@ -1273,7 +1112,7 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
       if (panel) {
         duplicateSession(
           { type: 'terminal', panelId: pid, title: panel.title },
-          { workspaceId: tab.id, targetPanelId: pid ?? undefined },
+          { workspaceId: tab.id, targetPanelId: pid },
         )
       }
       return
@@ -1295,30 +1134,22 @@ onUnmounted(() => {
   window.removeEventListener('input:contextmenu', onInputContextMenu)
   document.removeEventListener('wheel', onWheel, { capture: true })
   document.removeEventListener('keydown', onPlatformSystemShortcut, true)
-  // RDP overlay tracking
-  window.removeEventListener('rdp:overlay-push', RDPHideForOverlay)
-  window.removeEventListener('rdp:overlay-pop', RDPShowForOverlay)
-  window.removeEventListener('split:resize-start', RDPHideForOverlay)
-  window.removeEventListener('split:resize-end', RDPShowForOverlay)
-  window.removeEventListener('rdp:sync-position', rdpResetTracking)
-  window.removeEventListener('rdp:fullscreen-enter', onRdpFullScreenEnter)
   window.removeEventListener('panel:reconnect', onPanelReconnectEvent)
+  // RDP ActiveX embedding teardown
+  rdpEmbedding.teardown()
   // Wails EventsOn teardown (FE-03)
-  unsubRdpFullscreenExit?.()
-  unsubRdpMoveResizeStart?.()
-  unsubRdpMoveResizeEnd?.()
-  unsubRdpAdaptive?.()
   unsubTrayOpenSettings?.()
   unsubTrayOpenAbout?.()
   unsubTrayOpenNetscan?.()
   unsubMcpApproval?.()
   unsubMcpSessionCreated?.()
-  rdpAreaObserver?.disconnect()
   unsubTerminalCwd?.()
   settingsStore.dispose?.()
   connectionStore.dispose?.()
   syncStore.dispose?.()
   tunnelStore.dispose?.()
+  useSkillStore().dispose?.()
+  useCommandStore().dispose?.()
   disposeSessionStore?.()
   credStore.dispose()
 })
@@ -1382,13 +1213,13 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
       } else {
         const dontShowAgain = ref(false)
         // Hide the native RDP window so the dialog isn't covered by it (issue #346)
-        RDPHideForOverlay()
+        rdpEmbedding.RDPHideForOverlay()
         try {
           await ElMessageBox.confirm(
             h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
               h('span', t('tab.closeConnectedConfirm')),
               h(ElCheckbox, {
-                'onUpdate:modelValue': (v: string | number | boolean) => { dontShowAgain.value = !!v }
+                'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
               }, () => t('tab.dontShowAgain'))
             ]),
             t('tab.closeConfirmTitle'),
@@ -1397,7 +1228,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
         } catch {
           return
         } finally {
-          RDPShowForOverlay()
+          rdpEmbedding.RDPShowForOverlay()
         }
         if (dontShowAgain.value) {
           settingsStore.settings.closeTabPrompt = false
@@ -1526,7 +1357,7 @@ async function closeTabBatch(tabIds: string[]) {
         h('div', { style: 'display:flex;flex-direction:column;gap:0.625rem' }, [
           h('span', t('tab.closeConnectedBatchConfirm', { count: connectedCount })),
           h(ElCheckbox, {
-            'onUpdate:modelValue': (v: string | number | boolean) => { dontShowAgain.value = !!v }
+            'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
           }, () => t('tab.dontShowAgain'))
         ]),
         t('tab.closeConfirmTitle'),
@@ -1599,8 +1430,8 @@ function openFileBrowser(config: ConnectionConfig, prevStart?: any, afterTabId?:
   return launchFileBrowser(config, { prevStart, afterTabId, initialPath })
 }
 
-function openMonitorPanel(config: ConnectionConfig, prevStart?: any) {
-  return launchMonitor(config, { prevStart })
+function openMonitorPanel(config: ConnectionConfig, prevStart?: any, afterTabId?: string) {
+  return launchMonitor(config, { prevStart, afterTabId })
 }
 
 // Atomically remove a start tab and place a newly-created tab in its position.
@@ -1707,9 +1538,9 @@ async function connectTerminalSession(config: ConnectionConfig, persist: boolean
     return { status: 'failed' }
   }
 
-  const panel = panelStore.createPanel(config, config.type as PanelType)
+  const panel = panelStore.createPanel(config, config.type)
   const displayTitle = config.name || (config.type === 'local' || config.type === 'wsl'
-    ? getShellLabel(config.shellPath || '')
+    ? getShellLabel(config.shellPath)
     : config.type === 'serial'
     ? `${config.serialPort || 'Serial'} (${config.serialBaudRate || 115200})`
     : config.type === 'telnet'
@@ -1927,7 +1758,7 @@ function onTabDragStart(_e: DragEvent, _tabId: string) {
 
 async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
   const panel = panelStore.createPanel(null, 'local')
-  const shellName = getShellLabel(shellPath || '')
+  const shellName = getShellLabel(shellPath)
   panelStore.updateTitle(panel.id, shellName)
 
   try {
@@ -2034,17 +1865,7 @@ async function createWslTerminal(distro: string, keepOpen?: boolean) {
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),
 // so background sessions are tucked under the webview and don't respond to drag.
 watch(() => activeTab.value, (newTab, oldTab) => {
-  if (oldTab?.type === 'rdp') {
-    const p = panelStore.getPanel(oldTab.panelId)
-    if (p?.sessionId) RDPHide(p.sessionId)
-  }
-  // Clear pending restore timer on tab switch
-  if (rdpRestoreTimer) { clearTimeout(rdpRestoreTimer); rdpRestoreTimer = null }
-  if (newTab?.type === 'rdp') {
-    rdpResetTracking()
-    const sid = panelStore.getPanel(newTab.panelId)?.sessionId
-    if (sid) nextTick(() => RDPShow(sid))
-  }
+  rdpEmbedding.onTabSwitch(newTab, oldTab)
   // Auto-focus terminal on tab switch (including new connections)
   if (newTab) {
     const pid = tabStore.getActivePanelId()
@@ -2054,17 +1875,17 @@ watch(() => activeTab.value, (newTab, oldTab) => {
 
 // Hide RDP when new-connection dialog opens (App.vue's ConnectionForm)
 watch(showConnectionForm, (val) => {
-  if (val) RDPHideForOverlay()
-  else RDPShowForOverlay()
+  if (val) rdpEmbedding.RDPHideForOverlay()
+  else rdpEmbedding.RDPShowForOverlay()
 })
 
 watch(sidebarVisible, async () => {
-  rdpResetTracking()
+  rdpEmbedding.rdpResetTracking()
   localStateStore.update({ sidebarVisible: sidebarVisible.value })
 })
 
 watch(() => aiStore.visible, () => {
-  rdpResetTracking()
+  rdpEmbedding.rdpResetTracking()
 })
 
 watch(() => settingsStore.settings.keyboard, () => {
