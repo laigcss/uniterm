@@ -569,10 +569,219 @@ import { Close, RefreshRight } from '@element-plus/icons-vue'
 import { ChevronRight } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { uiPx } from '../utils/uiScale'
+import { formatBytes } from '../utils/format'
+import { useSessionData } from '../composables/useSessionEvents'
 
 import Menu from './Menu.vue'
-import { Events } from '@wailsio/runtime'
+
 import MenuItem from './MenuItem.vue'
+
+// ── Monitor data types ──
+// These mirror the backend payloads delivered via session:data and the
+// Get* APIs. Fields are typed loosely (string/number) because the backend
+// serialises everything to JSON; optional fields use `?` where the value
+// may be absent on some platforms.
+
+/** One row of the process list table. */
+interface ProcessRow {
+  pid: number
+  name: string
+  user: string
+  state?: string
+  cpu?: number
+  mem?: number
+  // Allow dynamic property access in the client-side sort handler.
+  [key: string]: string | number | undefined
+}
+
+/** File-descriptor breakdown inside a process detail payload. */
+interface ProcessFdInfo {
+  total?: number
+  files?: number
+  sockets?: number
+  pipes?: number
+  anons?: number
+  devs?: number
+  others?: number
+}
+
+/** I/O counters inside a process detail payload. */
+interface ProcessIoInfo {
+  rchar?: number
+  wchar?: number
+  read_bytes?: number
+  write_bytes?: number
+}
+
+/** Process detail payload returned by GetProcessDetail. */
+interface ProcessDetail {
+  pid: number
+  ppid?: number
+  name?: string
+  state?: string
+  threads?: number
+  exe?: string
+  cwd?: string
+  cmdline?: string
+  startTime?: string
+  fd?: ProcessFdInfo
+  vmRss?: string
+  vmSize?: string
+  cpuTicks?: string
+  voluntaryCtxSwitches?: number | null
+  nonvoluntaryCtxSwitches?: number | null
+  io?: ProcessIoInfo
+}
+
+/** One row of the listening-ports table. */
+interface PortInfo {
+  protocol: string
+  localAddr: string
+  process: string
+}
+
+/** One row of the disks table (also used for the perf disk sub-list). */
+interface DiskInfo {
+  name: string
+  type?: string
+  mountPoint?: string
+  size?: string
+  used?: string
+  total?: string
+  usage?: number
+  media?: string
+  fsType?: string
+  uuid?: string
+  vendor?: string
+  model?: string
+}
+
+/** One row of the network-cards table. */
+interface NetCardInfo {
+  name: string
+  state?: string
+  mac?: string
+  speed?: string
+  type?: string
+  bondMaster?: string
+  ipAddrs?: string[]
+  bondSlaves?: string[]
+}
+
+/** Per-core CPU usage entry in the perf payload. */
+interface CpuCoreInfo {
+  core: number
+  usage: number
+}
+
+/** Per-NIC throughput entry in the perf payload. */
+interface NetStatInfo {
+  name: string
+  rx: number
+  tx: number
+}
+
+/** One row of the services table. */
+interface ServiceInfo {
+  name: string
+  active?: string
+  enabled?: string
+  description?: string
+}
+
+/** Service detail payload returned by GetServiceDetail. */
+interface ServiceDetail {
+  Description?: string
+  LoadState?: string
+  SubState?: string
+  ActiveState?: string
+  UnitFileState?: string
+  ExecMainPID?: string
+  MemoryCurrent?: string | number
+}
+
+/** One row of the hardware devices table. */
+interface DeviceInfo {
+  id: string
+  class?: string
+  vendor?: string
+  product?: string
+  driver?: string
+  serial?: string
+  capacity?: string
+  rev?: string
+  category?: string
+}
+
+/** Tree node used by the device tree-table (group header or leaf device). */
+interface DeviceTreeNode {
+  rowKey: string
+  isGroup?: boolean
+  category?: string
+  count?: number
+  children?: DeviceTreeNode[]
+  id?: string
+  class?: string
+  vendor?: string
+  product?: string
+  driver?: string
+  serial?: string
+  capacity?: string
+  rev?: string
+}
+
+/** IPMI FRU identity card. */
+interface FruInfo {
+  product?: string
+  manufacturer?: string
+  serial?: string
+  partNumber?: string
+}
+
+/** IPMI LAN channel key/value pair. */
+interface LanInfo {
+  key: string
+  value: string
+}
+
+/** One IPMI sensor reading. */
+interface SensorInfo {
+  name: string
+  value: string
+  unit?: string
+  status: string
+  source?: string
+}
+
+/** Hardware sensors payload returned by GetHardwareSensors. */
+interface HardwareSensors {
+  hasIpmi?: boolean
+  sensors: SensorInfo[]
+}
+
+/** System info payload delivered via the session:data `system` event. */
+interface SystemInfo {
+  user?: string
+  uptimeSec?: number
+  os?: string
+  version?: string
+  kernel?: string
+  hostname?: string
+  localIP?: string
+  cpuModel?: string
+  cores?: number
+  arch?: string
+  cpuFreq?: number
+  memTotal?: number
+  diskTotal?: string
+  timezone?: string
+  epochSec?: number
+}
+
+/** Minimal shape of an Element Plus table instance used for DOM access. */
+interface ElTableInstance {
+  $el?: HTMLElement | null
+}
 
 const props = defineProps<{
   sessionId: string
@@ -591,12 +800,12 @@ const paused = ref(false)
 
 // Process detail
 const detailDrawerVisible = ref(false)
-const selectedProcess = ref<any>(null)
-const processDetail = ref<any>(null)
+const selectedProcess = ref<ProcessRow | null>(null)
+const processDetail = ref<ProcessDetail | null>(null)
 
 // Kill dialog
 const killDialogVisible = ref(false)
-const killTarget = ref<any>(null)
+const killTarget = ref<ProcessRow | null>(null)
 const killType = ref<string>('term') // 'term' | 'kill' | 'hup' | 'int'
 
 // Context menu
@@ -616,46 +825,46 @@ const currentMem = ref({ total: 0, used: 0, free: 0, usage: 0, cached: 0, buffer
 const currentSwap = ref({ total: 0, used: 0, usage: 0 })
 const currentDisk = ref({ total: '', used: '', usage: 0 })
 const currentNet = ref({ rx: 0, tx: 0, rxTotal: 0, txTotal: 0 })
-const processList = ref<any[]>([])
-const processTableRef = ref<any>(null)
+const processList = ref<ProcessRow[]>([])
+const processTableRef = ref<ElTableInstance | null>(null)
 // False while the component is hidden by KeepAlive: the full process payload
 // is skipped instead of being rendered in a hidden pane.
 const monitorActive = ref(true)
-const systemInfo = ref<Record<string, any> | null>(null)
+const systemInfo = ref<SystemInfo | null>(null)
 
 // Expandable detail lists: per-core / per-NIC (live from perf payload) and
 // per-disk (fetched on-demand via GetDisks when expanded).
-const cpus = ref<any[]>([])
-const nets = ref<any[]>([])
-const disks = ref<any[]>([])
+const cpus = ref<CpuCoreInfo[]>([])
+const nets = ref<NetStatInfo[]>([])
+const disks = ref<DiskInfo[]>([])
 const diskLoading = ref(false)
 const showCores = ref(false)
 const showNets = ref(false)
 const showDisks = ref(false)
 
 // Only directories with a mount point are shown in the disk detail list.
-const mountedDisks = computed(() => disks.value.filter((d: any) => d.mountPoint))
+const mountedDisks = computed(() => disks.value.filter((d: DiskInfo) => d.mountPoint))
 
 // Summary values for processes tab (independent from performance tab)
 const processSummaryCpu = ref({ usage: 0, cores: 0, processes: 0, load1: '-', load5: '-', load15: '-' })
 const processSummaryMem = ref({ total: 0, used: 0, free: 0, usage: 0, cached: 0, buffers: 0 })
 
 // On-demand tab data
-const portList = ref<any[]>([])
-const diskList = ref<any[]>([])
-const netCardList = ref<any[]>([])
+const portList = ref<PortInfo[]>([])
+const diskList = ref<DiskInfo[]>([])
+const netCardList = ref<NetCardInfo[]>([])
 const loadingPorts = ref(false)
 const loadingDisks = ref(false)
 const loadingNetCards = ref(false)
 
 // Services / devices / hardware health (on-demand tabs)
-const serviceList = ref<any[]>([])
-const deviceList = ref<any[]>([])
+const serviceList = ref<ServiceInfo[]>([])
+const deviceList = ref<DeviceInfo[]>([])
 // Hardware health loads as three independent parts (FRU / IPMI LAN /
 // sensors) so a slow ipmitool call does not block the others.
-const hardwareFru = ref<any>(null)
-const hardwareLan = ref<any[]>([])
-const hardwareSensors = ref<any>(null)
+const hardwareFru = ref<FruInfo | null>(null)
+const hardwareLan = ref<LanInfo[]>([])
+const hardwareSensors = ref<HardwareSensors | null>(null)
 const loadingServices = ref(false)
 const loadingDevices = ref(false)
 const loadingHardwareFru = ref(false)
@@ -667,7 +876,7 @@ const sensorSearch = ref('')
 
 // Service action confirm dialog
 const serviceDialogVisible = ref(false)
-const serviceActionTarget = ref<any>(null)
+const serviceActionTarget = ref<ServiceInfo | null>(null)
 const serviceActionCmd = ref('')
 const serviceMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const serviceMenuVisible = ref(false)
@@ -675,7 +884,7 @@ const serviceMenuVisible = ref(false)
 // Service detail drawer: two tabs (properties detail / journal logs)
 const serviceDetailVisible = ref(false)
 const serviceDetailName = ref('')
-const serviceDetail = ref<any>(null)
+const serviceDetail = ref<ServiceDetail | null>(null)
 const loadingServiceDetail = ref(false)
 const svcDrawerTab = ref<'detail' | 'logs'>('detail')
 const logLines = ref(200)
@@ -838,13 +1047,6 @@ const currentPerf = computed(() => {
   }
 })
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 function formatIo(val: number | undefined): string {
   if (val == null) return '-'
@@ -879,7 +1081,7 @@ const NEAR_BOTTOM_PX = 300
 const filteredProcesses = computed(() => {
   const q = processSearch.value.trim().toLowerCase()
   if (!q) return processList.value
-  return processList.value.filter((p: any) =>
+  return processList.value.filter((p: ProcessRow) =>
     String(p.name).toLowerCase().includes(q) ||
     String(p.user).toLowerCase().includes(q) ||
     String(p.pid).includes(q)
@@ -899,7 +1101,7 @@ const sortedProcesses = computed(() => {
   const s = processSortState.value
   if (!s) return list
   const dir = s.order === 'descending' ? -1 : 1
-  return list.sort((a: any, b: any) => {
+  return list.sort((a: ProcessRow, b: ProcessRow) => {
     const av = a[s.prop]
     const bv = b[s.prop]
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
@@ -944,7 +1146,7 @@ watch(processSearch, () => {
 const filteredPorts = computed(() => {
   const q = portSearch.value.trim().toLowerCase()
   if (!q) return portList.value
-  return portList.value.filter((p: any) =>
+  return portList.value.filter((p: PortInfo) =>
     String(p.localAddr).toLowerCase().includes(q) ||
     String(p.process).toLowerCase().includes(q)
   )
@@ -953,7 +1155,7 @@ const filteredPorts = computed(() => {
 const filteredNetCards = computed(() => {
   const q = netSearch.value.trim().toLowerCase()
   if (!q) return netCardList.value
-  return netCardList.value.filter((n: any) =>
+  return netCardList.value.filter((n: NetCardInfo) =>
     String(n.name).toLowerCase().includes(q) ||
     String(n.mac).toLowerCase().includes(q) ||
     (n.ipAddrs || []).some((ip: string) => ip.toLowerCase().includes(q)) ||
@@ -965,7 +1167,7 @@ const filteredNetCards = computed(() => {
 const filteredDisks = computed(() => {
   const q = diskSearch.value.trim().toLowerCase()
   if (!q) return diskList.value
-  return diskList.value.filter((d: any) =>
+  return diskList.value.filter((d: DiskInfo) =>
     String(d.name).toLowerCase().includes(q)
   )
 })
@@ -973,7 +1175,7 @@ const filteredDisks = computed(() => {
 const filteredServices = computed(() => {
   const q = serviceSearch.value.trim().toLowerCase()
   if (!q) return serviceList.value
-  return serviceList.value.filter((s: any) =>
+  return serviceList.value.filter((s: ServiceInfo) =>
     String(s.name).toLowerCase().includes(q) ||
     String(s.description).toLowerCase().includes(q)
   )
@@ -982,7 +1184,7 @@ const filteredServices = computed(() => {
 const filteredDevices = computed(() => {
   const q = deviceSearch.value.trim().toLowerCase()
   if (!q) return deviceList.value
-  return deviceList.value.filter((d: any) =>
+  return deviceList.value.filter((d: DeviceInfo) =>
     String(d.id).toLowerCase().includes(q) ||
     String(d.class).toLowerCase().includes(q) ||
     String(d.vendor).toLowerCase().includes(q) ||
@@ -996,13 +1198,13 @@ const filteredDevices = computed(() => {
 // list first, so empty categories disappear while searching.
 const deviceCatOrder = ['processor', 'memory', 'storage', 'network', 'display', 'bus', 'other']
 const deviceTreeData = computed(() => {
-  const groups = new Map<string, any[]>()
+  const groups = new Map<string, DeviceInfo[]>()
   for (const d of filteredDevices.value) {
     const cat = d.category || 'other'
     if (!groups.has(cat)) groups.set(cat, [])
     groups.get(cat)!.push(d)
   }
-  const rows: any[] = []
+  const rows: DeviceTreeNode[] = []
   for (const cat of deviceCatOrder) {
     const kids = groups.get(cat)
     if (!kids?.length) continue
@@ -1021,14 +1223,14 @@ const filteredSensors = computed(() => {
   const list = hardwareSensors.value?.sensors || []
   const q = sensorSearch.value.trim().toLowerCase()
   if (!q) return list
-  return list.filter((s: any) =>
+  return list.filter((s: SensorInfo) =>
     String(s.name).toLowerCase().includes(q) ||
     String(s.value).toLowerCase().includes(q) ||
     String(s.source).toLowerCase().includes(q)
   )
 })
 
-function serviceStateClass(row: any) {
+function serviceStateClass(row: ServiceInfo) {
   if (row.active === 'active') return 'state-ok'
   if (row.active === 'failed') return 'state-bad'
   return 'state-idle'
@@ -1166,13 +1368,13 @@ function togglePause() {
   SetMonitorPaused(props.sessionId, paused.value).catch(() => {})
 }
 
-async function onProcessRowClick(row: any) {
+async function onProcessRowClick(row: ProcessRow) {
   selectedProcess.value = row
   await fetchProcessDetail(row.pid)
   detailDrawerVisible.value = true
 }
 
-function onTableSignal(row: any, e: MouseEvent) {
+function onTableSignal(row: ProcessRow, e: MouseEvent) {
   selectedProcess.value = row
   signalMenuRef.value?.toggle(e.currentTarget as HTMLElement)
 }
@@ -1181,8 +1383,8 @@ async function fetchProcessDetail(pid: number) {
   try {
     const detail = await GetProcessDetail(props.sessionId, pid)
     processDetail.value = detail
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch process detail')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch process detail')
     processDetail.value = null
   }
 }
@@ -1215,8 +1417,8 @@ async function confirmKill() {
     await KillProcess(props.sessionId, pid, signal)
     msg.success('Signal sent')
     killDialogVisible.value = false
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to send signal')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to send signal')
   }
 }
 
@@ -1237,8 +1439,8 @@ async function fetchPorts() {
   loadingPorts.value = true
   try {
     portList.value = await GetPorts(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch ports')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch ports')
     portList.value = []
   } finally {
     loadingPorts.value = false
@@ -1251,8 +1453,8 @@ async function fetchDisks() {
   try {
     diskList.value = await GetDisks(props.sessionId)
     diskFetchRetried = false
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch disks')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch disks')
     diskList.value = []
     // The monitor session may still be connecting on the first attempt;
     // retry once so the list shows without a manual refresh.
@@ -1271,8 +1473,8 @@ async function fetchNetCards() {
   loadingNetCards.value = true
   try {
     netCardList.value = await GetNetworkCards(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch network cards')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch network cards')
     netCardList.value = []
   } finally {
     loadingNetCards.value = false
@@ -1283,8 +1485,8 @@ async function fetchServices() {
   loadingServices.value = true
   try {
     serviceList.value = await GetServices(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch services')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch services')
     serviceList.value = []
   } finally {
     loadingServices.value = false
@@ -1295,8 +1497,8 @@ async function fetchDevices() {
   loadingDevices.value = true
   try {
     deviceList.value = await GetDevices(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch devices')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch devices')
     deviceList.value = []
   } finally {
     loadingDevices.value = false
@@ -1307,8 +1509,8 @@ async function fetchHardwareFru() {
   loadingHardwareFru.value = true
   try {
     hardwareFru.value = await GetHardwareFru(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch FRU info')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch FRU info')
     hardwareFru.value = null
   } finally {
     loadingHardwareFru.value = false
@@ -1319,8 +1521,8 @@ async function fetchHardwareLan() {
   loadingHardwareLan.value = true
   try {
     hardwareLan.value = await GetHardwareLan(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch IPMI LAN info')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch IPMI LAN info')
     hardwareLan.value = []
   } finally {
     loadingHardwareLan.value = false
@@ -1331,15 +1533,15 @@ async function fetchHardwareSensors() {
   loadingHardwareSensors.value = true
   try {
     hardwareSensors.value = await GetHardwareSensors(props.sessionId)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch hardware sensors')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch hardware sensors')
     hardwareSensors.value = null
   } finally {
     loadingHardwareSensors.value = false
   }
 }
 
-function onServiceActionMenu(row: any, e: MouseEvent) {
+function onServiceActionMenu(row: ServiceInfo, e: MouseEvent) {
   serviceActionTarget.value = row
   serviceMenuRef.value?.toggle(e.currentTarget as HTMLElement)
 }
@@ -1359,12 +1561,12 @@ async function confirmServiceAction() {
     msg.success(`${cmd} ${name} OK`)
     serviceDialogVisible.value = false
     fetchServices()
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to run service action')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to run service action')
   }
 }
 
-async function onServiceRowClick(row: any) {
+async function onServiceRowClick(row: ServiceInfo) {
   serviceDetailName.value = row.name
   serviceDetail.value = null
   serviceLogs.value = ''
@@ -1373,8 +1575,8 @@ async function onServiceRowClick(row: any) {
   loadingServiceDetail.value = true
   try {
     serviceDetail.value = await GetServiceDetail(props.sessionId, row.name)
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch service detail')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch service detail')
   } finally {
     loadingServiceDetail.value = false
   }
@@ -1401,8 +1603,8 @@ async function fetchServiceLogs() {
         if (el) el.scrollTop = el.scrollHeight
       })
     }
-  } catch (e: any) {
-    msg.error(e?.message || 'Failed to fetch service logs')
+  } catch (e) {
+    msg.error((e instanceof Error ? e.message : '') || 'Failed to fetch service logs')
     serviceLogs.value = ''
   } finally {
     loadingServiceLogs.value = false
@@ -1535,7 +1737,60 @@ function drawChart() {
   drawLine(history, mainColor, true)
 }
 
-let unlisten: (() => void) | null = null
+// Subscribe to session:data via the shared composable — it handles the
+// ev.data parsing, sessionId filtering and onUnmounted cleanup for us.
+useSessionData(() => props.sessionId, (raw) => {
+  try {
+    const payload = JSON.parse(raw)
+    if (payload.type === 'system') {
+      systemInfo.value = payload.system
+      return
+    }
+    if (payload.type === 'performance') {
+      if (payload.cpu) {
+        currentCpu.value = payload.cpu
+        pushHistory(cpuHistory.value, payload.cpu.usage || 0)
+      }
+      if (payload.memory) {
+        currentMem.value = payload.memory
+        pushHistory(memHistory.value, payload.memory.usage || 0)
+      }
+      if (payload.swap) {
+        currentSwap.value = payload.swap
+      }
+      if (payload.disk) {
+        currentDisk.value = payload.disk
+        pushHistory(diskHistory.value, payload.disk.usage || 0)
+      }
+      if (payload.network) {
+        currentNet.value = payload.network
+        pushHistory(netRxHistory.value, payload.network.rx || 0)
+        pushHistory(netTxHistory.value, payload.network.tx || 0)
+        if (Array.isArray(payload.nets)) nets.value = payload.nets
+      }
+      if (Array.isArray(payload.cpus)) cpus.value = payload.cpus
+    }
+    if (payload.type === 'processes' && payload.processes) {
+      if (payload.summary) {
+        if (payload.summary.cpu) {
+          processSummaryCpu.value = payload.summary.cpu
+        }
+        if (payload.summary.memory) {
+          processSummaryMem.value = payload.summary.memory
+        }
+      }
+      // The full listing can be thousands of rows — only feed it into the
+      // reactive tree (and the table) while the processes pane is actually
+      // on screen, so hidden panes never re-render it.
+      if (monitorActive.value && activeTab.value === 'processes') {
+        processList.value = payload.processes
+      }
+    }
+    nextTick(drawChart)
+  } catch {
+    // ignore parse errors
+  }
+})
 
 onMounted(() => {
   // Drive the live host clock (1s local tick extrapolating from epochSec).
@@ -1544,60 +1799,6 @@ onMounted(() => {
 
   // Progressive process list: grow the rendered slice on scroll.
   bindProcessTableScroll()
-
-  unlisten =Events.On('session:data', (ev) => { const data: any = ev.data;
-    if (data?.id !== props.sessionId) return
-    try {
-      const payload = JSON.parse(data.data)
-      if (payload.type === 'system') {
-        systemInfo.value = payload.system
-        return
-      }
-      if (payload.type === 'performance') {
-        if (payload.cpu) {
-          currentCpu.value = payload.cpu
-          pushHistory(cpuHistory.value, payload.cpu.usage || 0)
-        }
-        if (payload.memory) {
-          currentMem.value = payload.memory
-          pushHistory(memHistory.value, payload.memory.usage || 0)
-        }
-        if (payload.swap) {
-          currentSwap.value = payload.swap
-        }
-        if (payload.disk) {
-          currentDisk.value = payload.disk
-          pushHistory(diskHistory.value, payload.disk.usage || 0)
-        }
-        if (payload.network) {
-          currentNet.value = payload.network
-          pushHistory(netRxHistory.value, payload.network.rx || 0)
-          pushHistory(netTxHistory.value, payload.network.tx || 0)
-          if (Array.isArray(payload.nets)) nets.value = payload.nets
-        }
-        if (Array.isArray(payload.cpus)) cpus.value = payload.cpus
-      }
-      if (payload.type === 'processes' && payload.processes) {
-        if (payload.summary) {
-          if (payload.summary.cpu) {
-            processSummaryCpu.value = payload.summary.cpu
-          }
-          if (payload.summary.memory) {
-            processSummaryMem.value = payload.summary.memory
-          }
-        }
-        // The full listing can be thousands of rows — only feed it into the
-        // reactive tree (and the table) while the processes pane is actually
-        // on screen, so hidden panes never re-render it.
-        if (monitorActive.value && activeTab.value === 'processes') {
-          processList.value = payload.processes
-        }
-      }
-      nextTick(drawChart)
-    } catch {
-      // ignore parse errors
-    }
-   })
 
   // Notify backend of initial active tab
   SetMonitorActiveTab(props.sessionId, activeTab.value).catch(() => {})
@@ -1617,7 +1818,7 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
-  if (unlisten) unlisten()
+
   if (clockTimer) window.clearInterval(clockTimer)
   clockTimer = null
   SetMonitorPaused(props.sessionId, true).catch(() => {})

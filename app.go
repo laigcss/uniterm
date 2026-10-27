@@ -2460,7 +2460,9 @@ func (a *App) SwitchCredentialMode(targetMode, masterPassword string) error {
 	if err := cs.Rekey(targetMode, newSalt, newKey); err != nil {
 		// Roll files back under oldKey; otherwise a failed Rekey leaves them
 		// encrypted under a key that is never persisted.
-		_ = a.reencryptAll(cs, newKey, oldKey)
+		if rollbackErr := a.reencryptAll(cs, newKey, oldKey); rollbackErr != nil {
+			log.Writef("WARNING: reencrypt rollback failed: %v (original error: %v)", rollbackErr, err)
+		}
 		return err
 	}
 	if targetMode == credentials.ModeKeychain {
@@ -2492,7 +2494,9 @@ func (a *App) ChangeMasterPassword(oldPassword, newPassword string) error {
 		return err
 	}
 	if err := cs.Rekey(credentials.ModeMasterPassword, newSalt, newKey); err != nil {
-		_ = a.reencryptAll(cs, newKey, oldKey)
+		if rollbackErr := a.reencryptAll(cs, newKey, oldKey); rollbackErr != nil {
+			log.Writef("WARNING: reencrypt rollback failed: %v (original error: %v)", rollbackErr, err)
+		}
 		return err
 	}
 	return nil

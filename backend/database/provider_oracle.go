@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"strconv"
@@ -44,7 +45,12 @@ func (p *oracleProvider) DriverName() string {
 }
 
 func (p *oracleProvider) Quote(name string) string {
-	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	q, err := SafeOracleIdent(name)
+	if err != nil {
+		log.Printf("WARNING: oracle Quote rejected unsafe identifier %q: %v", name, err)
+		return name
+	}
+	return q
 }
 
 func (p *oracleProvider) PrepareExec(db execer, dbName string) error {

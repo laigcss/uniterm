@@ -159,6 +159,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ExternalLink, ChevronRight } from '@lucide/vue'
 import { useI18n } from '../i18n'
+import { formatBytes } from '../utils/format'
 import { useCompanionStore } from '../stores/companionStore'
 import { usePanelStore } from '../stores/panelStore'
 import { Events } from '@wailsio/runtime'
@@ -256,13 +257,6 @@ function formatSkew(seconds: number): string {
   return `${sign}${s}s`
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes < 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 function formatMem(gb: number): string {
   if (!gb) return '0 B'

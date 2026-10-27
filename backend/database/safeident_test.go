@@ -140,3 +140,80 @@ func TestSafeIdentRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// TestSafeOracleIdent covers Oracle identifier quoting and rejection of
+// SQL-injection metacharacters (;, --, /*, */, ', ") on top of the base
+// identValidate checks (empty, NUL, path separators, length).
+func TestSafeOracleIdent(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    string
+	}{
+		{"plain", "users", false, `"users"`},
+		{"underscore_digits", "user_2024", false, `"user_2024"`},
+		{"schema qualified", "hr.employees", false, `"hr.employees"`},
+		{"dollar allowed", "cost$", false, `"cost$"`},
+		{"semicolon", "foo;bar", true, ""},
+		{"comment double dash", "foo--bar", true, ""},
+		{"block comment open", "foo/*bar", true, ""},
+		{"block comment close", "foo*/bar", true, ""},
+		{"single quote", "foo'bar", true, ""},
+		{"double quote", `foo"bar`, true, ""},
+		{"drop table injection", `x"; DROP TABLE users; --`, true, ""},
+		{"empty", "", true, ""},
+		{"nul byte", "foo\x00bar", true, ""},
+		{"path traversal", "../etc/passwd", true, ""},
+		{"too long", strings.Repeat("a", 129), true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := SafeOracleIdent(tc.input)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Errorf("SafeOracleIdent(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSafeSqlserverIdent covers SQL Server identifier quoting (brackets with
+// ] doubled) and rejection of the same SQL-injection metacharacters.
+func TestSafeSqlserverIdent(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    string
+	}{
+		{"plain", "users", false, "[users]"},
+		{"underscore_digits", "user_2024", false, "[user_2024]"},
+		{"schema qualified", "dbo.users", false, "[dbo.users]"},
+		{"bracket escaped", "foo]bar", false, "[foo]]bar]"},
+		{"semicolon", "foo;bar", true, ""},
+		{"comment double dash", "foo--bar", true, ""},
+		{"block comment open", "foo/*bar", true, ""},
+		{"block comment close", "foo*/bar", true, ""},
+		{"single quote", "foo'bar", true, ""},
+		{"double quote", `foo"bar`, true, ""},
+		{"drop table injection", "x]; DROP TABLE users; --", true, ""},
+		{"empty", "", true, ""},
+		{"nul byte", "foo\x00bar", true, ""},
+		{"path traversal", "..\\windows\\system32", true, ""},
+		{"too long", strings.Repeat("a", 129), true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := SafeSqlserverIdent(tc.input)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Errorf("SafeSqlserverIdent(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}

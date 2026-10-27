@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -56,7 +57,12 @@ func (p *sqlserverProvider) DriverName() string {
 }
 
 func (p *sqlserverProvider) Quote(name string) string {
-	return "[" + strings.ReplaceAll(name, "]", "]]") + "]"
+	q, err := SafeSqlserverIdent(name)
+	if err != nil {
+		log.Printf("WARNING: sqlserver Quote rejected unsafe identifier %q: %v", name, err)
+		return name
+	}
+	return q
 }
 
 func (p *sqlserverProvider) PrepareExec(db execer, dbName string) error {

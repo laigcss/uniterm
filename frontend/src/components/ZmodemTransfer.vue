@@ -30,6 +30,7 @@ import { computed } from 'vue'
 import { Download, Upload, Check, X, CircleOff } from '@lucide/vue'
 import { useZmodemStore } from '../stores/zmodemStore'
 import { useI18n } from '../i18n'
+import { formatBytes } from '../utils/format'
 
 const props = defineProps<{
   sessionId: string
@@ -55,13 +56,6 @@ function progressPercent(t: ReturnType<typeof store.getTransfers>[number]) {
   return Math.min(100, Math.round((t.transferred / t.size) * 100))
 }
 
-function formatBytes(bytes: number) {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 function cancelTransfer(t: ReturnType<typeof store.getTransfers>[number]) {
   store.updateTransfer(props.sessionId, t.id, { status: 'cancelled' })

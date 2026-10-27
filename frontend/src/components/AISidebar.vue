@@ -327,6 +327,7 @@ import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent, answerQuestion, dismissQuestion } from '../services/agent'
 import { CancelChatStream, SaveFileDialogFiltered, WriteFileBase64, ReadLocalAttachmentFile } from '../../bindings/github.com/ys-ll/uniterm/app'
 import type { AIAttachment, ExecutionMode } from '../types/ai'
+import type { ConnectionConfig } from '../types/session'
 import {
   ATTACHMENT_FILE_ACCEPT,
   ATTACHMENT_LIMITS,
@@ -585,7 +586,7 @@ async function onNativePathsDropped(paths: string[]) {
       const f = await ReadLocalAttachmentFile(p)
       await addFile(new File([bytesFromBase64(f.dataB64)], f.name || name))
     } catch (e) {
-      const detail = (e as any)?.toString?.() || String(e)
+      const detail = e instanceof Error ? e.toString() : String(e)
       if (detail.includes('AI_ATTACHMENT_IS_DIRECTORY')) {
         showAttachmentError('ai.attachmentIsDirectory', { name })
       } else if (detail.includes('AI_ATTACHMENT_TOO_LARGE')) {
@@ -782,7 +783,7 @@ watch(() => [searchText.value, visibleMessages.value.length], () => {
 const statusText = computed(() => {
   if (aiStore.pendingCommand) return t('ai.confirming')
   if (aiStore.pendingQuestion) return t('ai.awaitingAnswer')
-  const key = `ai.${aiStore.status}` as any
+  const key = `ai.${aiStore.status}`
   return t(key) || t('ai.thinking')
 })
 
@@ -920,8 +921,8 @@ async function onMsgCtxExport() {
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
     await WriteFileBase64(path, btoa(bin))
     ElMessage.success(t('ai.exportDone', { name: s.name }))
-  } catch (e: any) {
-    ElMessage.error(e?.message || String(e))
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : String(e))
   }
 }
 
@@ -981,7 +982,7 @@ const currentIsTerminal = computed(() => {
   const tab = tabStore.activeTab
   if (tab?.type === 'terminal') return true
   if (tab?.type === 'workspace') {
-    const pid = (tab as any).activePanelId
+    const pid = tab.activePanelId
     return !!(pid && panelStore.getPanel(pid))
   }
   return false
@@ -992,9 +993,9 @@ const currentTerminalLabel = computed(() => {
   if (!tab) return t('ai.currentTerminal')
   let panelId: string | undefined
   if (tab.type === 'terminal') {
-    panelId = (tab as any).panelId
+    panelId = tab.panelId
   } else if (tab.type === 'workspace') {
-    panelId = (tab as any).activePanelId
+    panelId = tab.activePanelId ?? undefined
   }
   if (!panelId) return t('ai.currentTerminal')
   const panel = panelStore.getPanel(panelId)
@@ -1002,18 +1003,18 @@ const currentTerminalLabel = computed(() => {
 })
 
 const availableTerminalPanels = computed(() => {
-  const result: Array<{ id: string; title: string; type: string; shellPath?: string; config?: any }> = []
+  const result: Array<{ id: string; title: string; type: string; shellPath?: string; config?: ConnectionConfig | null }> = []
   const seen = new Set<string>()
   for (const tab of tabStore.tabs) {
-    if (tab.type === 'terminal' && (tab as any).panelId) {
-      const p = panelStore.getPanel((tab as any).panelId)
+    if (tab.type === 'terminal' && tab.panelId) {
+      const p = panelStore.getPanel(tab.panelId)
       if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl') && !seen.has(p.id)) {
         seen.add(p.id)
         result.push({ id: p.id, title: p.title, type: p.type, shellPath: p.config?.shellPath, config: p.config })
       }
     }
-    if (tab.type === 'workspace' && (tab as any).panelIds) {
-      for (const pid of (tab as any).panelIds) {
+    if (tab.type === 'workspace' && tab.panelIds) {
+      for (const pid of tab.panelIds) {
         const p = panelStore.getPanel(pid)
         if (p && (p.type === 'ssh' || p.type === 'local' || p.type === 'wsl') && !seen.has(p.id)) {
           seen.add(p.id)

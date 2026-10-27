@@ -26,6 +26,49 @@ func SafePgIdent(name string) (string, error) {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`, nil
 }
 
+// SafeOracleIdent returns the Oracle identifier with double-quotes escaped
+// (doubled) and rejects names containing SQL-injection metacharacters
+// (;, --, /*, */, ', ") in addition to the base identValidate checks.
+// Addresses AUDIT-database-06 (SQL injection via Oracle Quote).
+func SafeOracleIdent(name string) (string, error) {
+	if err := identValidate(name); err != nil {
+		return "", err
+	}
+	if err := identDangerousChars(name); err != nil {
+		return "", err
+	}
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`, nil
+}
+
+// SafeSqlserverIdent returns the SQL Server identifier with brackets escaped
+// (] doubled) and rejects names containing SQL-injection metacharacters
+// (;, --, /*, */, ', ") in addition to the base identValidate checks.
+// Addresses AUDIT-database-07 (SQL injection via SQL Server Quote).
+func SafeSqlserverIdent(name string) (string, error) {
+	if err := identValidate(name); err != nil {
+		return "", err
+	}
+	if err := identDangerousChars(name); err != nil {
+		return "", err
+	}
+	return "[" + strings.ReplaceAll(name, "]", "]]") + "]", nil
+}
+
+// identDangerousChars rejects identifiers containing SQL-injection
+// metacharacters that should never appear in a legitimate identifier.
+// The quote characters themselves are rejected here (rather than only
+// escaped) so that a malicious name is flagged loudly instead of silently
+// passed through the escaping layer.
+func identDangerousChars(name string) error {
+	if strings.ContainsAny(name, ";'\"") ||
+		strings.Contains(name, "--") ||
+		strings.Contains(name, "/*") ||
+		strings.Contains(name, "*/") {
+		return fmt.Errorf("identifier contains dangerous characters: %s", name)
+	}
+	return nil
+}
+
 // SafeDefaultLiteral validates a literal value suitable for embedding in a
 // `DEFAULT` clause. Only number / string / NULL / CURRENT_* / boolean
 // literals are accepted; everything else is rejected to prevent injection

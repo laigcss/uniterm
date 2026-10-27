@@ -80,6 +80,24 @@ export interface SyncConflict {
   remoteTime: string
 }
 
+// Wails 绑定使用小写 json-tag 字段名（direction/message/conflict/...）。
+// 这些首字母大写的变体是对旧版/替代序列化路径的后备读取，保留以实现
+// 向前兼容；用具体接口替代 `as any` 以保留类型安全。字段标记为非可选，
+// 因为它们仅作为 `as unknown as` 的断言目标用于读取，实际空值由 `??` 兜底。
+interface SyncConfigLegacy {
+  Backend: string
+  LastSyncedHash: string
+}
+interface ConflictInfoLegacy {
+  LocalTime: string
+  RemoteTime: string
+}
+interface SyncResultLegacy {
+  Direction: number
+  Message: string
+  Conflict: ConflictInfoLegacy
+}
+
 export const useSyncStore = defineStore('sync', () => {
   const { t } = useI18n()
   const config = ref<SyncConfig>({
@@ -110,7 +128,7 @@ export const useSyncStore = defineStore('sync', () => {
     try {
       const cfg = await SyncGetConfig()
       config.value = {
-        backend: cfg.backend ?? (cfg as any).Backend ?? 'git',
+        backend: cfg.backend ?? (cfg as unknown as SyncConfigLegacy).Backend ?? 'git',
         repoUrl: cfg.repoUrl || '',
         branch: cfg.branch || 'main',
         username: cfg.username || '',
@@ -126,7 +144,7 @@ export const useSyncStore = defineStore('sync', () => {
           domain: cfg.remote?.domain ?? '',
           share: cfg.remote?.share ?? '',
         },
-        lastSyncedHash: cfg.lastSyncedHash ?? (cfg as any).LastSyncedHash ?? '',
+        lastSyncedHash: cfg.lastSyncedHash ?? (cfg as unknown as SyncConfigLegacy).LastSyncedHash ?? '',
         lastSyncAt: cfg.lastSyncAt || '',
         lastSyncStatus: cfg.lastSyncStatus || '',
         lastSyncError: cfg.lastSyncError || '',
@@ -162,22 +180,22 @@ export const useSyncStore = defineStore('sync', () => {
     syncing.value = true
     try {
       const result = await SyncNow()
-      const direction = result.direction ?? (result as any).Direction ?? 0
+      const direction = result.direction ?? (result as unknown as SyncResultLegacy).Direction ?? 0
       if (direction === 3) {
         conflict.value = result.conflict
-          ? { localTime: result.conflict.localTime ?? (result.conflict as any).LocalTime ?? '',
-              remoteTime: result.conflict.remoteTime ?? (result.conflict as any).RemoteTime ?? '' }
-          : (result as any).Conflict
-            ? { localTime: (result as any).Conflict.LocalTime ?? '', remoteTime: (result as any).Conflict.RemoteTime ?? '' }
+          ? { localTime: result.conflict.localTime ?? (result.conflict as unknown as ConflictInfoLegacy).LocalTime ?? '',
+              remoteTime: result.conflict.remoteTime ?? (result.conflict as unknown as ConflictInfoLegacy).RemoteTime ?? '' }
+          : (result as unknown as SyncResultLegacy).Conflict
+            ? { localTime: (result as unknown as SyncResultLegacy).Conflict.LocalTime ?? '', remoteTime: (result as unknown as SyncResultLegacy).Conflict.RemoteTime ?? '' }
             : null
       } else {
         conflict.value = null
       }
-      lastResult.value = result.message ?? (result as any).Message ?? ''
+      lastResult.value = result.message ?? (result as unknown as SyncResultLegacy).Message ?? ''
       await loadConfig()
       return {
         direction,
-        message: result.message ?? (result as any).Message ?? '',
+        message: result.message ?? (result as unknown as SyncResultLegacy).Message ?? '',
         conflict: conflict.value ?? undefined,
       }
     } catch (e: any) {
@@ -194,11 +212,11 @@ export const useSyncStore = defineStore('sync', () => {
     try {
       const result = await SyncResolveConflict(useLocal)
       conflict.value = null
-      lastResult.value = result.message ?? (result as any).Message ?? ''
+      lastResult.value = result.message ?? (result as unknown as SyncResultLegacy).Message ?? ''
       await loadConfig()
       return {
-        direction: result.direction ?? (result as any).Direction ?? 0,
-        message: result.message ?? (result as any).Message ?? '',
+        direction: result.direction ?? (result as unknown as SyncResultLegacy).Direction ?? 0,
+        message: result.message ?? (result as unknown as SyncResultLegacy).Message ?? '',
       }
     } catch (e: any) {
       lastResult.value = backendErrorText(e)
@@ -225,18 +243,18 @@ export const useSyncStore = defineStore('sync', () => {
     try {
       const result = await SyncConfigureRepo(repoUrl, username, token, masterPassword)
       await loadConfig()
-      const direction = result.direction ?? (result as any).Direction ?? 0
+      const direction = result.direction ?? (result as unknown as SyncResultLegacy).Direction ?? 0
       if (direction === 3) {
         conflict.value = result.conflict
-          ? { localTime: result.conflict.localTime ?? (result.conflict as any).LocalTime ?? '',
-              remoteTime: result.conflict.remoteTime ?? (result.conflict as any).RemoteTime ?? '' }
-          : (result as any).Conflict
-            ? { localTime: (result as any).Conflict.LocalTime ?? '', remoteTime: (result as any).Conflict.RemoteTime ?? '' }
+          ? { localTime: result.conflict.localTime ?? (result.conflict as unknown as ConflictInfoLegacy).LocalTime ?? '',
+              remoteTime: result.conflict.remoteTime ?? (result.conflict as unknown as ConflictInfoLegacy).RemoteTime ?? '' }
+          : (result as unknown as SyncResultLegacy).Conflict
+            ? { localTime: (result as unknown as SyncResultLegacy).Conflict.LocalTime ?? '', remoteTime: (result as unknown as SyncResultLegacy).Conflict.RemoteTime ?? '' }
             : { localTime: '', remoteTime: '' }
       }
       return {
         direction,
-        message: result.message ?? (result as any).Message ?? '',
+        message: result.message ?? (result as unknown as SyncResultLegacy).Message ?? '',
       }
     } catch (e: any) {
       throw e
@@ -255,18 +273,18 @@ export const useSyncStore = defineStore('sync', () => {
     try {
       const result = await SyncConfigureRemote(backend, remote, secret, masterPassword)
       await loadConfig()
-      const direction = result.direction ?? (result as any).Direction ?? 0
+      const direction = result.direction ?? (result as unknown as SyncResultLegacy).Direction ?? 0
       if (direction === 3) {
         conflict.value = result.conflict
-          ? { localTime: result.conflict.localTime ?? (result.conflict as any).LocalTime ?? '',
-              remoteTime: result.conflict.remoteTime ?? (result.conflict as any).RemoteTime ?? '' }
-          : (result as any).Conflict
-            ? { localTime: (result as any).Conflict.LocalTime ?? '', remoteTime: (result as any).Conflict.RemoteTime ?? '' }
+          ? { localTime: result.conflict.localTime ?? (result.conflict as unknown as ConflictInfoLegacy).LocalTime ?? '',
+              remoteTime: result.conflict.remoteTime ?? (result.conflict as unknown as ConflictInfoLegacy).RemoteTime ?? '' }
+          : (result as unknown as SyncResultLegacy).Conflict
+            ? { localTime: (result as unknown as SyncResultLegacy).Conflict.LocalTime ?? '', remoteTime: (result as unknown as SyncResultLegacy).Conflict.RemoteTime ?? '' }
             : { localTime: '', remoteTime: '' }
       }
       return {
         direction,
-        message: result.message ?? (result as any).Message ?? '',
+        message: result.message ?? (result as unknown as SyncResultLegacy).Message ?? '',
       }
     } catch (e: any) {
       throw e
@@ -321,8 +339,8 @@ export const useSyncStore = defineStore('sync', () => {
   unsubSyncConflict?.()
   unsubSyncConflict =Events.On('sync:conflict', (ev) => { const data: SyncConflict = ev.data; 
     conflict.value = {
-      localTime: data.localTime ?? (data as any).LocalTime ?? '',
-      remoteTime: data.remoteTime ?? (data as any).RemoteTime ?? '',
+      localTime: data.localTime ?? (data as unknown as ConflictInfoLegacy).LocalTime ?? '',
+      remoteTime: data.remoteTime ?? (data as unknown as ConflictInfoLegacy).RemoteTime ?? '',
     }
    })
 

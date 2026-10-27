@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 import type { AppSettings, AIModelConfig, CustomTerminalTheme } from '../types/settings'
 import { DEFAULT_SETTINGS, normalizeKeyBindings } from '../types/settings'
 import { SaveSettings, LoadSettings, GetAvailableShells, SetDefaultSessionLogDir } from '../../bindings/github.com/ys-ll/uniterm/app'
@@ -285,12 +285,20 @@ export const useSettingsStore = defineStore('settings', () => {
   // Apply the UI font baseline as soon as it changes (no restart needed)
   watch(() => settings.value.uiFontSize, applyUiFontSize)
 
-  // Listen for system color scheme changes
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  // Listen for system color scheme changes. The MediaQueryList and handler are
+  // kept on the store scope so dispose() can detach them, and onScopeDispose
+  // guards against leaks when the store's effect scope is torn down without an
+  // explicit dispose() call (FE-03 / matchMedia leak fix).
+  const darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  const handleMediaChange = (e: MediaQueryListEvent) => {
     systemPrefersDark.value = e.matches
     if (settings.value.theme === 'system') {
       applyTheme()
     }
+  }
+  darkMediaQuery.addEventListener('change', handleMediaChange)
+  onScopeDispose(() => {
+    darkMediaQuery.removeEventListener('change', handleMediaChange)
   })
 
   // Listen for settings changes from sync
@@ -318,6 +326,7 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   function dispose() {
+    darkMediaQuery.removeEventListener('change', handleMediaChange)
     unsubSettingsChanged?.()
     unsubSettingsChanged = null
     unsubAiChanged?.()

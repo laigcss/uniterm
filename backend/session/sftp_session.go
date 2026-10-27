@@ -941,8 +941,8 @@ func (s *SFTPSession) Copy(oldPath, newPath string) error {
 	if err != nil {
 		return err
 	}
+	defer session.Close()
 	err = session.Run(fmt.Sprintf("cp -r -- %s %s", shellEscape(old), shellEscape(n)))
-	session.Close()
 	if err == nil {
 		return nil
 	}
