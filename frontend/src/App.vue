@@ -1377,11 +1377,13 @@ async function closeTabBatch(tabIds: string[]) {
   }
 }
 
-function getPanelConfig(panelId: string): ConnectionConfig | null {
+function getPanelConfig(panelId: string | undefined): ConnectionConfig | null {
+  if (!panelId) return null
   return panelStore.getPanel(panelId)?.config || null
 }
 
-function getPanelSessionId(panelId: string): string | null {
+function getPanelSessionId(panelId: string | undefined): string | null {
+  if (!panelId) return null
   return panelStore.getPanel(panelId)?.sessionId || null
 }
 
