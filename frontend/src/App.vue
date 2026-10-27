@@ -20,7 +20,7 @@
           <KeepAlive>
             <TerminalTabContent
               v-if="activeTab.type === 'terminal'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :tab="activeTab"
               @close="closeTab"
             />
@@ -33,40 +33,40 @@
             />
             <FileTabContent
               v-else-if="activeTab.type === 'sftp'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :panel-id="activeTab.panelId"
             />
             <RDPTabContent
               v-else-if="activeTab.type === 'rdp'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :panel-id="activeTab.panelId"
               :config="getPanelConfig(activeTab.panelId)"
               :session-id="getPanelSessionId(activeTab.panelId)"
             />
             <VNCTabContent
               v-else-if="activeTab.type === 'vnc'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :panel-id="activeTab.panelId"
               :config="getPanelConfig(activeTab.panelId)"
               :session-id="getPanelSessionId(activeTab.panelId)"
             />
             <SPICETabContent
               v-else-if="activeTab.type === 'spice'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :panel-id="activeTab.panelId"
               :config="getPanelConfig(activeTab.panelId)"
               :session-id="getPanelSessionId(activeTab.panelId)"
             />
             <X11DesktopTabContent
               v-else-if="activeTab.type === 'x11-desktop'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :panel-id="activeTab.panelId"
               :config="getPanelConfig(activeTab.panelId)"
               :session-id="getPanelSessionId(activeTab.panelId)"
             />
             <DBTabContent
               v-else-if="activeTab.type === 'database'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
               :host-name="getPanelConfig(activeTab.panelId)?.host || ''"
               :default-db-name="getPanelConfig(activeTab.panelId)?.dbName"
@@ -74,39 +74,39 @@
             />
             <RedisTabContent
               v-else-if="activeTab.type === 'redis'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
               :key-separator="getPanelConfig(activeTab.panelId)?.redisKeySeparator ?? ''"
             />
             <MongoDBTabContent
               v-else-if="activeTab.type === 'mongodb'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
             />
             <ElasticsearchTabContent
               v-else-if="activeTab.type === 'elasticsearch'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
             />
             <MonitorTabContent
               v-else-if="activeTab.type === 'monitor'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :session-id="getPanelSessionId(activeTab.panelId) || ''"
             />
             <K8sTabContent
               v-else-if="activeTab.type === 'k8s'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :tab="activeTab"
               :connection="k8sConnectionForTab(activeTab)"
             />
             <ContainerTabContent
               v-else-if="activeTab.type === 'container'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :tab="activeTab"
             />
             <StartTabContent
               v-else-if="activeTab.type === 'start'"
-              :key="activeTab.id"
+              :key="activeTab?.id"
               :tab="activeTab"
               @connect="onConnect"
               @connect-to-workspace="({ configs, workspaceId }: any) => { for (const c of configs) onConnect(c, undefined, undefined, true, workspaceId) }"
