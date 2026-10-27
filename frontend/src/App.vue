@@ -125,7 +125,7 @@
       </div>
       <AISidebar ref="aiSidebarRef" @open-settings="openSettings" />
     </div>
-    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
+    <ConnectionForm v-model="showConnectionForm" :edit-config="editConfig ?? undefined" :default-group-id="pendingGroupId" @save="onSaveOnly" @connect="(c: ConnectionConfig, ko?: boolean) => { const wasEdit = !!editConfig?.id; editConfig = null; onConnect(c, ko, wasEdit) }" @connect-only="onConnectOnly" @cancel="editConfig = null" />
 
     <CredentialPrompt
       v-model:visible="credentialVisible"
@@ -236,7 +236,7 @@ import { useTunnelCredentials } from './composables/useTunnelCredentials'
 import { useRdpEmbedding } from './composables/useRdpEmbedding'
 import type { ShortcutAction } from './types/settings'
 import { useI18n } from './i18n'
-import { CreateSession, CloseSession, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval } from '../bindings/github.com/ys-ll/uniterm/app'
+import { CreateSession, CloseSession, RecordRecentConnection, GetPlatform, GetBackgroundImage, SessionStart, RelaunchApp, ResolveMCPApproval, SessionGetCwd } from '../bindings/github.com/ys-ll/uniterm/app'
 import { waitForTerminalSize } from './services/terminalManager'
 import { msg } from './services/message'
 import { unregisterTransferRoute } from './services/transferTaskCenter'
@@ -299,7 +299,7 @@ const sessionStore = useSessionStore()
 // ── RDP ActiveX embedding (composable) ──
 // RDP 位置同步 / overlay 跟踪 / 全屏 / 快照背景逻辑提取到 composable，
 // 使 App.vue 可采用上游版本而保持本地 RDP 嵌入功能不变。
-const rdpEmbedding = useRdpEmbedding({ activeTab, panelStore })
+const rdpEmbedding = useRdpEmbedding({ activeTab: activeTab as any, panelStore: panelStore as any })
 
 // ── Mobile key bar (app-level) ──
 // Soft keyboards lack Esc/Tab/arrows/Ctrl combos. The bar floats at the bottom
@@ -877,16 +877,25 @@ onMounted(async () => {
     const c = connId ? connectionStore.connections.find(x => x.id === connId) : undefined
     if (c) void openConnectionAtIndex(c, typeof index === 'number' ? index : tabStore.tabs.length)
   }) as EventListener)
-  window.addEventListener('app:connect-sftp', ((e: CustomEvent) => {
+  window.addEventListener('app:connect-sftp', (async (e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d
     if (c) {
       const prev = tabStore.activeTab
       // Explicit initialPath (sidebar "open standalone tab") wins; otherwise
       // fall back to the terminal's last recorded cwd (right-click "open SFTP").
-      const initialPath = d?.initialPath || (d?.sessionId ? companionStore.sessionCwd[d.sessionId] : '')
+      let initialPath = d?.initialPath || (d?.sessionId ? companionStore.sessionCwd[d.sessionId] : '')
+      if (!d?.initialPath && d?.sessionId) {
+        try {
+          const current = await SessionGetCwd(d.sessionId)
+          if (current) {
+            initialPath = current
+            companionStore.recordSessionCwd(d.sessionId, current)
+          }
+        } catch { /* The recorded directory remains the fallback. */ }
+      }
       openFileBrowser(c, prev?.type === 'start' ? prev : undefined, d?.sourceTabId, initialPath)
     }
-  }) as EventListener)
+  }) as unknown as EventListener)
   window.addEventListener('app:connect-terminal', ((e: CustomEvent) => {
     const d = e.detail; const c = d?.config || d; if (c) onConnect(c)
   }) as EventListener)
@@ -1103,7 +1112,7 @@ const actionHandlers: Record<ShortcutAction, () => void> = {
       if (panel) {
         duplicateSession(
           { type: 'terminal', panelId: pid, title: panel.title },
-          { workspaceId: tab.id, targetPanelId: pid },
+          { workspaceId: tab.id || '', targetPanelId: pid || undefined },
         )
       }
       return
@@ -1140,7 +1149,7 @@ onUnmounted(() => {
   syncStore.dispose?.()
   tunnelStore.dispose?.()
   useSkillStore().dispose?.()
-  useCommandStore().dispose?.()
+  useCommandStore().$dispose()
   disposeSessionStore?.()
   credStore.dispose()
 })
@@ -1211,7 +1220,7 @@ async function closeTab(tabId: string, opts: { skipConfirm?: boolean } = {}) {
               h('span', t('tab.closeConnectedConfirm')),
               h(ElCheckbox, {
                 'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
-              }, () => t('tab.dontShowAgain'))
+              } as any, () => t('tab.dontShowAgain'))
             ]),
             t('tab.closeConfirmTitle'),
             { confirmButtonText: t('tab.close'), cancelButtonText: t('conn.cancel'), type: 'warning' }
@@ -1349,7 +1358,7 @@ async function closeTabBatch(tabIds: string[]) {
           h('span', t('tab.closeConnectedBatchConfirm', { count: connectedCount })),
           h(ElCheckbox, {
             'onUpdate:modelValue': (v: boolean) => { dontShowAgain.value = v }
-          }, () => t('tab.dontShowAgain'))
+          } as any, () => t('tab.dontShowAgain'))
         ]),
         t('tab.closeConfirmTitle'),
         { confirmButtonText: t('tab.close'), cancelButtonText: t('conn.cancel'), type: 'warning' }
@@ -1529,9 +1538,9 @@ async function connectTerminalSession(config: ConnectionConfig, persist: boolean
     return { status: 'failed' }
   }
 
-  const panel = panelStore.createPanel(config, config.type)
+  const panel = panelStore.createPanel(config, config.type as any)
   const displayTitle = config.name || (config.type === 'local' || config.type === 'wsl'
-    ? getShellLabel(config.shellPath)
+    ? getShellLabel(config.shellPath || '')
     : config.type === 'serial'
     ? `${config.serialPort || 'Serial'} (${config.serialBaudRate || 115200})`
     : config.type === 'telnet'
@@ -1749,7 +1758,7 @@ function onTabDragStart(_e: DragEvent, _tabId: string) {
 
 async function createLocalTerminal(shellPath?: string, keepOpen?: boolean) {
   const panel = panelStore.createPanel(null, 'local')
-  const shellName = getShellLabel(shellPath)
+  const shellName = getShellLabel(shellPath || '')
   panelStore.updateTitle(panel.id, shellName)
 
   try {
@@ -1856,7 +1865,7 @@ async function createWslTerminal(distro: string, keepOpen?: boolean) {
 // Position updates are only sent to the active RDP session (see rdpSyncPosition),
 // so background sessions are tucked under the webview and don't respond to drag.
 watch(() => activeTab.value, (newTab, oldTab) => {
-  rdpEmbedding.onTabSwitch(newTab, oldTab)
+  rdpEmbedding.onTabSwitch(newTab as any, oldTab as any)
   // Auto-focus terminal on tab switch (including new connections)
   if (newTab) {
     const pid = tabStore.getActivePanelId()
