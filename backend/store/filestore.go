@@ -53,6 +53,10 @@ var SecretFiles = []SecretFile{
 	{File: "proxies.json", Paths: []string{"proxies.*.pass"}},
 	{File: "ai.json", Paths: []string{"models.*.apiKey"}},
 	{File: "settings.json", Paths: []string{"ai.models.*.apiKey"}},
+	// mcp_clients.json: Headers may carry bearer tokens (Authorization),
+	// Env may carry passwords/API keys for the stdio subprocess. Both are
+	// map[string]string, so every value under headers/env is a secret leaf.
+	{File: "mcp_clients.json", Paths: []string{"clients.*.headers.*", "clients.*.env.*"}},
 }
 
 // ClearAllSecretFields blanks every manifest-declared secret field in the

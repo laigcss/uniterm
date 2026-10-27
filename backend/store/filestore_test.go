@@ -48,6 +48,15 @@ func TestSecretFilesManifestCoversRealShapes(t *testing.T) {
 				},
 			},
 		},
+		"mcp_clients.json": {
+			"clients": []interface{}{
+				map[string]interface{}{
+					"name": "srv", "transport": "stdio",
+					"headers": map[string]interface{}{"Authorization": "Bearer tok"},
+					"env":     map[string]interface{}{"API_KEY": "sk"},
+				},
+			},
+		},
 	}
 	for file, obj := range shapes {
 		if err := EncryptSecretFields(file, &obj, fakeCipherStore{}); err != nil {
@@ -274,6 +283,7 @@ func TestClearSecretFieldsBlanksEveryManifestField(t *testing.T) {
 		"proxies.json":     `{"proxies":[{"id":"p1","pass":"enc:v1:ggg"}]}`,
 		"ai.json":          `{"models":[{"id":"m1","apiKey":"enc:v1:hhh"}]}`,
 		"settings.json":    `{"theme":"dark","ai":{"models":[{"id":"m2","apiKey":"enc:v1:iii"}]}}`,
+		"mcp_clients.json": `{"clients":[{"name":"srv","transport":"stdio","headers":{"Authorization":"enc:v1:jjj"},"env":{"API_KEY":"enc:v1:kkk"}}]}`,
 	}
 	for name, body := range seed {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {

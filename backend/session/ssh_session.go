@@ -383,7 +383,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 				User:            config.User,
 				Auth:            authMethods,
 				Timeout:         30 * time.Second,
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				HostKeyCallback: HostKeyCallback(config.Host, fmt.Sprintf("%d", config.Port), HostKeyStrategy(config.HostKeyStrategy)),
 			}, cleanup, nil
 		}
 	}
@@ -962,7 +962,7 @@ func probeCwdShellSeparately(config ConnectionConfig) string {
 			User:            config.User,
 			Auth:            authMethods,
 			Timeout:         cwdProbeDialTimeout,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			HostKeyCallback: HostKeyCallback(config.Host, fmt.Sprintf("%d", config.Port), HostKeyStrategy(config.HostKeyStrategy)),
 		}, cleanup, nil
 	}
 	sets, err := resolveSSHDialAlgorithms(config.SSHAlgorithms)

@@ -276,8 +276,8 @@ jobs:
           $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
           $VERSION = "${{ env.VERSION }}"
           $ROOT = $env:GITHUB_WORKSPACE
-          $AMD64_BIN = Join-Path $ROOT 'bin niTerm-amd64.exe'
-          $ARM64_BIN = Join-Path $ROOT 'bin niTerm-arm64.exe'
+          $AMD64_BIN = Join-Path $ROOT 'bin\uniTerm-amd64.exe'
+          $ARM64_BIN = Join-Path $ROOT 'bin\uniTerm-arm64.exe'
           $NSI = Join-Path $ROOT 'build\windows\installer\project.nsi'
 
           # compress amd64 with upx; arm64 is left uncompressed because
@@ -287,20 +287,20 @@ jobs:
 
           $VCXSRV_DIR = Join-Path $ROOT 'build\windows\installer\pluginscxsrv'
 
-          # project.nsi's OutFile is ..\..in\... installers into buildin,
+          # project.nsi's OutFile is ..\..\bin\... installers into build\bin,
           # which v3 never creates (it outputs to bin/). Ensure it exists.
-          New-Item -ItemType Directory -Force -Path (Join-Path $ROOT 'buildin') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $ROOT 'build\bin') | Out-Null
 
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_AMD64_BINARY=$AMD64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
           & makensis "-DVERSION=$VERSION" "-DARG_WAILS_ARM64_BINARY=$ARM64_BIN" "-DVCXSRV_DIR=$VCXSRV_DIR" $NSI
 
           foreach ($arch in @('amd64', 'arm64')) {
-            $srcExe = Join-Path $ROOT "bin niTerm-$arch.exe"
-            $srcInstaller = Join-Path $ROOT "buildin niTerm-$arch-installer.exe"
+            $srcExe = Join-Path $ROOT "bin\\uniTerm-$arch.exe"
+            $srcInstaller = Join-Path $ROOT "build\\bin\\uniTerm-$arch-installer.exe"
 
             # portable zip
             New-Item -ItemType Directory -Force -Path dist_tmp | Out-Null
-            Copy-Item $srcExe "dist_tmp niTerm.exe"
+            Copy-Item $srcExe "dist_tmp\\uniTerm.exe"
             Copy-Item -Recurse $VCXSRV_DIR "dist_tmp\pluginscxsrv"
             Compress-Archive -Path dist_tmp\* -DestinationPath "uniterm-windows-$arch-portable-$VERSION.zip" -Force
             Remove-Item -Recurse -Force dist_tmp

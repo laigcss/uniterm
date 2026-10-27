@@ -415,7 +415,7 @@ func (ts *TunnelService) dialChain(ctx context.Context, chain []ConnectionConfig
 			User:              cfg.User,
 			Auth:              authMethods,
 			Timeout:           30 * time.Second,
-			HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+			HostKeyCallback:   HostKeyCallback(cfg.Host, fmt.Sprintf("%d", cfg.Port), HostKeyStrategy(cfg.HostKeyStrategy)),
 			Config:            algoSet.config(),
 			HostKeyAlgorithms: algoSet.HostKeys,
 		}

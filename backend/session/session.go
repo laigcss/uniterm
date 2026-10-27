@@ -90,7 +90,11 @@ type ConnectionConfig struct {
 	// SSHAlgorithms customizes the negotiated algorithms for SSH-based
 	// sessions. nil keeps the compatible default.
 	SSHAlgorithms *SSHAlgoConfig `json:"sshAlgorithms,omitempty"`
-	AuthType      string         `json:"authType"`
+	// HostKeyStrategy controls SSH host key verification.
+	// 0 = TOFU (accept new, verify known), 1 = strict, 2 = off (insecure).
+	// Defaults to TOFU (HostKeyAcceptNew) when zero.
+	HostKeyStrategy int    `json:"hostKeyStrategy,omitempty"`
+	AuthType        string `json:"authType"`
 	// AuthType "agent" uses SSH_AUTH_SOCK on Unix. On Windows it uses Pageant,
 	// falling back to the Windows OpenSSH agent named pipe.
 	// AuthType "kerberos" uses the local Kerberos credential cache and

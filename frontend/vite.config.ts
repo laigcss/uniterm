@@ -51,7 +51,7 @@ export default defineConfig({
   // equivalent).
   server: {
     host: '127.0.0.1',
-    port: 34115,
+    port: parseInt(process.env.VITE_PORT || '9245'),
     strictPort: true
   }
 })

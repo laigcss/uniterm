@@ -1627,7 +1627,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { Settings, Monitor, MessageCircleMore, Info, RefreshCw, Pencil, Copy, Trash2, Globe, Keyboard, Plus, BookOpen, Wrench, SquareSlash, FolderOpen, Key, Network, ArrowRightLeft, ChevronLeft, ChevronRight, ChevronDown, Plug, Server, HardDrive } from '@lucide/vue'
 import { msg } from '../services/message'
 import { FetchModels, ChatCompletion, GetPlatform, GetAllFonts, GetDefaultSessionLogDir, OpenDirectoryDialog, OpenFileDialogFiltered, SetBackgroundImage, ClearBackgroundImage, GetBackgroundImage, RelaunchApp, ListExternalEditors, GenerateMCPToken, RevokeMCPToken, ListMCPTokens, GetMCPStatus, ListMCPClients, SaveMCPClient, RemoveMCPClient, TestMCPClient, MCPClientStatuses, MCPReconnectClient } from '../../bindings/github.com/ys-ll/uniterm/app'
@@ -1961,8 +1961,17 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopRebind()
   sidebarResizeObserver?.disconnect()
   sidebarResizeObserver = null
+})
+
+// SettingsTab lives inside <KeepAlive>: switching tabs deactivates (not
+// unmounts) the component, so onUnmounted won't fire. Without this hook the
+// global keydown listener registered by startRebind would leak across tab
+// switches if the user leaves the settings page mid-rebind.
+onDeactivated(() => {
+  stopRebind()
 })
 
 // The tab lives inside <KeepAlive>: re-opening it re-attaches the DOM, which

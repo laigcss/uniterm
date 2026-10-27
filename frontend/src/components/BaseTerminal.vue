@@ -1212,6 +1212,11 @@ function onTerminalTouchEnd() {
   touchPan.raf = requestAnimationFrame(step)
 }
 
+function onTerminalTouchCancel() {
+  touchPanStop()
+  touchPan.moved = false
+}
+
 onMounted(() => {
   nativeDrop.bind()
   if (!terminalRef.value) return
@@ -1280,7 +1285,7 @@ onMounted(() => {
     el.addEventListener('touchstart', onTerminalTouchStart, { passive: true })
     el.addEventListener('touchmove', onTerminalTouchMove, { passive: false })
     el.addEventListener('touchend', onTerminalTouchEnd, { passive: true })
-    el.addEventListener('touchcancel', () => { touchPanStop(); touchPan.moved = false }, { passive: true })
+    el.addEventListener('touchcancel', onTerminalTouchCancel, { passive: true })
   }
 
   initZmodemService(props.sessionId || '')
@@ -2196,6 +2201,14 @@ onBeforeUnmount(() => {
     detachTerminal(props.sessionId, terminalRef.value)
   }
   markTerminalActive(props.sessionId || '', terminalInstanceRef, false)
+  // Remove touch event listeners (refs still valid in onBeforeUnmount)
+  if (isMobileTouch && terminalRef.value) {
+    const el = terminalRef.value
+    el.removeEventListener('touchstart', onTerminalTouchStart)
+    el.removeEventListener('touchmove', onTerminalTouchMove)
+    el.removeEventListener('touchend', onTerminalTouchEnd)
+    el.removeEventListener('touchcancel', onTerminalTouchCancel)
+  }
 })
 
 onUnmounted(() => {

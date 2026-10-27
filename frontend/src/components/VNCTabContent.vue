@@ -254,6 +254,75 @@ function applyRFBOptions() {
   rfb.background = readThemeBackground()
 }
 
+// --- RFB event handlers (named so they can be removed on cache) ---
+// issue #95: only flip to 'connected' on the noVNC connect event.
+// Previously status='connected' was set as soon as the local proxy was
+// up, well before the RFB handshake completed, producing a black
+// screen with no error on security failure or wrong password.
+function onRFBConnect() {
+  lastError.value = ''
+  status.value = 'connected'
+  everConnected = true
+}
+
+function onRFBSecurityFailure(e: any) {
+  const reason = e.detail?.reason ?? e.detail?.status
+  lastError.value = t('vnc.errorSecurity', { reason: String(reason ?? '') })
+  status.value = 'error'
+}
+
+function onRFBCredentialsRequired(e: any) {
+  const types = (e.detail?.types || []).join(', ')
+  lastError.value = t('vnc.errorCredentials', { types })
+  status.value = 'error'
+}
+
+// Auto-downgrade retry: if the 3.8 negotiation dies without ever
+// reaching 'connected' (typical symptom: unexplained 1006 close or a
+// legacy server that refuses modern viewers), rebuild once under
+// RFB 3.3 before surfacing the error to the user.
+function onRFBDisconnect(e: any) {
+  if (!e.detail.clean && !everConnected && !rfb33Retried && currentProxyAddr) {
+    rfb33Retried = true
+    status.value = 'connecting'
+    // Give the backend VNCProxy a beat to release the previous
+    // WebSocket/TCP pair before reconnecting through it.
+    setTimeout(() => {
+      initRFB(currentProxyAddr!, savedPassword.value, true)
+    }, 500)
+    return
+  }
+  if (!e.detail.clean) {
+    if (!lastError.value) lastError.value = t('vnc.errorClosed')
+    status.value = 'error'
+  } else {
+    status.value = 'disconnected'
+  }
+}
+
+function onRFBClipboard(e: any) {
+  const text = e.detail.text
+  Clipboard.SetText(text).catch(() => {})
+}
+
+function attachRFBEvents() {
+  if (!rfb) return
+  rfb.addEventListener('connect', onRFBConnect)
+  rfb.addEventListener('securityfailure', onRFBSecurityFailure)
+  rfb.addEventListener('credentialsrequired', onRFBCredentialsRequired)
+  rfb.addEventListener('disconnect', onRFBDisconnect)
+  rfb.addEventListener('clipboard', onRFBClipboard)
+}
+
+function detachRFBEvents() {
+  if (!rfb) return
+  rfb.removeEventListener('connect', onRFBConnect)
+  rfb.removeEventListener('securityfailure', onRFBSecurityFailure)
+  rfb.removeEventListener('credentialsrequired', onRFBCredentialsRequired)
+  rfb.removeEventListener('disconnect', onRFBDisconnect)
+  rfb.removeEventListener('clipboard', onRFBClipboard)
+}
+
 function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = false) {
   if (!vncContainer.value || vncContainer.value.childElementCount > 0) {
     isIniting = false
@@ -308,51 +377,7 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
   // Previously status='connected' was set as soon as the local proxy was
   // up, well before the RFB handshake completed, producing a black
   // screen with no error on security failure or wrong password.
-  rfb.addEventListener('connect', () => {
-    lastError.value = ''
-    status.value = 'connected'
-    everConnected = true
-  })
-
-  rfb.addEventListener('securityfailure', (e: any) => {
-    const reason = e.detail?.reason ?? e.detail?.status
-    lastError.value = t('vnc.errorSecurity', { reason: String(reason ?? '') })
-    status.value = 'error'
-  })
-
-  rfb.addEventListener('credentialsrequired', (e: any) => {
-    const types = (e.detail?.types || []).join(', ')
-    lastError.value = t('vnc.errorCredentials', { types })
-    status.value = 'error'
-  })
-
-  // Auto-downgrade retry: if the 3.8 negotiation dies without ever
-  // reaching 'connected' (typical symptom: unexplained 1006 close or a
-  // legacy server that refuses modern viewers), rebuild once under
-  // RFB 3.3 before surfacing the error to the user.
-  rfb.addEventListener('disconnect', (e: any) => {
-    if (!e.detail.clean && !everConnected && !rfb33Retried && currentProxyAddr) {
-      rfb33Retried = true
-      status.value = 'connecting'
-      // Give the backend VNCProxy a beat to release the previous
-      // WebSocket/TCP pair before reconnecting through it.
-      setTimeout(() => {
-        initRFB(currentProxyAddr!, savedPassword.value, true)
-      }, 500)
-      return
-    }
-    if (!e.detail.clean) {
-      if (!lastError.value) lastError.value = t('vnc.errorClosed')
-      status.value = 'error'
-    } else {
-      status.value = 'disconnected'
-    }
-  })
-
-  rfb.addEventListener('clipboard', (e: any) => {
-    const text = e.detail.text
-    Clipboard.SetText(text).catch(() => {})
-  })
+  attachRFBEvents()
 
   // Clipboard sync: intercept paste shortcut in capture phase (before noVNC's
   // canvas processes it). Read local clipboard, send via RFB clipboard message
@@ -559,6 +584,10 @@ onMounted(() => {
     children.forEach(child => vncContainer.value!.appendChild(child))
     rfb = cached.rfb
     panelStore.removeVNCCache(props.panelId)
+    // Re-attach the component-scoped RFB listeners that were stripped
+    // before caching. Without this the restored rfb has no handlers and
+    // disconnect/clipboard/security events would be silently dropped.
+    attachRFBEvents()
     status.value = 'connected'
     // Cached RFB instances already completed their handshake; mark them so
     // a later disconnect doesn't fire the 3.3 downgrade retry against a
@@ -639,6 +668,12 @@ onBeforeUnmount(() => {
     const children = Array.from(vncContainer.value.children)
     children.forEach(child => container.appendChild(child))
     document.body.appendChild(container)
+    // Strip the component-scoped listeners before handing the RFB
+    // instance to the panel cache; otherwise the cached rfb keeps
+    // firing handlers that mutate this (about-to-unmount) component's
+    // refs, and on restore+reconnect the old listeners pile up and
+    // double-fire.
+    detachRFBEvents()
     panelStore.setVNCCache(props.panelId, { rfb, container })
   } else if (rfb) {
     rfb.disconnect()

@@ -151,6 +151,10 @@ func defaultPort(typ string) int {
 		return 3389
 	case "vnc":
 		return 5900
+	case "mosh":
+		return 22
+	case "ftp":
+		return 21
 	}
 	return 0
 }

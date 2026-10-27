@@ -94,7 +94,7 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		User:              config.User,
 		Auth:              authMethods,
 		Timeout:           30 * time.Second,
-		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback:   HostKeyCallback(config.Host, fmt.Sprintf("%d", config.Port), HostKeyStrategy(config.HostKeyStrategy)),
 		Config:            algoSet.config(),
 		HostKeyAlgorithms: algoSet.HostKeys,
 	}
