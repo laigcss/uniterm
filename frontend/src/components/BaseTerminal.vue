@@ -369,7 +369,7 @@ function resetIMEState(): boolean {
 function resetIMEComposition() {
   if (!resetIMEState()) return
   // Clear the textarea and end the OS-level composition via blur.
-  if (terminal.textarea) {
+  if (terminal?.textarea) {
     terminal.textarea.value = ''
     terminal.textarea.blur()
   }
@@ -1351,7 +1351,9 @@ onMounted(() => {
     const sidNow = props.sessionId
     const gen = sidNow ? bumpOnDataGeneration(sidNow) : 0
 
-    keyHandlerDispose = terminal.attachCustomKeyEventHandler(handleTerminalKey)
+    if (!terminal) return
+    terminal.attachCustomKeyEventHandler(handleTerminalKey)
+    keyHandlerDispose = { dispose() {} }
 
     // Input handling
     onDataDispose = terminal.onData((data) => {
@@ -1416,18 +1418,20 @@ onMounted(() => {
         if (/^(?:sudo\s+)?rz\b/.test(line)) {
           zmodemDirection = 'upload'
           // Recreate the zmodem service so on_detect sees the new direction.
-          if (props.sessionId) {
-            disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId)
-            })
-          }
+            if (props.sessionId) {
+              const sid = props.sessionId
+              disposeZmodemService(sid, false).then(() => {
+                initZmodemService(sid)
+              })
+            }
         } else if (/^(?:sudo\s+)?sz\b/.test(line)) {
           zmodemDirection = 'download'
-          if (props.sessionId) {
-            disposeZmodemService(props.sessionId, false).then(() => {
-              initZmodemService(props.sessionId)
-            })
-          }
+            if (props.sessionId) {
+              const sid = props.sessionId
+              disposeZmodemService(sid, false).then(() => {
+                initZmodemService(sid)
+              })
+            }
         }
       }
 
@@ -2284,7 +2288,7 @@ async function pasteToSession(text: string) {
             pasteWithScroll(
               {
                 bracketedPasteMode: managed.terminal.modes.bracketedPasteMode,
-                write: (payload) => queuedSessionWrite(p.sessionId, payload),
+                write: (payload) => queuedSessionWrite(p.sessionId!, payload),
                 scrollToBottom: () => managed.terminal.scrollToBottom(),
               },
               normalized,

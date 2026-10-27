@@ -5,6 +5,7 @@ import { SaveAISessions, LoadAISessions } from '../../bindings/github.com/ys-ll/
 import { buildUserContent, redactAttachmentsForLog } from '../services/attachments'
 import { useLocalStateStore } from './localStateStore'
 import { useTabStore } from './tabStore'
+import { usePanelStore } from './panelStore'
 import { isMobilePlatform } from '../utils/platform'
 import { t } from '../i18n'
 

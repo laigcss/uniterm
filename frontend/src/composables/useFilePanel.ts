@@ -574,7 +574,7 @@ export function useFilePanel(opts: FilePanelOptions) {
       const localPaths = await OpenMultipleFilesDialog(...await dialogStartDirs(opts.localCwd?.()))
       if (!localPaths?.length) return
       rememberDialogDir(parentDirOf(localPaths[0]))
-      const names = localPaths.map(fp => fp.replace(/\\/g, '/').split('/').pop() || 'upload')
+      const names = localPaths.map((fp: string) => fp.replace(/\\/g, '/').split('/').pop() || 'upload')
       const action = await conflicts.resolveConflicts(names, files.value.map(f => f.name))
       if (action === 'cancel') return
       const existing = files.value.map(f => f.name)

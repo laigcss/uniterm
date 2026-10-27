@@ -33,7 +33,7 @@
             <TypeFilterMenu ref="filterMenuRef" align="end" v-model="selectedTypeFilter" />
           </template>
         </el-input>
-        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget)">
+        <button class="sb-icon-btn" :title="t('header.newConnection')" @click.stop="newConnMenuRef?.toggle($event.currentTarget as HTMLElement)">
           <Plus :size="'0.9375rem'" />
         </button>
         <!-- New-connection menu — Menu.vue, teleported + anchored right-edge (align=end). -->

@@ -2703,25 +2703,6 @@ const categories = computed(() => {
   return cats
 })
 
-// Nav sidebar rendering: categories sliced into titled groups (app config /
-// network & identities / AI / other); an entry without a group renders
-// without a header.
-const categoryGroups = computed(() => {
-  const cats = categories.value as { key: string; label: string; icon: any; group?: string }[]
-  const defs = [
-    { key: 'app', title: t('settings.groupApp') },
-    { key: 'data', title: t('settings.groupData') },
-    { key: 'net', title: t('settings.groupNetwork') },
-    { key: 'ai', title: t('settings.groupAI') },
-    { key: 'other', title: t('settings.groupOther') },
-  ]
-  const groups = defs
-    .map(d => ({ ...d, items: cats.filter(c => c.group === d.key) }))
-    .filter(g => g.items.length > 0)
-  const rest = cats.filter(c => !c.group)
-  if (rest.length > 0) groups.push({ key: 'misc', title: '', items: rest })
-  return groups
-})
 
 // A persisted desktop-only active category would show an empty settings page
 // on mobile — fall back to basic.

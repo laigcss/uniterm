@@ -32,7 +32,7 @@
     <!-- Drag-and-drop overlay: shown while dragging files over the VNC area -->
     <div v-if="isDragging" class="vnc-drop-overlay">
       <el-icon :size="'3rem'"><Upload /></el-icon>
-      <p>{{ t('vnc.dropFileHint', '拖拽文件将上传到远程桌面') }}</p>
+      <p>{{ t('vnc.dropFileHint') }}</p>
     </div>
 
     <!-- Upload status toast -->

@@ -17,7 +17,7 @@
  *    上游移除此防护，认为"Always deliver Backspace and let the remote line
  *    editor enforce its bounds"，但本地保留以修复 Euler OS 上的 bug。
  */
-import type { KeyboardEvent } from 'xterm'
+
 
 /** xterm 实例所需的最小接口 */
 interface TerminalLike {
