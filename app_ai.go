@@ -18,11 +18,12 @@ import (
 	stdsync "sync"
 	"time"
 
-	_ "golang.org/x/image/webp" // registered for image.DecodeConfig
 	"image"
 	_ "image/gif"  // registered for image.DecodeConfig
 	_ "image/jpeg" // registered for image.DecodeConfig
 	_ "image/png"  // registered for image.DecodeConfig
+
+	_ "golang.org/x/image/webp" // registered for image.DecodeConfig
 
 	"github.com/mattn/go-ieproxy"
 	"github.com/ys-ll/uniterm/backend/session"
@@ -491,7 +492,11 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 						if hasImage {
 							parts = append(parts, map[string]interface{}{"type": "text", "text": toString(b["text"])})
 						} else {
-							out["content"] = b["text"]
+							text := toString(b["text"])
+							if previous, ok := out["content"].(string); ok && previous != "" {
+								text = previous + "\n\n" + text
+							}
+							out["content"] = text
 						}
 					}
 					if bType, _ := b["type"].(string); bType == "image" {
@@ -546,7 +551,11 @@ func convertAnthropicMessageToOpenAI(msg map[string]interface{}) []map[string]in
 			for _, block := range contentBlocks {
 				if b, ok := block.(map[string]interface{}); ok {
 					if bType, _ := b["type"].(string); bType == "text" {
-						out["content"] = b["text"]
+						text := toString(b["text"])
+						if previous, ok := out["content"].(string); ok && previous != "" {
+							text = previous + "\n\n" + text
+						}
+						out["content"] = text
 					}
 					if bType, _ := b["type"].(string); bType == "tool_use" {
 						argsStr := "{}"
@@ -597,6 +606,11 @@ func toString(v interface{}) string {
 	}
 }
 
+func isOfficialOpenAIURL(base string) bool {
+	u, err := url.Parse(base)
+	return err == nil && strings.EqualFold(u.Hostname(), "api.openai.com")
+}
+
 func isOpenCodeGoBaseURL(baseURL string) bool {
 	u, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
@@ -631,6 +645,11 @@ func (a *App) chatCompletionOpenAI(apiKey, baseURL, model string, reqBody map[st
 		"model":      model,
 		"stream":     true,
 		"max_tokens": reqBody["max_tokens"],
+	}
+	// Native OpenAI reasoning models use a combined reasoning/answer limit.
+	if isOfficialOpenAIURL(baseURL) && (strings.HasPrefix(model, "gpt-5") || strings.HasPrefix(model, "gpt-6") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")) {
+		delete(openaiBody, "max_tokens")
+		openaiBody["max_completion_tokens"] = reqBody["max_tokens"]
 	}
 
 	// Convert tools
