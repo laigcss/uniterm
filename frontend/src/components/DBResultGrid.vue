@@ -93,7 +93,7 @@
       <el-table-column
         v-if="canEdit"
         :label="actionsLabel"
-        :width="uiPx(88)"
+        :width="uiPx(100)"
         fixed="right"
         class-name="db-action-cell"
         :resizable="false"
@@ -107,6 +107,14 @@
               @click.stop.prevent="emit('edit-row', row)"
             >
               <Pencil :size="'0.875rem'" />
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-icon btn-sm"
+              :title="duplicateLabel"
+              @click.stop.prevent="emit('duplicate-row', row)"
+            >
+              <Copy :size="'0.875rem'" />
             </button>
             <button
               type="button"
@@ -143,8 +151,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { Pencil, Trash2 } from '@lucide/vue'
+import { computed, h, nextTick, onBeforeUnmount, reactive, shallowReactive, shallowRef, ref, watch } from 'vue'
+import { Pencil, Copy, Trash2 } from '@lucide/vue'
 import type { QueryResultColumn, ColumnInfo } from '../types/database'
 import { useI18n } from '../i18n'
 import { uiPx } from '../utils/uiScale'
@@ -164,6 +172,7 @@ const props = defineProps<{
   emptyText?: string
   actionsLabel?: string
   editLabel?: string
+  duplicateLabel?: string
   deleteLabel?: string
 }>()
 
@@ -171,8 +180,10 @@ const emit = defineEmits<{
   /** A staged, unsaved cell edit changed; payload = number of pending edits. */
   'pending-change': [count: number]
   'edit-row': [row: Record<string, any>]
+  'duplicate-row': [row: Record<string, any>]
   'delete-row': [row: Record<string, any>]
   'sort-change': [payload: { field: string; order: 'asc' | 'desc' | null }]
+  'editing-change': [editing: boolean]
 }>()
 
 const tableRef = ref<any>(null)
@@ -206,7 +217,7 @@ const tableKey = computed(() => `edit-${props.canEdit ? 1 : 0}-cols-${props.colu
 // 这里补齐桌面数据库客户端（DBeaver/Navicat）的标准交互：
 //   单击选中 → Ctrl/Cmd+C 复制该格 → 右键菜单提供格/行/列名复制。
 const gridRootEl = ref<HTMLElement | null>(null)
-const selectedCell = ref<{ row: Record<string, any>; field: string } | null>(null)
+const selectedCell = shallowRef<{ row: Record<string, any>; field: string } | null>(null)
 
 function selectCell(row: Record<string, any>, field: string) {
   selectedCell.value = { row, field }
@@ -334,7 +345,7 @@ function onV2SortChange({ key, order }: { key: string; order?: string }) {
 }
 
 /** Currently edited cell (row + column name). */
-const editingRow = ref<Record<string, any> | null>(null)
+const editingRow = shallowRef<Record<string, any> | null>(null)
 const editingField = ref<string | null>(null)
 const draftValue = ref('')
 const draftIsNull = ref(false)
@@ -344,7 +355,7 @@ interface StagedCell { old: any; newVal: any }
 interface StagedRow { pk: Record<string, any>; fields: Map<string, StagedCell> }
 
 /** Unsaved edits, keyed by the row object they belong to. Reactive for cell highlight. */
-const pending = reactive(new Map<Record<string, any>, StagedRow>())
+const pending = shallowReactive(new Map<Record<string, any>, StagedRow>())
 
 function changedCellCount() {
   let n = 0
@@ -393,6 +404,7 @@ function startEdit(row: Record<string, any>, field: string) {
   if (editingRow.value) onCellEditConfirm() // stage pending edit first
   editingRow.value = row
   editingField.value = field
+  emit('editing-change', true)
   draftIsNull.value = row[field] === null
   draftValue.value = row[field] === null || row[field] === undefined ? '' : String(row[field])
   snapOldValue = row[field]
@@ -440,9 +452,7 @@ function onCellEditConfirm() {
   const row = editingRow.value
   const field = editingField.value
   if (!row || !field) return
-  editingRow.value = null
-  editingField.value = null
-  onEditDismissCleanup()
+  stopEditing()
   const newVal: any = draftIsNull.value ? null : draftValue.value
   const oldVal = snapOldValue
   snapOldValue = undefined
@@ -452,12 +462,12 @@ function onCellEditConfirm() {
     return
   }
   // Stage instead of saving: reflect the change live, mark dirty, wait for explicit save.
-  row[field] = newVal
   let rec = pending.get(row)
   if (!rec) {
-    rec = { pk: snapshotPk(row), fields: new Map() }
+    rec = { pk: snapshotPk(row), fields: reactive(new Map<string, StagedCell>()) }
     pending.set(row, rec)
   }
+  row[field] = newVal
   const existing = rec.fields.get(field)
   const original = existing ? existing.old : oldVal
   if (valuesEqual(original, newVal)) {
@@ -479,11 +489,16 @@ function onCellEditCancel() {
     const staged = rec?.fields.get(field)
     row[field] = staged ? staged.newVal : snapOldValue
   }
-  editingRow.value = null
-  editingField.value = null
-  onEditDismissCleanup()
+  stopEditing()
   snapOldValue = undefined
   draftIsNull.value = false
+}
+
+function stopEditing() {
+  editingRow.value = null
+  editingField.value = null
+  emit('editing-change', false)
+  onEditDismissCleanup()
 }
 
 function onSortChange({ prop, order }: { prop?: string; order?: string | null }) {
@@ -520,21 +535,24 @@ function markCommitted(row: Record<string, any>, field: string) {
   bumpPending()
 }
 
-/** Snapshot of all currently staged edits, ready for DBUpdateRow calls. */
+/** One UPDATE per row keeps a changed primary key and other fields together. */
 function getPendingEdits(): Array<{
   row: Record<string, any>
-  field: string
-  newValue: any
-  oldValue: any
+  set: Record<string, any>
   where: Record<string, any>
 }> {
   const out: ReturnType<typeof getPendingEdits> = []
   for (const [row, rec] of pending) {
-    for (const [field, cell] of rec.fields) {
-      out.push({ row, field, newValue: cell.newVal, oldValue: cell.old, where: { ...rec.pk } })
-    }
+    const set: Record<string, any> = {}
+    for (const [field, cell] of rec.fields) set[field] = cell.newVal
+    out.push({ row, set, where: { ...rec.pk } })
   }
   return out
+}
+
+function markCommittedRow(row: Record<string, any>) {
+  pending.delete(row)
+  bumpPending()
 }
 
 function clearEdit() {
@@ -543,7 +561,13 @@ function clearEdit() {
 
 onBeforeUnmount(onEditDismissCleanup)
 
-watch(() => props.rows, () => {
+watch(() => props.rows, (rows, previous = []) => {
+  if (selectedCell.value && !rows.includes(selectedCell.value.row)) {
+    selectedCell.value = null
+  }
+  // Filtering and client-side sorting create new arrays containing the same
+  // row objects. Keep their staged changes until a different result arrives.
+  if (rows.every(row => previous.includes(row))) return
   if (pending.size) {
     pending.clear()
     bumpPending()
@@ -556,6 +580,7 @@ watch(() => props.rows, () => {
 
 defineExpose({
   getPendingEdits,
+  markCommittedRow,
   revertRow,
   revertAll,
   markCommitted,
