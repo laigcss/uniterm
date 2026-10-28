@@ -558,19 +558,35 @@ func (s *baseSession) AddStatusListener(cb func(SessionStatus)) {
 // frontend's stream subscription. Returns an unsubscribe function.
 func (s *baseSession) AddDataTap(cb func([]byte)) func() {
 	s.mu.Lock()
-	s.dataTaps = append(s.dataTaps, cb)
-	idx := len(s.dataTaps) - 1
-	s.mu.Unlock()
-	return func() {
-		s.mu.Lock()
-		// Sentinel removal: nilling the slot keeps every other tap's index
-		// stable, so a later unsubscribe for a tap registered before this
-		// one still points at the right callback. Splicing the slice would
-		// shift indices and make an older unsubscribe remove the wrong tap.
-		if idx < len(s.dataTaps) {
-			s.dataTaps[idx] = nil
+	// Reuse a nil slot left by a previous unsubscribe to prevent unbounded
+	// growth from sentinel removals (see the unsubscribe callback below).
+	idx := -1
+	for i, t := range s.dataTaps {
+		if t == nil {
+			idx = i
+			break
 		}
-		s.mu.Unlock()
+	}
+	if idx >= 0 {
+		s.dataTaps[idx] = cb
+	} else {
+		s.dataTaps = append(s.dataTaps, cb)
+		idx = len(s.dataTaps) - 1
+	}
+	s.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			// Sentinel removal: nilling the slot keeps every other tap's index
+			// stable, so a later unsubscribe for a tap registered before this
+			// one still points at the right callback. Splicing the slice would
+			// shift indices and make an older unsubscribe remove the wrong tap.
+			if idx < len(s.dataTaps) {
+				s.dataTaps[idx] = nil
+			}
+			s.mu.Unlock()
+		})
 	}
 }
 
@@ -580,8 +596,20 @@ func (s *baseSession) AddDataTap(cb func([]byte)) func() {
 // job's EOF watcher) need to detach when their job ends.
 func (s *baseSession) AddStatusTap(cb func(SessionStatus)) (untap func()) {
 	s.mu.Lock()
-	s.statusTaps = append(s.statusTaps, cb)
-	idx := len(s.statusTaps) - 1
+	// Reuse a nil slot left by a previous unsubscribe (see AddDataTap).
+	idx := -1
+	for i, t := range s.statusTaps {
+		if t == nil {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		s.statusTaps[idx] = cb
+	} else {
+		s.statusTaps = append(s.statusTaps, cb)
+		idx = len(s.statusTaps) - 1
+	}
 	s.mu.Unlock()
 	var once sync.Once
 	return func() {
