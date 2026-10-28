@@ -467,11 +467,6 @@ function onPaste(e: ClipboardEvent) {
 // across subnets) and copies the file directly.  SMB natively handles
 // binary files (Word, images, archives) without encoding issues.
 
-// SMB credentials for the remote Windows machine.  The password is set
-// once on the Windows side via `net user zj 1234` in a cmd window.
-const SMB_USER = 'zj'
-const SMB_PASS = '1234'
-
 async function onNativeFileDrop(paths: string[]) {
   if (!rfb || status.value !== 'connected') return
   const remoteHost = props.config?.host || ''
@@ -481,9 +476,14 @@ async function onNativeFileDrop(paths: string[]) {
     return
   }
 
-  // SMB credentials: prefer connection config, fall back to defaults
-  const smbUser = props.config?.user || SMB_USER
-  const smbPass = props.config?.password || SMB_PASS
+  // SMB credentials must come from the connection config — never hardcoded.
+  const smbUser = props.config?.user || ''
+  const smbPass = props.config?.password || ''
+  if (!smbUser || !smbPass) {
+    uploadStatus.value = t('vnc.uploadNoCreds', { host: remoteHost })
+    setTimeout(() => { uploadStatus.value = '' }, 5000)
+    return
+  }
 
   for (const p of paths) {
     const filename = p.split('/').pop() || p

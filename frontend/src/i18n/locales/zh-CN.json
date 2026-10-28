@@ -827,6 +827,7 @@
   "vnc.errorCredentials": "需要凭据：{types}",
   "vnc.errorClosed": "连接意外关闭",
   "vnc.uploadNoHost": "无法确定远程主机地址",
+  "vnc.uploadNoCreds": "缺少 SMB 凭据，请在连接配置中填写用户名和密码（{host}）",
   "vnc.uploading": "正在上传: {name} ({percent}%)",
   "vnc.uploaded": "已上传到 {path}",
   "vnc.uploadFailed": "上传失败: {error}",
