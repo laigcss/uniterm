@@ -248,8 +248,8 @@ const config = reactive({
   tftp:   { rootDir: '', port: 69, blockSize: 8192, timeoutSeconds: 0 },
   ssh:    { rootDir: '', port: 22, username: '', password: '', timeoutSeconds: 0 },
   ftp:    { rootDir: '', port: 21, username: '', password: '', anonymous: true, utf8: true, timeoutSeconds: 0 },
-  telnet: { port: 23, password: '', timeoutSeconds: 0 },
-  nfs:    { port: 2049, timeoutSeconds: 0 },
+  telnet: { rootDir: '', port: 23, password: '', timeoutSeconds: 0 },
+  nfs:    { rootDir: '', port: 2049, timeoutSeconds: 0 },
   s3:     { rootDir: '', port: 9000, accessKey: '', secretKey: '', timeoutSeconds: 0 }
 })
 

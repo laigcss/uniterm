@@ -11,7 +11,7 @@ import {
 import { Events } from '@wailsio/runtime'
 import type {
   ContainerInfo, InspectResult, ContainerImage, ContainerStats as ContainerStatsInfo, ContainerCreateOptions,
-  ContainerCommitOptions, ContainerTransferOptions, ContainerLoginOptions, ImageLayer, RuntimeInfo, ContainerVolume,
+  ContainerCommitOptions, ContainerTransferOptions, ContainerLoginOptions, ImageLayer, RuntimeInfo,
 } from '../types/container'
 
 // 凭据补全弹窗（useTunnelCredentials）提交的临时账密；error 非 null 表示用户取消，

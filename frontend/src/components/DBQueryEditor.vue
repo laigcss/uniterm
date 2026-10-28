@@ -100,7 +100,7 @@
             v-if="tableName && !isView"
             ref="importBtnRef"
             class="btn btn-default btn-sm"
-            @click.stop="importMenuRef?.toggle($event.currentTarget)"
+            @click.stop="importMenuRef?.toggle($event.currentTarget as HTMLElement)"
           >
             <Upload :size="14" /> {{ t('db.import') }}
           </button>
