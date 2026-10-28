@@ -100,6 +100,10 @@ tasks:
           SCRIPT: '{{if eq .DEV "true"}}build:dev{{else}}build{{end}}'
     env:
       PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
+      # Inject the release version (from -ldflags VERSION) into the frontend
+      # bundle via VITE_VERSION → import.meta.env.VITE_VERSION (vite.config.ts).
+      # Defaults to "dev" for dev builds, matching Go's main.Version default.
+      VITE_VERSION: '{{.VERSION | default "dev"}}'
 
   frontend:run:
     summary: Run a frontend script with selected runner
@@ -261,6 +265,7 @@ tasks:
             ref: .BUILD_FLAGS
           OBFUSCATED:
             ref: .OBFUSCATED
+          VERSION: '{{.VERSION}}'
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
         msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
@@ -296,6 +301,7 @@ tasks:
       - task: build:frontend
         vars:
           BUILD_FLAGS: "-tags server,production"
+          VERSION: '{{.VERSION}}'
     cmds:
       - >-
         docker build

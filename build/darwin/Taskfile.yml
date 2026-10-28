@@ -41,6 +41,7 @@ tasks:
             ref: .OBFUSCATED
           DEV:
             ref: .DEV
+          VERSION: '{{.VERSION}}'
       - task: generate:icns
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'

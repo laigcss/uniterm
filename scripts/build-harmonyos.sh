@@ -45,6 +45,13 @@ for arg in "$@"; do
   esac
 done
 
+# --- Version ---
+# Derive release version from git tags (e.g. v1.10.1). Falls back to "dev"
+# when not on a tagged commit. The same VERSION is injected into both the
+# Go binary (-ldflags -X main.Version) and the frontend (VITE_VERSION env),
+# keeping the two in sync.
+VERSION="$(git -C "$PROJECT_ROOT" describe --tags --always 2>/dev/null || echo dev)"
+
 # --- Colors ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -75,6 +82,7 @@ fi
 if ! $SKIP_FRONTEND; then
   log "Step 1: Building frontend (vite build)..."
   cd "$PROJECT_ROOT/frontend"
+  export VITE_VERSION="$VERSION"
   npx vite build
   ok "Frontend built → frontend/dist"
 
@@ -111,7 +119,7 @@ GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
   CC="$CC" \
   CGO_LDFLAGS="-L/tmp" \
   go build -mod=vendor -buildmode=c-shared -tags server,cshared \
-  -trimpath -ldflags="-w -s -X main.Version=v1.10.1-harmonyos" \
+  -trimpath -ldflags="-w -s -X main.Version=$VERSION" \
   -o "$GO_LIB_DIR/$GO_LIB_NAME" .
 
 if [[ ! -f "$GO_LIB_DIR/$GO_LIB_NAME" ]]; then

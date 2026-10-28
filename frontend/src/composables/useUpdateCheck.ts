@@ -206,10 +206,18 @@ function initAutoCheck() {
   settingsWatchStop?.()
   settingsWatchStop = null
 
-  // Fetch current version immediately so About page shows it
+  // Show the build-time version immediately (injected via VITE_VERSION in
+  // vite.config.ts) so the About page doesn't flash "..." while GetAppInfo()
+  // resolves. GetAppInfo() (Go binding) then overwrites current with the
+  // authoritative runtime version once available, keeping Go and frontend
+  // versions in sync.
+  const buildVersion = import.meta.env.VITE_VERSION || 'dev'
+  if (!updateInfo.value) {
+    updateInfo.value = { hasUpdate: false, current: buildVersion, latest: '', releaseUrl: '', changelog: '', assets: [] }
+  }
   GetAppInfo().then((info: { version: string }) => {
-    if (!updateInfo.value) {
-      updateInfo.value = { hasUpdate: false, current: info.version, latest: '', releaseUrl: '', changelog: '', assets: [] }
+    if (info.version && updateInfo.value) {
+      updateInfo.value.current = info.version
     }
   }).catch(() => {})
   // Mobile updates by installing a new APK; the in-app update check would

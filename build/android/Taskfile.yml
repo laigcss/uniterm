@@ -46,6 +46,7 @@ tasks:
             ref: .BUILD_FLAGS
           PRODUCTION:
             ref: .PRODUCTION
+          VERSION: '{{.VERSION}}'
     cmds:
       - echo "Building Android app {{.APP_NAME}}..."
       - task: compile:go:shared
