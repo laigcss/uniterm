@@ -30,42 +30,44 @@
         </div>
         <div class="tree-content" @contextmenu.prevent="onTreeContextMenu">
           <div v-if="treeLoading" class="tree-loading">{{ t('db.loading') }}</div>
-          <template v-else>
-            <div v-for="db in filteredDatabases" :key="db">
-              <div
-                class="db-header"
-                :class="{ selected: activeTab?.kind === 'objects' && activeTab?.dbName === db }"
-                @click="openObjectsTab(db)"
-                @contextmenu.prevent="onDbContextMenu($event, db)"
-              >
-                <span class="db-arrow" @click.stop="toggleDb(db)">
-                  <component :is="expandedDbs.has(db) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
-                </span>
-                <Database :size="'0.875rem'" class="db-icon" />
-                <span class="db-name">{{ db }}</span>
-              </div>
-              <div v-if="expandedDbs.has(db)" class="child-list">
-                <div
-                  v-for="col in (collections[db] || [])"
-                  :key="col"
-                  class="table-item"
-                  :class="{ selected: activeTab?.kind === 'collection' && activeTab?.dbName === db && activeTab?.collectionName === col }"
-                  @click="openCollectionTab(db, col)"
-                  @contextmenu.prevent="onColContextMenu($event, db, col)"
-                >
-                  <span class="table-icon-spacer" />
-                  <Layers :size="'0.875rem'" class="table-icon" />
-                  <span class="table-name">{{ col }}</span>
-                </div>
-                <div v-if="!collections[db] || collections[db].length === 0" class="empty-hint">
-                  {{ t('mongodb.noData') }}
-                </div>
-              </div>
+          <div v-else-if="filteredDatabases.length === 0" class="empty-hint">
+            {{ t('mongodb.noData') }}
+          </div>
+          <!-- 虚拟滚动：MongoDB 可能有大量集合，用 RecycleScroller 避免全量 DOM -->
+          <RecycleScroller
+            v-else
+            :items="visibleTreeRows"
+            :item-size="28"
+            key-field="id"
+            class="mongo-tree-scroller"
+            v-slot="{ item }"
+          >
+            <div
+              v-if="item.type === 'db'"
+              class="db-header"
+              :class="{ selected: activeTab?.kind === 'objects' && activeTab?.dbName === item.db }"
+              @click="openObjectsTab(item.db)"
+              @contextmenu.prevent="onDbContextMenu($event, item.db)"
+            >
+              <span class="db-arrow" @click.stop="toggleDb(item.db)">
+                <component :is="expandedDbs.has(item.db) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
+              </span>
+              <Database :size="'0.875rem'" class="db-icon" />
+              <span class="db-name">{{ item.db }}</span>
             </div>
-            <div v-if="filteredDatabases.length === 0 && !treeLoading" class="empty-hint">
-              {{ t('mongodb.noData') }}
+            <div
+              v-else-if="item.type === 'collection'"
+              class="table-item"
+              :class="{ selected: activeTab?.kind === 'collection' && activeTab?.dbName === item.db && activeTab?.collectionName === item.collection }"
+              @click="openCollectionTab(item.db, item.collection)"
+              @contextmenu.prevent="onColContextMenu($event, item.db, item.collection)"
+            >
+              <span class="table-icon-spacer" />
+              <Layers :size="'0.875rem'" class="table-icon" />
+              <span class="table-name">{{ item.collection }}</span>
             </div>
-          </template>
+            <div v-else class="empty-hint">{{ t('mongodb.noData') }}</div>
+          </RecycleScroller>
         </div>
       </div>
 
@@ -354,6 +356,31 @@ const filteredDatabases = computed(() => {
   const q = treeSearchQuery.value.trim().toLowerCase()
   if (!q) return databases.value
   return databases.value.filter(db => db.toLowerCase().includes(q))
+})
+
+// 虚拟滚动：将数据库>集合的树形结构展平为扁平列表，供 RecycleScroller 渲染
+interface MongoTreeRow {
+  id: string
+  type: 'db' | 'collection' | 'empty'
+  db: string
+  collection?: string
+}
+const visibleTreeRows = computed<MongoTreeRow[]>(() => {
+  const rows: MongoTreeRow[] = []
+  for (const db of filteredDatabases.value) {
+    rows.push({ id: `db:${db}`, type: 'db', db })
+    if (expandedDbs.has(db)) {
+      const cols = collections.value[db] || []
+      if (cols.length === 0) {
+        rows.push({ id: `empty:${db}`, type: 'empty', db })
+      } else {
+        for (const col of cols) {
+          rows.push({ id: `col:${db}/${col}`, type: 'collection', db, collection: col })
+        }
+      }
+    }
+  }
+  return rows
 })
 
 // ── Tabs state ──
@@ -893,7 +920,14 @@ watch(() => props.sessionId, () => {
 /* ── Tree ── */
 .tree-content {
   flex: 1;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* RecycleScroller 占满 tree-content 剩余空间并自行管理滚动 */
+.mongo-tree-scroller {
+  flex: 1;
+  min-height: 0;
 }
 .tree-loading {
   padding: 0.75rem;

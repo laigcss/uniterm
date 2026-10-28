@@ -23,41 +23,46 @@
     </div>
     <div ref="treeContentRef" class="tree-content" @contextmenu.prevent="onTreeContextMenu">
       <div v-if="loading || runningSqlFile" class="tree-loading">{{ t('db.loading') }}</div>
-      <template v-for="db in filteredDbs" :key="db.name">
+      <!-- 虚拟滚动：数据库可能有大量表，用 RecycleScroller 避免全量 DOM -->
+      <RecycleScroller
+        v-else
+        ref="treeScrollerRef"
+        :items="visibleTreeRows"
+        :item-size="28"
+        key-field="id"
+        class="db-tree-scroller"
+        v-slot="{ item }"
+      >
         <div
+          v-if="item.type === 'db'"
           class="db-header"
-          :data-db-row="db.name"
-          :class="{ selected: selectedDb === db.name && !selectedTable }"
-          @click="onDbClick(db.name)"
-          @dblclick="onDbActivate(db.name)"
-          @contextmenu.prevent="onDbContextMenu($event, db.name)"
+          :data-db-row="item.db"
+          :class="{ selected: selectedDb === item.db && !selectedTable }"
+          @click="onDbClick(item.db)"
+          @dblclick="onDbActivate(item.db)"
+          @contextmenu.prevent="onDbContextMenu($event, item.db)"
         >
-          <span class="db-arrow" @click.stop="onToggleDb(db.name)">
-            <component :is="expandedDbs.has(db.name) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
+          <span class="db-arrow" @click.stop="onToggleDb(item.db)">
+            <component :is="expandedDbs.has(item.db) ? ChevronDown : ChevronRight" :size="'0.75rem'" />
           </span>
           <Database class="db-icon" :size="'0.875rem'" />
-          <span class="db-name">{{ db.name }}</span>
+          <span class="db-name">{{ item.db }}</span>
         </div>
-        <template v-if="expandedDbs.has(db.name)">
-          <div
-            v-for="t in db.tables"
-            :key="t.name"
-            class="table-item"
-            :data-table-row="db.name + '/' + t.name"
-            :class="{ selected: selectedTable === t.name && selectedDb === db.name }"
-            @click="onTableClick(db.name, t.name)"
-            @dblclick="onTableDblClick(db.name, t)"
-            @contextmenu.prevent="onTableContextMenu($event, db.name, t)"
-          >
-            <span class="table-icon-spacer" />
-            <component :is="t.type === 'view' ? Eye : Table2" class="table-icon" :size="'0.875rem'" />
-            <span class="table-name">{{ t.name }}</span>
-          </div>
-          <div v-if="db.tables.length === 0" class="empty-hint">
-            {{ t('db.noTables') }}
-          </div>
-        </template>
-      </template>
+        <div
+          v-else-if="item.type === 'table'"
+          class="table-item"
+          :data-table-row="item.db + '/' + item.table"
+          :class="{ selected: selectedTable === item.table && selectedDb === item.db }"
+          @click="onTableClick(item.db, item.table)"
+          @dblclick="onTableDblClick(item.db, item.tableInfo)"
+          @contextmenu.prevent="onTableContextMenu($event, item.db, item.tableInfo)"
+        >
+          <span class="table-icon-spacer" />
+          <component :is="item.tableInfo.type === 'view' ? Eye : Table2" class="table-icon" :size="'0.875rem'" />
+          <span class="table-name">{{ item.table }}</span>
+        </div>
+        <div v-else class="empty-hint">{{ t('db.noTables') }}</div>
+      </RecycleScroller>
     </div>
 
     <Menu
@@ -305,13 +310,15 @@ watch(() => [props.activeDb, props.activeTable], async ([db, table]) => {
 })
 
 function scrollActiveIntoView() {
-  const root = treeContentRef.value
-  if (!root || !selectedDb.value) return
-  const key = selectedTable.value ? `${selectedDb.value}/${selectedTable.value}` : selectedDb.value
-  const attr = selectedTable.value ? 'data-table-row' : 'data-db-row'
-  const esc = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  const el = root.querySelector(`[${attr}="${esc}"]`) as HTMLElement | null
-  el?.scrollIntoView({ block: 'nearest' })
+  if (!selectedDb.value) return
+  // 虚拟滚动：在展平列表中找到选中项索引，用 RecycleScroller 的 scrollToItem 定位
+  const targetId = selectedTable.value
+    ? `tbl:${selectedDb.value}/${selectedTable.value}`
+    : `db:${selectedDb.value}`
+  const idx = visibleTreeRows.value.findIndex(r => r.id === targetId)
+  if (idx >= 0) {
+    treeScrollerRef.value?.scrollToItem(idx)
+  }
 }
 
 async function ensureDbExpanded(dbName: string) {
@@ -370,6 +377,34 @@ const filteredDbs = computed(() => {
     tables: db.tables.filter(t => t.name.toLowerCase().includes(q))
   }))
 })
+
+// 虚拟滚动：将数据库>表的树形结构展平为扁平列表，供 RecycleScroller 渲染
+interface DbTreeRow {
+  id: string
+  type: 'db' | 'table' | 'empty'
+  db: string
+  table?: string
+  tableInfo?: TableInfo
+}
+const visibleTreeRows = computed<DbTreeRow[]>(() => {
+  const rows: DbTreeRow[] = []
+  for (const db of filteredDbs.value) {
+    rows.push({ id: `db:${db.name}`, type: 'db', db: db.name })
+    if (expandedDbs.value.has(db.name)) {
+      if (db.tables.length === 0) {
+        rows.push({ id: `empty:${db.name}`, type: 'empty', db: db.name })
+      } else {
+        for (const t of db.tables) {
+          rows.push({ id: `tbl:${db.name}/${t.name}`, type: 'table', db: db.name, table: t.name, tableInfo: t })
+        }
+      }
+    }
+  }
+  return rows
+})
+
+// RecycleScroller 实例引用，用于 scrollToItem 定位选中行
+const treeScrollerRef = ref<any>(null)
 
 watch(searchQuery, (q) => {
   if (q.trim()) {
@@ -830,7 +865,14 @@ async function onCreateTable() {
 }
 .tree-content {
   flex: 1;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* RecycleScroller 占满 tree-content 剩余空间并自行管理滚动 */
+.db-tree-scroller {
+  flex: 1;
+  min-height: 0;
 }
 .tree-loading {
   padding: 0.75rem;

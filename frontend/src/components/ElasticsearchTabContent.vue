@@ -40,18 +40,26 @@
               <span class="cluster-root-name" :title="clusterTooltip">{{ clusterName }}</span>
             </div>
             <div v-if="clusterExpanded" class="child-list">
-              <div
-                v-for="idx in filteredIndices"
-                :key="idx.name"
-                class="index-item"
-                :class="{ selected: activeIndexName === idx.name }"
-                @click="openIndexTab(idx.name)"
-                @contextmenu.prevent="onIndexContextMenu($event, idx)"
-              >
-                <span class="health-dot" :class="idx.health || 'unknown'" />
-                <span class="index-name" :title="idx.name">{{ idx.name }}</span>
-              </div>
               <div v-if="filteredIndices.length === 0" class="empty-hint">{{ t('es.noIndices') }}</div>
+              <!-- 虚拟滚动：ES 集群可能有上千索引，用 RecycleScroller 避免全量 DOM -->
+              <RecycleScroller
+                v-else
+                :items="filteredIndices"
+                :item-size="28"
+                key-field="name"
+                class="es-index-scroller"
+                v-slot="{ item }"
+              >
+                <div
+                  class="index-item"
+                  :class="{ selected: activeIndexName === item.name }"
+                  @click="openIndexTab(item.name)"
+                  @contextmenu.prevent="onIndexContextMenu($event, item)"
+                >
+                  <span class="health-dot" :class="item.health || 'unknown'" />
+                  <span class="index-name" :title="item.name">{{ item.name }}</span>
+                </div>
+              </RecycleScroller>
             </div>
           </template>
         </div>
@@ -840,7 +848,9 @@ function onResizeStart(e: MouseEvent) {
 .search-input:focus { border-color: var(--accent); }
 .tree-content {
   flex: 1;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .cluster-root {
   display: flex;
@@ -874,10 +884,19 @@ function onResizeStart(e: MouseEvent) {
   color: var(--text-primary);
 }
 .child-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding-bottom: 0.25rem;
 }
 .child-list .index-item {
   padding-left: 2.75rem;
+}
+/* RecycleScroller 占满 child-list 剩余空间并自行管理滚动 */
+.es-index-scroller {
+  flex: 1;
+  min-height: 0;
 }
 .tree-loading {
   padding: 0.75rem;
