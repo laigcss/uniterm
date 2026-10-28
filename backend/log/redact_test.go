@@ -1,6 +1,11 @@
 package log
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestRedact(t *testing.T) {
 	// Save and restore the global toggle so this test is hermetic.
@@ -199,5 +204,67 @@ func TestRedactDisabled(t *testing.T) {
 	in := "password=hunter2 Bearer abc123 postgres://u:p@h/db"
 	if got := Redact(in); got != in {
 		t.Errorf("Redact with disabled flag should be no-op; got %q", got)
+	}
+}
+
+// TestWritefRedactsPipeline verifies that Writef applies Redact to every
+// message before it hits the log file, so secrets can never leak even if
+// a caller forgets to pre-redact. This is the defense-in-depth guarantee
+// requested by the upstream review of PR #1263.
+func TestWritefRedactsPipeline(t *testing.T) {
+	prevRedact := RedactEnabled
+	defer func() { RedactEnabled = prevRedact }()
+	RedactEnabled = true
+
+	// Redirect logging to an isolated temp dir so we can read the file
+	// back and assert on its contents without touching the user's real
+	// ~/.uniterm/uniterm.log.
+	tmpDir, err := os.MkdirTemp("", "uniterm-log-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	prevLogDir := LogDir
+	defer func() {
+		LogDir = prevLogDir
+		Close() // close our test file handle so RemoveAll succeeds
+	}()
+	LogDir = tmpDir
+
+	// Reset the package-level file handle so Init opens a fresh file in
+	// the temp dir rather than reusing a handle from a prior test.
+	Close()
+
+	if err := Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Write a line that contains several secret shapes.
+	Writef("connecting to postgres://alice:s3cr3t@db.example.com:5432/app password=hunter2 token=abc123")
+
+	// Read the log file back.
+	data, err := os.ReadFile(filepath.Join(tmpDir, ".uniterm", "uniterm.log"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	got := string(data)
+
+	// The secrets must NOT appear in the file.
+	for _, secret := range []string{"s3cr3t", "hunter2", "abc123"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("Writef leaked secret %q into log file; got:\n%s", secret, got)
+		}
+	}
+
+	// The redaction markers MUST appear.
+	if !strings.Contains(got, "password=***") {
+		t.Errorf("expected password=*** in log; got:\n%s", got)
+	}
+	if !strings.Contains(got, "token=***") {
+		t.Errorf("expected token=*** in log; got:\n%s", got)
+	}
+	if !strings.Contains(got, "alice:***@db.example.com") {
+		t.Errorf("expected DSN redaction alice:***@db.example.com in log; got:\n%s", got)
 	}
 }
