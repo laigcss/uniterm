@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "storeFile": "./sign/uniterm.p12",
+          "storePassword": "UnitermSignPwd2026DebugAbcDef123",
+          "keyAlias": "uniterm_key",
+          "keyPassword": "UnitermSignPwd2026DebugAbcDef123",
+          "certpath": "./sign/uniterm.cer",
+          "profile": "./sign/uniterm.p7b",
+          "signAlg": "SHA256withECDSA"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",

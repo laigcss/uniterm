@@ -2,3 +2,13 @@
 entry/build/
 build/
 *.hap
+
+# HarmonyOS signing materials (do not commit)
+sign/*.p12
+sign/*.csr
+sign/*.cer
+sign/*.p7b
+sign/*.pem
+sign/*-profile-*.json
+sign/material/
+sign/verify-*
