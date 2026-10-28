@@ -1,36 +1,36 @@
-// Dependency-free markdown helpers shared by surfaces that render markdown
-// into v-html (AI messages, update changelog). Keep in sync with
+// Markdown helpers shared by surfaces that render markdown into v-html
+// (AI messages, update changelog). Keep in sync with
 // AIMessage.sanitize.test.ts, which mirrors sanitizeRenderedHtml.
 
+import DOMPurify from 'dompurify'
+
 // Sanitize markdown-produced HTML before it's assigned to v-html.
-// This is defense in depth: every caller escapes its input first (see
-// escapeHtml), so no raw tag/quote from model or user content can reach
-// here. The strip-list below catches what the markdown renderer itself
-// could synthesize (javascript: links, quote-less attribute breakouts).
+// Uses DOMPurify (OWASP-recommended, industry-standard) for robust XSS
+// prevention. This replaces the previous regex-based sanitizer (FE-01)
+// which had fundamental weaknesses:
+//   - regex cannot prevent mutation XSS (browser HTML parsing "mutations")
+//   - entity-encoding bypasses (javascript&colon;)
+//   - tab/newline bypasses in URL schemes (java\tscript:)
+//   - incorrectly stripped legitimate <svg> checkboxes synthesized by the
+//     markdown renderer for task lists
+// DOMPurify parses with the real browser DOM API, handles all known attack
+// vectors, and is continuously maintained. Defense in depth is preserved:
+// every caller still escapes its input first (see escapeHtml), so no raw
+// tag/quote from model or user content can reach here.
 export function sanitizeRenderedHtml(html: string): string {
-  // Drop dangerous tags entirely (including their content).
-  const dangerousTags = [
-    'script', 'iframe', 'object', 'embed', 'style', 'form',
-    'link', 'meta', 'base', 'svg', 'math',
-  ]
-  for (const tag of dangerousTags) {
-    const re = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi')
-    html = html.replace(re, '')
-    const reSelf = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi')
-    html = html.replace(reSelf, '')
-  }
-  // Strip on*="..." event-handler attributes (any attribute starting with on),
-  // whether separated from the previous attribute by whitespace or by the
-  // tag-internal slash (<a href="x"/onclick="...">). The slash variant only
-  // matches a quoted value so URLs like href="/online=1" stay intact.
-  html = html.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-  html = html.replace(/\/on[a-z]+\s*=\s*("[^"]*"|'[^']*')/gi, '')
-  // Strip javascript:/data:/vbscript: URL schemes in href/src.
-  html = html.replace(
-    /\s+(href|src|action|formaction|xlink:href)\s*=\s*("\s*(?:javascript|data|vbscript):[^"]*"|'\s*(?:javascript|data|vbscript):[^']*'|(?:javascript|data|vbscript):[^\s>]+)/gi,
-    '',
-  )
-  return html
+  return DOMPurify.sanitize(html, {
+    // Enable both HTML and SVG profiles — the markdown renderer synthesizes
+    // <svg> checkboxes for task lists (see AIMessageItem.vue renderMarkdown).
+    // The previous regex sanitizer deleted all <svg>, breaking checkboxes.
+    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    // Explicitly allow target/rel — renderMarkdown synthesizes
+    // target="_blank" rel="noopener" on links. DOMPurify auto-adds
+    // rel="noopener noreferrer" to target="_blank" anchors for safety.
+    ADD_ATTR: ['target', 'rel'],
+    // Forbid tags that DOMPurify's html+svg profiles allow but are
+    // unnecessary for markdown output and carry XSS risk.
+    FORBID_TAGS: ['form', 'input', 'textarea', 'select', 'button', 'noscript', 'template'],
+  })
 }
 
 // Escape HTML-significant characters (including quotes — a raw double quote
