@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -35,6 +36,16 @@ export default defineConfig({
   ],
   define: {
     'import.meta.env.VITE_VERSION': JSON.stringify(version)
+  },
+  resolve: {
+    // @novnc-internals is a virtual alias for noVNC's internal core modules
+    // (cursor, display, …). The package only exports its RFB entry; tests that
+    // exercise the cursor/display internals import via this alias. Mapped to
+    // the real filesystem path so both vitest and the dev server can resolve
+    // it without hitting the package.json exports restriction.
+    alias: {
+      '@novnc-internals': fileURLToPath(new URL('./node_modules/@novnc/novnc/core', import.meta.url)),
+    },
   },
   // esnext everywhere so the dev server's esbuild transform also accepts
   // top-level await (used by @novnc/novnc). `build.target` alone only affects

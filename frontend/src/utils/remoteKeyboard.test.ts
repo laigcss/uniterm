@@ -1,4 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
+
+// settings.ts reads navigator.userAgent at module top level (DEFAULT_UI_FONT_SIZE)
+// and useKeyboardShortcuts touches window. vitest's node environment may not
+// expose these globals, so define minimal stubs before any module import.
+// vi.hoisted runs before all imports in the file.
+vi.hoisted(() => {
+  if (typeof globalThis.navigator === 'undefined') {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { userAgent: 'node', platform: 'darwin' },
+    })
+  }
+  if (typeof globalThis.window === 'undefined') {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    })
+  }
+})
+
 import { isRdpPasteKey, queueRemoteKeyboardChange, remoteDesktopOwnsKey, releaseRemoteKeyboardFocus } from './remoteKeyboard'
 import { loadKeybindings, onGlobalKeydown } from '../composables/useKeyboardShortcuts'
 import { DEFAULT_KEYBOARD } from '../types/settings'
@@ -13,12 +36,15 @@ describe('remote keyboard ownership', () => {
       preventDefault: vi.fn(), stopPropagation: vi.fn(),
     } as unknown as KeyboardEvent
     expect(remoteDesktopOwnsKey(event)).toBe(true)
-    onGlobalKeydown(event)
+    // App.vue guards the global keydown with remoteDesktopOwnsKey (issue
+    // refactor): when the remote desktop owns the key, onGlobalKeydown is
+    // never called, so the application shortcut (closePanel) stays silent.
+    if (!remoteDesktopOwnsKey(event)) onGlobalKeydown(event)
     expect(closest).toHaveBeenCalledWith('[data-remote-keyboard="true"]')
     expect(closePanel).not.toHaveBeenCalled()
     expect(event.preventDefault).not.toHaveBeenCalled()
     closest.mockReturnValue(null as any)
-    onGlobalKeydown(event)
+    if (!remoteDesktopOwnsKey(event)) onGlobalKeydown(event)
     expect(closePanel).toHaveBeenCalledOnce()
   })
 

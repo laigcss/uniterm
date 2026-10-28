@@ -21,75 +21,80 @@
 
     <div v-if="listError" class="k8s-list-err">{{ listErrorText }}</div>
 
-    <!-- CRD 实例列表：动态列 -->
-    <el-table
-      v-if="frame.kind === 'custom'"
-      :data="crdFiltered"
-      size="small"
-      height="calc(100% - 2.5rem)"
-      class="k8s-list-table"
-      border
-      v-loading="isLoading"
-      @row-click="r => emit('open-detail', r)"
-    >
-      <el-table-column label="Name" show-overflow-tooltip><template #default="{ row }">{{ row.metadata?.name }}</template></el-table-column>
-      <el-table-column v-for="pc in frame.crd.printerColumns" :key="pc.name" :label="pc.name" show-overflow-tooltip>
-        <template #default="{ row }">{{ evalJsonPath(row, pc.jsonPath) }}</template>
-      </el-table-column>
-      <el-table-column label="Age"><template #default="{ row }">{{ age(row.metadata?.creationTimestamp) }}</template></el-table-column>
-      <el-table-column :label="t('k8s.actions')" :width="uiPx(66)" fixed="right" class-name="k8s-action-cell">
-        <template #default="{ row }">
-          <button class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', row)">
-            <Pencil :size="'0.875rem'" />
-          </button>
-          <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onDeleteCr(row)">
-            <Trash2 :size="'0.875rem'" />
-          </button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <!-- 虚拟化资源列表：固定表头 + RecycleScroller 行虚拟滚动。
+         大量 K8s 资源时只渲染可视区行（DOM 从 O(n) 降到 O(可视行)），
+         排序/筛选/行点击/行着色/操作列全部保留，外观对齐 Element Plus 表格。 -->
+    <div class="k8s-vtable" v-loading="isLoading">
+      <div class="k8s-vtable-head">
+        <div
+          v-for="col in vtableColumns"
+          :key="col.header"
+          class="k8s-vtable-th"
+          :class="{ sortable: col.sortable, 'is-sorted': sortKey === col.header }"
+          :style="{ flex: colFlex(col) }"
+          @click="toggleSort(col)"
+        >
+          <span class="k8s-vtable-th-text">{{ col.header }}</span>
+          <span v-if="col.sortable && sortKey === col.header" class="k8s-vtable-sort">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+          <el-popover v-if="col.filterable" trigger="click" placement="bottom-start" :width="200" popper-class="k8s-col-filter-pop">
+            <template #reference>
+              <span class="k8s-vtable-filter" :class="{ active: colFilterActive(col) }" @click.stop>▾</span>
+            </template>
+            <div class="k8s-col-filter-panel">
+              <el-checkbox-group
+                :model-value="colFilterSel[col.header] || []"
+                @update:model-value="(v: string[]) => setColFilter(col.header, v)"
+              >
+                <el-checkbox v-for="v in enumValues(col)" :key="v" :value="v">{{ v }}</el-checkbox>
+              </el-checkbox-group>
+              <div class="k8s-col-filter-foot">
+                <el-button size="small" text @click="clearColFilter(col)">{{ t('shortcut.reset') }}</el-button>
+              </div>
+            </div>
+          </el-popover>
+        </div>
+        <div v-if="vactionWidth" class="k8s-vtable-th k8s-vtable-action" :style="{ flex: '0 0 ' + vactionWidth + 'px' }">{{ t('k8s.actions') }}</div>
+      </div>
 
-    <!-- 常规资源列表 -->
-    <el-table
-      v-else
-      :data="filtered"
-      size="small"
-      height="calc(100% - 2.5rem)"
-      class="k8s-list-table"
-      border
-      v-loading="isLoading"
-      :row-class-name="rowClassName"
-      @row-click="onRowClick"
-    >
-      <el-table-column
-        v-for="col in desc?.columns || []"
-        :key="col.header"
-        :label="col.header"
-        :width="col.width ? uiPx(col.width) : undefined"
-        sortable
-        show-overflow-tooltip
-        :sort-method="(a, b) => compareCells(col, a, b)"
-        :filters="col.filterable ? enumFilters(col) : undefined"
-        :filter-method="col.filterable ? (val, row) => cellText(col.value(row, usageOf(row))) === val : undefined"
+      <div v-if="!isLoading && scrollerItems.length === 0" class="k8s-vtable-empty">{{ t('db.noData') }}</div>
+
+      <RecycleScroller
+        v-else
+        :items="scrollerItems"
+        :item-size="VROW_HEIGHT"
+        key-field="key"
+        class="k8s-vtable-body"
+        v-slot="{ item }"
       >
-        <template #default="{ row }">{{ cellText(col.value(row, usageOf(row))) }}</template>
-      </el-table-column>
-
-      <el-table-column v-if="actionColWidth" :label="t('k8s.actions')" :width="uiPx(actionColWidth)" fixed="right" class-name="k8s-action-cell">
-        <template #default="{ row }">
-          <button
-            v-for="a in rowActions(row)"
-            :key="a"
-            class="btn btn-ghost btn-icon btn-sm"
-            :class="{ danger: actionMeta[a].danger }"
-            :title="actionMeta[a].title(row)"
-            @click.stop="actionMeta[a].run(row, $event)"
-          >
-            <component :is="actionMeta[a].icon(row)" :size="'0.875rem'" />
-          </button>
-        </template>
-      </el-table-column>
-    </el-table>
+        <div class="k8s-vtable-row" :class="vrowClass(item.row)" @click="vrowClick(item.row)">
+          <div
+            v-for="col in vtableColumns"
+            :key="col.header"
+            class="k8s-vtable-td"
+            :style="{ flex: colFlex(col) }"
+            :title="col.getText(item.row)"
+          ><span class="k8s-vtable-cell">{{ col.getText(item.row) }}</span></div>
+          <div v-if="vactionWidth" class="k8s-vtable-td k8s-vtable-action" :style="{ flex: '0 0 ' + vactionWidth + 'px' }">
+            <template v-if="frame.kind === 'custom'">
+              <button class="btn btn-ghost btn-icon btn-sm" :title="t('k8s.actionEdit')" @click.stop="emit('open-yaml', item.row)"><Pencil :size="'0.875rem'" /></button>
+              <button class="btn btn-ghost btn-icon btn-sm danger" :title="t('k8s.actionDelete')" @click.stop="onDeleteCr(item.row)"><Trash2 :size="'0.875rem'" /></button>
+            </template>
+            <template v-else>
+              <button
+                v-for="a in rowActions(item.row)"
+                :key="a"
+                class="btn btn-ghost btn-icon btn-sm"
+                :class="{ danger: actionMeta[a].danger }"
+                :title="actionMeta[a].title(item.row)"
+                @click.stop="actionMeta[a].run(item.row, $event)"
+              >
+                <component :is="actionMeta[a].icon(item.row)" :size="'0.875rem'" />
+              </button>
+            </template>
+          </div>
+        </div>
+      </RecycleScroller>
+    </div>
 
     <K8sCreateDialog
       v-model="createVisible"
@@ -106,7 +111,7 @@
 import { computed, ref, watch, onBeforeUnmount, h } from 'vue'
 import { uiPx } from '../utils/uiScale'
 import {
-  ElTable, ElTableColumn, ElInput, ElButton,
+  ElInput, ElButton,
   ElMessageBox, ElMessage, ElCheckbox,
 } from 'element-plus'
 import { Refresh, Plus } from '@element-plus/icons-vue'
@@ -251,27 +256,6 @@ function numericSortKey(text: string): number | null {
   return null
 }
 
-// el-table `sortable` needs a comparator when columns render via slot (no prop).
-// 优先用列自带的 sortValue（如 cpu 原始毫核）；否则解析单位/百分比/时长做数值比较；
-// 都不行再退回 localeCompare。
-function compareCells(col: any, a: any, b: any): number {
-  if (col.sortValue) return col.sortValue(a, usageOf(a)) - col.sortValue(b, usageOf(b))
-  const ta = cellText(col.value(a, usageOf(a)))
-  const tb = cellText(col.value(b, usageOf(b)))
-  const na = numericSortKey(ta)
-  const nb = numericSortKey(tb)
-  if (na !== null && nb !== null) return na - nb
-  // 一方能解析为数字、另一方不能（如 "—"）：数字排前
-  if (na !== null) return -1
-  if (nb !== null) return 1
-  return ta.localeCompare(tb)
-}
-
-function enumFilters(col: any) {
-  const set = new Set<string>()
-  for (const row of items.value) set.add(cellText(col.value(row, usageOf(row))))
-  return Array.from(set).filter(Boolean).sort().map(v => ({ text: v, value: v }))
-}
 
 function onRowClick(row: any) {
   // CRD list rows drill into the CRD; everything else opens its detail.
@@ -279,11 +263,6 @@ function onRowClick(row: any) {
   else emit('open-detail', row)
 }
 
-// 整行着色：非就绪/异常项高亮，对齐 k9s。
-function rowClassName({ row }: { row: any }): string {
-  const tone = desc.value?.rowTone?.(row)
-  return tone ? `k8s-row-${tone}` : ''
-}
 
 // ── action column ──────────────────────────────────────────────
 function has(a: string) { return (desc.value?.actions || []).includes(a as any) }
@@ -328,6 +307,143 @@ const actionColWidth = computed(() => {
     (has('cordon') ? 1 : 0) + (has('drain') ? 1 : 0) + (has('delete') ? 1 : 0)
   if (!iconCount) return 0
   return 20 + iconCount * 30
+})
+
+// ── 虚拟化表格（vue-virtual-scroller RecycleScroller）──────────────
+// 用固定表头 + 行虚拟滚动替代 el-table：大量 K8s 资源时只渲染可视区行，
+// DOM 数从 O(n) 降到 O(可视行)。排序/列筛选/行点击/行着色/操作列全部保留。
+const VROW_HEIGHT = 36
+
+// 统一列描述：常规资源用 desc.columns，CRD 实例用 printerColumns 动态列。
+interface VCol {
+  header: string
+  width?: number
+  getText: (row: any) => string
+  sortable?: boolean
+  filterable?: boolean
+  sortNum?: (row: any) => number
+}
+
+const vtableColumns = computed<VCol[]>(() => {
+  if (props.frame.kind === 'custom') {
+    const pcs = props.frame.crd.printerColumns
+    return [
+      { header: 'Name', getText: (r: any) => r.metadata?.name || '' },
+      ...pcs.map(pc => ({ header: pc.name, getText: (r: any) => String(evalJsonPath(r, pc.jsonPath) ?? '') })),
+      { header: 'Age', getText: (r: any) => age(r.metadata?.creationTimestamp) },
+    ]
+  }
+  return (desc.value?.columns || []).map(col => ({
+    header: col.header,
+    width: col.width,
+    getText: (row: any) => cellText(col.value(row, usageOf(row))),
+    sortable: true,
+    filterable: !!col.filterable,
+    sortNum: col.sortValue ? (row: any) => col.sortValue!(row, usageOf(row)) : undefined,
+  }))
+})
+
+const vtableRows = computed<any[]>(() => props.frame.kind === 'custom' ? crdFiltered.value : filtered.value)
+
+// 排序状态：sortKey 为列 header，null 表示默认按 name 升序（对齐原 el-table 默认）。
+const sortKey = ref<string | null>(null)
+const sortOrder = ref<'asc' | 'desc'>('asc')
+// 列 enum 筛选：header -> 已选值数组
+const colFilterSel = ref<Record<string, string[]>>({})
+
+function toggleSort(col: VCol) {
+  if (!col.sortable) return
+  if (sortKey.value === col.header) {
+    // 同列循环：asc → desc → 取消（回到默认 name 升序）
+    if (sortOrder.value === 'asc') sortOrder.value = 'desc'
+    else { sortKey.value = null; sortOrder.value = 'asc' }
+  } else {
+    sortKey.value = col.header
+    sortOrder.value = 'asc'
+  }
+}
+
+function enumValues(col: VCol): string[] {
+  const set = new Set<string>()
+  for (const row of vtableRows.value) set.add(col.getText(row))
+  return Array.from(set).filter(Boolean).sort()
+}
+
+function colFilterActive(col: VCol): boolean {
+  return (colFilterSel.value[col.header]?.length || 0) > 0
+}
+
+function setColFilter(header: string, v: string[]) {
+  colFilterSel.value = { ...colFilterSel.value, [header]: v }
+}
+
+function clearColFilter(col: VCol) {
+  const next = { ...colFilterSel.value }
+  delete next[col.header]
+  colFilterSel.value = next
+}
+
+// 单元格比较：优先 sortNum（如 cpu 毫核），否则解析单位/百分比/时长做数值比较，
+// 都不行退回 localeCompare。
+function vcompare(col: VCol, a: any, b: any): number {
+  if (col.sortNum) return col.sortNum(a) - col.sortNum(b)
+  const ta = col.getText(a)
+  const tb = col.getText(b)
+  const na = numericSortKey(ta)
+  const nb = numericSortKey(tb)
+  if (na !== null && nb !== null) return na - nb
+  if (na !== null) return -1
+  if (nb !== null) return 1
+  return ta.localeCompare(tb)
+}
+
+// 列 enum 筛选 + 排序后的最终列表（顶部 filter 已在 vtableRows 内完成）。
+const vtableFinal = computed<any[]>(() => {
+  let list = vtableRows.value
+  const cols = vtableColumns.value
+  const filters = colFilterSel.value
+  if (cols.some(c => (filters[c.header]?.length || 0) > 0)) {
+    list = list.filter(row => cols.every(c => {
+      const sel = filters[c.header]
+      if (!sel || sel.length === 0) return true
+      return sel.includes(c.getText(row))
+    }))
+  }
+  if (sortKey.value) {
+    const col = cols.find(c => c.header === sortKey.value)
+    if (col) {
+      const dir = sortOrder.value === 'asc' ? 1 : -1
+      list = list.slice().sort((a, b) => dir * vcompare(col, a, b))
+    }
+  }
+  return list
+})
+
+// RecycleScroller 需要顶层 key 字段（K8s 资源 uid 唯一，无 uid 退回 name）。
+const scrollerItems = computed(() => vtableFinal.value.map((row, i) => ({
+  row,
+  key: row.metadata?.uid || row.metadata?.name || `__idx_${i}`,
+})))
+
+// 列 flex 基础：有 width 固定，无 width 平分剩余空间。表头与行共用以保证对齐。
+function colFlex(col: VCol): string {
+  return col.width ? `0 0 ${uiPx(col.width)}px` : '1 1 0'
+}
+
+function vrowClass(row: any): string {
+  if (props.frame.kind === 'custom') return ''
+  const tone = desc.value?.rowTone?.(row)
+  return tone ? `k8s-row-${tone}` : ''
+}
+
+function vrowClick(row: any) {
+  if (props.frame.kind === 'custom') emit('open-detail', row)
+  else onRowClick(row)
+}
+
+const vactionWidth = computed(() => {
+  if (props.frame.kind === 'custom') return uiPx(66)
+  return actionColWidth.value ? uiPx(actionColWidth.value) : 0
 })
 
 function onViewPods(row: any) {
@@ -570,42 +686,154 @@ onBeforeUnmount(() => {
   color: var(--text-secondary, #888);
   font-size: 0.75rem;
 }
-.k8s-list-table {
-  flex: 1;
-}
-/* 行可点击（打开详情/CRD），用手型光标提示 */
-.k8s-list-table :deep(.el-table__row) {
-  cursor: pointer;
-}
-/* 行着色：非就绪/异常项高亮（对齐 k9s）。用 el-table 的 CSS 变量覆盖 hover/条纹底色。 */
-.k8s-list-table :deep(.k8s-row-warn) {
-  /* 实色（与底色混合），不用半透明覆盖 */
-  --el-table-tr-bg-color: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
-}
-.k8s-list-table :deep(.k8s-row-warn td.el-table__cell) {
-  background: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
-  color: var(--warning);
-}
-.k8s-list-table :deep(.k8s-row-err) {
-  --el-table-tr-bg-color: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
-}
-.k8s-list-table :deep(.k8s-row-err td.el-table__cell) {
-  background: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
-  color: var(--el-color-danger);
-}
-/* Action-column cell: tighter cell padding + fixed 0.25rem gap between the
-   project-standard .btn-icon buttons (1.5rem square, from style.css .btn). */
-.k8s-list-table :deep(.k8s-action-cell .cell) {
-  padding: 0 0.25rem;
-  white-space: nowrap;
-}
-.k8s-list-table :deep(.k8s-action-cell .btn-icon + .btn-icon) {
-  margin-left: 0.25rem;
-}
 .k8s-list-err {
   color: var(--el-color-danger, #f56);
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
   border-bottom: 1px solid var(--el-border-color-lighter, #333);
+}
+
+/* ── 虚拟化表格（对齐 Element Plus el-table small + border 外观）── */
+.k8s-vtable {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+  font-size: 0.75rem;
+}
+/* 表头：固定不滚动。overflow-y + scrollbar-gutter 预留与 body 一致的滚动条空间，
+   保证表头列与 body 列宽度对齐（body 由 RecycleScroller 管理滚动条）。 */
+.k8s-vtable-head {
+  display: flex;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  border-bottom: 1px solid var(--el-border-color-lighter, #333);
+  background: var(--bg-surface, #1e1e1e);
+}
+.k8s-vtable-th {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  height: 2rem;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  border-right: 1px solid var(--el-border-color-lighter, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  box-sizing: border-box;
+}
+.k8s-vtable-th:last-child {
+  border-right: none;
+}
+.k8s-vtable-th.sortable {
+  cursor: pointer;
+}
+.k8s-vtable-th.sortable:hover {
+  color: var(--text-primary, #ddd);
+}
+.k8s-vtable-th.is-sorted {
+  color: var(--el-color-primary, #409eff);
+}
+.k8s-vtable-th-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.k8s-vtable-sort {
+  font-size: 0.625rem;
+}
+.k8s-vtable-filter {
+  cursor: pointer;
+  font-size: 0.625rem;
+  color: var(--text-secondary, #888);
+  padding: 0 0.125rem;
+}
+.k8s-vtable-filter:hover,
+.k8s-vtable-filter.active {
+  color: var(--el-color-primary, #409eff);
+}
+.k8s-vtable-action {
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* RecycleScroller 根元素：占满剩余空间并自行管理滚动 */
+.k8s-vtable-body {
+  flex: 1;
+  min-height: 0;
+  scrollbar-gutter: stable;
+}
+.k8s-vtable-row {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--el-border-color-lighter, #333);
+  box-sizing: border-box;
+}
+.k8s-vtable-row:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+.k8s-vtable-td {
+  padding: 0 0.5rem;
+  border-right: 1px solid var(--el-border-color-lighter, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+.k8s-vtable-td:last-child {
+  border-right: none;
+}
+.k8s-vtable-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 行着色：非就绪/异常项高亮（对齐 k9s） */
+.k8s-vtable-row.k8s-row-warn {
+  background: color-mix(in srgb, var(--warning) 16%, var(--bg-surface));
+  color: var(--warning);
+}
+.k8s-vtable-row.k8s-row-err {
+  background: color-mix(in srgb, var(--el-color-danger) 14%, var(--bg-surface));
+  color: var(--el-color-danger);
+}
+/* 操作列按钮间距（.btn-icon 1.5rem 方形，来自全局 style.css .btn） */
+.k8s-vtable-action .btn-icon + .btn-icon {
+  margin-left: 0.25rem;
+}
+.k8s-vtable-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.75rem;
+}
+</style>
+
+<!-- el-popover 内容 teleport 到 body，scoped 样式不作用，故用全局样式 -->
+<style>
+.k8s-col-filter-panel .el-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+.k8s-col-filter-panel .el-checkbox {
+  margin-right: 0;
+  height: auto;
+  padding: 0.125rem 0;
+}
+.k8s-col-filter-foot {
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
+  text-align: right;
+  border-top: 1px solid var(--el-border-color-lighter, #333);
 }
 </style>

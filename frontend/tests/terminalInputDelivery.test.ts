@@ -4,13 +4,15 @@ import ts from 'typescript'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalInput } from '../src/composables/useTerminalInput'
 import { pasteWithScroll } from '../src/utils/terminalPaste'
-import { filterTerminalInput } from '../src/utils/terminalInputFilter'
+import { filterTerminalInput, stripDeviceReplies } from '../src/utils/terminalInputFilter'
+import { applyMobileCtrl } from '../src/utils/mobileCtrlKey'
 
-// Exercise the component's actual onData callback without mounting Wails,
+// Exercise the composable's actual onData callback without mounting Wails,
 // WebGL, and every store used by BaseTerminal.
-const source = readFileSync(new URL('../src/components/BaseTerminal.vue', import.meta.url), 'utf8')
-const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)![1]
-const ast = ts.createSourceFile('BaseTerminal.ts', script, ts.ScriptTarget.Latest, true)
+// After the BaseTerminal split, the onData listener lives in useTerminalDataFlow.
+const source = readFileSync(new URL('../src/composables/useTerminalDataFlow.ts', import.meta.url), 'utf8')
+const script = source // .ts file — no <script> tag to extract
+const ast = ts.createSourceFile('useTerminalDataFlow.ts', script, ts.ScriptTarget.Latest, true)
 let callback = ''
 function visit(node: ts.Node) {
   if (ts.isBinaryExpression(node) && node.left.getText(ast) === 'onDataDispose' &&
@@ -20,7 +22,7 @@ function visit(node: ts.Node) {
   ts.forEachChild(node, visit)
 }
 visit(ast)
-if (!callback) throw new Error('BaseTerminal onData callback not found')
+if (!callback) throw new Error('useTerminalDataFlow onData callback not found')
 const executable = ts.transpile(`const onData = ${callback}; onData`, {
   target: ts.ScriptTarget.ES2022,
 })
@@ -30,19 +32,49 @@ function setup() {
   vi.stubGlobal('cancelAnimationFrame', () => {})
   const input = useTerminalInput(null, { mode: 'ssh', sessionId: 'test' })
   const writes: string[] = []
-  const onData = runInNewContext(executable, {
+  // The keystroke pipeline in useTerminalDataFlow is:
+  //   onData → imeOrder.push → processTerminalData → writeTerminalInput
+  // imeOrder (createKeystrokeReorder) reorders IME bursts; without IME input
+  // it passes straight through to processTerminalData. processTerminalData
+  // updates the local line buffer (handleInput), applies the Backspace
+  // line-start guard (issue #814), then writes to the session. We wire the
+  // same chain in the VM context so the extracted onData callback exercises
+  // the real delivery behaviour.
+  const writeTerminalInputFn = (data: string, inAlt: boolean) => {
+    const filtered = filterTerminalInput(data, inAlt)
+    if (filtered) writes.push(filtered)
+  }
+  const ctx: Record<string, unknown> = {
     sidNow: 'test', gen: 1,
     getManagedTerminal: () => ({ onDataGeneration: 1 }),
-    replySuppressUntil: 0, isMobileTouch: false, retryOnEnter: false,
+    replySuppressUntil: { value: 0 }, isMobileTouch: false, retryOnEnter: false,
     props: { mode: 'ssh', sessionId: 'test' },
     terminalInput: input,
     suggestions: { isVisible: () => false, close: () => {} },
     setTimeout: () => 0,
-    writeTerminalInput: (data: string, inAlt: boolean) => {
-      const filtered = filterTerminalInput(data, inAlt)
-      if (filtered) writes.push(filtered)
-    },
-  }) as (data: string) => void
+    Date,
+    getMode: () => 'ssh',
+    stripDeviceReplies,
+    applyMobileCtrl,
+    keyHandler: { writeTerminalInput: writeTerminalInputFn },
+    writeTerminalInput: writeTerminalInputFn,
+  }
+  ctx.processTerminalData = (data: string) => {
+    input.handleInput(data)
+    const inAlt = input.isInAlternateScreen() ?? false
+    // NOTE: the Backspace line-start guard (issue #814, shouldSuppressBackspace)
+    // is a local-only addition that upstream removed ("Always deliver Backspace
+    // and let the remote line editor enforce its bounds"). These tests verify
+    // the upstream delivery behaviour through the imeOrder chain, so the guard
+    // is intentionally omitted here. The guard itself is covered by
+    // useSmartCopyPaste.test.ts.
+    ;(ctx.writeTerminalInput as (d: string, a: boolean) => void)(data, inAlt)
+  }
+  ctx.imeOrder = {
+    push: (data: string) => (ctx.processTerminalData as (d: string) => void)(data),
+    dispose: () => {},
+  }
+  const onData = runInNewContext(executable, ctx) as (data: string) => void
   return { input, writes, onData }
 }
 

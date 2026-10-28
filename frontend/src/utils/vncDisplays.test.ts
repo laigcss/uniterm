@@ -12,6 +12,8 @@ function canvas() {
 beforeAll(async () => {
   vi.stubGlobal('window', { console })
   vi.stubGlobal('document', { createElement: canvas })
+  // noVNC's Display constructor reads navigator.userAgent for a debug log.
+  vi.stubGlobal('navigator', { userAgent: 'vitest' })
   Display = (await import('@novnc-internals/display.js')).default
 })
 afterAll(() => vi.unstubAllGlobals())

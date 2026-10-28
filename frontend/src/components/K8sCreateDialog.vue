@@ -10,8 +10,8 @@
     <SyntaxEditor v-model="content" lang="yaml" />
     <div v-if="error" class="yaml-error">{{ error }}</div>
     <template #footer>
-      <el-button @click="visible = false">{{ t('common.cancel') || '取消' }}</el-button>
-      <el-button type="primary" :loading="saving" @click="onConfirm">{{ t('common.save') || '保存' }}</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="saving" @click="onConfirm">{{ t('common.save') }}</el-button>
     </template>
   </el-dialog>
 </template>

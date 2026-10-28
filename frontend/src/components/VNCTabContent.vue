@@ -476,7 +476,7 @@ async function onNativeFileDrop(paths: string[]) {
   if (!rfb || status.value !== 'connected') return
   const remoteHost = props.config?.host || ''
   if (!remoteHost) {
-    uploadStatus.value = '无法确定远程主机地址'
+    uploadStatus.value = t('vnc.uploadNoHost')
     setTimeout(() => { uploadStatus.value = '' }, 3000)
     return
   }
@@ -487,17 +487,17 @@ async function onNativeFileDrop(paths: string[]) {
 
   for (const p of paths) {
     const filename = p.split('/').pop() || p
-    uploadStatus.value = `正在上传: ${filename} (0%)`
+    uploadStatus.value = t('vnc.uploading', { name: filename, percent: 0 })
     try {
       const remotePath = await UploadFileViaSMB(p, remoteHost, smbUser, smbPass)
-      uploadStatus.value = `已上传到 ${remotePath}`
+      uploadStatus.value = t('vnc.uploaded', { path: remotePath })
       await sleep(800)
       await openURLOnRemote(remotePath)
       await sleep(500)
       uploadStatus.value = ''
     } catch (err: any) {
       console.error('File drop failed:', err)
-      uploadStatus.value = `上传失败: ${err?.message || err}`
+      uploadStatus.value = t('vnc.uploadFailed', { error: err?.message || err })
       setTimeout(() => { uploadStatus.value = '' }, 5000)
     }
   }
@@ -649,7 +649,7 @@ onMounted(() => {
   // SMB upload progress events from the backend
   smbProgressUnlisten = Events.On('vnc:smb-progress', (data: any) => {
     if (data?.filename && data?.percent !== undefined) {
-      uploadStatus.value = `正在上传: ${data.filename} (${data.percent}%)`
+      uploadStatus.value = t('vnc.uploading', { name: data.filename, percent: data.percent })
     }
   })
 })

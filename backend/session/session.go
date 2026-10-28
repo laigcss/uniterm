@@ -563,8 +563,12 @@ func (s *baseSession) AddDataTap(cb func([]byte)) func() {
 	s.mu.Unlock()
 	return func() {
 		s.mu.Lock()
+		// Sentinel removal: nilling the slot keeps every other tap's index
+		// stable, so a later unsubscribe for a tap registered before this
+		// one still points at the right callback. Splicing the slice would
+		// shift indices and make an older unsubscribe remove the wrong tap.
 		if idx < len(s.dataTaps) {
-			s.dataTaps = append(s.dataTaps[:idx], s.dataTaps[idx+1:]...)
+			s.dataTaps[idx] = nil
 		}
 		s.mu.Unlock()
 	}
@@ -583,8 +587,11 @@ func (s *baseSession) AddStatusTap(cb func(SessionStatus)) (untap func()) {
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
+			// Sentinel removal (see AddDataTap): nilling the slot keeps every
+			// other tap's index stable so an older unsubscribe cannot remove
+			// the wrong callback after a splice shifts indices.
 			if idx < len(s.statusTaps) {
-				s.statusTaps = append(s.statusTaps[:idx], s.statusTaps[idx+1:]...)
+				s.statusTaps[idx] = nil
 			}
 			s.mu.Unlock()
 		})
@@ -614,7 +621,9 @@ func (s *baseSession) setStatus(st SessionStatus) {
 		l(st)
 	}
 	for _, tap := range taps {
-		tap(st)
+		if tap != nil {
+			tap(st)
+		}
 	}
 }
 
@@ -661,7 +670,9 @@ func (s *baseSession) emitData(data []byte) {
 		w(data)
 	}
 	for _, tap := range taps {
-		tap(data)
+		if tap != nil {
+			tap(data)
+		}
 	}
 	if cb == nil {
 		return

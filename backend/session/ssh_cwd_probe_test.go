@@ -148,6 +148,32 @@ func waitForProbeConns(t *testing.T, conns chan *probeConnActivity, n int) []*pr
 	return nil
 }
 
+// findMainShellConn returns the connection that opened a shell (pty-req +
+// shell), distinguishing it from the cwd-hook probe connection which only
+// carries an exec. At most one shell connection is expected.
+func findMainShellConn(t *testing.T, acts []*probeConnActivity) *probeConnActivity {
+	t.Helper()
+	var main *probeConnActivity
+	for _, a := range acts {
+		if atomic.LoadInt32(&a.shell) > 0 {
+			if main != nil {
+				t.Fatalf("found multiple shell connections among %d transports", len(acts))
+			}
+			main = a
+		}
+	}
+	if main == nil {
+		t.Fatalf("no main shell connection found among %d transports", len(acts))
+	}
+	return main
+}
+
+// TestSSHConnectNeverExecutesCwdProbe verifies that the MAIN session transport
+// never carries an exec request (cwd probe). Since issues #1031/#1057 the
+// cwd-hook shell detection runs on a separate short-lived probe connection,
+// so the server may see an additional probe transport. The main connection
+// must still carry only pty-req + shell — the probe connection is allowed to
+// exec and must not affect the main session.
 func TestSSHConnectNeverExecutesCwdProbe(t *testing.T) {
 	for _, killOnExec := range []bool{false, true} {
 		t.Run(strconv.FormatBool(killOnExec), func(t *testing.T) {
@@ -160,13 +186,50 @@ func TestSSHConnectNeverExecutesCwdProbe(t *testing.T) {
 			if s.Status() != StatusConnected {
 				t.Fatalf("status = %s", s.Status())
 			}
-			acts := waitForProbeConns(t, conns, 1)
-			if len(acts) != 1 {
-				t.Fatalf("got %d transports, want one", len(acts))
+			// The probe connection runs in parallel and always dials the
+			// server (even if its exec is later killed), so two transports
+			// are expected: the probe and the main session.
+			acts := waitForProbeConns(t, conns, 2)
+			main := findMainShellConn(t, acts)
+			if got := atomic.LoadInt32(&main.shell); got != 2 {
+				t.Fatalf("main connection shell=%d, want 2 (pty-req + shell)", got)
 			}
-			if atomic.LoadInt32(&acts[0].shell) != 2 || atomic.LoadInt32(&acts[0].exec) != 0 {
-				t.Fatal("expected pty-req + shell without exec")
+			if got := atomic.LoadInt32(&main.exec); got != 0 {
+				t.Fatalf("main connection exec=%d, want 0 (cwd probe must not run on main transport)", got)
 			}
 		})
+	}
+}
+
+// TestSSHCwdProbeRunsOnSeparateConnection verifies the new behaviour introduced
+// for issues #1031/#1057: the cwd-hook shell detection exec runs on a dedicated
+// probe connection, never on the main session transport. Running exec on the
+// main connection would (a) consume the one-shot PAM loginmsg on OpenSSH so
+// the shell never displays the MOTD, and (b) tear down the whole transport on
+// CLI-only appliances that implement only pty-req + shell.
+func TestSSHCwdProbeRunsOnSeparateConnection(t *testing.T) {
+	addr, conns := startProbeTrackingServer(t, false)
+	s := NewSSHSession("cwd-probe-separate-" + t.Name())
+	if err := s.Connect(probeTestConfig(addr)); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Disconnect()
+	if s.Status() != StatusConnected {
+		t.Fatalf("status = %s", s.Status())
+	}
+	acts := waitForProbeConns(t, conns, 2)
+	var probe *probeConnActivity
+	for _, a := range acts {
+		if atomic.LoadInt32(&a.exec) > 0 {
+			probe = a
+			break
+		}
+	}
+	if probe == nil {
+		t.Fatalf("expected a separate probe connection carrying exec, none found among %d transports", len(acts))
+	}
+	main := findMainShellConn(t, acts)
+	if got := atomic.LoadInt32(&main.exec); got != 0 {
+		t.Fatalf("main connection carried exec=%d, want 0", got)
 	}
 }

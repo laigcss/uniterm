@@ -153,7 +153,7 @@ import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const props = defineProps<{
   rows: Record<string, any>[]
@@ -192,13 +192,10 @@ function showAll() {
   visibleCount.value = props.rows.length
 }
 const moreText = computed(() => {
-  const isZh = locale.value.startsWith('zh')
   return {
-    showing: isZh
-      ? `已显示 ${visibleCount.value} / ${props.rows.length} 行`
-      : `Showing ${visibleCount.value} of ${props.rows.length} rows`,
-    more: isZh ? '显示更多' : 'Show more',
-    all: isZh ? '显示全部' : 'Show all',
+    showing: t('db.resultShowing', { shown: visibleCount.value, total: props.rows.length }),
+    more: t('db.showMore'),
+    all: t('db.showAll'),
   }
 })
 
