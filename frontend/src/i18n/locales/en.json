@@ -827,6 +827,7 @@
   "vnc.errorCredentials": "Credentials required: {types}",
   "vnc.errorClosed": "Connection closed unexpectedly",
   "vnc.uploadNoHost": "Cannot determine remote host address",
+  "vnc.uploadNoCreds": "Missing SMB credentials — set user and password in the connection config ({host})",
   "vnc.uploading": "Uploading: {name} ({percent}%)",
   "vnc.uploaded": "Uploaded to {path}",
   "vnc.uploadFailed": "Upload failed: {error}",
