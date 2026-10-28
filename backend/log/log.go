@@ -41,6 +41,7 @@ func Writef(format string, args ...interface{}) {
 	defer mu.Unlock()
 
 	msg := fmt.Sprintf(format, args...)
+	msg = Redact(msg) // pipeline-level redaction: defensive sweep for secrets
 	line := fmt.Sprintf("%s %s\n", time.Now().Format("2006-01-02 15:04:05.000"), msg)
 
 	// Init ran before the wails Android bridge attached, so its logPath

@@ -29,13 +29,13 @@ func parseParams(s string) map[string]string {
 }
 
 // BuildDSN builds a DSN string from connection config fields.
-// On error the returned error is passed through log.Redact so a DSN
-// fragment (which carries the password) can never leak back to the
-// caller or front-end via the error string (S4).
+// The returned error only contains the database type name (never the
+// password); pipeline-level redaction in log.Writef provides defense
+// in depth for any secret that might reach the log.
 func BuildDSN(dbType, host, user, password, dbName, extraParams string, port int) (string, error) {
 	p, err := NewProvider(dbType)
 	if err != nil {
-		return "", fmt.Errorf("%s", log.Redact(err.Error()))
+		return "", err
 	}
 	return p.DSN(host, port, user, password, dbName, parseParams(extraParams)), nil
 }
