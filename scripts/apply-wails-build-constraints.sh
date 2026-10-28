@@ -174,6 +174,42 @@ for f in "${DESKTOP_FILES[@]}"; do
   fi
 done
 
+# --- Ensure logger_server.go exists (provides DefaultLogger for -tags server) ---
+LOGGER_SERVER="$WAILS_APP_DIR/logger_server.go"
+if [[ ! -f "$LOGGER_SERVER" ]]; then
+  if $CHECK_ONLY; then
+    echo -e "${RED}FAIL: logger_server.go is missing (required for -tags server builds).${NC}"
+    exit 1
+  fi
+  cat > "$LOGGER_SERVER" << 'GOEOF'
+//go:build server
+
+package application
+
+import (
+	"log/slog"
+	"os"
+)
+
+// DefaultLogger for server builds (cross-compile without platform-specific logger).
+func DefaultLogger(level slog.Leveler) *slog.Logger {
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: level,
+	})
+	return slog.New(handler)
+}
+GOEOF
+  echo -e "${GREEN}Created: logger_server.go${NC} (DefaultLogger stub for -tags server)"
+else
+  # In check-only mode, verify the file has the expected content
+  if $CHECK_ONLY; then
+    if ! grep -q 'func DefaultLogger' "$LOGGER_SERVER" 2>/dev/null; then
+      echo -e "${RED}FAIL: logger_server.go exists but missing DefaultLogger.${NC}"
+      exit 1
+    fi
+  fi
+fi
+
 # --- Summary ---
 echo ""
 echo "=== Summary ==="
