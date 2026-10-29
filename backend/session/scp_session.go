@@ -78,7 +78,7 @@ func (s *SCPSession) Connect(config ConnectionConfig) error {
 		User:              config.User,
 		Auth:              authMethods,
 		Timeout:           30 * time.Second,
-		HostKeyCallback:   HostKeyCallback(config.Host, fmt.Sprintf("%d", config.Port), HostKeyStrategy(config.HostKeyStrategy)),
+		HostKeyCallback:   HostKeyCallback(config.Host, strconv.Itoa(config.Port), s.id),
 		Config:            algoSet.config(),
 		HostKeyAlgorithms: algoSet.HostKeys,
 	}

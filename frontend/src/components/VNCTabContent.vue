@@ -1,5 +1,14 @@
 <template>
-  <div class="vnc-tab-content">
+  <div
+    ref="container"
+    class="vnc-tab-content"
+    :class="{ 'is-fullscreen': isFullscreen }"
+    :data-remote-keyboard="keyboardFocused && !viewOnly ? 'true' : undefined"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+    @keydown.capture="onLocalKey"
+    @keyup.capture="onLocalKey"
+  >
     <!-- Connecting state -->
     <div v-if="status === 'connecting'" class="vnc-overlay">
       <el-icon class="is-loading" :size="'2rem'"><Loader /></el-icon>
@@ -24,28 +33,23 @@
       v-show="status === 'connected'"
       ref="vncContainer"
       class="vnc-area"
+      :class="{ 'is-unscaled': !scaleViewport }"
       tabindex="0"
-      data-file-drop-target="vnc-drop-target"
       @paste="onPaste"
     />
 
-    <!-- Drag-and-drop overlay: shown while dragging files over the VNC area -->
-    <div v-if="isDragging" class="vnc-drop-overlay">
-      <el-icon :size="'3rem'"><Upload /></el-icon>
-      <p>{{ t('vnc.dropFileHint') }}</p>
-    </div>
-
-    <!-- Upload status toast -->
-    <div v-if="uploadStatus" class="vnc-upload-status">
-      {{ uploadStatus }}
-    </div>
-
     <!-- Status bar -->
-    <div v-show="status === 'connected'" class="vnc-statusbar">
+    <div v-show="status === 'connected' && !isFullscreen" class="vnc-statusbar">
       <span class="vnc-status-dot" />
       <span>{{ t('vnc.connected') }}</span>
       <span class="vnc-status-sep">|</span>
       <span>{{ config?.host }}:{{ config?.port || 5900 }}</span>
+      <span class="vnc-status-sep">|</span>
+      <RemoteDisplaySelect
+        :displays="displayState.displays" :width="displayState.width" :height="displayState.height"
+        :view="displayState.view" allow-custom @select="selectDisplay" @focus-desktop="focusDesktop"
+        @create-region="openRegionEditor()" @edit-region="openRegionEditor"
+      />
       <span class="vnc-status-sep">|</span>
       <span class="vnc-status-label">{{ t('vnc.scale') }}</span>
       <el-switch
@@ -73,23 +77,68 @@
         :inactive-text="t('vnc.scaleOff')"
         style="--el-switch-on-color: var(--success); --el-switch-off-color: var(--text-disabled)"
       />
+      <span class="vnc-status-spacer" />
+      <button class="vnc-fullscreen-btn" @click="toggleFullscreen">{{ t('remoteDesktop.fullscreen') }}</button>
     </div>
+    <RemoteDesktopToolbar
+      v-if="isFullscreen"
+      v-model:scale-viewport="scaleViewport"
+      v-model:show-dot-cursor="showDotCursor"
+      :host="config?.host || ''"
+      :port="config?.port || 5900"
+      :disabled="status !== 'connected'"
+      @restore="toggleFullscreen"
+      @focus-desktop="focusDesktop"
+      @minimize="blurDesktop"
+      @error="onToolbarError"
+    >
+      <template #displays>
+        <RemoteDisplaySelect
+          :displays="displayState.displays" :width="displayState.width" :height="displayState.height"
+          :view="displayState.view" allow-custom @select="selectDisplay" @focus-desktop="focusDesktop"
+          @create-region="openRegionEditor()" @edit-region="openRegionEditor"
+        />
+        <span class="vnc-status-sep">|</span>
+      </template>
+    </RemoteDesktopToolbar>
+    <DesktopRegionEditor
+      v-if="regionEditor" :key="regionEditor.region.id" :preview="regionEditor.preview" :region="regionEditor.region"
+      :regions="displayState.view.regions || []" :editing-existing="regionEditor.editingExisting"
+      :desktop-width="displayState.width" :desktop-height="displayState.height"
+      @save="saveRegion" @cancel="closeRegionEditor" @delete="deleteRegion"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Loader, Upload } from '@lucide/vue'
+import { ref, watch, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick } from 'vue'
+import { Loader } from '@lucide/vue'
+import RemoteDesktopToolbar from './RemoteDesktopToolbar.vue'
+import RemoteDisplaySelect from './RemoteDisplaySelect.vue'
+import DesktopRegionEditor from './DesktopRegionEditor.vue'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
-import { useNativeFileDrop } from '../composables/useFilePanel'
+import { useConnectionStore } from '../stores/connectionStore'
+import { useRemoteDesktopPreferences } from '../composables/useRemoteDesktopPreferences'
 import type { ConnectionConfig } from '../types/session'
-import { Clipboard, Events } from '@wailsio/runtime'
-import { CreateSession, CloseSession, EncodeClipboardText, UploadFileViaSMB } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { Events } from '@wailsio/runtime'
+import { CreateSession, CloseSession, SetVNCKeyboardCapture, EncodeVNCClipboardText } from '../../bindings/github.com/ys-ll/uniterm/app'
+import { createVncClipboard } from '../utils/vncClipboard'
+import { installVncPixelScaling } from '../utils/vncScaling'
+import { installVncCursor } from '../utils/vncCursor'
+import { captureVncPreview, installVncDisplays, type DesktopDisplayState, type DesktopPreview, type DesktopRegion, type DesktopView } from '../utils/vncDisplays'
+import { deleteDesktopRegion, saveDesktopRegion, suggestedDesktopRegion } from '../utils/desktopRegions'
+import { msg } from '../services/message'
+import { VncNativeKeyboard } from '../utils/vncKeyboard'
+import { queueRemoteKeyboardChange } from '../utils/remoteKeyboard'
+import type { NativeRdpKey } from '../utils/remoteKeyboard'
+import { RdpClipboardSync, RdpInputQueue } from '../utils/rdpClipboard'
+import { readClipboardText, writeClipboard } from '../composables/useClipboardWrite'
 const { t } = useI18n()
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
+const connectionStore = useConnectionStore()
 
 const props = defineProps<{
   panelId: string
@@ -100,16 +149,69 @@ const props = defineProps<{
 const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
 const lastError = ref<string>('')
 const currentSessionId = ref<string | null>(props.sessionId)
+const container = ref<HTMLDivElement | null>(null)
+const isFullscreen = ref(false)
 const vncContainer = ref<HTMLDivElement | null>(null)
 const savedPassword = ref<string>('')
-const scaleViewport = ref(true)
-const viewOnly = ref(false)
-const showDotCursor = ref(false)
+const { scaleViewport, viewOnly, showDotCursor } = useRemoteDesktopPreferences(() => props.config)
+const displayState = ref<DesktopDisplayState>({ displays: [], width: 0, height: 0, view: { selected: 'all' } })
+let displayController: ReturnType<typeof installVncDisplays> | null = null
+const regionEditor = ref<{ preview: DesktopPreview; region: DesktopRegion; editingExisting: boolean } | null>(null)
 
-// File drag-and-drop state (scheme D-2): isDragging toggles the overlay,
-// uploadStatus shows the current transfer progress message.
-const isDragging = ref(false)
-const uploadStatus = ref('')
+function openRegionEditor(id?: string) {
+  if (!rfb || status.value !== 'connected') return
+  blurDesktop()
+  try {
+    const preview = captureVncPreview(rfb)
+    const regions = displayState.value.view.regions || []
+    const existing = regions.find(region => region.id === id)
+    let number = 1
+    while (regions.some((region, index) => (region.name || t('remoteDesktop.regionNumber', { n: index + 1 })) === t('remoteDesktop.regionNumber', { n: number }))) number++
+    const region = existing ? { ...existing, name: existing.name || t('remoteDesktop.regionNumber', { n: regions.indexOf(existing) + 1 }) } : {
+      ...suggestedDesktopRegion(displayState.value.view, preview.width, preview.height, displayState.value.displays),
+      id: crypto.randomUUID(), name: t('remoteDesktop.regionNumber', { n: number }),
+    }
+    regionEditor.value = { preview, region, editingExisting: !!existing }
+  } catch (error) {
+    console.error('Desktop preview failed:', error)
+    msg.error(t('remoteDesktop.previewUnavailable'))
+    focusDesktop()
+  }
+}
+
+function closeRegionEditor() {
+  regionEditor.value = null
+  void nextTick(focusDesktop)
+}
+
+function saveRegion(region: DesktopRegion) {
+  selectDisplay(saveDesktopRegion(displayState.value.view, region))
+  closeRegionEditor()
+}
+
+function deleteRegion(id: string) {
+  selectDisplay(deleteDesktopRegion(displayState.value.view, id))
+  closeRegionEditor()
+}
+
+function selectDisplay(view: DesktopView) {
+  displayController?.select(view)
+  if (props.config) {
+    props.config.desktopView = view
+    void connectionStore.update(props.config.id, { desktopView: view })
+  }
+}
+const keyboardFocused = ref(false)
+let keyboardCaptureId = ''
+let keyboardHeartbeat: ReturnType<typeof setInterval> | null = null
+let clipboardPoll: ReturnType<typeof setInterval> | null = null
+let clipboardSync: RdpClipboardSync | null = null
+let nativeKeyboard: VncNativeKeyboard | null = null
+let restoreDesktopInput: (() => void) | null = null
+let unsubKeyboard: (() => void) | null = null
+const inputKeys = new Set<string>()
+const sentKeys = new Map<string, number>()
+const inputQueue = new RdpInputQueue(error => console.error('VNC input/clipboard error:', error))
 
 function readThemeBackground(): string {
   // Pull the resolved --bg-base CSS variable, which the global theme
@@ -137,26 +239,22 @@ function watchThemeBackground() {
 let rfb: any = null
 let unsubStatus: (() => void) | null = null
 let isIniting = false
+let restorePixelScaling: (() => void) | null = null
+let restoreCursor: (() => void) | null = null
+let pixelRatioQuery: MediaQueryList | null = null
+
+function onPixelRatioChange() {
+  pixelRatioQuery?.removeEventListener('change', onPixelRatioChange)
+  pixelRatioQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+  pixelRatioQuery.addEventListener('change', onPixelRatioChange)
+  rfb?._updateScale()
+}
+
 // RFB version-negotiation retry state: currentProxyAddr powers the 3.3
 // downgrade rebuild; everConnected/rfb33Retried guard the one-shot retry.
 let currentProxyAddr = ''
 let everConnected = false
 let rfb33Retried = false
-
-// Clipboard sync: intercept Cmd+V / Ctrl+V to sync local clipboard → VNC
-// server before the keypress reaches the remote. noVNC's canvas captures
-// the keydown and sends Ctrl+V directly, but doesn't sync the local
-// clipboard first — so the remote pastes stale content.
-let clipboardKeydownHandler: ((e: KeyboardEvent) => void) | null = null
-let clipboardFocusHandler: (() => void) | null = null
-// Native file drag-and-drop via Wails' WindowFilesDropped event. EnableFileDrop
-// in the window config intercepts OS file drops at the native layer, so HTML5
-// dragover/drop events never fire — we must use the Wails event pipe instead.
-const nativeDrop = useNativeFileDrop({
-  elementId: 'vnc-drop-target',
-  isActive: () => status.value === 'connected' && !!rfb,
-  upload: (paths: string[]) => { onNativeFileDrop(paths) },
-})
 
 async function connect() {
   if (!props.config) return
@@ -188,6 +286,16 @@ async function connect() {
 }
 
 async function reconnect() {
+  regionEditor.value = null
+  onFocusOut()
+  restoreDesktopInput?.()
+  restoreDesktopInput = null
+  displayController?.dispose()
+  displayController = null
+  restorePixelScaling?.()
+  restorePixelScaling = null
+  restoreCursor?.()
+  restoreCursor = null
   if (currentSessionId.value) {
     try { await CloseSession(currentSessionId.value) } catch (_) {}
     currentSessionId.value = null
@@ -202,6 +310,15 @@ async function reconnect() {
 function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
   if (isIniting) return
   isIniting = true
+  onFocusOut()
+  restoreDesktopInput?.()
+  restoreDesktopInput = null
+  displayController?.dispose()
+  displayController = null
+  restorePixelScaling?.()
+  restorePixelScaling = null
+  restoreCursor?.()
+  restoreCursor = null
 
   // Fresh attempt (not the 3.3 downgrade retry): reset negotiation state
   // and remember the proxy address the downgrade retry would reuse.
@@ -215,15 +332,6 @@ function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
     try { rfb.disconnect() } catch (_) {}
     rfb = null
   }
-  if (clipboardKeydownHandler && vncContainer.value) {
-    vncContainer.value.removeEventListener('keydown', clipboardKeydownHandler, true)
-    clipboardKeydownHandler = null
-  }
-  if (clipboardFocusHandler && vncContainer.value) {
-    vncContainer.value.removeEventListener('focus', clipboardFocusHandler, true)
-    clipboardFocusHandler = null
-  }
-
   if (vncContainer.value) {
     vncContainer.value.innerHTML = ''
   }
@@ -248,79 +356,149 @@ function initRFB(proxyAddr: string, password: string, forceRfb33 = false) {
 
 function applyRFBOptions() {
   if (!rfb) return
+  displayController?.dispose()
+  restorePixelScaling?.()
+  restorePixelScaling = installVncPixelScaling(rfb)
+  restoreCursor?.()
+  if (container.value) restoreCursor = installVncCursor(rfb, container.value)
   rfb.viewOnly = viewOnly.value
   rfb.scaleViewport = scaleViewport.value
   rfb.showDotCursor = showDotCursor.value
   rfb.background = readThemeBackground()
+  displayController = installVncDisplays(rfb, props.config?.desktopView ?? { selected: 'all' }, state => {
+    displayState.value = state
+  })
+  setupDesktopInput()
 }
 
-// --- RFB event handlers (named so they can be removed on cache) ---
-// issue #95: only flip to 'connected' on the noVNC connect event.
-// Previously status='connected' was set as soon as the local proxy was
-// up, well before the RFB handshake completed, producing a black
-// screen with no error on security failure or wrong password.
-function onRFBConnect() {
-  lastError.value = ''
-  status.value = 'connected'
-  everConnected = true
+function ownsRemoteKeyboard(): boolean {
+  return !regionEditor.value && status.value === 'connected' && !viewOnly.value && document.hasFocus() &&
+    document.activeElement === vncContainer.value?.querySelector('canvas')
 }
 
-function onRFBSecurityFailure(e: any) {
-  const reason = e.detail?.reason ?? e.detail?.status
-  lastError.value = t('vnc.errorSecurity', { reason: String(reason ?? '') })
-  status.value = 'error'
+function onLocalKey(event: KeyboardEvent) {
+  if (event.code === 'F12') event.stopPropagation()
 }
 
-function onRFBCredentialsRequired(e: any) {
-  const types = (e.detail?.types || []).join(', ')
-  lastError.value = t('vnc.errorCredentials', { types })
-  status.value = 'error'
+function syncLocalClipboard(text?: string): Promise<void> {
+  return ownsRemoteKeyboard() ? clipboardSync?.sync(false, text) ?? Promise.resolve() : Promise.resolve()
 }
 
-// Auto-downgrade retry: if the 3.8 negotiation dies without ever
-// reaching 'connected' (typical symptom: unexplained 1006 close or a
-// legacy server that refuses modern viewers), rebuild once under
-// RFB 3.3 before surfacing the error to the user.
-function onRFBDisconnect(e: any) {
-  if (!e.detail.clean && !everConnected && !rfb33Retried && currentProxyAddr) {
-    rfb33Retried = true
-    status.value = 'connecting'
-    // Give the backend VNCProxy a beat to release the previous
-    // WebSocket/TCP pair before reconnecting through it.
-    setTimeout(() => {
-      initRFB(currentProxyAddr!, savedPassword.value, true)
-    }, 500)
-    return
+function queueVncKey(keysym: number, code: string, down: boolean, send: () => void) {
+  const repeat = inputKeys.has(code)
+  const paste = down && !repeat && ((code === 'KeyV' &&
+    ['ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight'].some(key => inputKeys.has(key))) ||
+    (code === 'Insert' && ['ShiftLeft', 'ShiftRight'].some(key => inputKeys.has(key))))
+  if (down) inputKeys.add(code)
+  else inputKeys.delete(code)
+  if (paste) inputQueue.enqueue(() => syncLocalClipboard())
+  inputQueue.enqueue(() => {
+    send()
+    if (down) sentKeys.set(code, keysym)
+    else sentKeys.delete(code)
+  })
+}
+
+function setupDesktopInput() {
+  restoreDesktopInput?.()
+  const target = rfb
+  const clipboard = createVncClipboard(target, props.config?.vncClipboardEncoding, EncodeVNCClipboardText,
+    () => ownsRemoteKeyboard() && rfb === target)
+  const sync = new RdpClipboardSync({
+    read: async () => {
+      const text = await readClipboardText()
+      return ownsRemoteKeyboard() ? { kind: 'text', text } : null
+    },
+    publish: async content => {
+      if (content.kind === 'text') await clipboard.publish(content.text)
+    },
+    writeText: writeClipboard,
+  }, true)
+  clipboardSync = sync
+  nativeKeyboard = new VncNativeKeyboard((keysym, code, down) => {
+    queueVncKey(keysym, code, down, () => target.sendKey(keysym, code, down))
+  })
+  const keyboard = target._keyboard
+  const original = keyboard.onkeyevent
+  const handler = (keysym: number, code: string, down: boolean, numlock: boolean, capslock: boolean) => {
+    queueVncKey(keysym, code, down, () => original(keysym, code, down, numlock, capslock))
   }
-  if (!e.detail.clean) {
-    if (!lastError.value) lastError.value = t('vnc.errorClosed')
-    status.value = 'error'
-  } else {
-    status.value = 'disconnected'
+  keyboard.onkeyevent = handler
+  const onClipboard = (event: any) => {
+    try {
+      sync.receiveText(clipboard.decode(event.detail.text)).catch(error => console.error('VNC clipboard write error:', error))
+    } catch (error) {
+      console.error('VNC clipboard decode error:', error)
+    }
+  }
+  target.addEventListener('clipboard', onClipboard)
+  restoreDesktopInput = () => {
+    sync.dispose()
+    clipboard.dispose()
+    target.removeEventListener('clipboard', onClipboard)
+    if (keyboard.onkeyevent === handler) keyboard.onkeyevent = original
+    inputQueue.clear()
+    nativeKeyboard = null
+    clipboardSync = null
+    inputKeys.clear()
+    sentKeys.clear()
   }
 }
 
-function onRFBClipboard(e: any) {
-  const text = e.detail.text
-  Clipboard.SetText(text).catch(() => {})
+function onFocusIn() {
+  if (!ownsRemoteKeyboard()) return
+  keyboardFocused.value = true
+  syncLocalClipboard().catch(error => console.error('VNC clipboard sync error:', error))
+  if (keyboardCaptureId || !currentSessionId.value) return
+  const captureID = crypto.randomUUID()
+  const sessionID = currentSessionId.value
+  keyboardCaptureId = captureID
+  queueRemoteKeyboardChange(() => SetVNCKeyboardCapture(sessionID, captureID, true, isFullscreen.value))
+    .then(enabled => {
+      if (!enabled || keyboardCaptureId !== captureID) return
+      let pending = false
+      keyboardHeartbeat = setInterval(() => {
+        if (!ownsRemoteKeyboard()) { onFocusOut(); return }
+        if (pending) return
+        pending = true
+        queueRemoteKeyboardChange(() => SetVNCKeyboardCapture(sessionID, captureID, true, isFullscreen.value))
+          .catch(error => {
+            console.error('VNC keyboard capture error:', error)
+            if (keyboardCaptureId === captureID) onFocusOut()
+          })
+          .finally(() => { pending = false })
+      }, 1000)
+    })
+    .catch(error => console.error('VNC keyboard capture error:', error))
 }
 
-function attachRFBEvents() {
-  if (!rfb) return
-  rfb.addEventListener('connect', onRFBConnect)
-  rfb.addEventListener('securityfailure', onRFBSecurityFailure)
-  rfb.addEventListener('credentialsrequired', onRFBCredentialsRequired)
-  rfb.addEventListener('disconnect', onRFBDisconnect)
-  rfb.addEventListener('clipboard', onRFBClipboard)
+function onFocusOut() {
+  if (keyboardHeartbeat !== null) clearInterval(keyboardHeartbeat)
+  keyboardHeartbeat = null
+  keyboardFocused.value = false
+  const captureID = keyboardCaptureId
+  keyboardCaptureId = ''
+  if (captureID) {
+    const sessionID = currentSessionId.value || ''
+    queueRemoteKeyboardChange(() => SetVNCKeyboardCapture(sessionID, captureID, false))
+      .catch(error => console.error('VNC keyboard release error:', error))
+  }
+  inputQueue.clear()
+  nativeKeyboard?.release()
+  for (const [code, keysym] of Array.from(sentKeys).reverse()) rfb?.sendKey(keysym, code, false)
+  sentKeys.clear()
+  inputKeys.clear()
 }
 
-function detachRFBEvents() {
-  if (!rfb) return
-  rfb.removeEventListener('connect', onRFBConnect)
-  rfb.removeEventListener('securityfailure', onRFBSecurityFailure)
-  rfb.removeEventListener('credentialsrequired', onRFBCredentialsRequired)
-  rfb.removeEventListener('disconnect', onRFBDisconnect)
-  rfb.removeEventListener('clipboard', onRFBClipboard)
+function onNativeKey(data: NativeRdpKey) {
+  if (data.captureID !== keyboardCaptureId || !ownsRemoteKeyboard()) return
+  if (data.reset) { onFocusOut(); onFocusIn(); return }
+  nativeKeyboard?.key(data)
+}
+
+function onVisibilityChange() {
+  if (document.hidden) onFocusOut()
+  else onFocusIn()
 }
 
 function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = false) {
@@ -370,210 +548,127 @@ function createRFB(RFB: any, proxyAddr: string, password: string, forceRfb33 = f
     }
   }
 
-
   applyRFBOptions()
 
   // issue #95: only flip to 'connected' on the noVNC connect event.
   // Previously status='connected' was set as soon as the local proxy was
   // up, well before the RFB handshake completed, producing a black
   // screen with no error on security failure or wrong password.
-  attachRFBEvents()
+  rfb.addEventListener('connect', () => {
+    lastError.value = ''
+    status.value = 'connected'
+    everConnected = true
+  })
 
-  // Clipboard sync: intercept paste shortcut in capture phase (before noVNC's
-  // canvas processes it). Read local clipboard, send via RFB clipboard message
-  // with GBK encoding (TightVNC on Chinese Windows uses ACP/GBK to decode
-  // ClientCutText), then manually send Ctrl+V keypress to trigger paste.
-  if (vncContainer.value) {
-    clipboardKeydownHandler = (e: KeyboardEvent) => {
-      // Mac: Cmd+V (metaKey), Windows/Linux: Ctrl+V (ctrlKey)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey && !e.altKey && rfb) {
-        e.preventDefault()
-        e.stopPropagation()
-        sendClipboardGBK().finally(() => {
-          // XK_Control_L = 0xffe3, XK_v = 0x0076
-          rfb.sendKey(0xffe3, 'ControlLeft', true)
-          rfb.sendKey(0x0076, 'KeyV', true)
-          rfb.sendKey(0x0076, 'KeyV', false)
-          rfb.sendKey(0xffe3, 'ControlLeft', false)
-        })
-      }
+  rfb.addEventListener('securityfailure', (e: any) => {
+    const reason = e.detail?.reason ?? e.detail?.status
+    lastError.value = t('vnc.errorSecurity', { reason: String(reason ?? '') })
+    status.value = 'error'
+  })
+
+  rfb.addEventListener('credentialsrequired', (e: any) => {
+    const types = (e.detail?.types || []).join(', ')
+    lastError.value = t('vnc.errorCredentials', { types })
+    status.value = 'error'
+  })
+
+  // Auto-downgrade retry: if the 3.8 negotiation dies without ever
+  // reaching 'connected' (typical symptom: unexplained 1006 close or a
+  // legacy server that refuses modern viewers), rebuild once under
+  // RFB 3.3 before surfacing the error to the user.
+  rfb.addEventListener('disconnect', (e: any) => {
+    if (!e.detail.clean && !everConnected && !rfb33Retried && currentProxyAddr) {
+      rfb33Retried = true
+      status.value = 'connecting'
+      // Give the backend VNCProxy a beat to release the previous
+      // WebSocket/TCP pair before reconnecting through it.
+      setTimeout(() => {
+        initRFB(currentProxyAddr!, savedPassword.value, true)
+      }, 500)
+      return
     }
-    vncContainer.value.addEventListener('keydown', clipboardKeydownHandler, true)
-
-    // Auto-sync Mac clipboard → VNC server on focus. This makes right-click
-    // paste work (Windows clipboard already has the correct content by the
-    // time the user right-clicks → Paste).
-    clipboardFocusHandler = () => {
-      if (rfb && status.value === 'connected') sendClipboardGBK()
+    if (!e.detail.clean) {
+      if (!lastError.value) lastError.value = t('vnc.errorClosed')
+      status.value = 'error'
+    } else {
+      status.value = 'disconnected'
     }
-    vncContainer.value.addEventListener('focus', clipboardFocusHandler, true)
-
-  }
+  })
 
   isIniting = false
 }
 
-// Send local clipboard text to VNC server with correct encoding.
-// - Extended clipboard supported → use noVNC's native clipboardPasteFrom (UTF-8)
-// - Not supported (TightVNC basic mode) → encode as GBK via backend, send
-//   ClientCutText directly. TightVNC on Chinese Windows decodes with ACP (GBK).
-async function sendClipboardGBK() {
-  if (!rfb) return
-  try {
-    const text = await Clipboard.Text()
-    if (!text) return
-    // Extended clipboard supports UTF-8 natively
-    if (rfb._clipboardServerCapabilitiesFormats?.[1] &&
-        rfb._clipboardServerCapabilitiesActions?.[2]) {
-      rfb.clipboardPasteFrom(text)
-      return
-    }
-    // Basic mode: encode as GBK via backend
-    const base64 = await EncodeClipboardText(text, 'gbk')
-    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-    const sock = rfb._sock
-    if (!sock) return
-    sock.sQpush8(6)              // msg-type: ClientCutText
-    sock.sQpush8(0); sock.sQpush8(0); sock.sQpush8(0)  // padding
-    sock.sQpush32(bytes.length)  // length (big-endian)
-    sock.sQpushBytes(bytes)      // GBK-encoded text
-    sock.flush()
-  } catch {
-    // Fallback: try original clipboardPasteFrom
-    try {
-      const text = await Clipboard.Text()
-      if (text) rfb.clipboardPasteFrom(text)
-    } catch {}
-  }
-}
-
 function onPaste(e: ClipboardEvent) {
   const text = e.clipboardData?.getData('text')
-  if (text && rfb) {
-    rfb.clipboardPasteFrom(text)
-  }
+  if (!text || !rfb || !ownsRemoteKeyboard()) return
+  e.preventDefault()
+  const target = rfb
+  inputQueue.enqueue(() => syncLocalClipboard(text))
+  inputQueue.enqueue(() => {
+    target.sendKey(0xffe3, 'ControlLeft', true)
+    target.sendKey(0x76, 'KeyV', true)
+    target.sendKey(0x76, 'KeyV', false)
+    target.sendKey(0xffe3, 'ControlLeft', false)
+  })
 }
-
-// ── File drag-and-drop (scheme D-2) ──────────────────────────────────────
-// Wails' EnableFileDrop intercepts OS file drops at the native layer and
-// delivers absolute file paths via the common:WindowFilesDropped event.
-// We upload each file to the backend HTTP file server → the server returns
-// a LAN-reachable download URL → we sync that URL to the Windows clipboard
-// and drive Win+R, Ctrl+V, Enter so Windows opens the URL in its default
-// browser and downloads the file.
-
-// --- VNC file drag-and-drop: SMB forward push ---
-// Mac connects to the remote Windows SMB share (forward connection, works
-// across subnets) and copies the file directly.  SMB natively handles
-// binary files (Word, images, archives) without encoding issues.
-
-async function onNativeFileDrop(paths: string[]) {
-  if (!rfb || status.value !== 'connected') return
-  const remoteHost = props.config?.host || ''
-  if (!remoteHost) {
-    uploadStatus.value = t('vnc.uploadNoHost')
-    setTimeout(() => { uploadStatus.value = '' }, 3000)
-    return
-  }
-
-  // SMB credentials must come from the connection config — never hardcoded.
-  const smbUser = props.config?.user || ''
-  const smbPass = props.config?.password || ''
-  if (!smbUser || !smbPass) {
-    uploadStatus.value = t('vnc.uploadNoCreds', { host: remoteHost })
-    setTimeout(() => { uploadStatus.value = '' }, 5000)
-    return
-  }
-
-  for (const p of paths) {
-    const filename = p.split('/').pop() || p
-    uploadStatus.value = t('vnc.uploading', { name: filename, percent: 0 })
-    try {
-      const remotePath = await UploadFileViaSMB(p, remoteHost, smbUser, smbPass)
-      uploadStatus.value = t('vnc.uploaded', { path: remotePath })
-      await sleep(800)
-      await openURLOnRemote(remotePath)
-      await sleep(500)
-      uploadStatus.value = ''
-    } catch (err: any) {
-      console.error('File drop failed:', err)
-      uploadStatus.value = t('vnc.uploadFailed', { error: err?.message || err })
-      setTimeout(() => { uploadStatus.value = '' }, 5000)
-    }
-  }
-}
-
-
-// Send a text string to the VNC server clipboard. URLs are ASCII so no GBK
-// encoding is needed — we use UTF-8 / TextEncoder directly.
-async function sendTextToVNCClipboard(text: string) {
-  if (!rfb) return
-  // Extended clipboard supports UTF-8 natively
-  if (rfb._clipboardServerCapabilitiesFormats?.[1] &&
-      rfb._clipboardServerCapabilitiesActions?.[2]) {
-    rfb.clipboardPasteFrom(text)
-    return
-  }
-  // Basic mode: TightVNC on Chinese Windows decodes ClientCutText as GBK,
-  // so we must encode the text as GBK (not UTF-8) to avoid mojibake for
-  // non-ASCII file paths (e.g. Chinese filenames).
-  const base64Bytes = await EncodeClipboardText(text, 'gbk')
-  const bytes = Uint8Array.from(atob(base64Bytes), c => c.charCodeAt(0))
-  const sock = rfb._sock
-  if (!sock) return
-  sock.sQpush8(6)              // msg-type: ClientCutText
-  sock.sQpush8(0); sock.sQpush8(0); sock.sQpush8(0)  // padding
-  sock.sQpush32(bytes.length)  // length
-  sock.sQpushBytes(bytes)      // text bytes
-  sock.flush()
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-// Drive the remote Windows desktop to open a URL: Win+R → wait → Ctrl+V →
-// wait → Enter. This makes Windows open the download URL in the default
-// browser, which downloads the file to the remote desktop.
-async function openURLOnRemote(url: string) {
-  if (!rfb) return
-
-  // 1. Sync the URL to the Windows clipboard
-  await sendTextToVNCClipboard(url)
-  await sleep(200)
-
-  // 2. Win+R opens the Run dialog
-  //    XK_Super_L = 0xffeb, XK_r = 0x0072
-  rfb.sendKey(0xffeb, 'MetaLeft', true)
-  rfb.sendKey(0x0072, 'KeyR', true)
-  rfb.sendKey(0x0072, 'KeyR', false)
-  rfb.sendKey(0xffeb, 'MetaLeft', false)
-
-  await sleep(800)  // wait for the Run dialog to open
-
-  // 3. Ctrl+V pastes the URL
-  //    XK_Control_L = 0xffe3, XK_v = 0x0076
-  rfb.sendKey(0xffe3, 'ControlLeft', true)
-  rfb.sendKey(0x0076, 'KeyV', true)
-  rfb.sendKey(0x0076, 'KeyV', false)
-  rfb.sendKey(0xffe3, 'ControlLeft', false)
-
-  await sleep(300)  // wait for the paste to complete
-
-  // 4. Enter executes the URL
-  //    XK_Return = 0xff0d
-  rfb.sendKey(0xff0d, 'Enter', true)
-  rfb.sendKey(0xff0d, 'Enter', false)
-}
-
-let smbProgressUnlisten: (() => void) | null = null
 
 function onReconnectEvent(e: Event) {
   const panelId = (e as CustomEvent)?.detail?.panelId
   if (panelId && panelId === props.panelId) reconnect()
 }
 
+function focusDesktop() {
+  if (status.value === 'connected') rfb?.focus({ preventScroll: true })
+}
+
+function blurDesktop() {
+  onFocusOut()
+  rfb?.blur()
+}
+
+function onToolbarError(error: unknown) {
+  console.error('VNC minimize error:', error)
+}
+
+function onFullscreenChange() {
+  isFullscreen.value = document.fullscreenElement === container.value
+  if (keyboardCaptureId && currentSessionId.value) {
+    // Apply the new fullscreen flag immediately instead of waiting for the
+    // next capture heartbeat, so Escape is forwarded right away.
+    const captureID = keyboardCaptureId
+    const sessionID = currentSessionId.value
+    queueRemoteKeyboardChange(() => SetVNCKeyboardCapture(sessionID, captureID, true, isFullscreen.value))
+      .catch(error => console.error('VNC keyboard capture error:', error))
+  }
+}
+
+async function toggleFullscreen() {
+  const el = container.value
+  if (!el) return
+  try {
+    if (document.fullscreenElement === el) await document.exitFullscreen()
+    else await el.requestFullscreen()
+    focusDesktop()
+  } catch (error) {
+    console.error('VNC fullscreen error:', error)
+  }
+}
+
+function onFullscreenEvent(event: Event) {
+  if ((event as CustomEvent<{ panelId: string }>).detail?.panelId === props.panelId) void toggleFullscreen()
+}
+
 onMounted(() => {
+  unsubKeyboard = Events.On('remote-desktop:keyboard', event => onNativeKey(event.data as NativeRdpKey))
+  window.addEventListener('blur', onFocusOut)
+  window.addEventListener('focus', onFocusIn)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  clipboardPoll = setInterval(() => {
+    syncLocalClipboard().catch(error => console.error('VNC clipboard sync error:', error))
+  }, 1000)
+  onPixelRatioChange()
+  document.addEventListener('fullscreenchange', onFullscreenChange)
+  window.addEventListener('vnc:fullscreen', onFullscreenEvent)
   if (props.sessionId) {
     currentSessionId.value = props.sessionId
   }
@@ -584,10 +679,6 @@ onMounted(() => {
     children.forEach(child => vncContainer.value!.appendChild(child))
     rfb = cached.rfb
     panelStore.removeVNCCache(props.panelId)
-    // Re-attach the component-scoped RFB listeners that were stripped
-    // before caching. Without this the restored rfb has no handlers and
-    // disconnect/clipboard/security events would be silently dropped.
-    attachRFBEvents()
     status.value = 'connected'
     // Cached RFB instances already completed their handshake; mark them so
     // a later disconnect doesn't fire the 3.3 downgrade retry against a
@@ -640,26 +731,33 @@ onMounted(() => {
 
   watchThemeBackground()
 
-  // Bind native file-drop listener (Wails WindowFilesDropped event).
-  nativeDrop.bind()
-
   // Tab right-click 「重连」(Reconnect) menu → forced reconnect of this panel.
   window.addEventListener('panel:reconnect', onReconnectEvent)
-
-  // SMB upload progress events from the backend
-  smbProgressUnlisten = Events.On('vnc:smb-progress', (data: any) => {
-    if (data?.filename && data?.percent !== undefined) {
-      uploadStatus.value = t('vnc.uploading', { name: data.filename, percent: data.percent })
-    }
-  })
 })
 
 onBeforeUnmount(() => {
-  smbProgressUnlisten?.()
+  onFocusOut()
+  restoreDesktopInput?.()
+  restoreDesktopInput = null
+  unsubKeyboard?.()
+  if (clipboardPoll !== null) clearInterval(clipboardPoll)
+  clipboardPoll = null
+  window.removeEventListener('blur', onFocusOut)
+  window.removeEventListener('focus', onFocusIn)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  pixelRatioQuery?.removeEventListener('change', onPixelRatioChange)
+  pixelRatioQuery = null
+  displayController?.dispose()
+  displayController = null
+  restorePixelScaling?.()
+  restorePixelScaling = null
+  restoreCursor?.()
+  restoreCursor = null
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  window.removeEventListener('vnc:fullscreen', onFullscreenEvent)
   themeObserver?.disconnect()
   themeObserver = null
   unsubStatus?.()
-  nativeDrop.unbind()
   window.removeEventListener('panel:reconnect', onReconnectEvent)
 
   if (rfb && vncContainer.value && vncContainer.value.childElementCount > 0) {
@@ -668,12 +766,6 @@ onBeforeUnmount(() => {
     const children = Array.from(vncContainer.value.children)
     children.forEach(child => container.appendChild(child))
     document.body.appendChild(container)
-    // Strip the component-scoped listeners before handing the RFB
-    // instance to the panel cache; otherwise the cached rfb keeps
-    // firing handlers that mutate this (about-to-unmount) component's
-    // refs, and on restore+reconnect the old listeners pile up and
-    // double-fire.
-    detachRFBEvents()
     panelStore.setVNCCache(props.panelId, { rfb, container })
   } else if (rfb) {
     rfb.disconnect()
@@ -691,11 +783,19 @@ watch(scaleViewport, (val) => {
   if (rfb) rfb.scaleViewport = val
 })
 watch(viewOnly, (val) => {
+  if (val) onFocusOut()
   if (rfb) rfb.viewOnly = val
+  if (!val) onFocusIn()
 })
 watch(showDotCursor, (val) => {
   if (rfb) rfb.showDotCursor = val
 })
+watch(status, value => {
+  if (value === 'connected') void nextTick(onFocusIn)
+  else { regionEditor.value = null; onFocusOut() }
+})
+onDeactivated(onFocusOut)
+onActivated(onFocusIn)
 </script>
 
 <style scoped>
@@ -718,6 +818,13 @@ watch(showDotCursor, (val) => {
 .vnc-area :deep(canvas) {
   display: block;
   flex-shrink: 0;
+}
+.vnc-area.is-unscaled :deep(canvas) {
+  image-rendering: pixelated;
+}
+.vnc-tab-content.is-fullscreen .vnc-area,
+.vnc-tab-content.is-fullscreen .vnc-overlay {
+  bottom: 0;
 }
 .vnc-overlay {
   position: absolute;
@@ -753,6 +860,10 @@ watch(showDotCursor, (val) => {
   color: var(--text-muted);
   font-size: 0.75rem;
   box-sizing: border-box;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   z-index: 5;
 }
 .vnc-status-dot {
@@ -761,37 +872,21 @@ watch(showDotCursor, (val) => {
   background: var(--success);
   flex-shrink: 0;
 }
+.vnc-statusbar::-webkit-scrollbar { display: none; }
+.vnc-statusbar :deep(.el-switch) { height: 1.25rem; }
 .vnc-status-sep { color: var(--text-disabled); }
 .vnc-status-label { font-size: 0.6875rem; }
-
-/* File drag-and-drop overlay (scheme D-2) */
-.vnc-drop-overlay {
-  position: absolute;
-  inset: 0;
-  bottom: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  background: rgba(0, 0, 0, 0.7);
-  color: var(--primary, #409eff);
-  z-index: 20;
-  pointer-events: none;
-  border: 2px dashed var(--primary, #409eff);
-  border-radius: 4px;
+.vnc-status-spacer { flex: 1; }
+.vnc-fullscreen-btn {
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 1px 0.625rem;
+  border-radius: var(--radius-sm);
 }
-.vnc-upload-status {
-  position: absolute;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.5rem 1rem;
-  background: var(--bg-elevated);
-  color: var(--text);
-  border-radius: 4px;
-  font-size: 0.875rem;
-  z-index: 15;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+.vnc-fullscreen-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 </style>

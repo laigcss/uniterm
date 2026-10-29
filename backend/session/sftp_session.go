@@ -94,7 +94,7 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		User:              config.User,
 		Auth:              authMethods,
 		Timeout:           30 * time.Second,
-		HostKeyCallback:   HostKeyCallback(config.Host, fmt.Sprintf("%d", config.Port), HostKeyStrategy(config.HostKeyStrategy)),
+		HostKeyCallback:   HostKeyCallback(config.Host, strconv.Itoa(config.Port), s.id),
 		Config:            algoSet.config(),
 		HostKeyAlgorithms: algoSet.HostKeys,
 	}
@@ -941,8 +941,8 @@ func (s *SFTPSession) Copy(oldPath, newPath string) error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
 	err = session.Run(fmt.Sprintf("cp -r -- %s %s", shellEscape(old), shellEscape(n)))
+	session.Close()
 	if err == nil {
 		return nil
 	}
