@@ -2161,5 +2161,6 @@
   "record.playBtn": "Play",
   "record.speed": "Speed",
   "record.loadFailed": "Load failed: {error}",
-  "record.sensitiveWarning": "The recording may contain sensitive information. Please keep it safe."
+  "record.sensitiveWarning": "The recording may contain sensitive information. Please keep it safe.",
+  "terminal.copySingleLine": "Copy as single line"
 }

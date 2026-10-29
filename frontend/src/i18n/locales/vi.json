@@ -2115,5 +2115,6 @@
   "record.playBtn": "Phát",
   "record.speed": "Tốc độ",
   "record.loadFailed": "Tải thất bại: {error}",
-  "record.sensitiveWarning": "Bản ghi có thể chứa thông tin nhạy cảm. Vui lòng giữ an toàn."
+  "record.sensitiveWarning": "Bản ghi có thể chứa thông tin nhạy cảm. Vui lòng giữ an toàn.",
+  "terminal.copySingleLine": "Sao chép thành một dòng"
 }

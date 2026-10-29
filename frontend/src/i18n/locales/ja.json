@@ -2119,5 +2119,6 @@
   "record.playBtn": "再生",
   "record.speed": "倍速",
   "record.loadFailed": "読み込みに失敗しました：{error}",
-  "record.sensitiveWarning": "録画内容に機密情報が含まれている可能性があります。安全に保管してください。"
+  "record.sensitiveWarning": "録画内容に機密情報が含まれている可能性があります。安全に保管してください。",
+  "terminal.copySingleLine": "1 行としてコピー"
 }

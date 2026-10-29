@@ -84,6 +84,7 @@ import { usePanelStore } from '../stores/panelStore'
 import { useTerminalMenu } from '../composables/useTerminalMenu'
 
 import { getManagedTerminal } from '../services/terminalManager'
+import { getTerminalSelection } from '../services/terminalCommandWrap'
 
 import type { useTerminalInput } from '../composables/useTerminalInput'
 import { useSuggestions } from '../composables/useSuggestions'
@@ -222,7 +223,7 @@ function getFitAddon() {
 }
 
 function getSelection(): string {
-  return terminal?.getSelection() || ''
+  return terminal ? getTerminalSelection(terminal) : ''
 }
 
 

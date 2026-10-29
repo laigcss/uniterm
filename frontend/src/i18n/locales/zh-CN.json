@@ -2161,5 +2161,6 @@
   "record.playBtn": "播放",
   "record.speed": "倍速",
   "record.loadFailed": "加载失败：{error}",
-  "record.sensitiveWarning": "录制内容可能包含敏感信息，请妥善保管"
+  "record.sensitiveWarning": "录制内容可能包含敏感信息，请妥善保管",
+  "terminal.copySingleLine": "复制为单行"
 }

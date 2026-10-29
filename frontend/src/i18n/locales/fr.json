@@ -2119,5 +2119,6 @@
   "record.playBtn": "Lire",
   "record.speed": "Vitesse",
   "record.loadFailed": "Échec du chargement : {error}",
-  "record.sensitiveWarning": "L'enregistrement peut contenir des informations sensibles. Veuillez le conserver en sécurité."
+  "record.sensitiveWarning": "L'enregistrement peut contenir des informations sensibles. Veuillez le conserver en sécurité.",
+  "terminal.copySingleLine": "Copier sur une seule ligne"
 }

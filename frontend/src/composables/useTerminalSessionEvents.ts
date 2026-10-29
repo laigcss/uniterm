@@ -2,7 +2,8 @@ import type { Terminal } from '@xterm/xterm'
 import type { Ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { SessionResize } from '../../bindings/github.com/ys-ll/uniterm/app'
-import { queuedSessionWrite } from '../services/sessionWriter'
+import { queuedSessionWrite } from '../services/terminalCommandWrite'
+import { getTerminalSelection } from '../services/terminalCommandWrap'
 import { useSettingsStore } from '../stores/settingsStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useTabStore } from '../stores/tabStore'
@@ -69,6 +70,7 @@ export function useTerminalSessionEvents(options: UseTerminalSessionEventsOption
   let onTerminalCopy: ((e: Event) => void) | null = null
   let onTerminalPaste: ((e: Event) => void) | null = null
   let onVisibilityChange: (() => void) | null = null
+  let onNativeTerminalCopy: ((e: ClipboardEvent) => void) | null = null
 
   function setup() {
     const terminal = getTerminal()
@@ -81,7 +83,8 @@ export function useTerminalSessionEvents(options: UseTerminalSessionEventsOption
     terminal.onSelectionChange(() => {
       if (settingsStore.settings.terminal.selectionAction !== 'copy') return
       setTimeout(() => {
-        const text = getTerminal()?.getSelection()
+        const terminal = getTerminal()
+        const text = terminal ? getTerminalSelection(terminal) : undefined
         if (!text) {
           // Selection cleared: reset the dedup guard, or re-selecting the same
           // text would never re-copy and a lost write could never be retried.
@@ -94,6 +97,22 @@ export function useTerminalSessionEvents(options: UseTerminalSessionEventsOption
         }
       }, 0)
     })
+
+    // Native copy event: when the selection spans a command-wrap seam, the
+    // reconstructed text (getTerminalSelection) differs from xterm's raw
+    // getSelection. Override the clipboard so Cmd+C / Ctrl+C copies the logical
+    // line, not the screen-wrapped fragments (issue #1270).
+    onNativeTerminalCopy = (event: ClipboardEvent) => {
+      if (!isActive.value || !event.clipboardData) return
+      const terminal = getTerminal()
+      if (!terminal) return
+      const text = getTerminalSelection(terminal)
+      if (text === terminal.getSelection()) return
+      event.clipboardData.setData('text/plain', text)
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    terminalRef.value?.addEventListener('copy', onNativeTerminalCopy, true)
 
     // Close suggestion popup when clicking outside
     onDocumentMouseDown = (event: MouseEvent) => {
@@ -269,7 +288,8 @@ export function useTerminalSessionEvents(options: UseTerminalSessionEventsOption
       if (!isActive.value) return
       const detail = (e as CustomEvent).detail
       if (detail?.panelId && detail.panelId !== getPanelId()) return
-      const sel = getTerminal()?.getSelection()
+      const terminal = getTerminal()
+      const sel = terminal ? getTerminalSelection(terminal) : undefined
       if (sel) {
         writeClipboard(sel)
       }
@@ -301,6 +321,10 @@ export function useTerminalSessionEvents(options: UseTerminalSessionEventsOption
   }
 
   function teardown() {
+    if (onNativeTerminalCopy) {
+      terminalRef.value?.removeEventListener('copy', onNativeTerminalCopy, true)
+      onNativeTerminalCopy = null
+    }
     unsubscribe?.()
     statusUnsubscribe?.()
     if (onDocumentMouseDown) {

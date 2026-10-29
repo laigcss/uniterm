@@ -4,7 +4,8 @@ import { useSmartCopyPaste } from './useSmartCopyPaste'
 import { useSuggestions } from './useSuggestions'
 import type { SuggestionItem } from './useSuggestions'
 
-import { queuedSessionWrite } from '../services/sessionWriter'
+import { queuedSessionWrite } from '../services/terminalCommandWrite'
+import { getTerminalSelection } from '../services/terminalCommandWrap'
 import { filterTerminalInput } from '../utils/terminalInputFilter'
 import { applyBackspaceKey } from '../utils/terminalOptions'
 import { handleTerminalWordDelete } from '../utils/terminalWordDelete'
@@ -207,7 +208,8 @@ export function useTerminalKeyHandler(options: UseTerminalKeyHandlerOptions) {
     // macOS Cmd+C: copy selection when there is one. With no selection, don't
     // intercept — let it pass through (Ctrl+C interrupt uses ctrlKey, unaffected).
     if (isMac && e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-      const sel = getTerminal()?.getSelection()
+      const terminal = getTerminal()
+      const sel = terminal ? getTerminalSelection(terminal) : undefined
       if (sel) {
         e.preventDefault()
         writeClipboard(sel)

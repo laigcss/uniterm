@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { queuedSessionWrite } from '../services/sessionWriter'
+import { queuedSessionWrite } from '../services/terminalCommandWrite'
 import { stampCommandLine } from '../services/terminalTimestamps'
 import { getManagedTerminal, bumpOnDataGeneration } from '../services/terminalManager'
 import { createKeystrokeReorder } from '../utils/imeKeystrokeOrder'

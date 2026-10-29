@@ -1,3 +1,4 @@
+import { selectionAsSingleLine } from '../services/terminalCommandWrap'
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 
@@ -22,6 +23,7 @@ export interface UseTerminalMenuReturn {
   openMenu: (e: MouseEvent) => void
   closeMenu: () => void
   copySelection: () => void
+  copySingleLine: () => void
   selectAll: () => void
   copyAndPaste: () => Promise<void>
   pasteFromClipboard: () => Promise<void>
@@ -84,6 +86,12 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     closeMenu()
   }
 
+  function copySingleLine() {
+    const text = options.getSelection()
+    if (text) writeClipboard(selectionAsSingleLine(text))
+    closeMenu()
+  }
+
   function selectAll() {
     options.onSelectAll?.()
     closeMenu()
@@ -128,6 +136,7 @@ export function useTerminalMenu(options: UseTerminalMenuOptions): UseTerminalMen
     openMenu,
     closeMenu,
     copySelection,
+    copySingleLine,
     selectAll,
     copyAndPaste,
     pasteFromClipboard,

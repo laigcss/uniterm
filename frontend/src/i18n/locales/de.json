@@ -2119,5 +2119,6 @@
   "record.playBtn": "Wiedergeben",
   "record.speed": "Geschwindigkeit",
   "record.loadFailed": "Laden fehlgeschlagen: {error}",
-  "record.sensitiveWarning": "Die Aufzeichnung kann sensible Informationen enthalten. Bitte sicher aufbewahren."
+  "record.sensitiveWarning": "Die Aufzeichnung kann sensible Informationen enthalten. Bitte sicher aufbewahren.",
+  "terminal.copySingleLine": "Als eine Zeile kopieren"
 }

@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { recordWrite, currentAbsoluteLine } from '../services/terminalTimestamps'
+import { updateCommandWraps } from '../services/terminalCommandWrap'
 import { stripCursorBlink } from '../utils/cursor'
 import { sanitizeLiveTerminalOutput } from '../utils/terminalSanitize'
 import { DcsReassembler } from '../utils/dcsReassembler'
@@ -43,6 +44,7 @@ export function useTerminalRender(options: UseTerminalRenderOptions) {
     const ts = Date.now()
     const before = currentAbsoluteLine(sid)
     term.write(data, () => {
+      updateCommandWraps(term)
       recordWrite(sid, before, ts)
       onParsed?.()
     })

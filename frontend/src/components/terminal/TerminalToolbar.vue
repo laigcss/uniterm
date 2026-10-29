@@ -5,6 +5,7 @@
     <MenuItem :class="{ disabled: !menu.hasSelection.value }" :shortcut="menuShortcut('copy')" @click="menu.copySelection">
       {{ t('terminal.copy') }}
     </MenuItem>
+    <MenuItem :class="{ disabled: !menu.hasSelection.value }" @click="menu.copySingleLine">{{ t('terminal.copySingleLine') }}</MenuItem>
     <MenuItem :class="{ disabled: !menu.hasSelection.value }" @click="menu.copyAndPaste">
       {{ t('terminal.copyAndPaste') }}
     </MenuItem>

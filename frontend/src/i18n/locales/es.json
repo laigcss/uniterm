@@ -2119,5 +2119,6 @@
   "record.playBtn": "Reproducir",
   "record.speed": "Velocidad",
   "record.loadFailed": "Error al cargar: {error}",
-  "record.sensitiveWarning": "La grabación puede contener información confidencial. Consérvela de forma segura."
+  "record.sensitiveWarning": "La grabación puede contener información confidencial. Consérvela de forma segura.",
+  "terminal.copySingleLine": "Copiar en una sola línea"
 }
