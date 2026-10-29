@@ -43,6 +43,7 @@
       @open-sftp="openSftp"
       @upload-file-rz="uploadFileRz"
       @open-monitor="openMonitor"
+      @open-record-list="openRecordList"
     />
 
     <!-- Terminal suggestions popup -->
@@ -62,6 +63,9 @@
 
     <!-- Screen preview on scrollbar hover (issue #729) -->
     <TerminalScreenPreview :session-id="props.sessionId || ''" />
+
+    <!-- Terminal session recording list + replay dialog -->
+    <RecordList v-model:visible="recordListVisible" />
   </div>
 </template>
 
@@ -88,6 +92,7 @@ import TerminalGutter from './TerminalGutter.vue'
 import { useZmodemStore } from '../stores/zmodemStore'
 import ZmodemTransfer from './ZmodemTransfer.vue'
 import TerminalScreenPreview from './TerminalScreenPreview.vue'
+import RecordList from './RecordList.vue'
 // Extracted sub-components and composables
 import TerminalSearch from './terminal/TerminalSearch.vue'
 import TerminalOverlay from './terminal/TerminalOverlay.vue'
@@ -405,6 +410,13 @@ function openMonitor() {
     // sourceTabId anchors the new monitor tab beside the owning terminal tab
     window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: { ...p, sourceTabId: p.tabId } }))
   }
+}
+
+// Terminal session recording list (cast replay) dialog visibility.
+const recordListVisible = ref(false)
+function openRecordList() {
+  menu.closeMenu()
+  recordListVisible.value = true
 }
 
 const gutterRef = ref<{ $el: HTMLElement } | null>(null)

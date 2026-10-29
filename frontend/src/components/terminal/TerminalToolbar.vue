@@ -32,6 +32,7 @@
     <MenuItem :shortcut="menuShortcut('toggleTimestamps')" @click="emit('toggleTimestamps')">
       {{ showTimestamps ? t('settings.hideTimestamps') : t('settings.showTimestamps') }}
     </MenuItem>
+    <MenuItem @click="onOpenRecordList">{{ t('record.openList') }}</MenuItem>
     <MenuItem v-if="supportsOutputLog" @click="emit('toggleOutputLog')">
       {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
     </MenuItem>
@@ -91,6 +92,7 @@ const emit = defineEmits<{
   openSftp: []
   uploadFileRz: []
   openMonitor: []
+  openRecordList: []
 }>()
 
 const { t } = useI18n()
@@ -112,6 +114,7 @@ function onTriggerSearch() { props.menu.closeMenu(); emit('triggerSearch') }
 function onExport() { props.menu.closeMenu(); emit('export') }
 function onResetOutput() { props.menu.closeMenu(); emit('resetOutput') }
 function onClearScrollback() { props.menu.closeMenu(); emit('clearScrollback') }
+function onOpenRecordList() { props.menu.closeMenu(); emit('openRecordList') }
 
 defineExpose({
   terminalMenuRef,
