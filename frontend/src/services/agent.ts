@@ -1,6 +1,7 @@
 import { chat, AVAILABLE_TOOLS, ChatCancelledError, ChatTimeoutError } from './llm'
 import { executeCommand, startCommand, captureTerminal, collectOutput, sendTerminalKey } from './terminalAgent'
 import type { ExecuteResult } from './terminalAgent'
+import { assessLocalRisk } from './localRisk'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
@@ -81,11 +82,35 @@ type RiskLevel = 'read' | 'write' | 'dangerous'
 
 export const VALID_RISK: readonly RiskLevel[] = ['read', 'write', 'dangerous']
 
+// 风险等级排序：read < write < dangerous，用于取 max(modelRisk, localRisk)。
+const RISK_RANK: Record<RiskLevel, number> = { read: 0, write: 1, dangerous: 2 }
+
+/**
+ * 计算工具调用的风险等级。
+ *
+ * 纵深防御：同时考虑模型自声明的 `input.risk`（不可信——prompt injection
+ * 可将其篡改为 "read" 以绕过确认）和本地模式匹配 assessLocalRisk（独立于
+ * 模型声明），取两者中更严格的一方。这样即使模型把 `rm -rf ~` 声明为
+ * risk:"read"，localRisk 仍会返回 "dangerous"，最终按 dangerous 处理。
+ *
+ * 非 execute_command / start_command 工具一律 dangerous（default-closed）。
+ */
 export function getRisk(tu: { name: string; input: Record<string, unknown> }): RiskLevel {
   if (tu.name !== 'execute_command' && tu.name !== 'start_command') return 'dangerous'
-  const risk = tu.input.risk
-  if (risk === 'read' || risk === 'write' || risk === 'dangerous') return risk
-  return 'dangerous' // default-closed: unknown / missing / wrong-typed → dangerous
+
+  // 模型声明的风险（不可信）
+  const declared = tu.input.risk
+  const modelRisk: RiskLevel =
+    declared === 'read' || declared === 'write' || declared === 'dangerous'
+      ? declared
+      : 'dangerous' // default-closed: unknown / missing / wrong-typed → dangerous
+
+  // 本地模式匹配风险（独立于模型声明，纯静态分析）
+  const command = typeof tu.input.command === 'string' ? tu.input.command : ''
+  const localRisk = assessLocalRisk(command) as RiskLevel
+
+  // 取两者最高：任一来源判定为 dangerous 则 dangerous，任一判定为 write 则至少 write
+  return RISK_RANK[localRisk] > RISK_RANK[modelRisk] ? localRisk : modelRisk
 }
 
 function shouldConfirm(risk: RiskLevel): boolean {
