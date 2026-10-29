@@ -83,6 +83,9 @@ designs/
 docs/articles/
 docker/
 
+# HarmonyOS signing materials (generated locally, not committed)
+harmonyos/sign/
+
 # Android scaffold (copied from wails build assets; outputs stay ignored)
 !build/android/
 !build/android/**
