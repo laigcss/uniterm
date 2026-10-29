@@ -82,11 +82,14 @@ type App struct {
 	webviewDataPath      string
 	// dataDir is the resolved config data directory, passed to store
 	// constructors. Resolved at startup; finalized by bootstrap in a later task.
-	dataDir         string
-	credentialStore *credentials.Store
-	storesReady     bool
-	chatCancel      atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
-	moveResizeCh    chan string                        // defer EventsEmit from WndProc
+	dataDir           string
+	credentialStore   *credentials.Store
+	storesReady       bool
+	chatCancel        atomic.Pointer[context.CancelFunc] // F-308: active stream cancellation, per-call swap so overlap is safe
+	compactionCancels stdsync.Map                        // request ID -> context.CancelFunc; independent of chat streams
+	rdpKeyboardMu     stdsync.Mutex
+	rdpKeyboard       *platform.RDPKeyboardCapture
+	moveResizeCh      chan string // defer EventsEmit from WndProc
 	// F-043: foreground flag — true while the window is visible and the
 	// user is interacting; background goroutines (keepalive, output_log
 	// flush, k8s watches, auto-sync) should consult IsForeground before

@@ -2086,3 +2086,10 @@ func (a *App) ReadLocalAttachmentFile(path string) (LocalAttachmentFile, error) 
 		DataB64: base64.StdEncoding.EncodeToString(data),
 	}, nil
 }
+
+// CancelAICompaction cancels an in-flight context compaction request.
+func (a *App) CancelAICompaction(requestID string) {
+	if c, ok := a.compactionCancels.Load(requestID); ok {
+		c.(context.CancelFunc)()
+	}
+}

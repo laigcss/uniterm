@@ -230,3 +230,10 @@ func applyTrayIcon(tray *application.SystemTray) {
 func trayIconPNG() []byte {
 	return appIconTrayPNG
 }
+
+// setClipboardFiles publishes completed downloads as clipboard file references.
+// On macOS this is a stub — clipboard file transfer is only supported on Windows.
+func (a *App) setClipboardFiles(paths []string) error {
+	return fmt.Errorf("clipboard file transfer is only supported on Windows")
+}
+

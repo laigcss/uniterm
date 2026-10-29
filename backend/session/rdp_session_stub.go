@@ -2,37 +2,9 @@
 
 package session
 
-import "fmt"
-
-// RDPSession is a stub for non-Windows platforms.
-// It satisfies the Session interface but Connect always returns an error.
-type RDPSession struct {
-	baseSession
-}
-
-func NewRDPSession(id string) *RDPSession {
-	return &RDPSession{
-		baseSession: baseSession{
-			id:          id,
-			sessionType: "rdp",
-			status:      StatusDisconnected,
-		},
-	}
-}
-
-func (s *RDPSession) Connect(_ ConnectionConfig) error {
-	return fmt.Errorf("RDP is only supported on Windows")
-}
-
-func (s *RDPSession) Disconnect() error { return nil }
-
-func (s *RDPSession) IsConnected() bool { return false }
-
-func (s *RDPSession) Resize(_, _ int) error { return nil }
-
-func (s *RDPSession) Write(_ []byte) error { return nil }
-
-// Stub methods called from app.go
+// Stub methods called from app_terminal.go / app_remote_desktop.go on non-Windows
+// platforms. The upstream rdp_session.go is a cross-platform proxy implementation;
+// these methods are Windows-specific (ActiveX / HWND) and have no-op stubs here.
 
 func (s *RDPSession) ClientAreaScreenRect() (x, y, w, h int) { return }
 
@@ -53,5 +25,5 @@ func (s *RDPSession) SetOnAdaptiveEvent(_ func(event, snapshot string)) {}
 func (s *RDPSession) Invalidate() {}
 
 func (s *RDPSession) Snapshot() (string, error) {
-	return "", fmt.Errorf("RDP is only supported on Windows")
+	return "", nil
 }
