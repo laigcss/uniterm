@@ -174,14 +174,40 @@ for f in "${DESKTOP_FILES[@]}"; do
   fi
 done
 
-# --- Ensure logger_server.go exists (provides DefaultLogger for -tags server) ---
+# --- Ensure DefaultLogger is available for -tags server builds ---
+#
+# logger_dev.go (constraint contains `|| server`) already provides DefaultLogger
+# in server mode.  In that case a separate logger_server.go is REDUNDANT and
+# causes a "DefaultLogger redeclared" compile error, so we remove it.
+#
+# Only when logger_dev.go does NOT cover server mode (e.g. after a fresh
+# `go mod vendor` resets its constraint) do we create logger_server.go as a
+# fallback stub.
 LOGGER_SERVER="$WAILS_APP_DIR/logger_server.go"
-if [[ ! -f "$LOGGER_SERVER" ]]; then
-  if $CHECK_ONLY; then
-    echo -e "${RED}FAIL: logger_server.go is missing (required for -tags server builds).${NC}"
-    exit 1
+LOGGER_DEV="$WAILS_APP_DIR/logger_dev.go"
+LOGGER_DEV_COVERS_SERVER=false
+if [[ -f "$LOGGER_DEV" ]] && head -1 "$LOGGER_DEV" | grep -q 'server'; then
+  LOGGER_DEV_COVERS_SERVER=true
+fi
+
+if $LOGGER_DEV_COVERS_SERVER; then
+  # logger_dev.go covers server mode → remove redundant logger_server.go
+  if [[ -f "$LOGGER_SERVER" ]]; then
+    if $CHECK_ONLY; then
+      echo -e "${RED}FAIL: logger_server.go is redundant (logger_dev.go already covers server mode) and would cause DefaultLogger redeclaration.${NC}"
+      exit 1
+    fi
+    rm -f "$LOGGER_SERVER"
+    echo -e "${GREEN}Removed redundant logger_server.go${NC} (logger_dev.go covers server mode)"
   fi
-  cat > "$LOGGER_SERVER" << 'GOEOF'
+else
+  # Fallback: logger_dev.go does not cover server mode → ensure logger_server.go exists
+  if [[ ! -f "$LOGGER_SERVER" ]]; then
+    if $CHECK_ONLY; then
+      echo -e "${RED}FAIL: logger_server.go is missing and logger_dev.go does not cover server mode (no DefaultLogger for -tags server builds).${NC}"
+      exit 1
+    fi
+    cat > "$LOGGER_SERVER" << 'GOEOF'
 //go:build server
 
 package application
@@ -199,13 +225,13 @@ func DefaultLogger(level slog.Leveler) *slog.Logger {
 	return slog.New(handler)
 }
 GOEOF
-  echo -e "${GREEN}Created: logger_server.go${NC} (DefaultLogger stub for -tags server)"
-else
-  # In check-only mode, verify the file has the expected content
-  if $CHECK_ONLY; then
-    if ! grep -q 'func DefaultLogger' "$LOGGER_SERVER" 2>/dev/null; then
-      echo -e "${RED}FAIL: logger_server.go exists but missing DefaultLogger.${NC}"
-      exit 1
+    echo -e "${GREEN}Created: logger_server.go${NC} (DefaultLogger stub for -tags server)"
+  else
+    if $CHECK_ONLY; then
+      if ! grep -q 'func DefaultLogger' "$LOGGER_SERVER" 2>/dev/null; then
+        echo -e "${RED}FAIL: logger_server.go exists but missing DefaultLogger.${NC}"
+        exit 1
+      fi
     fi
   fi
 fi

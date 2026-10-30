@@ -66,8 +66,7 @@ warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 
 # --- Step 0: Check Wails vendor build constraints ---
 log "Step 0: Verifying Wails vendor build constraints..."
-"$SCRIPT_DIR/apply-wails-build-constraints.sh" --check
-if [[ $? -ne 0 ]]; then
+if ! "$SCRIPT_DIR/apply-wails-build-constraints.sh" --check; then
   warn "Constraints not satisfied. Auto-patching..."
   "$SCRIPT_DIR/apply-wails-build-constraints.sh"
 fi
@@ -115,10 +114,16 @@ cd "$PROJECT_ROOT"
 # Clean previous build
 rm -f "$GO_LIB_DIR/$GO_LIB_NAME" "$GO_LIB_DIR/${GO_LIB_NAME%.so}.h"
 
+# Notes on build tags & linker flags:
+#   - netgo: force pure-Go net package. Go 1.27's net/cgo_resold.go passes
+#     C.size_t (uint64) to getnameinfo which expects C.socklen_t (uint32 on
+#     OpenHarmony sysroot), causing a cgo type mismatch. netgo skips that file.
+#   - CGO_LDFLAGS includes $GO_LIB_DIR so the linker can find liblog.so stub
+#     (HilogLog) checked in at harmonyos/entry/libs/arm64-v8a/liblog.so.
 GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
   CC="$CC" \
-  CGO_LDFLAGS="-L/tmp" \
-  go build -mod=vendor -buildmode=c-shared -tags server,cshared \
+  CGO_LDFLAGS="-L$GO_LIB_DIR -L/tmp" \
+  go build -mod=vendor -buildmode=c-shared -tags server,cshared,netgo \
   -trimpath -ldflags="-w -s -X main.Version=$VERSION" \
   -o "$GO_LIB_DIR/$GO_LIB_NAME" .
 
