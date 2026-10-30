@@ -5,7 +5,7 @@
 // authenticated clients, and gates every command behind an approval dialog
 // surfaced in the UI.
 //
-// Transport: Streamable HTTP on 127.0.0.1 only, authenticated with a
+// Transport: Streamable HTTP on loopback by default (remote access is opt-in), authenticated with a
 // per-client bearer token (stored as SHA-256, shown once at creation).
 package mcp
 
@@ -17,7 +17,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,6 +80,8 @@ type Env struct {
 	// Connect opens a new SSH session for a saved connection id and returns
 	// the session id. The approval gate runs before dialing.
 	Connect func(connectionID string) (sessionID string, err error)
+	// OpenTerminal opens a saved terminal profile, or an ad hoc local/WSL terminal.
+	OpenTerminal func(connectionID, terminalType, shellPath string) (string, error)
 	// Approve surfaces a confirmation request to the user and waits for the
 	// verdict. err is non-nil on timeout/no-window.
 	Approve func(req ApprovalRequest) error
@@ -99,20 +103,37 @@ type Env struct {
 	// allowed directories (SFTP bookmarks) and returns the resolved path.
 	ResolveLocalPath func(path string) (resolved string, err error)
 	// Foreground runs a command in the live terminal PTY as an async job and
-	// completes on idle-settle / EOF rather than an end marker. When nil the
+	// completes on a shell acknowledgement, never terminal silence. When nil the
 	// unified uniterm_exec tool reports foreground mode unsupported; background
 	// mode still works over Sessions/Commands.
 	Foreground ForegroundJobs
+	// ExecMode returns the user-selected execution mode: "background" (SSH
+	// non-PTY exec tools) or "foreground" (live-terminal tools plus capture /
+	// send-key). Read once per server Start to pick the registered toolset;
+	// the user stops the endpoint before changing it in settings.
+	// "" / unknown falls back to background.
+	ExecMode func() string
+	// Capture snapshots a live session's terminal screen (redraw-resolved,
+	// like what the user sees). Used by the foreground toolset's
+	// uniterm_capture; nil disables the tool.
+	Capture func(sessionID string, tailLines int) (string, error)
+	// SendKey types text or a control key into a live session's terminal.
+	// text is typed verbatim (sendEnter appends the shell newline); control
+	// is "ctrl_c" | "ctrl_d" | "enter". Used by uniterm_send_key; nil
+	// disables the tool.
+	SendKey func(sessionID, text, control string, sendEnter bool) error
+	// Collect starts read-only output observation using the foreground job engine.
+	Collect func(sessionID string, hardLimitMs int) (string, error)
 }
 
 // ForegroundJobs is the unified async-job surface for the live-PTY (foreground)
-// mode. Implemented by the App layer over the mcpjob registry; kept as an
+// mode. Implemented by the App layer over the foreground job registry; kept as an
 // interface so the mcp package stays testable without a real session.
 type ForegroundJobs interface {
 	// StartForeground types command into sessionID's live terminal and returns
-	// a jobId. idleMs bounds the silence that counts as completion; hardLimitMs
-	// is the hard runtime cap (the job moves to "timeout" but stays pollable).
-	StartForeground(sessionID, command string, idleMs, hardLimitMs int) (jobID string, err error)
+	// a jobId. hardLimitMs bounds this
+	// wait. On timeout the command and output tap continue until real completion.
+	StartForeground(sessionID, command string, hardLimitMs int) (jobID string, err error)
 	// PollForeground returns output-so-far, exit code and state for a jobId.
 	PollForeground(jobID string, offset, max int) (stdout, stderr []byte, exitCode int, state string, err error)
 	// InterruptForeground stops a running foreground job.
@@ -220,7 +241,8 @@ type Server struct {
 	started bool
 	// finishedBg caches sync-completed background results for the unified
 	// uniterm_exec_result poll path (keyed by bg- jobId).
-	finishedBg map[string]finishedBackground
+	finishedBg       map[string]finishedBackground
+	foregroundOutput map[string]terminalOutputOptions
 }
 
 // TokenInfo is the stored form of one client token.
@@ -255,9 +277,9 @@ func (s *Server) SetTokens(tokens map[string]TokenInfo) {
 	s.tokens = tokens
 }
 
-// Start brings up the listener on 127.0.0.1:port. Idempotent: a running
-// server is stopped first when the port changed, or the call is a no-op.
-func (s *Server) Start(port int) error {
+// Start restarts the listener on the requested port. Remote access must be
+// explicitly enabled; otherwise both the listener and SDK restrict it to localhost.
+func (s *Server) Start(port int, allowRemote bool) error {
 	s.Stop()
 
 	srv := mcp.NewServer(&mcp.Implementation{
@@ -268,15 +290,19 @@ func (s *Server) Start(port int) error {
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return srv
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: allowRemote})
 
-	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
+	host := "127.0.0.1"
+	if allowRemote {
+		host = "0.0.0.0"
+	}
+	ln, err := net.Listen("tcp4", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return fmt.Errorf("mcp: listen: %w", err)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", s.authMiddleware(handler))
-	httpSrv := &http.Server{Handler: mux}
+	httpSrv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	s.mu.Lock()
 	s.handler = handler
@@ -291,7 +317,7 @@ func (s *Server) Start(port int) error {
 			log.Writef("mcp: serve: %v", err)
 		}
 	}()
-	log.Writef("mcp: server listening on 127.0.0.1:%d", s.port)
+	log.Writef("mcp: server listening on %s:%d", host, s.port)
 	return nil
 }
 
@@ -322,6 +348,12 @@ type tokenNameContextKey struct{}
 // label approvals/audit entries.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Validate browser origins on every method, including GET streams.
+		// CLI clients and SSH forwarding normally send no Origin header.
+		if !validRequestOrigin(r) {
+			http.Error(w, "Forbidden: invalid Origin header", http.StatusForbidden)
+			return
+		}
 		token := bearerToken(r)
 		key := HashToken(token)
 		name := ""
@@ -341,6 +373,23 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), tokenNameContextKey{}, name)))
 	})
+}
+
+func validRequestOrigin(r *http.Request) bool {
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 {
+		return true
+	}
+	if len(origins) != 1 || origins[0] == "" {
+		return false
+	}
+	origin, err := url.Parse(origins[0])
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return err == nil && origin.Scheme == scheme && strings.EqualFold(origin.Host, r.Host) &&
+		origin.User == nil && origin.Path == "" && origin.RawQuery == "" && !origin.ForceQuery && origin.Fragment == ""
 }
 
 // bearerToken extracts the Authorization: Bearer value.

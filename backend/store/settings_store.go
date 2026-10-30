@@ -132,9 +132,13 @@ type AIModelConfig struct {
 }
 
 type AISettings struct {
-	MaxTurns      *int            `json:"maxTurns"`
-	Models        []AIModelConfig `json:"models"`
-	ActiveModelID string          `json:"activeModelId"`
+	MaxTurns           *int            `json:"maxTurns"`
+	AutoCompact        *bool           `json:"autoCompact,omitempty"`
+	ContextTokenBudget int             `json:"contextTokenBudget,omitempty"`
+	SummaryModelID     string          `json:"summaryModelId,omitempty"`
+	Models             []AIModelConfig `json:"models"`
+	// Read only for migration to local_state.json. New clients omit this field.
+	ActiveModelID string `json:"activeModelId,omitempty"`
 }
 
 // MCPSettings configures the external-agent MCP server endpoint. Pointer on
@@ -144,21 +148,34 @@ type AISettings struct {
 // and side effects are governed by the approval policy alone; the stale
 // field is ignored on load.
 type MCPSettings struct {
-	// Enabled starts the localhost Streamable HTTP endpoint on launch.
+	// Enabled starts the Streamable HTTP endpoint on launch.
 	Enabled bool `json:"enabled"`
-	// Port for the 127.0.0.1 listener; 0 = DefaultPort.
+	// AllowRemote opts into listening on all IPv4 interfaces and accepting
+	// non-local Host headers, including requests forwarded over SSH.
+	// Defaults to false so existing installations stay loopback-only.
+	AllowRemote bool `json:"allowRemote,omitempty"`
+	// Port for the HTTP listener; 0 = DefaultPort.
 	Port int `json:"port,omitempty"`
 	// Policy is the approval policy: confirm_write (default) / confirm_all /
 	// confirm_dangerous / bypass. Unknown or empty values fall back to
 	// confirm_write when the policy is evaluated (mcpPolicy in app_mcp.go).
 	Policy string `json:"policy,omitempty"`
+	// ExecMode selects which terminal-execution toolset the MCP server
+	// exposes: "background" (default, non-PTY SSH exec with real exit codes)
+	// or "foreground" (types into any live terminal, screen-resolved output,
+	// plus capture/send-key tools). The user picks the mode — the agent never
+	// chooses at call time. Unknown or empty values fall back to background
+	// (mcpExecMode in app_mcp.go). Takes effect on the next MCP server start
+	// (StartMCP runs after every SaveLocalState).
+	ExecMode string `json:"execMode,omitempty"`
 }
 
 // DefaultMCPSettings is the off-by-default MCP block for settings.json.
 func DefaultMCPSettings() MCPSettings {
 	return MCPSettings{
-		Enabled: false,
-		Policy:  "confirm_write",
+		Enabled:  false,
+		Policy:   "confirm_write",
+		ExecMode: "background",
 	}
 }
 
@@ -420,7 +437,6 @@ func defaultAISettings() AISettings {
 				Protocol: "anthropic",
 			},
 		},
-		ActiveModelID: "model-default",
 	}
 }
 

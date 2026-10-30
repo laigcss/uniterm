@@ -1,21 +1,22 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/mcp"
 	"github.com/ys-ll/uniterm/backend/session"
 	"github.com/ys-ll/uniterm/backend/store"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 // MCP server wiring: settings persistence (mcp.json), token management, the
@@ -55,6 +56,7 @@ func (a *App) ensureMCPServer() *mcp.Server {
 			ListSessions:     a.mcpListSessions,
 			ListConnections:  a.mcpListConnections,
 			Connect:          a.mcpConnect,
+			OpenTerminal:     a.mcpOpenTerminal,
 			Approve:          a.mcpApprove,
 			Audit:            a.mcpAudit,
 			Policy:           a.mcpPolicy,
@@ -62,6 +64,10 @@ func (a *App) ensureMCPServer() *mcp.Server {
 			FileSession:      a.mcpFileSession,
 			ResolveLocalPath: a.mcpResolveLocalPath,
 			Foreground:       a,
+			ExecMode:         a.mcpExecMode,
+			Capture:          a.CaptureScreen,
+			SendKey:          a.SendKey,
+			Collect:          a.StartForegroundCapture,
 		}
 		a.mcpServer = mcp.NewServer(env)
 	})
@@ -90,7 +96,7 @@ func (a *App) StartMCP() error {
 	if cfg.Port > 0 {
 		port = cfg.Port
 	}
-	return srv.Start(port)
+	return srv.Start(port, cfg.AllowRemote)
 }
 
 // MCPStatus_ reports endpoint state to the settings UI.
@@ -267,8 +273,9 @@ func (a *App) mcpListSessions() []mcp.SessionSummary {
 		return []mcp.SessionSummary{}
 	}
 	out := make([]mcp.SessionSummary, 0)
+	mode := a.mcpExecMode()
 	for _, s := range a.sessionManager.List() {
-		if s.Type != "ssh" {
+		if !mcpTerminalAllowed(mode, s.Type) {
 			continue
 		}
 		sum := mcp.SessionSummary{
@@ -611,8 +618,9 @@ func (a *App) mcpListConnections() []mcp.ConnectionSummary {
 		return []mcp.ConnectionSummary{}
 	}
 	out := make([]mcp.ConnectionSummary, 0, len(data.Connections))
+	mode := a.mcpExecMode()
 	for _, c := range data.Connections {
-		if c.Type != "ssh" {
+		if !mcpTerminalAllowed(mode, c.Type) {
 			continue
 		}
 		out = append(out, mcp.ConnectionSummary{
@@ -627,97 +635,59 @@ func (a *App) mcpListConnections() []mcp.ConnectionSummary {
 	return out
 }
 
-// mcpConnect opens a new visible SSH session for a saved connection, reusing
-// the exact credential-resolution path the frontend uses.
-func (a *App) mcpConnect(connectionID string) (string, error) {
-	if a.connectionStore == nil {
-		return "", fmt.Errorf("connection store not initialized")
+func mcpTerminalAllowed(mode, kind string) bool {
+	if mode == mcp.ModeForeground {
+		return mcp.IsTerminalType(kind)
 	}
-	data, err := a.connectionStore.Load()
-	if err != nil {
-		return "", err
-	}
-	var config session.ConnectionConfig
-	found := false
-	for _, c := range data.Connections {
-		if c.ID == connectionID && c.Type == "ssh" {
-			config = c
-			found = true
-			break
-		}
-	}
-	if !found {
-		return "", fmt.Errorf("ssh connection %s not found", connectionID)
-	}
+	return kind == "ssh"
+}
 
-	// Same resolution chain as CreateSession (app_terminal.go).
-	if config.AuthType == "identity" {
-		mc, err := a.materializeIdentity(config)
+// Both MCP modes reuse the normal session creation and frontend sizing flow.
+func (a *App) mcpConnect(connectionID string) (string, error) {
+	return a.mcpOpenTerminal(connectionID, "", "")
+}
+
+func (a *App) mcpOpenTerminal(connectionID, terminalType, shellPath string) (string, error) {
+	var config session.ConnectionConfig
+	if connectionID != "" {
+		if a.connectionStore == nil {
+			return "", fmt.Errorf("connection store not initialized")
+		}
+		data, err := a.connectionStore.Load()
 		if err != nil {
 			return "", err
 		}
-		config = mc
-	}
-	mc, err := a.materializeProxy(config)
-	if err != nil {
-		return "", err
-	}
-	config = mc
-
-	s, err := a.sessionManager.Create("ssh", config)
-	if err != nil {
-		return "", err
-	}
-	if setter, ok := s.(interface{ SetLogIdentity(string, string) }); ok {
-		setter.SetLogIdentity(config.Name, config.Host)
-	}
-	ssh := s.(*session.SSHSession)
-	ssh.SetOnDataCallback(func(data []byte) {
-		a.emit("session:data", map[string]interface{}{
-			"id":   s.ID(),
-			"data": string(data),
-		})
-	})
-	ssh.SetOnBinaryCallback(func(data []byte) {
-		a.emit("session:binary", map[string]interface{}{
-			"id":   s.ID(),
-			"data": base64.StdEncoding.EncodeToString(data),
-		})
-	})
-	s.SetOnStatusChangeCallback(func(status session.SessionStatus) {
-		payload := map[string]interface{}{
-			"id":     s.ID(),
-			"status": status,
-		}
-		if status == session.StatusConnected {
-			if remoteOS := ssh.RemoteOS(); remoteOS != "" {
-				payload["remoteOS"] = remoteOS
+		found := false
+		for _, c := range data.Connections {
+			if c.ID == connectionID {
+				config = c
+				found = true
+				break
 			}
 		}
-		a.emit("session:status", payload)
-	})
-	// Tell the frontend to open a tab for the new session so the user can see
-	// and control it. The terminal tab will attach via its session id.
+		if !found {
+			return "", fmt.Errorf("connection %s not found", connectionID)
+		}
+		terminalType = config.Type
+	} else {
+		if terminalType != "local" && terminalType != "wsl" {
+			return "", fmt.Errorf("an unsaved terminal must have type local or wsl")
+		}
+		config.Type = terminalType
+		config.Name = terminalType
+		config.ShellPath = shellPath
+	}
+	if !mcpTerminalAllowed(a.mcpExecMode(), terminalType) {
+		return "", fmt.Errorf("terminal type %s is unavailable in this execution mode", terminalType)
+	}
+	info, err := a.CreateSession(terminalType, config)
+	if err != nil {
+		return "", err
+	}
 	a.emit("mcp:session-created", map[string]interface{}{
-		"sessionId": s.ID(),
-		"name":      config.Name,
-		"host":      config.Host,
+		"sessionId": info.ID, "type": terminalType, "name": config.Name, "host": config.Host, "config": config,
 	})
-
-	// Connect in the background; the tool call already passed the approval
-	// gate, and the user sees the tab while the handshake runs.
-	configCopy := config
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Writef("mcp connect panic: %v", r)
-			}
-		}()
-		if err := s.Connect(configCopy); err != nil {
-			a.failSessionConnect(s, err)
-		}
-	}()
-	return s.ID(), nil
+	return info.ID, nil
 }
 
 // ── Approval bridge ──────────────────────────────────────────────
@@ -869,6 +839,16 @@ func (a *App) mcpPolicy() mcp.Policy {
 	}
 }
 
+// mcpExecMode returns the user-configured execution mode, defaulting to
+// background. Read once per MCP server Start (which re-runs after every
+// SaveLocalState) to pick the registered toolset.
+func (a *App) mcpExecMode() string {
+	if a.mcpSettings().ExecMode == mcp.ModeForeground {
+		return mcp.ModeForeground
+	}
+	return mcp.ModeBackground
+}
+
 // ── Approval notification strings ───────────────────────────────
 // MCP approval notification strings per UI language, mirroring the
 // trayLabels table in main.go: the Go side can't use the frontend's i18n
@@ -974,4 +954,317 @@ func (a *App) notifyMCPApproval(req mcp.ApprovalRequest) {
 		a.window.Focus()
 		a.window.Show()
 	}
+}
+
+// Unified async-job bridge: implements mcp.ForegroundJobs over the app's live
+// session manager and the MCP foreground job registry. Background (non-PTY SSH
+// exec) stays on the existing session.mcpExec path; this bridge owns the
+// foreground live-PTY tap.
+
+// tapSource is the additive-observer surface baseSession provides; the generic
+// Session interface only exposes the single-slot setters.
+type tapSource interface {
+	AddDataTap(cb func([]byte)) func()
+	AddStatusTap(cb func(session.SessionStatus)) func()
+}
+
+// ptyAdapter turns a generic session.Session into the narrow mcp.Pty
+// surface. Data taps are additive (AddDataTap) so the frontend's own stream
+// subscription is never replaced.
+type ptyAdapter struct {
+	s    session.Session
+	taps tapSource
+}
+
+func (p ptyAdapter) Write(data []byte) error { return p.s.Write(data) }
+
+func (p ptyAdapter) OnData(cb func([]byte)) func() {
+	if p.taps != nil {
+		return p.taps.AddDataTap(cb)
+	}
+	return func() {}
+}
+
+func (p ptyAdapter) OnStatusChange(cb func(string)) func() {
+	if p.taps == nil {
+		return func() {}
+	}
+	return p.taps.AddStatusTap(func(st session.SessionStatus) {
+		cb(string(st))
+	})
+}
+
+func (p ptyAdapter) Alive() bool { return p.s.Status() == session.StatusConnected }
+
+func (p ptyAdapter) ForegroundShell() string {
+	if shell, ok := p.s.(interface{ ForegroundShell() string }); ok {
+		return shell.ForegroundShell()
+	}
+	return ""
+}
+
+// newlineFor returns the Enter bytes the shell expects. Windows OpenSSH and
+// PowerShell need CR; POSIX shells accept LF (the frontend mirrors this).
+func newlineFor(s session.Session) string {
+	if runtime.GOOS == "windows" && (s.Type() == "local" || s.Type() == "wsl") {
+		return "\r"
+	}
+	if ssh, ok := s.(*session.SSHSession); ok && ssh.RemoteOS() == "windows-openssh" {
+		return "\r"
+	}
+	return "\n"
+}
+
+func (a *App) jobRegistry() *mcp.Registry {
+	a.jobOnce.Do(func() {
+		a.jobs = mcp.NewRegistry()
+	})
+	return a.jobs
+}
+
+// screenCols/screenRows is the fallback emulator grid size for sessions that
+// do not report a PTY size. PTY-based sessions must size the grid from the
+// live PTY instead (sessionScreenSize): ConPTY and remote PTY streams rely on
+// the terminal's auto-wrap at the real width — PowerShell's paste echo is
+// repainted as flowing text with no CRLF between wrapped rows — so a grid
+// wider than the PTY lays the same stream out on different rows, absolute
+// cursor addressing lands on the wrong lines, and the watermark emitter skips
+// repainted rows. The AI then receives merged fragments (or nothing) for
+// everything painted above the cursor.
+const (
+	screenCols = 200
+	screenRows = 60
+)
+
+// sessionScreenSize returns the emulator grid size for foreground jobs and
+// captures: the session's live PTY size when it reports one, the generous
+// fallback constants otherwise.
+func sessionScreenSize(s session.Session) (int, int) {
+	if sized, ok := s.(interface{ GetPendingSize() (cols, rows int) }); ok {
+		if cols, rows := sized.GetPendingSize(); cols > 0 && rows > 0 {
+			return cols, rows
+		}
+	}
+	return screenCols, screenRows
+}
+
+// StartForeground implements mcp.ForegroundJobs and is the single execution
+// entry for the live-terminal path: the MCP server's foreground toolset and
+// the built-in AI panel's execute path both come through here, so MCP foreground job's
+// per-session busy lock applies to both consumers equally.
+func (a *App) StartForeground(sessionID, command string, hardLimitMs int) (string, error) {
+	if a.sessionManager == nil {
+		return "", errors.New("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return "", errors.New("session not found: " + sessionID)
+	}
+	pty := ptyAdapter{s: s}
+	if taps, ok := s.(tapSource); ok {
+		pty.taps = taps
+	}
+	cols, rows := sessionScreenSize(s)
+	// Seed the job emulator with the prompt line from the session's long-lived
+	// capture emulator: the shell painted it before the job started, so the
+	// PTY stream only resends incremental input-line repaints and the first
+	// returned line would otherwise begin mid-row (unpainted prompt column).
+	var seed mcp.ScreenSeed
+	if cap := a.sessionCaptureFor(s); cap != nil {
+		cap.mu.Lock()
+		seed = cap.screen.PromptSeed()
+		if seed.Line == "" {
+			// The capture missed the prompt (e.g. recreated after a resize on
+			// a remote that never repaints — SSH reflows far-side only). Fall
+			// back to the row carried across the resize; flow-style streams
+			// continue right after the seeded prompt on the fresh grid.
+			seed = cap.carriedSeed
+			seed.Y = 0
+		}
+		cap.mu.Unlock()
+	}
+	job, err := a.jobRegistry().StartWithScreen(
+		pty, sessionID, command, newlineFor(s),
+		time.Duration(hardLimitMs)*time.Millisecond,
+		mcp.DefaultMaxOutput,
+		cols, rows, seed,
+	)
+	if err != nil {
+		return "", err
+	}
+	return job.ID, nil
+}
+
+// PollForeground implements mcp.ForegroundJobs.
+func (a *App) PollForeground(jobID string, offset, max int) (stdout, stderr []byte, exitCode int, state string, err error) {
+	job, ok := a.jobRegistry().Lookup(jobID)
+	if !ok {
+		return nil, nil, -1, "unknown", mcp.ErrUnknownJob
+	}
+	out, errOut, code, st, jerr := job.Snapshot()
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(out) {
+		offset = len(out)
+	}
+	out = out[offset:]
+	if max > 0 && len(out) > max {
+		out = out[:max]
+	}
+	return out, errOut, code, st, jerr
+}
+
+// StartForegroundCapture passively collects terminal output using the same
+// job engine and completion rules as foreground command execution.
+func (a *App) StartForegroundCapture(sessionID string, hardLimitMs int) (string, error) {
+	if a.sessionManager == nil {
+		return "", errors.New("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return "", fmt.Errorf("session not found: %s", sessionID)
+	}
+	if job, ok := a.jobRegistry().Collect(sessionID, time.Duration(hardLimitMs)*time.Millisecond); ok {
+		return job.ID, nil
+	}
+	p := ptyAdapter{s: s}
+	if taps, ok := s.(tapSource); ok {
+		p.taps = taps
+	}
+	cols, rows := sessionScreenSize(s)
+	job, err := a.jobRegistry().ObserveWithScreen(p, sessionID,
+		time.Duration(hardLimitMs)*time.Millisecond,
+		cols, rows)
+	if err != nil {
+		return "", err
+	}
+	return job.ID, nil
+}
+
+// InterruptForeground implements mcp.ForegroundJobs.
+func (a *App) InterruptForeground(jobID, _ string) error {
+	return a.jobRegistry().Interrupt(jobID)
+}
+
+// screenCols/screenRows live above StartForeground; the capture emulator
+// shares the same grid constants.
+
+// sessionCapture is one session's screen emulator, attached before connecting
+// so the first capture includes output already displayed by the terminal.
+// Its additive taps are unsubscribed when the session disconnects.
+type sessionCapture struct {
+	mu        sync.Mutex
+	screen    *mcp.Screen
+	dataOff   func()
+	statusOff func()
+	// carriedSeed holds the prompt-row snapshot taken when a resize replaced
+	// this capture. Remotes that don't repaint after a resize (SSH) leave the
+	// fresh emulator blank, so foreground jobs fall back to this seed.
+	carriedSeed mcp.ScreenSeed
+}
+
+// CaptureScreen snapshots a live session's terminal screen — what the user
+// currently sees, redraw-resolved. Serves the MCP uniterm_capture tool and
+// the built-in panel's collect-output fallback.
+func (a *App) CaptureScreen(sessionID string, tailLines int) (string, error) {
+	if a.sessionManager == nil {
+		return "", errors.New("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return "", fmt.Errorf("session not found: %s", sessionID)
+	}
+	cap := a.sessionCaptureFor(s)
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	if tailLines <= 0 {
+		tailLines = 200
+	}
+	return cap.screen.Tail(tailLines), nil
+}
+
+// sessionCaptureFor lazily creates the emulator+tap pair for a session.
+func (a *App) sessionCaptureFor(s session.Session) *sessionCapture {
+	a.captureMu.Lock()
+	defer a.captureMu.Unlock()
+	if a.captures == nil {
+		a.captures = make(map[string]*sessionCapture)
+	}
+	if c, ok := a.captures[s.ID()]; ok {
+		return c
+	}
+	cols, rows := sessionScreenSize(s)
+	screen := mcp.NewScreen(cols, rows)
+	c := &sessionCapture{screen: screen}
+	if taps, ok := s.(tapSource); ok {
+		c.dataOff = taps.AddDataTap(func(b []byte) {
+			c.mu.Lock()
+			screen.Feed(b)
+			c.mu.Unlock()
+		})
+		// Detach asynchronously: the untap helpers take the session mutex,
+		// which the tap callback itself may be running under.
+		c.statusOff = taps.AddStatusTap(func(st session.SessionStatus) {
+			if st == session.StatusDisconnected || st == session.StatusError {
+				go a.removeCapture(s.ID())
+			}
+		})
+	}
+	a.captures[s.ID()] = c
+	return c
+}
+
+// removeCapture drops a session's capture emulator and unsubscribes its taps.
+func (a *App) removeCapture(id string) {
+	a.captureMu.Lock()
+	c, ok := a.captures[id]
+	delete(a.captures, id)
+	a.captureMu.Unlock()
+	if ok {
+		if c.dataOff != nil {
+			c.dataOff()
+		}
+		if c.statusOff != nil {
+			c.statusOff()
+		}
+	}
+}
+
+// SendKey types text or a control key into a live session's terminal — the
+// backend twin of the built-in panel's send_terminal_key, shared by the MCP
+// uniterm_send_key tool. control is "ctrl_c" | "ctrl_d" | "enter"; with text,
+// sendEnter appends the shell newline.
+func (a *App) SendKey(sessionID, text, control string, sendEnter bool) error {
+	if a.sessionManager == nil {
+		return errors.New("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	var data string
+	switch control {
+	case "ctrl_c":
+		// Built-in AI and MCP send-key calls share this path. Sending ETX
+		// alone cannot finish jobs on CLIs without a shell completion marker.
+		return a.jobRegistry().InterruptSession(sessionID, func() error {
+			return s.Write([]byte{3})
+		})
+	case "ctrl_d":
+		data = "\x04"
+	case "enter":
+		data = newlineFor(s)
+	case "":
+		if text == "" {
+			return errors.New("either text or control is required")
+		}
+		data = text
+		if sendEnter {
+			data += newlineFor(s)
+		}
+	default:
+		return fmt.Errorf("unknown control %q (want ctrl_c|ctrl_d|enter)", control)
+	}
+	return s.Write([]byte(data))
 }

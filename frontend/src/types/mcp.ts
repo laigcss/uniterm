@@ -17,11 +17,13 @@ export interface MCPStatus {
 // never in synced settings.
 export interface MCPSettings {
   enabled: boolean
+  allowRemote?: boolean
   port?: number
   policy?: string
 }
 
 export const DEFAULT_MCP_SETTINGS: MCPSettings = {
   enabled: false,
+  allowRemote: false,
   policy: 'confirm_write',
 }

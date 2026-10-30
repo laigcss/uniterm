@@ -33,7 +33,7 @@ import (
 	"github.com/ys-ll/uniterm/backend/log"
 	"github.com/ys-ll/uniterm/backend/mcp"
 	"github.com/ys-ll/uniterm/backend/mcpclient"
-	"github.com/ys-ll/uniterm/backend/mcpjob"
+
 	"github.com/ys-ll/uniterm/backend/netscan"
 	"github.com/ys-ll/uniterm/backend/platform"
 	"github.com/ys-ll/uniterm/backend/session"
@@ -127,12 +127,17 @@ type App struct {
 	// MCP client (uniTerm connects to external MCP servers). Separate from the
 	// mcpServer above: that one exposes uniTerm to external agents; this one
 	// feeds external tools into the built-in AI panel. Lazily created.
-	mcpClient     *mcpclient.Manager
-	mcpClientOnce stdsync.Once
+	mcpClient      *mcpclient.Manager
+	mcpClientStore *store.MCPClientStore
+	mcpClientOnce  stdsync.Once
 	// Unified async foreground-job registry (mcp uniterm_exec mode=foreground).
 	// Background non-PTY exec stays on the session mcpExec path.
-	jobs    *mcpjob.Registry
+	jobs    *mcp.Registry
 	jobOnce stdsync.Once
+
+	// Foreground capture sessions (screen read-only observation).
+	captureMu stdsync.Mutex
+	captures  map[string]*sessionCapture
 
 	// session objects and the log file spans all of them. sessionToPanel
 	// tracks the current session→panel binding so emitData can look up
@@ -358,6 +363,7 @@ func (a *App) initStores(dataDir string, upgrade bool) {
 	} else {
 		a.aiConfigStore = acs
 	}
+	a.mcpClientStore = store.NewMCPClientStore(dataDir)
 
 	is, err := store.NewIdentityStore(dataDir)
 	if err != nil {
@@ -546,6 +552,9 @@ func (a *App) initCredentials(dataDir string, upgrade bool) {
 	}
 	if a.settingsStore != nil {
 		a.settingsStore.SetPasswordStore(cred)
+	}
+	if a.mcpClientStore != nil {
+		a.mcpClientStore.SetPasswordStore(cred)
 	}
 	if a.aiConfigStore != nil {
 		a.aiConfigStore.SetPasswordStore(cred)

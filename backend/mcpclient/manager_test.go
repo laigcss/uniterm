@@ -3,11 +3,15 @@ package mcpclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // fakeSession stands in for *mcp.ClientSession in tests; it returns a fixed tool
@@ -30,32 +34,6 @@ func (f *fakeSession) CallTool(ctx context.Context, params *mcp.CallToolParams) 
 
 func (f *fakeSession) Close() error { return nil }
 
-// flakySession 模拟一个会断开的 MCP session：前 failCount 次 CallTool 返回
-// err，之后返回正常结果。用于测试自动重连逻辑。
-type flakySession struct {
-	tools     []*mcp.Tool
-	calls     []string
-	err       error // 要返回的连接错误
-	failCount int   // 还要失败多少次
-}
-
-func (f *flakySession) ListTools(ctx context.Context, params *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
-	return &mcp.ListToolsResult{Tools: f.tools}, nil
-}
-
-func (f *flakySession) CallTool(ctx context.Context, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
-	f.calls = append(f.calls, params.Name)
-	if f.failCount > 0 {
-		f.failCount--
-		return nil, f.err
-	}
-	return &mcp.CallToolResult{Content: []mcp.Content{
-		&mcp.TextContent{Text: "echo:" + params.Name},
-	}}, nil
-}
-
-func (f *flakySession) Close() error { return nil }
-
 func TestQualifiedName(t *testing.T) {
 	cases := map[string]string{
 		"fs":          "mcp__fs",
@@ -76,28 +54,16 @@ func TestQualifiedName(t *testing.T) {
 	}
 }
 
-func TestConfigValidate(t *testing.T) {
-	if err := (ClientConfig{Name: "x", Transport: TransportStdio}).Validate(); err == nil {
-		t.Error("stdio without command should fail")
-	}
-	if err := (ClientConfig{Name: "x", Transport: TransportStreamableHTTP, URL: "http://x"}).Validate(); err != nil {
-		t.Errorf("valid http config: %v", err)
-	}
-	if err := (ClientConfig{Name: "x", Transport: "ftp"}).Validate(); err == nil {
-		t.Error("unknown transport should fail")
-	}
-}
-
 func TestManagerListAndCall(t *testing.T) {
 	fs := &fakeSession{tools: []*mcp.Tool{
 		{Name: "read_file", Description: "read a file", InputSchema: map[string]any{"type": "object"}},
 		{Name: "write_file", Description: "write a file"},
 	}}
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) { return fs, nil }
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	m.dial = func(ctx context.Context, cfg store.MCPClientConfig) (Session, error) { return fs, nil }
 
 	ctx := context.Background()
-	m.ensureConn(ctx, ClientConfig{Name: "fs", Transport: TransportStdio, Command: "npx", Enabled: true})
+	m.ensureConn(ctx, store.MCPClientConfig{Name: "fs", Transport: store.MCPTransportStdio, Command: "npx", Enabled: true})
 
 	tools := m.ListTools()
 	if len(tools) != 2 {
@@ -126,231 +92,229 @@ func TestManagerListAndCall(t *testing.T) {
 
 func TestManagerRecordsDialFailure(t *testing.T) {
 	wantErr := errors.New("boom")
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) { return nil, wantErr }
-	m.ensureConn(context.Background(), ClientConfig{Name: "bad", Transport: TransportStdio, Command: "x", Enabled: true})
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	m.dial = func(ctx context.Context, cfg store.MCPClientConfig) (Session, error) { return nil, wantErr }
+	m.ensureConn(context.Background(), store.MCPClientConfig{Name: "bad", Transport: store.MCPTransportStdio, Command: "x", Enabled: true})
 
 	if tools := m.ListTools(); len(tools) != 0 {
 		t.Errorf("failed conn must not list tools, got %d", len(tools))
 	}
-	statuses := m.Statuses([]ClientConfig{{Name: "bad", Enabled: true}})
+	statuses := m.Statuses([]store.MCPClientConfig{{Name: "bad", Enabled: true}})
 	if len(statuses) != 1 || statuses[0].Connected || statuses[0].Error == "" {
 		t.Errorf("statuses=%+v", statuses)
 	}
 }
 
-func TestStoreRoundTrip(t *testing.T) {
-	s := NewStore(t.TempDir())
-	in := []ClientConfig{
-		{Name: "B", Transport: TransportStdio, Command: "npx", Enabled: true},
-		{Name: "a", Transport: TransportSSE, URL: "http://x/sse", Enabled: false},
+// TestInMemoryRoundTrip connects the manager's dialer to a real SDK server over
+// in-memory transports, lists tools, and calls one — proving the SDK wiring
+// (ListTools/CallTool) works, not just the fake session.
+func TestInMemoryRoundTrip(t *testing.T) {
+	ctx := context.Background()
+
+	echo := func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "echo:hi"}}}, nil
 	}
-	if err := s.Save(in); err != nil {
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
+	server.AddTool(&mcp.Tool{
+		Name:        "ping",
+		Description: "echo back",
+		InputSchema: map[string]any{"type": "object"},
+	}, echo)
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "uniterm-test", Version: "1.0.0"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Load()
+	cs, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("want 2, got %d", len(got))
-	}
-	// Saved sorted by name.
-	if got[0].Name != "a" || got[1].Name != "B" {
-		t.Errorf("not sorted: %s, %s", got[0].Name, got[1].Name)
-	}
-	// Missing file → empty, not error.
-	empty := NewStore(t.TempDir())
-	list, err := empty.Load()
-	if err != nil || len(list) != 0 {
-		t.Errorf("missing file: list=%v err=%v", list, err)
-	}
-}
+	defer cs.Close()
 
-// TestIsConnectionError 验证连接断开类错误的识别。
-func TestIsConnectionError(t *testing.T) {
-	cases := []struct {
-		err  error
-		want bool
-	}{
-		{nil, false},
-		{errors.New("some other error"), false},
-		{io.EOF, true},
-		{errors.New("connection closed: calling \"tools/call\": client is closing: EOF"), true},
-		{errors.New("client is closing"), true},
-		{errors.New("write: broken pipe"), true},
-		{errors.New("read: connection reset by peer"), true},
-		{errors.New("use of closed network connection"), true},
-		{errors.New("session ended"), true},
-	}
-	for _, c := range cases {
-		if got := isConnectionError(c.err); got != c.want {
-			t.Errorf("isConnectionError(%v) = %v, want %v", c.err, got, c.want)
-		}
-	}
-}
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	m.dial = func(context.Context, store.MCPClientConfig) (Session, error) { return cs, nil }
 
-// TestCallToolAutoReconnect 验证 SSE 断连后 CallTool 自动重连并重试成功。
-// 第一次 CallTool 返回 EOF，触发重连；dialer 第二次返回一个健康的 session，
-// 重试调用成功。
-func TestCallToolAutoReconnect(t *testing.T) {
-	// 第一个 session 模拟断开的 SSE 连接：总是返回 EOF
-	broken := &flakySession{
-		tools:     []*mcp.Tool{{Name: "ping", Description: "echo"}},
-		err:       io.EOF,
-		failCount: 1, // 第一次 CallTool 失败，之后如果还被调用则成功
-	}
-	// 第二个 session 是重连后的健康连接
-	healthy := &fakeSession{tools: []*mcp.Tool{{Name: "ping", Description: "echo"}}}
+	m.ensureConn(ctx, store.MCPClientConfig{Name: "echo", Transport: store.MCPTransportStdio, Enabled: true})
 
-	dialCount := 0
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) {
-		dialCount++
-		if dialCount == 1 {
-			return broken, nil
-		}
-		return healthy, nil
+	tools := m.ListTools()
+	if len(tools) != 1 || tools[0].Name != "ping" {
+		t.Fatalf("tools=%+v", tools)
+	}
+	if tools[0].QualifiedName != "mcp__echo__ping" {
+		t.Fatalf("qualified=%q", tools[0].QualifiedName)
 	}
 
-	ctx := context.Background()
-	cfg := ClientConfig{Name: "sse-srv", Transport: TransportSSE, URL: "http://x/sse", Enabled: true}
-	m.ensureConn(ctx, cfg)
-
-	// 第一次调用：broken session 返回 EOF → 触发重连 → healthy session → 成功
-	out, err := m.CallTool(ctx, "mcp__sse-srv__ping", map[string]any{})
+	out, err := m.CallTool(ctx, "mcp__echo__ping", map[string]any{})
 	if err != nil {
-		t.Fatalf("CallTool should auto-reconnect and succeed, got: %v", err)
+		t.Fatal(err)
 	}
-	if out != "echo:ping" {
-		t.Errorf("out=%q, want %q", out, "echo:ping")
-	}
-	// dialer 应被调用两次：初始连接 + 重连
-	if dialCount != 2 {
-		t.Errorf("dialCount=%d, want 2 (initial + reconnect)", dialCount)
-	}
-	// broken session 应被调用一次（失败的那次）
-	if len(broken.calls) != 1 {
-		t.Errorf("broken.calls=%d, want 1", len(broken.calls))
-	}
-	// healthy session 应被调用一次（重连后重试的那次）
-	if len(healthy.calls) != 1 {
-		t.Errorf("healthy.calls=%d, want 1", len(healthy.calls))
+	if out != "echo:hi" {
+		t.Fatalf("out=%q", out)
 	}
 }
 
-// TestCallToolNoReconnectOnNonConnectionError 验证非连接错误不触发重连。
-// 工具自身返回的业务错误（res.IsError）不应触发重连。
-func TestCallToolNoReconnectOnNonConnectionError(t *testing.T) {
-	// session 返回一个非连接类错误
-	bizErr := &flakySession{
-		tools:     []*mcp.Tool{{Name: "ping"}},
-		err:       errors.New("tool not found"),
-		failCount: 1,
-	}
-
-	dialCount := 0
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) {
-		dialCount++
-		return bizErr, nil
-	}
-
-	ctx := context.Background()
-	m.ensureConn(ctx, ClientConfig{Name: "srv", Transport: TransportStdio, Command: "x", Enabled: true})
-
-	// 调用应返回错误，且不触发重连
-	_, err := m.CallTool(ctx, "mcp__srv__ping", nil)
-	if err == nil {
-		t.Fatal("CallTool should return the business error")
-	}
-	// dialer 只应被调用一次（初始连接），不触发重连
-	if dialCount != 1 {
-		t.Errorf("dialCount=%d, want 1 (no reconnect on business error)", dialCount)
-	}
+// dyingSession simulates issue #1174: the session works at first, then the
+// transport drops (EOF on every call), mimicking a broken SSE long-poll.
+type dyingSession struct {
+	tools   []*mcp.Tool
+	dead    atomic.Bool
+	dials   atomic.Int32 // incremented by the dialer
+	calls   []string
+	callsMu sync.Mutex
 }
 
-// TestCallToolReconnectFails 验证重连失败时返回包含原始错误的复合错误信息。
-func TestCallToolReconnectFails(t *testing.T) {
-	// 第一个 session 总是返回 EOF
-	broken := &flakySession{
-		tools:     []*mcp.Tool{{Name: "ping"}},
-		err:       io.EOF,
-		failCount: 5, // 总是失败
-	}
+func (f *dyingSession) ListTools(ctx context.Context, params *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
+	return &mcp.ListToolsResult{Tools: f.tools}, nil
+}
 
-	dialCount := 0
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) {
-		dialCount++
-		if dialCount == 1 {
-			return broken, nil
+func (f *dyingSession) CallTool(ctx context.Context, params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
+	f.callsMu.Lock()
+	f.calls = append(f.calls, params.Name)
+	f.callsMu.Unlock()
+	if f.dead.Load() {
+		return nil, fmt.Errorf("connection closed: calling %q: client is closing: EOF", params.Name)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{
+		&mcp.TextContent{Text: "echo:" + params.Name},
+	}}, nil
+}
+
+func (f *dyingSession) Close() error { return nil }
+
+func TestCallToolReconnectsAfterConnDrop(t *testing.T) {
+	s1 := &dyingSession{tools: []*mcp.Tool{{Name: "vault_list", Description: "list"}}}
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	var dials atomic.Int32
+	m.dial = func(ctx context.Context, cfg store.MCPClientConfig) (Session, error) {
+		dials.Add(1)
+		// First dial returns the original session; the reconnect returns a
+		// FRESH live session, like a real SDK redial would.
+		if dials.Load() == 1 {
+			return s1, nil
 		}
-		// 重连时 dial 失败
-		return nil, errors.New("dial failed: server unreachable")
+		return &dyingSession{tools: s1.tools}, nil
 	}
-
 	ctx := context.Background()
-	m.ensureConn(ctx, ClientConfig{Name: "srv", Transport: TransportSSE, URL: "http://x", Enabled: true})
+	m.ensureConn(ctx, store.MCPClientConfig{Name: "notes", Transport: store.MCPTransportSSE, URL: "http://x/sse", Enabled: true})
 
-	_, err := m.CallTool(ctx, "mcp__srv__ping", nil)
-	if err == nil {
-		t.Fatal("CallTool should fail when reconnect fails")
-	}
-	// 错误信息应包含 "reconnect failed"
-	if !strings.Contains(err.Error(), "reconnect failed") {
-		t.Errorf("error should mention reconnect failed, got: %v", err)
-	}
-}
-
-// TestReconnectManual 验证手动调用 Reconnect 方法能重新建立连接。
-func TestReconnectManual(t *testing.T) {
-	first := &fakeSession{tools: []*mcp.Tool{{Name: "ping"}}}
-	second := &fakeSession{tools: []*mcp.Tool{{Name: "ping"}}}
-
-	dialCount := 0
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) {
-		dialCount++
-		if dialCount == 1 {
-			return first, nil
-		}
-		return second, nil
+	// Before the drop: works.
+	if out, err := m.CallTool(ctx, "mcp__notes__vault_list", nil); err != nil || out != "echo:vault_list" {
+		t.Fatalf("pre-drop call: out=%q err=%v", out, err)
 	}
 
-	ctx := context.Background()
-	m.ensureConn(ctx, ClientConfig{Name: "srv", Transport: TransportSSE, URL: "http://x", Enabled: true})
-
-	// 手动重连
-	if err := m.Reconnect(ctx, "srv"); err != nil {
-		t.Fatalf("Reconnect: %v", err)
-	}
-	if dialCount != 2 {
-		t.Errorf("dialCount=%d, want 2", dialCount)
-	}
-
-	// 重连后调用工具应使用新的 session
-	out, err := m.CallTool(ctx, "mcp__srv__ping", nil)
+	// The SSE stream drops. Pre-fix behavior: EOF forever. Fixed: one redial
+	// and the call retries transparently.
+	s1.dead.Store(true)
+	out, err := m.CallTool(ctx, "mcp__notes__vault_list", nil)
 	if err != nil {
-		t.Fatalf("CallTool after reconnect: %v", err)
+		t.Fatalf("post-drop call must reconnect+retry, got: %v", err)
 	}
-	if out != "echo:ping" {
-		t.Errorf("out=%q", out)
+	if out != "echo:vault_list" {
+		t.Fatalf("retry out=%q", out)
 	}
-	// 新 session 应被调用，旧 session 不应被调用
-	if len(second.calls) != 1 {
-		t.Errorf("second.calls=%d, want 1", len(second.calls))
+	// The dialer ran exactly once more (the reconnect), not once per call.
+	if got := dials.Load(); got != 2 {
+		t.Fatalf("dials = %d, want 2 (initial + one reconnect)", got)
 	}
 }
 
-// TestReconnectUnknownServer 验证重连不存在的服务器返回错误。
-func TestReconnectUnknownServer(t *testing.T) {
-	m := NewManager(NewStore(t.TempDir()))
-	m.dial = func(ctx context.Context, cfg ClientConfig) (Session, error) {
-		return &fakeSession{}, nil
+func TestCallToolReconnectFailureIsActionable(t *testing.T) {
+	s1 := &dyingSession{tools: []*mcp.Tool{{Name: "vault_list"}}}
+	dialErr := errors.New("dial tcp 1.2.3.4: connection refused")
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	var dials atomic.Int32
+	m.dial = func(ctx context.Context, cfg store.MCPClientConfig) (Session, error) {
+		if dials.Add(1) == 1 {
+			return s1, nil
+		}
+		return nil, dialErr
 	}
-	err := m.Reconnect(context.Background(), "no-such-server")
+	ctx := context.Background()
+	m.ensureConn(ctx, store.MCPClientConfig{Name: "notes", Transport: store.MCPTransportSSE, URL: "http://x/sse", Enabled: true})
+
+	s1.dead.Store(true)
+	_, err := m.CallTool(ctx, "mcp__notes__vault_list", nil)
 	if err == nil {
-		t.Fatal("Reconnect should fail for unknown server")
+		t.Fatal("want error when reconnect also fails")
+	}
+	// Actionable: names the server, URL, transport, both errors, and a hint.
+	msg := err.Error()
+	for _, want := range []string{"notes", "http://x/sse", "sse", "reconnect failed", "EOF", "settings"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error message missing %q: %s", want, msg)
+		}
+	}
+	// The conn is marked failed so Statuses surfaces it and ListTools
+	// stops reporting the stale tool list.
+	if tools := m.ListTools(); len(tools) != 0 {
+		t.Errorf("failed conn must stop listing tools, got %d", len(tools))
+	}
+	st := m.Statuses([]store.MCPClientConfig{{Name: "notes", Enabled: true}})
+	if len(st) != 1 || st[0].Connected || st[0].Error == "" {
+		t.Errorf("statuses=%+v", st)
+	}
+}
+
+func TestConcurrentCallsTriggerSingleReconnect(t *testing.T) {
+	s1 := &dyingSession{tools: []*mcp.Tool{{Name: "vault_list"}}}
+	m := NewManager(store.NewMCPClientStore(t.TempDir()))
+	var dials atomic.Int32
+	m.dial = func(ctx context.Context, cfg store.MCPClientConfig) (Session, error) {
+		if dials.Add(1) == 1 {
+			return s1, nil
+		}
+		// Fresh live session for the reconnect; concurrent riders share it.
+		return &dyingSession{tools: s1.tools}, nil
+	}
+	ctx := context.Background()
+	m.ensureConn(ctx, store.MCPClientConfig{Name: "notes", Transport: store.MCPTransportSSE, URL: "http://x/sse", Enabled: true})
+
+	// 10 concurrent calls hit the dead session at once; the reconnect lock
+	// must collapse them to a single extra dial.
+	s1.dead.Store(true)
+	var wg sync.WaitGroup
+	errs := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := m.CallTool(ctx, "mcp__notes__vault_list", nil)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent post-drop call failed: %v", err)
+		}
+	}
+	// The reconnect lock collapses the stampede: exactly one redial total.
+	if got := dials.Load(); got != 2 {
+		t.Fatalf("dials = %d, want 2 (initial + single reconnect)", got)
+	}
+}
+
+func TestIsConnError(t *testing.T) {
+	if !isConnError(mcp.ErrConnectionClosed) {
+		t.Error("ErrConnectionClosed must be a conn error")
+	}
+	if !isConnError(io.EOF) {
+		t.Error("EOF must be a conn error")
+	}
+	if !isConnError(fmt.Errorf("connection closed: calling %q: client is closing: EOF", "tools/call")) {
+		t.Error("wrapped SDK close phrasing must match")
+	}
+	if !isConnError(fmt.Errorf("write tcp: broken pipe")) {
+		t.Error("broken pipe must match")
+	}
+	if isConnError(errors.New("vault not found")) {
+		t.Error("tool-level error must NOT trigger reconnect")
+	}
+	if isConnError(nil) {
+		t.Error("nil is not a conn error")
 	}
 }

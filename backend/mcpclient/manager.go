@@ -3,7 +3,10 @@ package mcpclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/ys-ll/uniterm/backend/store"
+	"io"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -24,7 +27,7 @@ type Session interface {
 
 // dialer connects a config to a live MCP session. The default uses the SDK;
 // tests replace it with an in-memory dialer.
-type dialer func(ctx context.Context, cfg ClientConfig) (Session, error)
+type dialer func(ctx context.Context, cfg store.MCPClientConfig) (Session, error)
 
 // DiscoveredTool is one external tool flattened for the built-in AI.
 type DiscoveredTool struct {
@@ -40,12 +43,16 @@ type DiscoveredTool struct {
 
 // Conn is one live external server connection.
 type Conn struct {
-	cfg     ClientConfig
+	cfg     store.MCPClientConfig
 	session Session
 	tools   []DiscoveredTool
 	// err records the last connect/list failure for status display; a conn
 	// with a non-nil err is skipped by ListTools/CallTool.
 	err error
+
+	// reconnectMu serializes reconnect attempts for this conn so concurrent
+	// tool calls after a dropped connection trigger exactly one redial.
+	reconnectMu sync.Mutex
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
@@ -53,38 +60,38 @@ type Conn struct {
 
 // Manager owns the set of live external MCP connections.
 type Manager struct {
-	store *Store
+	store *store.MCPClientStore
 	dial  dialer
 	mu    sync.Mutex
 	conns map[string]*Conn
 }
 
 // NewManager builds a manager over the store with the default SDK dialer.
-func NewManager(store *Store) *Manager {
-	m := &Manager{store: store, conns: map[string]*Conn{}}
+func NewManager(configStore *store.MCPClientStore) *Manager {
+	m := &Manager{store: configStore, conns: map[string]*Conn{}}
 	m.dial = m.defaultDial
 	return m
 }
 
 // defaultDial connects via the go-sdk transport matching cfg.Transport.
-func (m *Manager) defaultDial(ctx context.Context, cfg ClientConfig) (Session, error) {
+func (m *Manager) defaultDial(ctx context.Context, cfg store.MCPClientConfig) (Session, error) {
 	client := mcp.NewClient(&mcp.Implementation{Name: "uniterm-mcp-client", Version: "1.0.0"}, nil)
 
 	var transport mcp.Transport
 	switch cfg.Transport {
-	case TransportStdio:
+	case store.MCPTransportStdio:
 		cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
 		if len(cfg.Env) > 0 {
 			cmd.Env = append(cmd.Environ(), envPairs(cfg.Env)...)
 		}
 		transport = &mcp.CommandTransport{Command: cmd}
-	case TransportStreamableHTTP:
+	case store.MCPTransportStreamableHTTP:
 		transport = &mcp.StreamableClientTransport{
 			Endpoint:             cfg.URL,
 			HTTPClient:           &http.Client{Transport: &headerRoundTripper{headers: cfg.Headers}, Timeout: 30 * time.Second},
 			DisableStandaloneSSE: true, // request-response only; no server push needed by the AI panel
 		}
-	case TransportSSE:
+	case store.MCPTransportSSE:
 		transport = &mcp.SSEClientTransport{
 			Endpoint:   cfg.URL,
 			HTTPClient: &http.Client{Transport: &headerRoundTripper{headers: cfg.Headers}, Timeout: 30 * time.Second},
@@ -201,7 +208,7 @@ func (m *Manager) Reload(ctx context.Context) {
 	m.mu.Unlock()
 }
 
-func (m *Manager) ensureConn(ctx context.Context, cfg ClientConfig) {
+func (m *Manager) ensureConn(ctx context.Context, cfg store.MCPClientConfig) {
 	m.mu.Lock()
 	if existing, ok := m.conns[cfg.Name]; ok && existing.session != nil && existing.err == nil {
 		m.mu.Unlock()
@@ -305,7 +312,7 @@ type ConnStatus struct {
 
 // Statuses returns a health row for every persisted config (including
 // disconnected/failed ones) so the UI can show why a server is down.
-func (m *Manager) Statuses(configs []ClientConfig) []ConnStatus {
+func (m *Manager) Statuses(configs []store.MCPClientConfig) []ConnStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]ConnStatus, 0, len(configs))
@@ -324,66 +331,32 @@ func (m *Manager) Statuses(configs []ClientConfig) []ConnStatus {
 }
 
 // CallTool invokes a remote tool by its qualified name and returns the
-// concatenated text content.
-//
-// 当 SSE / streamable-http 长连接断开时，第一次调用会返回 EOF 等连接错误。
-// 此处检测到连接断开类错误后，自动重新建立连接并重试一次，避免用户每次
-// 调用都看到裸 EOF。重连最多重试一次，不会无限循环。stdio 子进程崩溃是
-// 不同的问题（子进程已退出），但重连同样会重新拉起子进程。
+// concatenated text content. When the call fails with a connection-level
+// error (dropped SSE stream, wedged stdio pipe, half-closed HTTP session),
+// the conn is redialed once and the call retried transparently (issue
+// #1174: previously every call after a dropped SSE connection returned a
+// bare EOF until an app restart).
 func (m *Manager) CallTool(ctx context.Context, qualified string, args map[string]any) (string, error) {
 	server, tool, ok := splitQualified(qualified)
 	if !ok {
 		return "", fmt.Errorf("not an mcp tool: %q", qualified)
 	}
-
-	// 第一次尝试
-	result, err := m.callToolOnce(ctx, qualified, server, tool, args)
-	if err == nil {
-		return result, nil
-	}
-
-	// 非连接断开类错误直接返回，不触发重连
-	if !isConnectionError(err) {
-		return "", err
-	}
-
-	log.Writef("mcpclient: %q connection lost (%v), attempting reconnect...", server, err)
-
-	// 尝试重连（带独立超时，避免重连卡住拖垮调用）
-	reconnectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	if reconnectErr := m.reconnect(reconnectCtx, server); reconnectErr != nil {
-		return "", fmt.Errorf("mcp server %q reconnect failed: %w (original error: %v)", server, reconnectErr, err)
-	}
-
-	log.Writef("mcpclient: %q reconnected, retrying tool call...", server)
-
-	// 重连成功后重试一次
-	result, err = m.callToolOnce(ctx, qualified, server, tool, args)
-	if err != nil {
-		return "", err
-	}
-	return result, nil
-}
-
-// callToolOnce 执行一次工具调用，不包含重连逻辑。由 CallTool 在重连前后
-// 各调用一次。
-func (m *Manager) callToolOnce(ctx context.Context, qualified, server, tool string, args map[string]any) (string, error) {
 	m.mu.Lock()
 	c, ok := m.conns[server]
 	m.mu.Unlock()
-	if !ok || c.session == nil {
+	if !ok || c == nil {
+		return "", fmt.Errorf("mcp server %q is not connected (add or enable it in settings)", server)
+	}
+	if c.session == nil && c.err != nil {
+		return "", fmt.Errorf("mcp server %q (%s, %s): %w", server, c.cfg.URL, c.cfg.Transport, c.err)
+	}
+	if c.session == nil {
 		return "", fmt.Errorf("mcp server %q is not connected", server)
 	}
-	if c.err != nil {
-		return "", fmt.Errorf("mcp server %q: %v", server, c.err)
-	}
 
-	callCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	res, err := c.session.CallTool(callCtx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	res, err := m.callWithRetry(ctx, c, tool, args)
 	if err != nil {
-		return "", fmt.Errorf("call %s: %w", qualified, err)
+		return "", err
 	}
 	text := extractText(res)
 	if res.IsError {
@@ -395,74 +368,132 @@ func (m *Manager) callToolOnce(ctx context.Context, qualified, server, tool stri
 	return text, nil
 }
 
-// reconnect 重新建立指定服务器的连接。先关闭旧连接并从 map 中删除，再通过
-// ensureConn 重新拨号并枚举工具。对 SSE / streamable-http transport 有效；
-// stdio 子进程崩溃时也会重新拉起子进程。重连结果记录在 conn 上，调用方
-// 通过检查 conn.session / conn.err 判断是否成功。
-func (m *Manager) reconnect(ctx context.Context, server string) error {
+// callWithRetry performs the tool call and, on a connection-level failure,
+// redials the conn once and replays the call on the fresh session.
+func (m *Manager) callWithRetry(ctx context.Context, c *Conn, tool string, args map[string]any) (*mcp.CallToolResult, error) {
 	m.mu.Lock()
-	c, ok := m.conns[server]
-	if !ok {
-		m.mu.Unlock()
-		return fmt.Errorf("mcp server %q not found", server)
-	}
-	cfg := c.cfg
-	// 关闭旧连接并从 map 中删除，强制 ensureConn 重新建立连接。
-	// closeLocked 使用 closeOnce，重复关闭安全。
-	m.closeLocked(c)
-	delete(m.conns, server)
+	sess := c.session
 	m.mu.Unlock()
-
-	// 重新建立连接（ensureConn 内部自己管理锁）
-	m.ensureConn(ctx, cfg)
-
-	// 检查重连结果
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	c, ok = m.conns[server]
-	if !ok || c.session == nil || c.err != nil {
-		if c != nil && c.err != nil {
-			return c.err
-		}
-		return fmt.Errorf("mcp server %q reconnect failed", server)
+	if sess == nil {
+		return nil, fmt.Errorf("mcp server %q is not connected", c.cfg.Name)
 	}
-	return nil
+	callCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	res, err := sess.CallTool(callCtx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	if err == nil {
+		return res, nil
+	}
+	if !isConnError(err) {
+		return nil, fmt.Errorf("call mcp__%s__%s: %w", sanitize(c.cfg.Name), tool, err)
+	}
+
+	// The transport died mid-session (SSE stream dropped, stdio pipe
+	// closed, ...). Redial and retry once; the reconnect lock collapses a
+	// stampede of concurrent failed calls into a single redial.
+	log.Writef("mcpclient: connection lost on %q (%s), reconnecting: %v", c.cfg.Name, c.cfg.Transport, err)
+	session, rerr := m.reconnect(c, sess)
+	if rerr != nil {
+		return nil, fmt.Errorf("mcp server %q (%s, %s) connection lost and reconnect failed: %v (original call error: %w; check the server or re-enable it in settings)",
+			c.cfg.Name, c.cfg.URL, c.cfg.Transport, rerr, err)
+	}
+	retryCtx, retryCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer retryCancel()
+	res, rerr2 := session.CallTool(retryCtx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	if rerr2 != nil {
+		// The fresh session failed too — mark the conn so ListTools stops
+		// reporting the stale tool cache and Statuses shows the server down.
+		m.mu.Lock()
+		c.err = rerr2
+		m.mu.Unlock()
+		return nil, fmt.Errorf("call mcp__%s__%s after reconnect: %w (server %q, %s, %s; check the server or re-enable it in settings)",
+			sanitize(c.cfg.Name), tool, rerr2, c.cfg.Name, c.cfg.URL, c.cfg.Transport)
+	}
+	return res, nil
 }
 
-// Reconnect 是公开的重连入口，供前端"重连"按钮通过 Wails binding 调用。
-// 重新建立指定服务器的连接并刷新工具列表。
-func (m *Manager) Reconnect(ctx context.Context, server string) error {
-	return m.reconnect(ctx, server)
+// reconnect redials a dead conn in place: new session, fresh tool list. The
+// per-conn lock guarantees one dialer at a time; concurrent callers ride
+// whichever redial wins the lock (generation counter tells riders whether
+// the session on the conn is newer than the one they saw fail).
+func (m *Manager) reconnect(c *Conn, failed Session) (Session, error) {
+	c.reconnectMu.Lock()
+	defer c.reconnectMu.Unlock()
+
+	// Another caller already reconnected while this goroutine waited on the
+	// lock: the conn now carries a session that is not the one this caller
+	// saw fail, so ride it instead of dialing again. Session identity (not a
+	// generation counter) is the test: a caller that failed on ANY session
+	// still served by the conn is served by the same redial it waits behind.
+	m.mu.Lock()
+	session := c.session
+	m.mu.Unlock()
+	if session != nil && session != failed {
+		return session, nil
+	}
+
+	connectCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	newSession, err := m.dial(connectCtx, c.cfg)
+	if err != nil {
+		m.mu.Lock()
+		c.err = err
+		if c.session != nil {
+			_ = c.session.Close()
+		}
+		c.session = nil
+		m.mu.Unlock()
+		return nil, err
+	}
+	newTools, err := listTools(connectCtx, newSession, c.cfg.Name)
+	if err != nil {
+		_ = newSession.Close()
+		m.mu.Lock()
+		c.err = err
+		if c.session != nil {
+			_ = c.session.Close()
+		}
+		c.session = nil
+		m.mu.Unlock()
+		return nil, err
+	}
+
+	m.mu.Lock()
+	old := c.session
+	c.session = newSession
+	c.tools = newTools
+	c.err = nil
+	m.mu.Unlock()
+	if old != nil {
+		_ = old.Close()
+	}
+	log.Writef("mcpclient: %q reconnected, %d tools", c.cfg.Name, len(newTools))
+	return newSession, nil
 }
 
-// isConnectionError 判断是否是连接断开类错误。匹配 EOF、connection closed、
-// client is closing 等常见网络断开模式，用于决定是否触发自动重连。
-func isConnectionError(err error) bool {
+// isConnError reports whether err is a transport-level failure worth a
+// reconnect (as opposed to a tool-level error the retry cannot fix).
+// The SDK wraps dropped transports as ErrConnectionClosed ("connection
+// closed: calling ..."); the "client is closing" phrasing appears on
+// sessions whose transport goroutine has exited. io.EOF surfaces from raw
+// pipes (stdio).
+func isConnError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, mcp.ErrConnectionClosed) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 	msg := err.Error()
-	// 匹配常见连接断开模式。这些字符串来自 go-sdk / net 包的实际错误信息。
-	patterns := []string{
-		"EOF",
-		"connection closed",
-		"client is closing",
-		"broken pipe",
-		"connection reset",
-		"use of closed network connection",
-		"session ended",
-	}
-	for _, p := range patterns {
-		if strings.Contains(msg, p) {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(msg, "client is closing") ||
+		strings.Contains(msg, "connection closed") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "use of closed")
 }
 
 // TestConnection dials a one-shot connection, lists its tools, and closes. Used
 // by the settings "test" button without persisting state first.
-func (m *Manager) TestConnection(ctx context.Context, cfg ClientConfig) ([]DiscoveredTool, error) {
+func (m *Manager) TestConnection(ctx context.Context, cfg store.MCPClientConfig) ([]DiscoveredTool, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -484,16 +515,6 @@ func (m *Manager) CloseAll() {
 		m.closeLocked(c)
 	}
 	m.conns = map[string]*Conn{}
-}
-
-// StoreLoad exposes the persisted list for the App bindings.
-func (m *Manager) StoreLoad() ([]ClientConfig, error) {
-	return m.store.Load()
-}
-
-// StoreSave persists the list (App bindings own the upsert).
-func (m *Manager) StoreSave(clients []ClientConfig) error {
-	return m.store.Save(clients)
 }
 
 // extractText concatenates text content blocks; non-text blocks are rendered as

@@ -3,8 +3,24 @@ import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAIStore } from '../stores/aiStore'
 import { t } from '../i18n'
+import { useLocalStateStore } from '../stores/localStateStore'
+import type { AIModelConfig } from '../types/settings'
+import type { AIReasoningPreference } from '../types/ai'
+import { normalizeReasoning } from './aiReasoning'
+
+export interface ChatConfiguration {
+  model: AIModelConfig
+  reasoning: AIReasoningPreference
+}
+
+export function captureChatConfiguration(): ChatConfiguration | undefined {
+  const model = useSettingsStore().activeModel
+  if (!model) return undefined
+  return { model: { ...model }, reasoning: normalizeReasoning(useLocalStateStore().state.ai?.modelPreferences?.[model.id]) }
+}
 
 export interface ChatOptions {
+  configuration?: ChatConfiguration
   system: string
   messages: Array<Record<string, unknown>>
   tools?: Array<{
