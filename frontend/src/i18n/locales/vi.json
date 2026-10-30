@@ -278,6 +278,8 @@
   "ai.currentTerminal": "Terminal hiện tại",
   "ai.noTerminalHint": "Chuyển sang một thẻ terminal, hoặc nhấp [+] để thêm terminal liên kết.",
   "ai.addTerminal": "Thêm terminal",
+  "ai.hashAssociated": "Đã liên kết",
+  "ai.referenceTerminal": "Thiết bị đầu cuối tham chiếu",
   "ai.other": "Khác",
   "ai.otherPlaceholder": "Nhập câu trả lời của bạn...",
   "sftp.local": "Cục bộ",

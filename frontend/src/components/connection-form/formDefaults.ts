@@ -49,6 +49,7 @@ export function createInitialForm(): ConnectionConfig {
     ftpSkipVerify: false,
     vncShared: true,
     vncRepeaterID: '',
+    vncClipboardEncoding: 'auto',
     encoding: 'utf-8',
     termType: 'xterm-256color',
     backspaceKey: 'del',
@@ -128,6 +129,7 @@ export function resetFormFields(form: ConnectionConfig): void {
   form.ftpSkipVerify = false
   form.vncShared = true
   form.vncRepeaterID = ''
+  form.vncClipboardEncoding = 'auto'
   form.encoding = 'utf-8'
   form.termType = 'xterm-256color'
   form.backspaceKey = 'del'

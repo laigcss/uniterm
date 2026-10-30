@@ -38,6 +38,7 @@ import { ref } from 'vue'
 import { Copy, Check } from '@lucide/vue'
 import { useAIStore } from '../../stores/aiStore'
 import { useI18n } from '../../i18n'
+import { writeClipboard } from '../../composables/useClipboardWrite'
 import type { AIMessage, ToolCall } from '../../types/ai'
 
 defineProps<{
@@ -53,7 +54,7 @@ const copiedTool = ref('')
 
 async function copyToolText(text: string, key: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    await writeClipboard(text)
     copiedTool.value = key
     setTimeout(() => {
       copiedTool.value = ''

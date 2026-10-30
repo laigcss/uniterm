@@ -278,6 +278,8 @@
   "ai.currentTerminal": "現在のターミナル",
   "ai.noTerminalHint": "ターミナルタブに切り替えるか、[+] をクリックして関連付けるターミナルを追加してください。",
   "ai.addTerminal": "ターミナルを追加",
+  "ai.hashAssociated": "リンク済み",
+  "ai.referenceTerminal": "参照端末",
   "ai.other": "その他",
   "ai.otherPlaceholder": "回答を入力...",
   "sftp.local": "ローカル",

@@ -278,6 +278,8 @@
   "ai.currentTerminal": "目前終端",
   "ai.noTerminalHint": "請切換到終端分頁，或點擊 [+] 新增關聯終端。",
   "ai.addTerminal": "新增終端",
+  "ai.hashAssociated": "已關聯",
+  "ai.referenceTerminal": "參考終端",
   "ai.other": "其他",
   "ai.otherPlaceholder": "輸入你的回答...",
   "sftp.local": "本機",

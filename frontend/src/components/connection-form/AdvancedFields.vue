@@ -68,6 +68,20 @@
           <el-form-item :label="t('conn.vncRepeaterID')">
             <el-input v-model="form.vncRepeaterID" :placeholder="t('conn.vncRepeaterIDPlaceholder')" />
           </el-form-item>
+          <el-form-item :label="t('conn.vncClipboardEncoding')">
+            <el-select v-model="form.vncClipboardEncoding">
+              <el-option :label="t('conn.vncClipboardEncodingDefault')" value="auto" />
+              <el-option label="Unicode (UTF-8)" value="utf-8" />
+              <el-option label="Simplified Chinese (GBK)" value="gbk" />
+              <el-option label="Simplified Chinese (GB2312)" value="gb2312" />
+              <el-option label="Simplified Chinese (GB18030)" value="gb18030" />
+              <el-option label="Traditional Chinese (Big5)" value="big5" />
+              <el-option label="Japanese (Shift-JIS)" value="shift-jis" />
+              <el-option label="Japanese (EUC-JP)" value="euc-jp" />
+              <el-option label="Korean (EUC-KR)" value="euc-kr" />
+              <el-option label="Latin-1" value="latin1" />
+            </el-select>
+          </el-form-item>
         </template>
         <template v-if="form.type === 'rdp' && isWindows">
           <el-form-item :label="t('conn.rdpAdminSession')">

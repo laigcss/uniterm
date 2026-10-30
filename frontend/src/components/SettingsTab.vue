@@ -27,7 +27,7 @@
       <SyncSettings v-if="settingsStore.activeCategory === 'sync'" :is-narrow="isNarrow" />
       <ShortcutSettings v-if="settingsStore.activeCategory === 'keyboard' && !isMobile" :is-narrow="isNarrow" />
       <AISettings v-if="settingsStore.activeCategory === 'ai'" :is-narrow="isNarrow" />
-      <SkillsSettings v-if="settingsStore.activeCategory === 'skills'" :is-narrow="isNarrow" />
+      <SkillsSettings v-if="['skills', 'commands'].includes(settingsStore.activeCategory)" :is-narrow="isNarrow" />
       <MCPSettings v-if="['mcp', 'mcp-client'].includes(settingsStore.activeCategory)" :is-narrow="isNarrow" />
       <ConnectionSettings v-if="['identities', 'proxies', 'tunnels'].includes(settingsStore.activeCategory)" :is-narrow="isNarrow" />
       <AboutSettings v-if="settingsStore.activeCategory === 'about'" :is-narrow="isNarrow" />

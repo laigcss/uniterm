@@ -278,6 +278,8 @@
   "ai.currentTerminal": "Aktuelles Terminal",
   "ai.noTerminalHint": "Wechseln Sie zu einem Terminal-Tab oder klicken Sie auf [+], um ein zugehöriges Terminal hinzuzufügen.",
   "ai.addTerminal": "Terminal hinzufügen",
+  "ai.hashAssociated": "Verknüpft",
+  "ai.referenceTerminal": "Referenzterminal",
   "ai.other": "Andere",
   "ai.otherPlaceholder": "Antwort eingeben...",
   "sftp.local": "Lokal",

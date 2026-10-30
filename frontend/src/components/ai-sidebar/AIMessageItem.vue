@@ -65,6 +65,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { Copy, FileText } from '@lucide/vue'
 import { useAIStore } from '../../stores/aiStore'
 import { useI18n } from '../../i18n'
+import { writeClipboard } from '../../composables/useClipboardWrite'
 import { sanitizeRenderedHtml, escapeHtml as escapeHtmlBase } from '../../utils/markdown'
 import { formatClock, formatDuration } from '../../utils/timeFormat'
 import { attachmentPreviewUrl, formatBytes } from '../../services/attachments'
@@ -125,7 +126,7 @@ const copyMdLabel = ref(t('ai.copyMarkdown'))
 
 async function copyAsMarkdown() {
   try {
-    await navigator.clipboard.writeText(props.message.content)
+    await writeClipboard(props.message.content)
     copyMdLabel.value = t('ai.copied')
     setTimeout(() => {
       copyMdLabel.value = t('ai.copyMarkdown')
@@ -147,7 +148,7 @@ function onTextClick(event: MouseEvent) {
   const wrapper = btn.closest('.code-block-wrapper')
   const code = wrapper?.querySelector('code')?.textContent
   if (code) {
-    navigator.clipboard.writeText(code)
+    writeClipboard(code)
     btn.innerHTML = CHECK_ICON
     setTimeout(() => {
       btn.innerHTML = COPY_ICON

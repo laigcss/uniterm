@@ -145,6 +145,9 @@ export function normalizeForm(opts: UseFormValidationOptions): ConnectionConfig 
   if (normalized.type === 'database' && normalized.dbType === 'postgres' && !normalized.dbName?.trim()) {
     throw new Error(t('db.pgDbNameRequired'))
   }
+  if (normalized.type === 'database' && normalized.dbType === 'oracle' && !normalized.dbName?.trim()) {
+    throw new Error(t('db.serviceNameRequired'))
+  }
   if (normalized.type === 'elasticsearch' && normalized.authType === 'apikey' && !normalized.password?.trim()) {
     throw new Error(t('conn.esApiKeyRequired'))
   }

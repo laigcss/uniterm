@@ -278,6 +278,8 @@
   "ai.currentTerminal": "Terminal actuel",
   "ai.noTerminalHint": "Basculez vers un onglet de terminal ou cliquez sur [+] pour ajouter un terminal associé.",
   "ai.addTerminal": "Ajouter un terminal",
+  "ai.hashAssociated": "Lié",
+  "ai.referenceTerminal": "Terminal de référence",
   "ai.other": "Autre",
   "ai.otherPlaceholder": "Saisissez votre réponse...",
   "sftp.local": "Local",

@@ -278,6 +278,8 @@
   "ai.currentTerminal": "Текущий терминал",
   "ai.noTerminalHint": "Переключитесь на вкладку терминала или нажмите [+], чтобы добавить связанный терминал.",
   "ai.addTerminal": "Добавить терминал",
+  "ai.hashAssociated": "Связано",
+  "ai.referenceTerminal": "Эталонный терминал",
   "ai.other": "Другое",
   "ai.otherPlaceholder": "Введите ответ...",
   "sftp.local": "Локальный",

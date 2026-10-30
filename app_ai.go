@@ -18,11 +18,12 @@ import (
 	stdsync "sync"
 	"time"
 
-	_ "golang.org/x/image/webp" // registered for image.DecodeConfig
 	"image"
 	_ "image/gif"  // registered for image.DecodeConfig
 	_ "image/jpeg" // registered for image.DecodeConfig
 	_ "image/png"  // registered for image.DecodeConfig
+
+	_ "golang.org/x/image/webp" // registered for image.DecodeConfig
 
 	"github.com/mattn/go-ieproxy"
 	"github.com/ys-ll/uniterm/backend/log"

@@ -46,8 +46,8 @@
       <el-button @click="emit('selectSqliteFile')">{{ t('db.sqliteBrowse') }}</el-button>
     </div>
   </el-form-item>
-  <el-form-item v-if="(form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'sqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch') || form.type === 'mongodb'" :label="t('db.databases')" :required="form.dbType === 'postgres'">
-    <el-input v-model="form.dbName" :placeholder="t('db.databases')" />
+  <el-form-item v-if="(form.type === 'database' && form.dbType !== 'rqlite' && form.dbType !== 'sqlite' && form.dbType !== 'redis' && form.dbType !== 'elasticsearch') || form.type === 'mongodb'" :label="form.type === 'database' && form.dbType === 'oracle' ? t('db.serviceName') : t('db.databases')" :required="form.dbType === 'postgres' || (form.type === 'database' && form.dbType === 'oracle')">
+    <el-input v-model="form.dbName" :placeholder="form.type === 'database' && form.dbType === 'oracle' ? t('db.serviceNamePlaceholder') : t('db.databases')" />
   </el-form-item>
   <el-form-item v-if="form.type === 'local' || form.type === 'wsl'" :label="t('conn.shell')">
     <el-select v-model="form.shellPath" filterable allow-create clearable>

@@ -124,6 +124,10 @@ export interface ConnectionConfig {
   // Empty (default) — direct connection to the VNC server.
   // Non-empty — connect via an UltraVNC-compatible repeater using the given ID.
   vncRepeaterID?: string
+  // vncClipboardEncoding controls the text encoding used when synchronizing the
+  // clipboard between the local machine and the VNC server. "auto" (default)
+  // lets the runtime negotiate; the other values force a specific encoding.
+  vncClipboardEncoding?: 'auto' | 'latin1' | 'utf-8' | 'gbk' | 'gb2312' | 'gb18030' | 'big5' | 'shift-jis' | 'euc-jp' | 'euc-kr'
   // SMB-specific
   smbDomain?: string
   smbShare?: string
