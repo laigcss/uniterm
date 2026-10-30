@@ -104,21 +104,41 @@
       <MenuItem v-if="tab.type === 'terminal'" :shortcut="menuShortcut('terminalSearch')" @click="triggerSearch">
         {{ t('terminal.searchText') }}
       </MenuItem>
-      <MenuItem v-if="tab.type === 'terminal'" @click="triggerExport">{{ t('terminal.export') }}</MenuItem>
-      <MenuItem v-if="tab.type === 'terminal'" @click="triggerResetOutput">{{ t('terminal.resetOutput') }}</MenuItem>
-      <MenuItem v-if="tab.type === 'terminal'" @click="triggerClearScrollback">{{ t('terminal.clearScrollback') }}</MenuItem>
-      <MenuItem v-if="supportsOutputLog" @click="toggleOutputLog">
-        {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
-      </MenuItem>
-      <MenuItem v-if="supportsOutputLog && isOutputLogOn" @click="openLogDir">
-        {{ t('session.openLogDir') }}
-      </MenuItem>
+      <MenuSubmenu v-if="tab.type === 'terminal'" :label="t('terminal.display')">
+        <MenuItem @click="toggleTabLineNumbers">
+          {{ settingsStore.settings.terminal.showLineNumbers ? t('settings.hideLineNumbers') : t('settings.showLineNumbers') }}
+        </MenuItem>
+        <MenuItem @click="toggleTabTimestamps">
+          {{ settingsStore.settings.terminal.showTimestamps ? t('settings.hideTimestamps') : t('settings.showTimestamps') }}
+        </MenuItem>
+      </MenuSubmenu>
+      <MenuSubmenu v-if="tab.type === 'terminal'" :label="t('terminal.clearScreen')">
+        <MenuItem @click="triggerResetOutput">{{ t('terminal.resetOutput') }}</MenuItem>
+        <MenuItem @click="triggerClearScrollback">{{ t('terminal.clearScrollback') }}</MenuItem>
+      </MenuSubmenu>
+      <MenuSubmenu v-if="tab.type === 'terminal'" :label="t('session.logRecordMenu')">
+        <MenuItem v-if="supportsOutputLog" @click="toggleOutputLog">
+          {{ isOutputLogOn ? t('session.stopLog') : t('session.startLog') }}
+        </MenuItem>
+        <MenuItem v-if="supportsOutputLog" @click="openLogDir">
+          {{ t('session.openLogDir') }}
+        </MenuItem>
+        <MenuDivider />
+        <MenuItem @click="triggerExport">{{ t('terminal.export') }}</MenuItem>
+        <MenuDivider />
+        <MenuItem @click="toggleTabRecording">
+          {{ isTabRecording() ? t('record.stop') : t('record.start') }}
+        </MenuItem>
+        <MenuItem @click="openRecordListEvent">{{ t('record.openList') }}</MenuItem>
+      </MenuSubmenu>
 
       <!-- ③ 连接功能（ssh / rdp） -->
       <MenuDivider />
-      <MenuItem v-if="tab.type === 'rdp'" @click="enterRdpFullScreen">{{ t('rdp.fullscreen') }}</MenuItem>
-      <MenuItem v-if="isSsh" @click="openSftp">{{ t(fileMenuKey) }}</MenuItem>
-      <MenuItem v-if="isSsh" @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
+      <MenuItem v-if="tab.type === 'rdp' || tab.type === 'vnc' || tab.type === 'spice'" @click="enterDesktopFullScreen">{{ t('remoteDesktop.fullscreen') }}</MenuItem>
+      <MenuSubmenu v-if="isSsh" :label="t('terminal.transfer')">
+        <MenuItem @click="openSftp">{{ t(fileMenuKey) }}</MenuItem>
+        <MenuItem @click="uploadFileRz">{{ t('terminal.uploadFileRz') }}</MenuItem>
+      </MenuSubmenu>
       <MenuItem v-if="isSsh" @click="openMonitor">{{ t('sidebar.connectMonitor') }}</MenuItem>
       <MenuItem v-if="isSftpOverSsh" @click="openTerminal">{{ t('tab.openTerminal') }}</MenuItem>
 
@@ -149,25 +169,28 @@ import {
   EnableSessionOutputLog,
   DisableSessionOutputLog,
   GetSessionOutputLogInfo,
+  DefaultSessionLogDir,
   OpenPathInExplorer,
-  RDPSetFullScreen,
 } from '../../bindings/github.com/ys-ll/uniterm/app'
 import { msg } from '../services/message'
 import { ElMessageBox } from 'element-plus'
 import { saveWorkspaceToConnections } from '../composables/savedWorkspace'
-import type { Tab, TerminalTab, SFTPTab, RDPTab, WorkspaceTab } from '../types/workspace'
+import type { TerminalTab, SettingsTab, NetscanTab, SFTPTab, RDPTab, VNCTab, SPICETab, DBTab, MonitorTab, WorkspaceTab } from '../types/workspace'
 import { connectFileMenuKey, fileTransferProto, canOpenSshTerminal, asSshTerminalConfig } from '../utils/fileTransferUtils'
 import { connectionTypeIconOfKind } from '../utils/connectionTypes'
 import { useDuplicateSession } from '../composables/useDuplicateSession'
 import Menu from './Menu.vue'
 import MenuItem from './MenuItem.vue'
 import MenuDivider from './MenuDivider.vue'
+import MenuSubmenu from './MenuSubmenu.vue'
+import { getSessionRecorder, maybeWarnSensitive } from '../services/terminalRecorder'
+import { getManagedTerminal } from '../services/terminalManager'
 import { Clipboard } from '@wailsio/runtime'
 import { isMobilePlatform } from '../utils/platform'
 import { SquareTerminal, FolderUp, X, ArrowDownUp, Lock, Radio } from '@lucide/vue'
 
 const props = defineProps<{
-  tab: Tab
+  tab: TerminalTab | SettingsTab | NetscanTab | SFTPTab | RDPTab | VNCTab | SPICETab | DBTab | MonitorTab | WorkspaceTab
   shortcutIndex?: number
   isActive: boolean
   hasNotification?: boolean
@@ -298,7 +321,7 @@ const showBroadcastIcon = computed(() =>
 
 
 const hasActiveTransfers = computed(() => {
-  if (props.tab.type === 'workspace' || props.tab.type === 'start') return false
+  if (props.tab.type === 'workspace') return false
   const keys = [props.tab.panelId]
   // Terminal tabs also surface their companion file panel's transfers.
   if (props.tab.type === 'terminal') {
@@ -481,9 +504,6 @@ function closeContextMenu() {
   ctxMenuVisible.value = false
 }
 
-watch(ctxMenuVisible, (val) => {
-  window.dispatchEvent(new CustomEvent(val ? 'rdp:overlay-push' : 'rdp:overlay-pop'))
-})
 
 function startEdit() {
   closeContextMenu()
@@ -613,7 +633,8 @@ function onReconnect() {
 function openSftp() {
   const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
   if (panel) {
-    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: panel }))
+    // sourceTabId anchors the new SFTP tab beside this tab (not the active one)
+    window.dispatchEvent(new CustomEvent('app:connect-sftp', { detail: { ...panel, sourceTabId: props.tab.id } }))
   }
   closeContextMenu()
 }
@@ -626,7 +647,8 @@ function uploadFileRz() {
 function openMonitor() {
   const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
   if (panel) {
-    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: panel }))
+    // sourceTabId anchors the new monitor tab beside this tab (not the active one)
+    window.dispatchEvent(new CustomEvent('app:connect-monitor', { detail: { ...panel, sourceTabId: props.tab.id } }))
   }
   closeContextMenu()
 }
@@ -649,13 +671,12 @@ function locateHost() {
   closeContextMenu()
 }
 
-async function enterRdpFullScreen() {
+function enterDesktopFullScreen() {
   closeContextMenu()
-  const panel = panelStore.getPanel((props.tab as RDPTab).panelId)
-  const sid = panel?.sessionId
-  if (!sid) return
-  window.dispatchEvent(new CustomEvent('rdp:fullscreen-enter'))
-  try { await RDPSetFullScreen(sid, true) } catch (e) { console.error('RDP fullscreen error:', e) }
+  tabStore.setActiveTab(props.tab.id)
+  nextTick(() => {
+    window.dispatchEvent(new CustomEvent(`${props.tab.type}:fullscreen`, { detail: { panelId: (props.tab as RDPTab | VNCTab | SPICETab).panelId } }))
+  })
 }
 
 async function toggleOutputLog() {
@@ -688,12 +709,72 @@ async function toggleOutputLog() {
 
 async function openLogDir() {
   closeContextMenu()
-  if (!outputLogPath.value) return
+  // Always available: without a running panel log, fall back to the
+  // OS-default session log directory.
+  let dir = outputLogPath.value
+  if (!dir) {
+    try {
+      dir = await DefaultSessionLogDir()
+    } catch {
+      return
+    }
+  }
+  if (!dir) return
   try {
-    await OpenPathInExplorer(outputLogPath.value)
+    await OpenPathInExplorer(dir)
   } catch (e: any) {
     msg.error(String(e?.message ?? e))
   }
+}
+
+// Cast v2 recording controls (same session-keyed recorder the terminal uses).
+function terminalSessionId(): string {
+  if (props.tab.type !== 'terminal') return ''
+  const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
+  return panel?.sessionId || ''
+}
+
+function isTabRecording(): boolean {
+  const sid = terminalSessionId()
+  return !!sid && getSessionRecorder(sid).isRecording()
+}
+
+async function toggleTabRecording() {
+  closeContextMenu()
+  const sid = terminalSessionId()
+  if (!sid) return
+  const recorder = getSessionRecorder(sid)
+  try {
+    if (recorder.isRecording()) {
+      const path = await recorder.stop()
+      msg.copyable(t('record.stopped', { path }), 'info')
+    } else {
+      const managed = getManagedTerminal(sid)
+      const panel = panelStore.getPanel((props.tab as TerminalTab).panelId)
+      const path = await recorder.start(sid, managed?.terminal.cols || 80, managed?.terminal.rows || 24, panel?.config?.name || sid)
+      maybeWarnSensitive(t('record.sensitiveWarning'))
+      msg.copyable(t('record.started', { path }), 'success')
+    }
+  } catch (e: any) {
+    msg.error(t('record.startFailed', { error: String(e?.message ?? e) }))
+  }
+}
+
+// One RecordList instance lives in BaseTerminal; reuse the event pattern the
+// export/reset actions already use.
+function openRecordListEvent() {
+  window.dispatchEvent(new CustomEvent('terminal:record-list', { detail: { panelId: (props.tab as TerminalTab).panelId } }))
+  closeContextMenu()
+}
+
+function toggleTabLineNumbers() {
+  closeContextMenu()
+  settingsStore.updateTerminal({ showLineNumbers: !settingsStore.settings.terminal.showLineNumbers })
+}
+
+function toggleTabTimestamps() {
+  closeContextMenu()
+  settingsStore.updateTerminal({ showTimestamps: !settingsStore.settings.terminal.showTimestamps })
 }
 
 function triggerSearch() {
