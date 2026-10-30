@@ -100,7 +100,7 @@
 <script setup lang="ts">
 import { Close } from '@element-plus/icons-vue'
 import { useI18n } from '../../i18n'
-import { formatBytes } from '../../utils/format'
+import { formatBytes } from '../../services/attachments'
 import type { ProcessDetail } from './monitorTypes'
 
 defineProps<{

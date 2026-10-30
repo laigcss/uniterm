@@ -76,7 +76,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { ChevronRight } from '@lucide/vue'
 import { useI18n } from '../../i18n'
-import { formatBytes } from '../../utils/format'
+import { formatBytes } from '../../services/attachments'
 import { fmtWidth } from '../../composables/useMonitorData'
 import type { CpuCoreInfo, CpuPerf, DiskInfo, MemPerf, NetPerf, NetStatInfo, SwapPerf, DiskPerf } from './monitorTypes'
 
