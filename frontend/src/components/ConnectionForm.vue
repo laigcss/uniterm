@@ -60,6 +60,7 @@
               v-model:rdpCustomWidth="rdpCustomWidth"
               v-model:rdpCustomHeight="rdpCustomHeight"
               :rdp-custom-resolution-const="RDP_CUSTOM_RESOLUTION"
+              :password-input-key="passwordInputKey"
               @group-select="onGroupSelect"
               @select-sqlite-file="selectSqliteFile"
               @scan-serial-ports="scanSerialPorts"

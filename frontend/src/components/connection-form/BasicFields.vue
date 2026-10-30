@@ -27,8 +27,25 @@
     <el-form-item :label="t('conn.redisSentinels')" required>
       <el-input v-model="form.redisSentinels" :placeholder="t('conn.redisSentinelsPlaceholder')" />
     </el-form-item>
+    <el-form-item :label="t('conn.sentinelUser')">
+      <el-input v-model="form.sentinelUser" :placeholder="t('conn.sentinelAuthHint')" />
+    </el-form-item>
+    <el-form-item :label="t('conn.sentinelPassword')">
+      <el-input v-model="form.sentinelPassword" type="password" show-password :key="passwordInputKey" :placeholder="t('conn.sentinelAuthHint')" />
+    </el-form-item>
     <el-form-item :label="t('conn.redisMasterName')" required>
       <el-input v-model="form.redisMasterName" placeholder="mymaster" />
+    </el-form-item>
+  </template>
+  <template v-if="isElasticsearch">
+    <el-form-item :label="t('conn.esUseSsl')">
+      <el-switch v-model="form.esUseSsl" />
+    </el-form-item>
+    <el-form-item v-if="form.esUseSsl" :label="t('conn.esSkipVerify')">
+      <div class="nla-row">
+        <el-switch v-model="form.esSkipVerify" />
+        <span class="field-hint hint-after-switch">{{ t('conn.esSkipVerifyHint') }}</span>
+      </div>
     </el-form-item>
   </template>
   <el-form-item :label="form.type === 's3' ? 'Endpoint' : form.type === 'webdav' ? 'URL' : t('conn.host')" required v-if="!isSqliteDb && form.type !== 'local' && form.type !== 'wsl' && form.type !== 'serial' && form.type !== 'k8s' && form.type !== 'container' && !isRedisSentinel">
@@ -225,6 +242,9 @@
     </el-form-item>
   </template>
   <template v-if="form.type === 'rdp' && isWindows">
+    <el-form-item v-if="form.authType !== 'identity'" :label="t('conn.rdpDomain')">
+      <el-input v-model="form.rdpDomain" placeholder="e.g. WORKGROUP or WIN-ABC123" />
+    </el-form-item>
     <el-form-item :label="t('rdp.resolution')">
       <el-select v-model="rdpResolution" placeholder="1280×720">
         <el-option
@@ -309,6 +329,7 @@ const props = defineProps<{
   rdpCustomWidth: number
   rdpCustomHeight: number
   rdpCustomResolutionConst: string
+  passwordInputKey: number
 }>()
 
 const emit = defineEmits<{
@@ -374,6 +395,7 @@ const rdpCustomHeight = computed({
 // threading them through props.
 const isSqliteDb = computed(() => props.form.type === 'database' && props.form.dbType === 'sqlite')
 const isRedisSentinel = computed(() => props.form.type === 'redis' && props.form.redisMode === 'sentinel')
+const isElasticsearch = computed(() => props.form.type === 'elasticsearch')
 
 // Baud-rate autocomplete suggestions (presets list mirrors the original).
 const baudRatePresets = [300, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400, 460800, 921600]

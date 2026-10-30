@@ -90,6 +90,9 @@
               <el-option :value="true" :label="t('conn.rdpAdminSessionOn')" />
             </el-select>
           </el-form-item>
+          <el-form-item :label="t('conn.rdpEnableNLA')">
+            <el-switch v-model="form.rdpEnableNLA" />
+          </el-form-item>
           <el-form-item :label="t('conn.rdpSmartSizing')">
             <el-switch v-model="form.rdpSmartSizing" />
           </el-form-item>
