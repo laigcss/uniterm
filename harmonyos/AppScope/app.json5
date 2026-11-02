@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.aiops.terminal",
     "vendor": "ai-ops-team",
-    "versionCode": 1000000,
-    "versionName": "1.0.0",
+    "versionCode": 10902,
+    "versionName": "1.9.2",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }

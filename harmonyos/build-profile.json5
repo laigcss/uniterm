@@ -6,9 +6,9 @@
         "type": "HarmonyOS",
         "material": {
           "storeFile": "./sign/uniterm.p12",
-          "storePassword": "UnitermSignPwd2026DebugAbcDef123",
+          "storePassword": "@@HARMONYOS_STORE_PASSWORD@@",
           "keyAlias": "uniterm_key",
-          "keyPassword": "UnitermSignPwd2026DebugAbcDef123",
+          "keyPassword": "@@HARMONYOS_KEY_PASSWORD@@",
           "certpath": "./sign/uniterm.cer",
           "profile": "./sign/uniterm.p7b",
           "signAlg": "SHA256withECDSA"

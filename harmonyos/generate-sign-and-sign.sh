@@ -19,7 +19,14 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SIGN_DIR="$PROJECT_DIR/sign"
 HAP_SIGN="/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/lib/hap-sign-tool.jar"
 
-PWD_VAL="UnitermSignPwd2026DebugAbcDef123"
+# 密码从环境变量读取，见 harmonyos/sign-env
+# 生成阶段统一使用同一密码，要求 store/key 两个环境变量相等
+PWD_VAL="${HARMONYOS_KEY_PASSWORD:?错误: 未设置 HARMONYOS_KEY_PASSWORD，请先 source harmonyos/sign-env}"
+: "${HARMONYOS_STORE_PASSWORD:?错误: 未设置 HARMONYOS_STORE_PASSWORD，请先 source harmonyos/sign-env}"
+if [ "$PWD_VAL" != "$HARMONYOS_STORE_PASSWORD" ]; then
+  echo "错误: 生成脚本要求 HARMONYOS_KEY_PASSWORD 与 HARMONYOS_STORE_PASSWORD 相同"
+  exit 1
+fi
 BUNDLE_NAME="com.aiops.terminal"
 COMPATIBLE_VERSION="26"
 

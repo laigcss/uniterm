@@ -26,9 +26,10 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SIGN_DIR="$PROJECT_DIR/sign"
 HAP_SIGN_TOOL="/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/lib/hap-sign-tool.jar"
 
-# 签名参数
+# 签名参数 (密码从环境变量读取，见 harmonyos/sign-env)
 KEY_ALIAS="uniterm_key"
-KEY_PWD="UnitermSignPwd2026DebugAbcDef123"
+KEY_PWD="${HARMONYOS_KEY_PASSWORD:?错误: 未设置 HARMONYOS_KEY_PASSWORD，请先 source harmonyos/sign-env}"
+STORE_PWD="${HARMONYOS_STORE_PASSWORD:?错误: 未设置 HARMONYOS_STORE_PASSWORD，请先 source harmonyos/sign-env}"
 SIGN_ALG="SHA256withECDSA"
 COMPATIBLE_VERSION="26"
 
@@ -73,7 +74,7 @@ java -jar "$HAP_SIGN_TOOL" sign-app \
   -inFile "$UNSIGNED_HAP" \
   -signAlg "$SIGN_ALG" \
   -keystoreFile "$SIGN_DIR/uniterm.p12" \
-  -keystorePwd "$KEY_PWD" \
+  -keystorePwd "$STORE_PWD" \
   -outFile "$SIGNED_HAP" \
   -compatibleVersion "$COMPATIBLE_VERSION" \
   -signCode "1" 2>&1 | grep -E "success|ERROR|Sign"

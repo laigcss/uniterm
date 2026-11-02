@@ -1,0 +1,9 @@
+# HarmonyOS signing environment variables
+# Copy this file to harmonyos/sign-env and fill in real values
+# harmonyos/sign-env is gitignored and should never be committed
+
+# Store password for uniterm.p12 keystore
+export HARMONYOS_STORE_PASSWORD=""
+
+# Key password for uniterm_key alias
+export HARMONYOS_KEY_PASSWORD=""

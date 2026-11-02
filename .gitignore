@@ -125,3 +125,5 @@ harmonyos/entry/.cxx/
 harmonyos/screenshot.jpeg
 harmonyos/.hvigor/
 harmonyos/entry/build/
+# HarmonyOS signing secrets (real values, never commit)
+harmonyos/sign-env
