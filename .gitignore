@@ -6,6 +6,8 @@ build/windows/*
 build/windows/installer/*
 !build/windows/installer/project.nsi
 !build/windows/icon.ico
+!build/windows/info.json
+!build/windows/wails.exe.manifest
 !build/appicon.png
 !build/appicon_tray.png
 !build/appicon_tray_template.png

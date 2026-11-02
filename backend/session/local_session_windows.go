@@ -486,6 +486,13 @@ func (s *LocalSession) writeWslCwdHookBody(body string) {
 	go s.watchCwdHookConfirm()
 }
 
+// cwdHookConfirmTimeout bounds how long the session waits for the injected
+// cwd hook's ready marker before restoring terminal echo blindly. The hook
+// normally confirms within a second once the shell processes the armed line,
+// but WSL cold starts can delay it; 5s is generous yet keeps the fallback
+// prompt from feeling sluggish.
+const cwdHookConfirmTimeout = 5 * time.Second
+
 // watchCwdHookConfirm bounds how long the session waits for the injected
 // hook's ready marker. If the hook never confirms (unsupported setup, the
 // user exited the shell instantly), echo is restored blindly so the session

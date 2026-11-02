@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ys-ll/uniterm/backend/log"
-	"github.com/ys-ll/uniterm/backend/session"
-	"github.com/ys-ll/uniterm/backend/store"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/ys-ll/uniterm/backend/log"
+	"github.com/ys-ll/uniterm/backend/session"
+	"github.com/ys-ll/uniterm/backend/store"
 )
 
 // devBuild is true for `wails dev` (Version == "dev"); false for production
@@ -108,6 +108,15 @@ func main() {
 	// exempt — only GUI instances compete for the lock.
 	if session.RunLocalPtyBroker(os.Args) {
 		return
+	}
+
+	// WebView2 Runtime check (Windows-only; no-op on other platforms).
+	// Must run before application.New() — Wails calls os.Exit(1) silently
+	// when WebView2 is missing, which looks like "double-click and nothing
+	// happens". This check shows a MessageBox with install instructions
+	// instead, so the user knows what to do.
+	if !checkWebView2Runtime() {
+		os.Exit(1)
 	}
 
 	// Single-instance relaunch: RelaunchApp/autotest set relaunchPending and
