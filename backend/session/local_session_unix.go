@@ -20,6 +20,8 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
+
+	"github.com/ys-ll/uniterm/backend/log"
 )
 
 // Mouse tracking escape sequences that terminal applications (e.g. opencode,
@@ -75,6 +77,7 @@ type LocalSession struct {
 	quit                 chan struct{}
 	quitOnce             sync.Once
 	mouseTrackingEnabled atomic.Bool
+	foregroundShell      string
 
 	mu             sync.RWMutex
 	enc            encoding.Encoding
@@ -98,6 +101,15 @@ func NewLocalSession(id string) *LocalSession {
 	// the frontend sends its first Resize() with the real dimensions.
 	s.SetPendingSize(200, 60)
 	return s
+}
+
+// ForegroundShell reports the configured shell for command completion detection.
+// Unknown shells wait for the execution deadline instead of guessing from output.
+func (s *LocalSession) ForegroundShell() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	shell := strings.ReplaceAll(s.foregroundShell, `\`, "/")
+	return strings.TrimSuffix(strings.ToLower(shellBasename(shell)), ".exe")
 }
 
 func (s *LocalSession) Connect(config ConnectionConfig) error {
@@ -128,7 +140,10 @@ func (s *LocalSession) Connect(config ConnectionConfig) error {
 		shell = "/system/bin/sh"
 	}
 
-	s.cmd = exec.Command(shell, loginShellArgs(shell)...)
+	s.cmd = exec.Command(shell, append(loginShellArgs(shell), splitShellArgs(config.ShellArgs)...)...)
+	s.mu.Lock()
+	s.foregroundShell = shell
+	s.mu.Unlock()
 	s.cmd.Env = ensureTerminalEnv(os.Environ(), ExplicitTermType(config.TermType))
 	s.cmd.Dir = workDir
 
@@ -329,7 +344,9 @@ func (s *LocalSession) runPostLoginScript(script string) {
 
 	send := func(data []byte) {
 		if s.pty != nil {
-			s.pty.Write(data)
+			if _, err := s.pty.Write(data); err != nil {
+				log.Writef("local: post-login write failed: %v", err)
+			}
 		}
 	}
 	s.baseSession.RunPostLoginScript(ctx, script, send, s.IsConnected)

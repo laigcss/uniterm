@@ -26,6 +26,7 @@ export function createInitialForm(): ConnectionConfig {
     rdpEnableNLA: true,
     rdpDomain: '',
     rdpAdminSession: false,
+    rdpQuality: 'balanced',
     dbType: '',
     dbName: '',
     dbParams: '',
@@ -48,6 +49,8 @@ export function createInitialForm(): ConnectionConfig {
     ftpPassive: true,
     ftpSkipVerify: false,
     vncShared: true,
+    desktopPreferences: undefined,
+    desktopView: undefined,
     vncRepeaterID: '',
     vncClipboardEncoding: 'auto',
     encoding: 'utf-8',
@@ -58,6 +61,8 @@ export function createInitialForm(): ConnectionConfig {
     localEcho: false,
     newlineMode: 'cr' as 'cr' | 'crlf',
     shellPath: '',
+    shellArgs: '',
+    cwd: '',
     smbDomain: 'WORKGROUP',
     smbShare: '',
     s3Region: 'us-east-1',
@@ -104,6 +109,7 @@ export function resetFormFields(form: ConnectionConfig): void {
   form.rdpEnableNLA = true
   form.rdpDomain = ''
   form.rdpAdminSession = false
+  form.rdpQuality = 'balanced'
   form.kerberosRealm = ''
   form.sshAlgorithms = undefined
   form.dbType = ''
@@ -128,6 +134,8 @@ export function resetFormFields(form: ConnectionConfig): void {
   form.ftpPassive = true
   form.ftpSkipVerify = false
   form.vncShared = true
+  form.desktopPreferences = undefined
+  form.desktopView = undefined
   form.vncRepeaterID = ''
   form.vncClipboardEncoding = 'auto'
   form.encoding = 'utf-8'
@@ -138,6 +146,8 @@ export function resetFormFields(form: ConnectionConfig): void {
   form.localEcho = false
   form.newlineMode = 'cr'
   form.shellPath = ''
+  form.shellArgs = ''
+  form.cwd = ''
   form.serialPort = ''
   form.serialBaudRate = 115200
   form.serialDataBits = 8

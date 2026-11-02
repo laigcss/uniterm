@@ -470,6 +470,8 @@ watch(() => props.editConfig, (config) => {
     form.rdpEnableNLA = config.rdpEnableNLA ?? false
     form.rdpAdminSession = config.rdpAdminSession ?? false
     form.x11Forwarding = config.x11Forwarding ?? false
+    // Older connections predate the tier field; they get the default tier.
+    form.rdpQuality = config.rdpQuality ?? 'balanced'
     form.agentForwarding = config.agentForwarding ?? false
     // Existing SSH connections without the field default to SFTP (old behavior).
     form.fileTransferProto = config.fileTransferProto ?? 'sftp'

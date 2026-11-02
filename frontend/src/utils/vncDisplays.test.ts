@@ -50,7 +50,7 @@ function fakeRfb() {
     },
   })
   rfb._display.resize(4480, 1440)
-  installVncPixelScaling(rfb, () => 2)
+  installVncPixelScaling(rfb, () => 1, () => 2)
   return rfb
 }
 

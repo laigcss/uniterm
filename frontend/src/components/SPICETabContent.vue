@@ -35,19 +35,40 @@
       <span class="spice-status-sep">|</span>
       <span>{{ config?.host }}:{{ config?.port || 5900 }}</span>
       <span class="spice-status-sep">|</span>
-      <span class="spice-scale-label">{{ t('spice.scale') }}</span>
-      <el-switch
-        v-model="scaleViewport"
-       
-        style="--el-switch-on-color: var(--success); --el-switch-off-color: var(--text-disabled)"
-      />
+      <span class="spice-status-label">{{ t('remoteDesktop.scale') }}</span>
+      <RemoteDesktopZoomSelect v-model="zoom" />
+      <span class="spice-status-spacer" />
+      <button class="spice-fullscreen-btn" @click="toggleFullscreen">{{ t('remoteDesktop.fullscreen') }}</button>
     </div>
+    <RemoteDesktopToolbar
+      v-if="isFullscreen"
+      v-model:zoom="zoom"
+      :host="config?.host || ''"
+      :port="config?.port || 5900"
+      :resolution="resolution || undefined"
+      :disabled="status !== 'connected'"
+      @restore="toggleFullscreen"
+      @focus-desktop="focusDesktop"
+      @minimize="blurDesktop"
+      @error="onToolbarError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Loader } from '@lucide/vue'
+import RemoteDesktopToolbar from './RemoteDesktopToolbar.vue'
+import RemoteDesktopZoomSelect from './RemoteDesktopZoomSelect.vue'
+import { useRemoteDesktopPreferences } from '../composables/useRemoteDesktopPreferences'
+import { spiceDesktopGeometry } from '../utils/spiceGeometry'
+import { SpiceKeyboard } from '../utils/spiceKeyboard'
+import { createSpiceClipboard } from '../utils/spiceClipboard'
+import { getSpiceConnectionMonitor } from '../utils/spiceConnection'
+import { RdpClipboardSync, RdpInputQueue } from '../utils/rdpClipboard'
+import { readClipboardText, writeClipboard } from '../composables/useClipboardWrite'
+import { queueRemoteKeyboardChange, REMOTE_KEY_SCANCODES } from '../utils/remoteKeyboard'
+import type { NativeRdpKey } from '../utils/remoteKeyboard'
 import { useI18n } from '../i18n'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
@@ -66,12 +87,33 @@ const props = defineProps<{
 
 const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
 const currentSessionId = ref<string | null>(props.sessionId)
+const viewport = ref<HTMLDivElement | null>(null)
+const desktop = ref<HTMLDivElement | null>(null)
 const spiceContainer = ref<HTMLDivElement | null>(null)
-const scaleViewport = ref(false)
+const { zoom, scaleViewport } = useRemoteDesktopPreferences(() => props.config)
+const isFullscreen = ref(false)
+const resolution = ref('')
+const keyboardFocused = ref(false)
+let keyboardCaptureId = ''
+let keyboardGeneration = 0
+let keyboardHeartbeat: ReturnType<typeof setInterval> | null = null
+let unsubKeyboard: (() => void) | null = null
+let clipboard: ReturnType<typeof createSpiceClipboard> | null = null
+let clipboardSync: RdpClipboardSync | null = null
+let clipboardPoll: ReturnType<typeof setInterval> | null = null
+let restoreClipboard: (() => void) | null = null
+const inputKeys = new Set<number>()
+const inputQueue = new RdpInputQueue(error => console.error('SPICE input/clipboard error:', error))
+const keyboard = new SpiceKeyboard(packet => {
+  if (sc?.inputs?.state !== 'ready' || sc.inputs.ws?.readyState !== 1) return false
+  sc.inputs.ws.send(packet)
+  return true
+})
 
 let sc: any = null
 let unsubStatus: (() => void) | null = null
 let isIniting = false
+let pixelRatioQuery: MediaQueryList | null = null
 
 async function connect() {
   if (!props.config) return
@@ -158,39 +200,36 @@ function onPaste(e: ClipboardEvent) {
 }
 
 function applyScale() {
-  if (!spiceContainer.value) return
-  const container = spiceContainer.value
-  const canvases = container.querySelectorAll('canvas')
-  canvases.forEach((canvas: HTMLCanvasElement) => {
-    if (scaleViewport.value) {
-      const cw = container.clientWidth
-      const ch = container.clientHeight
-      const iw = canvas.width || canvas.clientWidth
-      const ih = canvas.height || canvas.clientHeight
-      const scale = Math.min(cw / iw, ch / ih, 1)
-      const tx = (cw - iw * scale) / 2
-      const ty = (ch - ih * scale) / 2
-      canvas.style.transformOrigin = '0 0'
-      canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`
-    } else {
-      canvas.style.transform = ''
-    }
-  })
-  container.style.overflow = scaleViewport.value ? 'hidden' : 'auto'
+  const screen = spiceContainer.value
+  const area = viewport.value
+  const bounds = desktop.value
+  if (!screen || !area || !bounds) return
+  area.style.overflow = scaleViewport.value ? 'hidden' : 'auto'
+  const primary = sc?.display?.surfaces?.[sc.display.primary_surface]?.canvas as HTMLCanvasElement | undefined
+  const canvas = primary && screen.contains(primary) ? primary : screen.querySelector('canvas')
+  const geometry = canvas && spiceDesktopGeometry(canvas.width, canvas.height,
+    area.clientWidth, area.clientHeight, zoom.value, window.devicePixelRatio)
+  if (!geometry || !canvas) {
+    resolution.value = ''
+    bounds.style.width = bounds.style.height = ''
+    return
+  }
+  resolution.value = `${canvas.width} × ${canvas.height}`
+  bounds.style.width = `${geometry.width}px`
+  bounds.style.height = `${geometry.height}px`
+  screen.style.width = `${canvas.width}px`
+  screen.style.height = `${canvas.height}px`
+  screen.style.transform = `scale(${geometry.scaleX}, ${geometry.scaleY})`
 }
 
-watch(scaleViewport, () => {
+watch(zoom, applyScale, { flush: 'post' })
+
+function onPixelRatioChange() {
+  pixelRatioQuery?.removeEventListener('change', onPixelRatioChange)
+  pixelRatioQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+  pixelRatioQuery.addEventListener('change', onPixelRatioChange)
   applyScale()
-  // ResizeObserver to reapply on container size changes
-  if (scaleViewport.value && spiceContainer.value) {
-    const ro = new ResizeObserver(() => applyScale())
-    ro.observe(spiceContainer.value)
-    ;(spiceContainer.value as any).__scaleObserver = ro
-  } else if (spiceContainer.value) {
-    const ro = (spiceContainer.value as any).__scaleObserver
-    if (ro) { ro.disconnect(); (spiceContainer.value as any).__scaleObserver = null }
-  }
-})
+}
 
 function onReconnectEvent(e: Event) {
   const panelId = (e as CustomEvent)?.detail?.panelId

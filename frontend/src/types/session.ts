@@ -57,8 +57,16 @@ export interface ConnectionConfig {
   // "DOMAIN\user" prefix in user is used as a fallback.
   rdpDomain?: string
   rdpAdminSession?: boolean
+  // Graphics/network profile tier: 'high' (LAN experience), 'balanced'
+  // (default, broadband: wallpaper/theming off), 'low' (modem profile for
+  // low-bandwidth links). Maps to the RDP connection_type + performance flags.
+  rdpQuality?: 'high' | 'balanced' | 'low'
   // Local terminal shell path (for WSL, `wsl://<distro>` carries the distro)
   shellPath?: string
+  // Extra command-line arguments appended to the local shell's launch
+  // command line (WindTerm-style). For cmd.exe they are consumed by /k as
+  // the command to run; also passed through to wsl:// distros and Unix shells.
+  shellArgs?: string
   // Working directory for local terminal (defaults to user home)
   cwd?: string
   // Serial port
@@ -120,6 +128,17 @@ export interface ConnectionConfig {
   // true (default) — the new client may connect alongside other clients.
   // false — the server will typically disconnect other clients on connect.
   vncShared?: boolean
+  // Status bar preferences, remembered per remote desktop connection.
+  desktopPreferences?: {
+    scaleViewport?: boolean
+    viewOnly?: boolean
+    showDotCursor?: boolean
+    // RDP/SPICE display zoom: 'adaptive' (fit pane), 'stretch' (fill pane,
+    // ignore aspect ratio) or a factor ("0.75"); absent falls back to the
+    // legacy scaleViewport boolean (true → 'adaptive').
+    rdpZoom?: string
+  }
+  desktopView?: import('../utils/vncDisplays').DesktopView
   // vncRepeaterID is forwarded to noVNC's RFB constructor as `repeaterID`.
   // Empty (default) — direct connection to the VNC server.
   // Non-empty — connect via an UltraVNC-compatible repeater using the given ID.

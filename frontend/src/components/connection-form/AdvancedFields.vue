@@ -7,6 +7,12 @@
     <template v-if="advGroupProtocol">
       <div class="adv-grid">
         <div class="adv-group-title">{{ t('conn.advGroupProtocol') }}</div>
+        <el-form-item v-if="form.type === 'local' || form.type === 'wsl'" :label="t('conn.shellArgs')">
+          <el-input v-model="form.shellArgs" :placeholder="t('conn.shellArgsPlaceholder')" clearable />
+        </el-form-item>
+        <el-form-item v-if="form.type === 'local' || form.type === 'wsl'" :label="t('conn.workingDir')">
+          <el-input v-model="form.cwd" :placeholder="t('conn.workingDirPlaceholder')" clearable />
+        </el-form-item>
         <el-form-item v-if="isSSHAlgoType" :label="t('conn.sshAlgoMode')">
           <el-radio-group v-model="sshAlgoMode">
             <el-radio-button value="compatible">{{ t('conn.sshAlgoModeCompatible') }}</el-radio-button>
@@ -88,6 +94,13 @@
             <el-select v-model="form.rdpAdminSession" style="width: 100%">
               <el-option :value="false" :label="t('conn.rdpAdminSessionOff')" />
               <el-option :value="true" :label="t('conn.rdpAdminSessionOn')" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('conn.rdpQuality')">
+            <el-select v-model="form.rdpQuality" style="width: 100%">
+              <el-option value="high" :label="t('conn.rdpQualityHigh')" />
+              <el-option value="balanced" :label="t('conn.rdpQualityBalanced')" />
+              <el-option value="low" :label="t('conn.rdpQualityLow')" />
             </el-select>
           </el-form-item>
           <el-form-item :label="t('conn.rdpEnableNLA')">
@@ -329,7 +342,7 @@ const advGroupTerminal = computed(() =>
 )
 const advGroupNetwork = computed(() => showProxy.value || showTunnel.value)
 const advGroupProtocol = computed(() =>
-  ['database', 'mongodb', 'redis', 'elasticsearch', 'ftp', 'vnc', 'telnet'].includes(props.form.type) ||
+  ['database', 'mongodb', 'redis', 'elasticsearch', 'ftp', 'vnc', 'telnet', 'local', 'wsl'].includes(props.form.type) ||
   (props.form.type === 'rdp' && props.isWindows) ||
   isSSHAlgoType.value
 )
